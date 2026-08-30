@@ -1010,9 +1010,10 @@
           <button id="puheBtn" onclick="toistaPuhe()" style="width:100%; background:var(--panel-alt); color:var(--cyan); border:1px solid var(--cyan); border-radius:12px; font-family:'Barlow Condensed',sans-serif; font-size:20px; font-weight:700; letter-spacing:.02em; padding:14px; cursor:pointer;">
             ▶ Kuuntele päivän tilanne
           </button>
-          <div style="display:flex; gap:8px; margin-top:8px;">
+          <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
             <button class="chip" onclick="naytaPuheteksti()" style="border-color:var(--muted); color:var(--muted);">Näytä tekstinä</button>
             <button class="chip" onclick="puheDiagnostiikka()" style="border-color:var(--muted); color:var(--muted);">Tarkista äänet</button>
+            <button class="chip" id="earthBtn" onclick="avaaGoogleEarth()" style="display:none; border-color:var(--amber); color:var(--amber);">🌍 Avaa kartta Google Earthissa</button>
           </div>
           <div id="puheTekstiBox" style="display:none; margin-top:10px; background:var(--panel-alt); border-radius:10px; padding:12px;"></div>
           <p class="hint" id="puheStatus" style="margin-top:6px;">Selostus vedestä, kelistä, syvyyksistä ja parhaasta paikasta. Kuunneltavaksi matkalla.</p>
@@ -2851,6 +2852,34 @@
     // Teksti kirjoitetaan KUUNNELTAVAKSI, ei luetteloksi: kokonaisia lauseita, ei
     // lyhenteitä eikä sulkuja. Tarkoitus on että sen voi kuunnella ajaessa.
     let puheKaynnissa = false;
+
+    // ===== GOOGLE EARTH -KARTTA =====
+    // Avaa KMZ-tiedoston, jossa on Lappajärven syvyyskartta, omat merkinnät ja
+    // sovelluksen ottipaikat samalla tasolla. Android tarjoaa Google Earthia
+    // avaajaksi, jos se on asennettu.
+    //
+    // Tiedosto ladataan samaan kansioon sovelluksen kanssa, joten polku on suhteellinen
+    // ja toimii sekä GitHub Pagesissa että paikallisesti.
+    const EARTH_KMZ = 'Lappajarvi_syvyys_ja_merkinnat.kmz';
+
+    function paivitaEarthNappi() {
+      const b = document.getElementById('earthBtn');
+      if (!b) return;
+      // Näytetään vain Lappajärvellä — kartta kattaa vain sen järven.
+      const onLappajarvi = currentLocation && currentLocation.name &&
+                           currentLocation.name.toLowerCase().includes('lappaj');
+      b.style.display = onLappajarvi ? 'inline-block' : 'none';
+    }
+
+    function avaaGoogleEarth() {
+      const st = document.getElementById('puheStatus');
+      try {
+        window.open(EARTH_KMZ, '_blank', 'noopener');
+        if (st) st.innerHTML = '<span style="color:var(--cyan);">Kartta avataan. Valitse avaajaksi Google Earth. Jos mitään ei tapahdu, tiedosto latautui — avaa se Lataukset-kansiosta.</span>';
+      } catch (e) {
+        if (st) st.innerHTML = '<span style="color:var(--hard-red);">Kartan avaus epäonnistui: ' + e.message + '</span>';
+      }
+    }
 
     function puheTuettu() {
       try {
@@ -5253,6 +5282,7 @@
         ? evaluateHotspots(targetHour, wDir, wSpeed, curTemp, a.season)
         : genericLocationAdvice(targetHour, wDir, curTemp, a.season, currentLocation.name);
       viimeisinOttipaikka = hotspotResult;   // puheselostusta varten
+      paivitaEarthNappi();                   // Earth-nappi vain Lappajärvellä
 
       document.getElementById('hotspotHeroContainer').innerHTML = `
     <div class="spot-hero">

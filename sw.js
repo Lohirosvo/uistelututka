@@ -10,7 +10,7 @@
 // Muut tiedostot (kuvakkeet, manifest) haetaan välimuistista ensin — ne eivät muutu.
 //
 // VERSIO: kasvata tätä aina kun julkaiset uuden version. Vanha välimuisti siivotaan.
-const VERSIO = 'uistelututka-v8';
+const VERSIO = 'uistelututka-v9';
 const SIVU = './';
 
 const ESILADATTAVAT = [
@@ -20,7 +20,8 @@ const ESILADATTAVAT = [
   './icon-192.png',
   './icon-512.png',
   './icon-192-maskable.png',
-  './icon-512-maskable.png'
+  './icon-512-maskable.png',
+  './Lappajarvi_syvyys_ja_merkinnat.kmz'
 ];
 
 self.addEventListener('install', (e) => {
