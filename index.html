@@ -3521,6 +3521,37 @@
       const isDarkOrRough = (light === 'cloudy' || wind === 'hard');
       if (light === 'cloudy') d -= 2;
 
+      // KIRKKAUSVASTE — UUSI 29.8.2026.
+      // Aiemmin muikun syvyys EI reagoinut veden kirkkauteen lainkaan: näkösyvyys 1,8 m
+      // ja 7 m antoivat saman 8,0 metriä. Se oli epäjohdonmukaista, koska kuhan optinen
+      // lattia korjattiin jo valonvaimenemismallilla — ja koska muikku ohjaa nyt sekä
+      // taimenta että järvilohea, puute kertautui molempiin.
+      //
+      // PERUSTE: muikku on päiväsaikaan valoa välttävä ja hakeutuu hämärävyöhykkeeseen.
+      // Kirkkaassa vedessä valo tunkeutuu syvemmälle, joten sama valotaso on syvemmällä.
+      // Käytetään samaa kerrointa kuin kuhalla: Kd ≈ 2,7 / näkösyvyys (Gallegos ym. 2011,
+      // humusvesiin sovitettu; Poole & Atkins 1929 alkuperäinen 1,7 pätee kirkkaisiin).
+      // Vertailukohta on Lappajärven näkösyvyys 1,8 m, jolle taulukon arvot on viritetty.
+      //
+      // VARAUS: muikulle ei löytynyt julkaistua Secchi–syvyys-kerrointa, joten skaalaus on
+      // johdettu valofysiikasta eikä mitattu. Vaikutus on siksi rajattu kertoimeen
+      // 0,6–1,8, jottei se vie lukemia mielivaltaisen kauas taulukosta.
+      if (hour >= 9 && hour <= 16) {
+        const a = answers;
+        let secchi = 1.8;
+        if (a.clarity === 1) secchi = 0.4;
+        else if (a.clarity === 2) secchi = 1.8;
+        else if (a.clarity === 3) secchi = 2.8;
+        else if (a.clarity === 4) secchi = 4.5;
+        else if (a.clarity === 5) secchi = 7.0;
+        if (typeof currentLocation.secchiMeters === 'number') secchi = currentLocation.secchiMeters;
+
+        // Sama valotaso siirtyy syvemmälle suhteessa Kd:n käänteislukuun, eli
+        // suhteessa näkösyvyyteen. Vertailu Lappajärveen (1,8 m).
+        const kerroin = Math.min(1.8, Math.max(0.6, Math.sqrt(secchi / 1.8)));
+        d = d * kerroin;
+      }
+
       if (thermoDepth && !isNaN(thermoDepth)) {
         if (hour >= 9 && hour <= 16) {
           if (isDarkOrRough || (temp !== undefined && temp <= 16)) {
