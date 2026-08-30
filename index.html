@@ -1411,6 +1411,41 @@
       window.addEventListener('load', pwaTila);
     }
 
+    // ===== OMAT MERKINNÄT — OziExplorer-karttatyö 2014 =====
+    // Nämä ovat käyttäjän OMIA lohikalamerkintöjä Lappajärveltä, luettu .map-tiedoston
+    // georeferoinnista. Ne ovat projektin luotettavinta paikkatietoa: eivät artikkelista,
+    // videokuvasta eivätkä analogiasta toisesta järvestä, vaan tästä järvestä.
+    //
+    // MIKSI OMANA TASONAAN eikä ottipaikkoina: näissä on koordinaatti ja merkintä, mutta
+    // ei taktiikkaa, pohjatietoa eikä tuulisuuntaa. Jos ne muutettaisiin ottipaikoiksi,
+    // joutuisin keksimään ne tiedot — ja juuri sitä olemme koko projektin ajan purkaneet.
+    // Merkintä säilyy sellaisena kuin sen kirjoitit.
+    //
+    // MUKANA VAIN VARMAT: 18 merkintää, joissa ei ole kysymysmerkkiä. Kuusi epävarmaa
+    // ("LOHTA ?", "Taimenta ?", "TÄSTÄ VOIS KOKEILLA") jätettiin pois, koska ne ovat
+    // arvauksia eivätkä havaintoja. Kuuden pisteen luoteisrykelmä on jo omana
+    // ottipaikkanaan, joten se ei ole tässä uudestaan.
+    const omatMerkinnat = [
+      { lat: 63.19349, lon: 23.58406, t: "Taimen" },
+      { lat: 63.15542, lon: 23.62484, t: "Taimen itätuuli" },
+      { lat: 63.15411, lon: 23.54693, t: "Taimen" },
+      { lat: 63.14800, lon: 23.56630, t: "taimen 30 cm potk parvi" },
+      { lat: 63.14781, lon: 23.61185, t: "taimen ip" },
+      { lat: 63.14762, lon: 23.59559, t: "taimen 08:30" },
+      { lat: 63.14449, lon: 23.61594, t: "TAIMEN ja JÄRVILOHI 10 m käyrä 7.7 itätuuli" },
+      { lat: 63.14412, lon: 23.59857, t: "taimen ip" },
+      { lat: 63.13318, lon: 23.55265, t: "Taimen" },
+      { lat: 63.13192, lon: 23.56298, t: "Taimen 17.7" },
+      { lat: 63.12947, lon: 23.58355, t: "Taimen" },
+      { lat: 63.12888, lon: 23.55747, t: "Taimen" },
+      { lat: 63.12687, lon: 23.59136, t: "Taimen" },
+      { lat: 63.11291, lon: 23.58085, t: "Taimen" },
+      { lat: 63.11083, lon: 23.61757, t: "Etelään 7.5-11 m vedes jalokala 7.10" },
+      { lat: 63.11024, lon: 23.58779, t: "kesäkuu alku taimen iso" },
+      { lat: 63.10492, lon: 23.59626, t: "Taimen 2.7 21:00" },
+      { lat: 63.10202, lon: 23.62371, t: "Pohjoiseen 7.5-11 m vedes jalokala 7.10" },
+    ];
+
     // ===== OTTIPISTEHÄLYTYS =====
     // Soittaa oman ääniraidan kun vene LÄHESTYY taimenpistettä alle 50 m etäisyydellä.
     // Kolme sääntöä käyttäjän määrittelyn mukaan:
@@ -1425,8 +1460,18 @@
     let ottiLaukaistu = {};           // piste odottaa poistumista ennen uutta laukaisua
 
     function taimenPisteet() {
-      return Object.values(lappajarviHotspots).filter(
+      // Kaksi lähdettä: mallin ottipaikat (joilla on taktiikka ja perustelu) sekä
+      // käyttäjän omat karttamerkinnät (joilla on vain koordinaatti ja havainto).
+      // Molemmat laukaisevat hälytyksen, mutta omat merkinnät erottuvat nimestä.
+      const ottipaikat = Object.values(lappajarviHotspots).filter(
         h => h.targetSpecies && h.targetSpecies.toLowerCase().includes('taimen'));
+      const omat = omatMerkinnat.map((m, i) => ({
+        id: 'oma_' + i,
+        name: 'Oma merkintä: ' + m.t,
+        lat: m.lat, lon: m.lon,
+        omaMerkinta: true
+      }));
+      return ottipaikat.concat(omat);
     }
 
     function metreina(lat1, lon1, lat2, lon2) {
