@@ -973,6 +973,18 @@
     </div>
 
     <div class="progress" id="progress"></div>
+    <!-- PIKAPANEELI: kolme arvoa jotka muuttuvat joka reissulla -->
+    <div class="q" id="pikapaneeli" style="border-color:var(--amber); background:radial-gradient(ellipse at top left, rgba(255,176,32,0.05) 0%, var(--panel) 75%);">
+      <div class="idx">Pikasäätö</div>
+      <h2>Muuttuu joka reissulla</h2>
+      <p class="hint">Vesi, tuuli ja valo vaihtuvat jokaisella kerralla. Muut vastaukset muistetaan, joten näitä kolmea säätämällä pääset useimmiten suoraan analyysiin.</p>
+      <div id="pikaSisalto"></div>
+      <button onclick="analyze(); document.getElementById('resultsSection').scrollIntoView({behavior:'smooth'});"
+              style="width:100%; margin-top:12px; background:var(--amber); color:#1a1200; border:none; border-radius:10px; font-family:'Barlow Condensed',sans-serif; font-size:20px; font-weight:700; letter-spacing:.02em; padding:14px; cursor:pointer;">
+        Analysoi näillä
+      </button>
+    </div>
+
     <div id="questions"></div>
 
     <div id="result">
@@ -2461,27 +2473,6 @@
         defaultVal: 'open'
       },
       {
-        id: 'map_data', title: 'Karttadata (Genesis)',
-        hint: 'Sinisestä kartasta pelkkä syvyyskartta, punaisesta kartasta pohjankovuus.',
-        options: [
-          { l: 'Matala / Pehmeä', v: 'shallow_soft' },
-          { l: 'Syvä / Pehmeä', v: 'deep_soft' },
-          { l: 'Matala / Kova (Punainen)', v: 'shallow_hard' },
-          { l: 'Syvä / Kova (Punainen)', v: 'deep_hard' }
-        ],
-        defaultVal: 'deep_hard'
-      },
-      {
-        id: 'speed', title: 'Uistelunopeus (SOG)',
-        hint: 'Vaikuttaa vieheen uintisyvyyteen (esim. NMEA 2000 -väylästä luettu nopeus).',
-        options: [
-          { l: '< 3.5 km/h (Hidas)', v: 'slow' },
-          { l: '3.5 – 4.2 km/h (Normaali)', v: 'normal' },
-          { l: '> 4.2 km/h (Nopea/Ärsyke)', v: 'fast' }
-        ],
-        defaultVal: 'normal'
-      },
-      {
         id: 'targetSize', title: 'Tavoitekoko (taimen)',
         hint: 'Tutkimus: taimen muuttuu kalansyöjäksi n. 30 cm:ssä, ja ruokavalio vaihtuu selvästi samassa kohdassa. Suuret yksilöt ovat ulappapetoja jotka seuraavat muikkuparvia, pienemmät pysyvät rantavyöhykkeellä pohjaeläinravinnossa (L\'Abée-Lund ym. 1992; Jensen ym. 2012).',
         options: [
@@ -2794,6 +2785,66 @@
       });
 
       return { topSpot, whyChosen, timeline };
+    }
+
+    // ===== VASTAUSTEN MUISTI =====
+    // Kysymyksiä on 13, mutta vain osa muuttuu reissujen välillä. Kausi, näkösyvyys ja
+    // kokoluokat pysyvät samoina viikkoja; vesi, tuuli ja valo vaihtuvat joka kerta.
+    // Muistetaan kaikki vastaukset, jotta ei tarvitse valita alusta joka käynnistyksellä.
+    const LS_VASTAUKSET = 'nopeusnaytto_pro1_vastaukset';
+
+    function tallennaVastaukset() {
+      try {
+        const t = {};
+        questions.forEach(q => { if (answers[q.id] !== undefined) t[q.id] = answers[q.id]; });
+        localStorage.setItem(LS_VASTAUKSET, JSON.stringify(t));
+      } catch (e) { /* muisti täynnä tai estetty — ei kriittistä */ }
+    }
+
+    function palautaVastaukset() {
+      try {
+        const raw = localStorage.getItem(LS_VASTAUKSET);
+        if (!raw) return;
+        const t = JSON.parse(raw);
+        questions.forEach(q => { if (t[q.id] !== undefined) answers[q.id] = t[q.id]; });
+      } catch (e) { /* rikkinäinen data — käytetään oletuksia */ }
+    }
+
+    // Pikapaneeliin nostetut kysymykset: nämä kolme muuttuvat käytännössä joka reissulla.
+    const PIKA_KYSYMYKSET = ['temp', 'wind', 'light'];
+
+    function renderPika() {
+      const c = document.getElementById('pikaSisalto');
+      if (!c) return;
+      c.innerHTML = '';
+      PIKA_KYSYMYKSET.forEach(id => {
+        const q = questions.find(x => x.id === id);
+        if (!q || !q.options) return;
+        const wrap = document.createElement('div');
+        wrap.style.marginBottom = '12px';
+        const otsikko = document.createElement('p');
+        otsikko.className = 'hint';
+        otsikko.style.margin = '0 0 5px';
+        otsikko.textContent = q.title;
+        wrap.appendChild(otsikko);
+
+        const rivi = document.createElement('div');
+        rivi.className = 'options';
+        q.options.forEach(o => {
+          const chip = document.createElement('div');
+          chip.className = 'chip' + (answers[q.id] === o.v ? ' selected' : '');
+          chip.textContent = o.l;
+          chip.onclick = () => {
+            answers[q.id] = o.v;
+            tallennaVastaukset();
+            renderPika();
+            renderQuestions();   // pidetään alempi lista synkassa
+          };
+          rivi.appendChild(chip);
+        });
+        wrap.appendChild(rivi);
+        c.appendChild(wrap);
+      });
     }
 
     function renderQuestions() {
@@ -4674,12 +4725,19 @@
       }
       let gearTip = gearTips.join(' ');
 
-      if (a.speed === 'fast') {
-        gearDepthBias -= 0.5;
-        gearTip += " Kova vauhti nostaa uintia — pidennä vapautuspituuksia tai lisää painoa.";
-      } else if (a.speed === 'slow') {
-        gearDepthBias += 0.5;
-        gearTip += " Hidas vauhti — tarkkaile pohjakosketuksia, jos käytät painosyvääjiä.";
+      // POISTETTU 29.8.2026: erillinen "Uistelunopeus (SOG)" -kysymys. Se ei vaikuttanut
+      // laskentaan lainkaan (vain perustelutekstiin), ja se oli päällekkäinen paremman
+      // tiedon kanssa: nopeus tulee jo GPS:stä nopeusnäytölle ja Dipsy-laskuriin, jossa
+      // sitä käytetään oikeaan laskentaan. Käsin arvioitu luokka oli siis huonompi kopio
+      // mitatusta arvosta. Käytetään nyt GPS-nopeutta, jos se on saatavilla.
+      if (viimeisinNopeus !== null && viimeisinNopeus > 1.0) {
+        if (viimeisinNopeus > 4.2) {
+          gearDepthBias -= 0.5;
+          gearTip += ` GPS-nopeus ${viimeisinNopeus.toFixed(1)} km/h nostaa uintia — pidennä vapautuspituuksia tai lisää painoa.`;
+        } else if (viimeisinNopeus < 3.5) {
+          gearDepthBias += 0.5;
+          gearTip += ` GPS-nopeus ${viimeisinNopeus.toFixed(1)} km/h on hidas — tarkkaile pohjakosketuksia, jos käytät painosyvääjiä.`;
+        }
       }
 
       // KORJATTU: gearDepthBias oli aiemmin laskettu mutta ei käytetty mihinkään (kuollut koodi).
@@ -4692,8 +4750,12 @@
         gearTip += ` ➜ Kalustosi/vauhtisi nostaa vieheen n. ${Math.abs(gearDepthBias).toFixed(1)} m ylemmäs — tarvitset lisää siimaa tai painoa tavoitesyvyyteen.`;
       }
 
-      if (a.map_data === 'shallow_hard' || a.map_data === 'deep_hard') {
-        reasonsTaimen.push("Punainen Genesis-kartta (kova pohja) havaittu: Optimaalinen ruokailualue lohikaloille (sininen kartta näyttää vain syvyyden).");
+      // Kova pohja on lohikaloille parempi ruokailualue kuin pehmeä. Tämä perustelu oli
+      // aiemmin kytketty erilliseen "Karttadata (Genesis)" -kysymykseen, joka POISTETTIIN
+      // 29.8.2026: se ei vaikuttanut laskentaan lainkaan ja oli päällekkäinen tämän
+      // pohjanmuoto-kysymyksen kanssa. Perustelu siirrettiin tänne, missä tieto jo on.
+      if (a.bottom === 'rocky' || a.bottom === 'edge') {
+        reasonsTaimen.push("Kova pohja (kivikko tai penkan reuna) on lohikaloille parempi ruokailualue kuin pehmeä tasainen pohja. Lowrance Genesis -kartan punainen taso näyttää tämän suoraan; sininen taso näyttää vain syvyyden.");
       }
 
       // UUSI: "Taimenkeli?" -artikkelin havainnot.
@@ -5141,7 +5203,9 @@
       if (opts && opts.children[idx]) opts.children[idx].click();
     }
 
+    palautaVastaukset();   // muistetut vastaukset ennen ensimmäistä renderöintiä
     renderQuestions();
+    renderPika();
     loadSettings();
     renderSlideDiverOptions();
     renderKalaLajit();
