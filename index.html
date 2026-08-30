@@ -1254,14 +1254,28 @@
 
     // ===== SADETUTKA =====
     // Avaa sataako.fi peittonäkymässä. Ei API-avainta, ei tiliä, ei riippuvuutta
-    // maksullisesta karttapalvelusta — juuri siksi tämä on turvallinen lisäys.
+    // maksullisesta karttapalvelusta.
     //
-    // VARASUUNNITELMA: useimmat sivustot estävät upottamisen (X-Frame-Options tai
-    // Content-Security-Policy). Estoa ei voi havaita suoraan JavaScriptista, joten
-    // odotetaan hetki: jos kehys ei ole ehtinyt latautua, tarjotaan nappi uuteen
-    // välilehteen. Näin ruutu ei jää tyhjäksi ilman selitystä.
-    const SADETUTKA_URL = 'https://www.sataako.fi/';
+    // KESKITYS: sataako.fi tukee virallisesti upottamista kyselyparametreilla
+    // (lähde: github.com/heikkipora/sataako-fi, README "Embedding"):
+    //   lng & lat  = kartan keskipiste (WGS84)
+    //   zoom       = zoomaustaso
+    //   collapsed  = true piilottaa sivupaneelin
+    // Ilman näitä kartta avautuu pääkaupunkiseudulle, joka on väärä paikka.
+    // Käytetään ensisijaisesti GPS-sijaintia, muuten valitun järven koordinaatteja.
     let sadetutkaAikakatkaisu = null;
+
+    function sadetutkaUrl() {
+      let lat, lon;
+      if (viimeisinGps) {
+        lat = viimeisinGps.lat; lon = viimeisinGps.lon;
+      } else if (currentLocation) {
+        lat = currentLocation.lat; lon = currentLocation.lon;
+      } else {
+        lat = 63.14378; lon = 23.53885;   // Lappajärvi, Karvala
+      }
+      return `https://www.sataako.fi/?lng=${lon.toFixed(4)}&lat=${lat.toFixed(4)}&zoom=8&collapsed=true`;
+    }
 
     function avaaSadetutka() {
       const ov = document.getElementById('sadetutkaOverlay');
@@ -1274,7 +1288,11 @@
 
       let latautui = false;
       fr.onload = () => { latautui = true; };
-      fr.src = SADETUTKA_URL;
+      fr.src = sadetutkaUrl();
+
+      const paikka = viimeisinGps ? 'GPS-sijainti' : (currentLocation ? currentLocation.name : 'Lappajärvi');
+      const info = document.getElementById('sadetutkaPaikka');
+      if (info) info.textContent = paikka;
 
       clearTimeout(sadetutkaAikakatkaisu);
       sadetutkaAikakatkaisu = setTimeout(() => {
@@ -1291,7 +1309,7 @@
     }
 
     function sadetutkaUuteenValilehteen() {
-      window.open(SADETUTKA_URL, '_blank', 'noopener');
+      window.open(sadetutkaUrl(), '_blank', 'noopener');
     }
 
     // Takaisin-painike sulkee peittonäkymän eikä poistu sovelluksesta.
@@ -5148,7 +5166,9 @@
   <!-- SADETUTKAN PEITTONÄKYMÄ -->
   <div id="sadetutkaOverlay" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(4,10,18,0.96); flex-direction:column;">
     <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-bottom:1px solid var(--line); flex:0 0 auto;">
-      <div style="color:var(--cyan); font-family:'Barlow Condensed',sans-serif; font-size:20px; letter-spacing:.04em;">SADETUTKA</div>
+      <div style="color:var(--cyan); font-family:'Barlow Condensed',sans-serif; font-size:20px; letter-spacing:.04em;">
+        SADETUTKA <span id="sadetutkaPaikka" style="color:var(--muted); font-size:14px; letter-spacing:0;"></span>
+      </div>
       <div style="display:flex; gap:8px;">
         <button class="chip" onclick="sadetutkaUuteenValilehteen()" style="border-color:var(--muted); color:var(--muted);">Uusi välilehti</button>
         <button class="chip" onclick="suljeSadetutka()" style="border-color:var(--hard-red); color:var(--hard-red);">Sulje</button>
