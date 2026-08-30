@@ -18,23 +18,6 @@
        Päivätila tähtää WCAG AAA -kontrastiin (7:1), koska heijastus syö osan siitä.
        Yötilassa punasävyt säästävät hämäränäköä. */
 
-    /* PÄIVÄ — kirkas aurinko, valkoinen tausta, lähes musta teksti */
-    html[data-tila="paiva"] {
-      --bg: #F2F5F8;
-      --panel: #FFFFFF;
-      --panel-alt: #E6EDF4;
-      --line: #B8C6D6;
-      --text: #0A1420;
-      --muted: #44576B;
-      --amber: #9A5B00;
-      --cyan: #005F73;
-      --pink: #A3005C;
-      --silver: #33475C;
-      --hard-red: #B3000C;
-      --olive: #6B5200;
-      --navy: #003D99;
-    }
-
     /* YÖ — punasävyt, säästää hämäränäköä */
     html[data-tila="yo"] {
       --bg: #0A0000;
@@ -814,6 +797,20 @@
       <p class="sub">Automaattinen syvyysennuste (+30 min), tuulidynamiikka ja GPS-nopeusvaroitin.</p>
       <div class="sonarstrip"></div>
     </header>
+
+    <!-- TUULIHÄLYTYS JA NÄYTTÖTILA -->
+    <div id="tuuliHalytysBox" style="display:none; margin-bottom:12px;"></div>
+    <div style="margin-bottom:14px;">
+      <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+        <span style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;">Näyttö</span>
+        <div class="chip" data-tilanappi="auto"   onclick="asetaNaytto('auto')">Auto</div>
+        <div class="chip" data-tilanappi="hamara" onclick="asetaNaytto('hamara')">◐ Normaali</div>
+        <div class="chip" data-tilanappi="yo"     onclick="asetaNaytto('yo')">☾ Yö</div>
+        <div class="chip" onclick="paivitaTiedot(true)" style="border-color:var(--cyan); color:var(--cyan);">↻ Päivitä</div>
+      </div>
+      <p class="hint" id="nayttoStatus" style="margin-top:5px;"></p>
+      <p class="hint" id="paivitysStatus" style="margin-top:2px;"></p>
+    </div>
 
     <!-- SADETUTKA — nappi nopeusnäytön yläpuolella -->
     <div style="margin-bottom:14px;">
@@ -2896,6 +2893,155 @@
     // lyhenteitä eikä sulkuja. Tarkoitus on että sen voi kuunnella ajaessa.
     let puheKaynnissa = false;
 
+    // ===== ILMATIETEEN LAITOKSEN ASEMAHAVAINTO =====
+    // Open-Meteo antaa mallin ennusteen; tämä antaa LÄHIMMÄN ASEMAN MITATUN tuulen.
+    // Mitattu voittaa mallin, joten tätä käytetään ensisijaisena kun se on saatavilla.
+    //
+    // Rajapinta on ilmainen eikä vaadi api-avainta (Ilmatieteen laitos poisti
+    // rekisteröitymisvaatimuksen 2019). Lisenssi CC BY 4.0.
+    // Tallennettu kysely: fmi::observations::weather::simple
+    //   ws_10min = 10 min keskituuli, wg_10min = puuska, wd_10min = suunta
+    //
+    // VARAUS: en voi täältä käsin varmistaa salliiko opendata.fmi.fi selainkutsut
+    // (CORS). Jos ei salli, haku epäonnistuu hiljaisesti ja malli käyttää Open-Meteoa
+    // kuten ennenkin — mitään ei rikkoudu.
+    let fmiTuuli = null;   // { ws, wg, wd, aika, asema }
+
+    async function haeFmiTuuli(lat, lon) {
+      try {
+        const alku = new Date(Date.now() - 60 * 60 * 1000).toISOString().slice(0, 19) + 'Z';
+        const url = 'https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature'
+          + '&storedquery_id=fmi::observations::weather::simple'
+          + `&latlon=${lat.toFixed(4)},${lon.toFixed(4)}`
+          + '&parameters=ws_10min,wg_10min,wd_10min'
+          + `&starttime=${alku}&maxlocations=1`;
+        const r = await fetch(url, { cache: 'no-store' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const xml = new DOMParser().parseFromString(await r.text(), 'text/xml');
+        const el = xml.getElementsByTagNameNS('*', 'BsWfsElement');
+        // Otetaan kustakin suureesta VIIMEISIN ei-NaN arvo.
+        const viim = {};
+        let aika = null, asema = null;
+        for (let i = 0; i < el.length; i++) {
+          const nimi = el[i].getElementsByTagNameNS('*', 'ParameterName')[0]?.textContent;
+          const arvo = parseFloat(el[i].getElementsByTagNameNS('*', 'ParameterValue')[0]?.textContent);
+          const t = el[i].getElementsByTagNameNS('*', 'Time')[0]?.textContent;
+          if (nimi && !isNaN(arvo)) { viim[nimi] = arvo; if (t) aika = t; }
+        }
+        const nimiEl = xml.getElementsByTagNameNS('*', 'name')[0];
+        if (nimiEl) asema = nimiEl.textContent;
+        if (viim.ws_10min === undefined && viim.wg_10min === undefined) throw new Error('ei dataa');
+        fmiTuuli = {
+          ws: viim.ws_10min, wg: viim.wg_10min, wd: viim.wd_10min,
+          aika: aika ? new Date(aika) : null, asema: asema || 'lähin asema'
+        };
+        return fmiTuuli;
+      } catch (e) {
+        console.warn('FMI-asemahaku ei onnistunut:', e.message);
+        fmiTuuli = null;
+        return null;
+      }
+    }
+
+    // ===== TUULIHÄLYTYS =====
+    // Rajat käyttäjän oman kokemuksen mukaan: puuska yli 15 m/s tai jatkuva yli 7 m/s.
+    // Nämä ovat veneilyturvallisuuden rajoja, eivät kalabiologiaa — siksi ne eivät
+    // vaikuta syvyysmalliin lainkaan, vain näkyvään varoitukseen.
+    const TUULI_PUUSKA_RAJA = 15;
+    const TUULI_JATKUVA_RAJA = 7;
+
+    function tuuliHalytysTila() {
+      // Mitattu asemahavainto voittaa mallin ennusteen.
+      const ws = fmiTuuli && fmiTuuli.ws !== undefined ? fmiTuuli.ws
+               : (omLatest ? omLatest.wind : null);
+      const wg = fmiTuuli && fmiTuuli.wg !== undefined ? fmiTuuli.wg
+               : (omLatest ? omLatest.gust : null);
+      const lahde = (fmiTuuli && fmiTuuli.ws !== undefined) ? ('mitattu, ' + fmiTuuli.asema) : 'ennuste';
+      if (ws === null && wg === null) return null;
+      const puuskaYli = (wg !== null && wg !== undefined && wg >= TUULI_PUUSKA_RAJA);
+      const jatkuvaYli = (ws !== null && ws !== undefined && ws >= TUULI_JATKUVA_RAJA);
+      return { ws, wg, lahde, halytys: (puuskaYli || jatkuvaYli), puuskaYli, jatkuvaYli };
+    }
+
+    function piirraTuuliHalytys() {
+      const box = document.getElementById('tuuliHalytysBox');
+      if (!box) return;
+      const t = tuuliHalytysTila();
+      if (!t) { box.style.display = 'none'; return; }
+
+      if (!t.halytys) {
+        box.style.display = 'block';
+        box.innerHTML = `<p class="hint" style="margin:0;">Tuuli ${t.ws !== null && t.ws !== undefined ? t.ws.toFixed(1) : '—'} m/s`
+          + `${t.wg !== null && t.wg !== undefined ? ', puuskat ' + t.wg.toFixed(1) + ' m/s' : ''}`
+          + ` <span style="opacity:.7;">(${t.lahde})</span></p>`;
+        return;
+      }
+
+      // Punainen tuulisukka valkoisin raidoin. Liehuu kevyesti, jotta se erottuu
+      // vilkaisulla ilman että se vie huomiota nopeuslukemasta.
+      box.style.display = 'block';
+      box.innerHTML = `
+        <div style="display:flex; align-items:center; gap:12px; background:rgba(255,69,58,0.12); border:1px solid var(--hard-red); border-radius:10px; padding:10px 12px;">
+          <svg width="54" height="34" viewBox="0 0 54 34" style="flex:0 0 auto;">
+            <line x1="4" y1="2" x2="4" y2="32" stroke="#8FA3B8" stroke-width="2.5"/>
+            <g>
+              <animateTransform attributeName="transform" type="translate"
+                values="0 0; 0 -1.5; 0 0; 0 1.5; 0 0" dur="2.2s" repeatCount="indefinite"/>
+              <polygon points="6,7 42,11 42,21 6,25" fill="#FF453A"/>
+              <polygon points="14,8.1 18,8.5 18,23.5 14,23.9" fill="#FFFFFF" opacity="0.92"/>
+              <polygon points="26,9.4 30,9.8 30,22.2 26,22.6" fill="#FFFFFF" opacity="0.92"/>
+              <polygon points="42,11 50,13 50,19 42,21" fill="#FF453A" opacity="0.75"/>
+            </g>
+          </svg>
+          <div style="min-width:0;">
+            <div style="font-family:'Barlow Condensed',sans-serif; font-size:19px; font-weight:700; color:var(--hard-red); letter-spacing:.02em;">
+              TUULIVAROITUS
+            </div>
+            <div style="font-size:13px; color:var(--text); line-height:1.35;">
+              ${t.jatkuvaYli ? `Jatkuva tuuli ${t.ws.toFixed(1)} m/s (raja ${TUULI_JATKUVA_RAJA}).` : ''}
+              ${t.puuskaYli ? `Puuskat ${t.wg.toFixed(1)} m/s (raja ${TUULI_PUUSKA_RAJA}).` : ''}
+              <span style="color:var(--muted);">Lähde: ${t.lahde}.</span>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    // ===== AUTOMAATTINEN PÄIVITYS =====
+    // Sää, tuuli ja vedenkorkeus vanhenevat reissun aikana. Päivitetään puolen tunnin
+    // välein, mutta vain kun sivu on näkyvissä — taustalla se olisi turhaa akunkulutusta.
+    let viimeisinPaivitys = 0;
+    const PAIVITYSVALI = 30 * 60 * 1000;
+
+    async function paivitaTiedot(pakota) {
+      const nyt = Date.now();
+      if (!pakota && nyt - viimeisinPaivitys < PAIVITYSVALI) return;
+      viimeisinPaivitys = nyt;
+      const st = document.getElementById('paivitysStatus');
+      if (st) st.textContent = 'Päivitetään…';
+      try {
+        const lat = viimeisinGps ? viimeisinGps.lat : currentLocation.lat;
+        const lon = viimeisinGps ? viimeisinGps.lon : currentLocation.lon;
+        await Promise.allSettled([
+          (typeof fetchOpenMeteo === 'function') ? fetchOpenMeteo() : Promise.resolve(),
+          haeFmiTuuli(lat, lon)
+        ]);
+        piirraTuuliHalytys();
+        if (st) {
+          const k = new Date().toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' });
+          st.innerHTML = `Päivitetty ${k}${fmiTuuli ? ' · asemahavainto: ' + fmiTuuli.asema : ''}`;
+        }
+      } catch (e) {
+        if (st) st.textContent = 'Päivitys ei onnistunut — verkko poissa?';
+      }
+    }
+
+    setInterval(() => {
+      if (document.visibilityState === 'visible') paivitaTiedot(false);
+    }, 5 * 60 * 1000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') paivitaTiedot(false);
+    });
+
     // ===== NÄYTTÖTILA: PÄIVÄ / HÄMÄRÄ / YÖ =====
     // Puuttui aiemmin kokonaan. Karttaplotterien ja merenkulun standardien (IEC 62288,
     // IHO S-52) vakioratkaisu, ja se on käytännössä tärkein ergonomiakorjaus veneessä:
@@ -2909,9 +3055,12 @@
       const h = new Date().getHours() + new Date().getMinutes() / 60;
       const r = (cachedSunData && cachedSunData.rise) ? cachedSunData.rise : 6;
       const s = (cachedSunData && cachedSunData.set) ? cachedSunData.set : 21;
-      if (h > r + 1 && h < s - 1) return 'paiva';      // selvä päivä
-      if (h < r - 1 || h > s + 1) return 'yo';         // selvä yö
-      return 'hamara';                                  // siirtymä: oletustumma
+      // PÄIVÄTILA POISTETTU 29.8.2026: kokeilin vaaleaa palettia, mutta se latisti
+      // lajivärit (taimenen pinkki, kuhan keltainen) sameiksi ja heikensi luettavuutta.
+      // Alkuperäinen tumma teema on huolella tehty; sitä ei kannata korvata kiireessä
+      // kootulla. Jäljellä on hämärä (alkuperäinen) ja yö (punasävyt hämäränäölle).
+      if (h < r - 1 || h > s + 1) return 'yo';
+      return 'hamara';
     }
 
     function asetaNaytto(tila) {
@@ -2921,7 +3070,7 @@
       // Hämärä käyttää alkuperäistä tummaa palettia, joten attribuuttia ei aseteta.
       if (t === 'hamara') document.documentElement.removeAttribute('data-tila');
       else document.documentElement.setAttribute('data-tila', t);
-      const nimet = { auto: 'Auto', paiva: 'Päivä', hamara: 'Hämärä', yo: 'Yö' };
+      const nimet = { auto: 'Auto', hamara: 'Normaali', yo: 'Yö' };
       document.querySelectorAll('[data-tilanappi]').forEach(b => {
         b.classList.toggle('selected', b.getAttribute('data-tilanappi') === tila);
       });
@@ -5057,7 +5206,7 @@
       const lat = coords.lat, lon = coords.lon;
       statusEl.textContent = 'Haetaan sää- ja aurinkodataa...';
 
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,wind_speed_10m,wind_direction_10m,surface_pressure,cloud_cover&hourly=surface_pressure,cloud_cover,wind_speed_10m&daily=sunrise,sunset&wind_speed_unit=ms&timezone=auto&start_date=${dateStr}&end_date=${dateStr}`;
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,surface_pressure,cloud_cover&hourly=surface_pressure,cloud_cover,wind_speed_10m&daily=sunrise,sunset&wind_speed_unit=ms&timezone=auto&start_date=${dateStr}&end_date=${dateStr}`;
 
       try {
         const res = await fetch(url);
@@ -5110,7 +5259,7 @@
           }
         }
 
-        omLatest = { temp: c.temperature_2m, wind: c.wind_speed_10m, windDir: c.wind_direction_10m, pressure: c.surface_pressure, cloud: c.cloud_cover, trend, time: c.time };
+        omLatest = { temp: c.temperature_2m, wind: c.wind_speed_10m, gust: c.wind_gusts_10m, windDir: c.wind_direction_10m, pressure: c.surface_pressure, cloud: c.cloud_cover, trend, time: c.time };
 
         const moon = getMoonPhase(now2);
         statusEl.innerHTML = `${c.temperature_2m.toFixed(1)} °C · tuuli ${c.wind_speed_10m.toFixed(1)} m/s · pilvisyys ${c.cloud_cover.toFixed(0)}% · paine ${c.surface_pressure.toFixed(0)} hPa · ☀ Nousee ${cachedSunData.riseStr} · Laskee ${cachedSunData.setStr}<br>🌙 ${moon.name} (${(moon.illumination * 100).toFixed(0)}% valaistu)`;
@@ -5846,6 +5995,7 @@
     }
 
     palautaNaytto();       // näyttötila ensin, jottei sivu välähdä väärällä paletilla
+    setTimeout(() => paivitaTiedot(true), 1500);   // asemahavainto ja tuulihälytys heti
     palautaVastaukset();   // muistetut vastaukset ennen ensimmäistä renderöintiä
     renderQuestions();
     renderPika();
