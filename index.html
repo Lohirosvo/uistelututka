@@ -10,6 +10,48 @@
     href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
     rel="stylesheet">
   <style>
+    /* ===== KOLME VÄRIPALETTIA =====
+       Lähde: IEC 62288 ja IHO S-52 (merenkulun näyttöstandardit) määrittelevät erilliset
+       päivä-, hämärä- ja yöpaletit. Sama ratkaisu on Deeperissä, Navionicsissa ja
+       kaikissa karttaplottereissa. Perustelu: kirkas auringonvalo pesee kontrastin pois
+       tummalta taustalta, ja yöllä kirkas näyttö tuhoaa hämäränäön.
+       Päivätila tähtää WCAG AAA -kontrastiin (7:1), koska heijastus syö osan siitä.
+       Yötilassa punasävyt säästävät hämäränäköä. */
+
+    /* PÄIVÄ — kirkas aurinko, valkoinen tausta, lähes musta teksti */
+    html[data-tila="paiva"] {
+      --bg: #F2F5F8;
+      --panel: #FFFFFF;
+      --panel-alt: #E6EDF4;
+      --line: #B8C6D6;
+      --text: #0A1420;
+      --muted: #44576B;
+      --amber: #9A5B00;
+      --cyan: #005F73;
+      --pink: #A3005C;
+      --silver: #33475C;
+      --hard-red: #B3000C;
+      --olive: #6B5200;
+      --navy: #003D99;
+    }
+
+    /* YÖ — punasävyt, säästää hämäränäköä */
+    html[data-tila="yo"] {
+      --bg: #0A0000;
+      --panel: #1A0505;
+      --panel-alt: #260808;
+      --line: #4A1414;
+      --text: #FF9A8A;
+      --muted: #B05F55;
+      --amber: #FF7043;
+      --cyan: #FF8A65;
+      --pink: #FF6E6E;
+      --silver: #E09080;
+      --hard-red: #FF3B30;
+      --olive: #D4703A;
+      --navy: #FF8A65;
+    }
+
     :root {
       --bg: #060B14;
       --panel: #0E1B2E;
@@ -2854,6 +2896,50 @@
     // lyhenteitä eikä sulkuja. Tarkoitus on että sen voi kuunnella ajaessa.
     let puheKaynnissa = false;
 
+    // ===== NÄYTTÖTILA: PÄIVÄ / HÄMÄRÄ / YÖ =====
+    // Puuttui aiemmin kokonaan. Karttaplotterien ja merenkulun standardien (IEC 62288,
+    // IHO S-52) vakioratkaisu, ja se on käytännössä tärkein ergonomiakorjaus veneessä:
+    // tumma teema on väärä valinta kirkkaassa auringossa, kirkas väärä yöllä.
+    //
+    // Automaattinen valinta auringon mukaan, mutta käsivalinta ohittaa sen ja muistetaan.
+    const LS_TILA = 'nopeusnaytto_pro1_naytto';
+    let naytto = 'auto';
+
+    function paatteleTila() {
+      const h = new Date().getHours() + new Date().getMinutes() / 60;
+      const r = (cachedSunData && cachedSunData.rise) ? cachedSunData.rise : 6;
+      const s = (cachedSunData && cachedSunData.set) ? cachedSunData.set : 21;
+      if (h > r + 1 && h < s - 1) return 'paiva';      // selvä päivä
+      if (h < r - 1 || h > s + 1) return 'yo';         // selvä yö
+      return 'hamara';                                  // siirtymä: oletustumma
+    }
+
+    function asetaNaytto(tila) {
+      naytto = tila;
+      try { localStorage.setItem(LS_TILA, tila); } catch (e) { /* ei kriittistä */ }
+      const t = (tila === 'auto') ? paatteleTila() : tila;
+      // Hämärä käyttää alkuperäistä tummaa palettia, joten attribuuttia ei aseteta.
+      if (t === 'hamara') document.documentElement.removeAttribute('data-tila');
+      else document.documentElement.setAttribute('data-tila', t);
+      const nimet = { auto: 'Auto', paiva: 'Päivä', hamara: 'Hämärä', yo: 'Yö' };
+      document.querySelectorAll('[data-tilanappi]').forEach(b => {
+        b.classList.toggle('selected', b.getAttribute('data-tilanappi') === tila);
+      });
+      const st = document.getElementById('nayttoStatus');
+      if (st) st.textContent = (tila === 'auto')
+        ? `Automaattinen — nyt ${nimet[t].toLowerCase()}. Vaihtuu auringonnousun ja -laskun mukaan.`
+        : `Kiinteä: ${nimet[tila].toLowerCase()}.`;
+    }
+
+    function palautaNaytto() {
+      let t = 'auto';
+      try { t = localStorage.getItem(LS_TILA) || 'auto'; } catch (e) { /* oletus */ }
+      asetaNaytto(t);
+    }
+
+    // Automaattitilassa tarkistetaan aika ajoin, onko aika vaihtaa.
+    setInterval(() => { if (naytto === 'auto') asetaNaytto('auto'); }, 5 * 60 * 1000);
+
     // ===== SYVYYSKARTTA SOVELLUKSEN SISÄLLÄ =====
     // Miksi tämä eikä Google Earth: Earth avautuu erillisenä sovelluksena, josta paluu
     // vaatii Androidin monitehtävänäkymän. Veneessä se on kömpelöä. Tämä näkymä sulkeutuu
@@ -3150,8 +3236,12 @@
       }
 
       // Syvyydet — vain olennaiset, ei kaikkia kuutta
-      osat.push(`Syöttikala on noin ${e.muikku.toFixed(0)} metrissä.`);
-      osat.push(`Taimenelle suositus on ${e.taimen.toFixed(1).replace('.', ' pilkku ')} metriä, järvilohelle ${e.jarvilohi.toFixed(1).replace('.', ' pilkku ')} metriä ja kuhalle ${e.kuha.toFixed(1).replace('.', ' pilkku ')} metriä.`);
+      osat.push(`Syöttikala on noin ${e.muikku.toFixed(0)} metrissä, eli ${Math.round(e.muikku * 3.28084)} jalassa.`);
+      // Jalat mukaan puheeseen, koska takila on jalkamitoitettu.
+      const jl = m => Math.round(m * 3.28084);
+      osat.push(`Taimenelle suositus on ${e.taimen.toFixed(1).replace('.', ' pilkku ')} metriä, eli ${jl(e.taimen)} jalkaa.`);
+      osat.push(`Järvilohelle ${e.jarvilohi.toFixed(1).replace('.', ' pilkku ')} metriä, eli ${jl(e.jarvilohi)} jalkaa.`);
+      osat.push(`Kuhalle ${e.kuha.toFixed(1).replace('.', ' pilkku ')} metriä, eli ${jl(e.kuha)} jalkaa.`);
 
       // Ottipaikka
       if (viimeisinOttipaikka && viimeisinOttipaikka.topSpot) {
@@ -5536,12 +5626,22 @@
     function renderResult({ lowS, highS, lowK, highK, lowH, highH, lowT, highT, lowA, highA, lowJL, highJL, color, area, gearTip, reasonsSyotti, reasonsKuha, reasonsHauki, reasonsTaimen, reasonsAhven, reasonsJarvilohi, svgGraph }) {
       document.getElementById('forecastGraph').innerHTML = svgGraph;
 
-      document.getElementById('depthOutSyotti').textContent = `${lowS.toFixed(1)}–${highS.toFixed(1)} m`;
-      document.getElementById('depthOutKuha').textContent = `${lowK.toFixed(1)}–${highK.toFixed(1)} m`;
-      document.getElementById('depthOutHauki').textContent = `${lowH.toFixed(1)}–${highH.toFixed(1)} m`;
-      document.getElementById('depthOutTaimen').textContent = `${lowT.toFixed(1)}–${highT.toFixed(1)} m`;
-      document.getElementById('depthOutAhven').textContent = `${lowA.toFixed(1)}–${highA.toFixed(1)} m`;
-      document.getElementById('depthOutJarvilohi').textContent = `${lowJL.toFixed(1)}–${highJL.toFixed(1)} m`;
+      // METRIT JA JALAT RINNAKKAIN — uusi 29.8.2026.
+      // Takila on jalkamitoitettu, joten molemmat yksiköt tarvitaan samaan silmäykseen.
+      // Jalat pyöristetään kokonaisiksi: takilan mittari ei näytä desimaaleja, joten
+      // desimaalitarkkuus antaisi väärän vaikutelman tarkkuudesta.
+      function syvyysTeksti(low, high) {
+        const ft = m => Math.round(m * 3.28084);
+        return `${low.toFixed(1)}–${high.toFixed(1)} m`
+             + `<span style="font-size:0.52em; color:var(--muted); display:block; margin-top:2px; letter-spacing:.04em;">`
+             + `${ft(low)}–${ft(high)} ft</span>`;
+      }
+      document.getElementById('depthOutSyotti').innerHTML = syvyysTeksti(lowS, highS);
+      document.getElementById('depthOutKuha').innerHTML = syvyysTeksti(lowK, highK);
+      document.getElementById('depthOutHauki').innerHTML = syvyysTeksti(lowH, highH);
+      document.getElementById('depthOutTaimen').innerHTML = syvyysTeksti(lowT, highT);
+      document.getElementById('depthOutAhven').innerHTML = syvyysTeksti(lowA, highA);
+      document.getElementById('depthOutJarvilohi').innerHTML = syvyysTeksti(lowJL, highJL);
 
       document.getElementById('colorOut').textContent = color;
       document.getElementById('areaOut').textContent = area;
@@ -5745,6 +5845,7 @@
       if (opts && opts.children[idx]) opts.children[idx].click();
     }
 
+    palautaNaytto();       // näyttötila ensin, jottei sivu välähdä väärällä paletilla
     palautaVastaukset();   // muistetut vastaukset ennen ensimmäistä renderöintiä
     renderQuestions();
     renderPika();
