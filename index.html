@@ -1013,7 +1013,8 @@
           <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
             <button class="chip" onclick="naytaPuheteksti()" style="border-color:var(--muted); color:var(--muted);">Näytä tekstinä</button>
             <button class="chip" onclick="puheDiagnostiikka()" style="border-color:var(--muted); color:var(--muted);">Tarkista äänet</button>
-            <button class="chip" id="earthBtn" onclick="avaaGoogleEarth()" style="display:none; border-color:var(--amber); color:var(--amber);">🌍 Avaa kartta Google Earthissa</button>
+            <button class="chip" id="earthBtn" onclick="avaaKartta()" style="display:none; border-color:var(--amber); color:var(--amber);">🗺 Syvyyskartta ja merkinnät</button>
+            <button class="chip" id="earthKmzBtn" onclick="avaaGoogleEarth()" style="display:none; border-color:var(--muted); color:var(--muted);">Google Earthiin</button>
           </div>
           <div id="puheTekstiBox" style="display:none; margin-top:10px; background:var(--panel-alt); border-radius:10px; padding:12px;"></div>
           <p class="hint" id="puheStatus" style="margin-top:6px;">Selostus vedestä, kelistä, syvyyksistä ja parhaasta paikasta. Kuunneltavaksi matkalla.</p>
@@ -2853,6 +2854,189 @@
     // lyhenteitä eikä sulkuja. Tarkoitus on että sen voi kuunnella ajaessa.
     let puheKaynnissa = false;
 
+    // ===== SYVYYSKARTTA SOVELLUKSEN SISÄLLÄ =====
+    // Miksi tämä eikä Google Earth: Earth avautuu erillisenä sovelluksena, josta paluu
+    // vaatii Androidin monitehtävänäkymän. Veneessä se on kömpelöä. Tämä näkymä sulkeutuu
+    // yhdellä napilla takaisin analyysiin, toimii offline eikä vaadi muita sovelluksia.
+    //
+    // Kartta on sama georeferoitu syvyyskartta kuin KMZ:ssä. Koordinaattimuunnos on
+    // suoraviivainen, koska kuvan reunat vastaavat tunnettuja lat/lon-rajoja.
+    const KARTTA = {
+      src: 'syvyyskartta.jpg',
+      N: 63.2476393968922, S: 63.06510185648172,
+      E: 23.80564763625802, W: 23.538893054666
+    };
+    let karttaKuva = null, karttaValmis = false;
+    let kScale = 1, kOffX = 0, kOffY = 0;   // näkymän muunnos
+
+    function karttaLataa() {
+      if (karttaKuva) return;
+      karttaKuva = new Image();
+      karttaKuva.onload = () => { karttaValmis = true; karttaSovita(); };
+      karttaKuva.onerror = () => {
+        karttaValmis = false;
+        const info = document.getElementById('karttaInfo');
+        if (info) info.textContent = '— karttakuvaa ei löytynyt';
+      };
+      karttaKuva.src = KARTTA.src;
+    }
+
+    // lat/lon -> kuvan pikselit
+    function karttaPx(lat, lon) {
+      return {
+        x: (lon - KARTTA.W) / (KARTTA.E - KARTTA.W) * karttaKuva.width,
+        y: (KARTTA.N - lat) / (KARTTA.N - KARTTA.S) * karttaKuva.height
+      };
+    }
+
+    function karttaPisteet() {
+      const lista = [];
+      omatMerkinnat.forEach(m => lista.push({
+        lat: m.lat, lon: m.lon, t: m.t,
+        tyyppi: (m.t.toLowerCase() === 'taimen') ? 'oma' : 'lisatieto'
+      }));
+      Object.values(lappajarviHotspots).forEach(h => lista.push({
+        lat: h.lat, lon: h.lon, t: h.name, tyyppi: 'ottipaikka'
+      }));
+      return lista;
+    }
+
+    function karttaPiirra() {
+      const cv = document.getElementById('karttaCanvas');
+      if (!cv || !karttaValmis) return;
+      const dpr = window.devicePixelRatio || 1;
+      const w = cv.clientWidth, h = cv.clientHeight;
+      if (cv.width !== w * dpr || cv.height !== h * dpr) {
+        cv.width = w * dpr; cv.height = h * dpr;
+      }
+      const ctx = cv.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = '#040a12';
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.drawImage(karttaKuva, kOffX, kOffY, karttaKuva.width * kScale, karttaKuva.height * kScale);
+
+      const varit = { lisatieto: '#ffb020', oma: '#45d3e8', ottipaikka: '#ff4d6d' };
+      karttaPisteet().forEach(p => {
+        const pk = karttaPx(p.lat, p.lon);
+        const x = pk.x * kScale + kOffX, y = pk.y * kScale + kOffY;
+        if (x < -20 || y < -20 || x > w + 20 || y > h + 20) return;
+        ctx.beginPath();
+        ctx.arc(x, y, p.tyyppi === 'ottipaikka' ? 7 : 5.5, 0, Math.PI * 2);
+        ctx.fillStyle = varit[p.tyyppi];
+        ctx.fill();
+        ctx.lineWidth = 1.5; ctx.strokeStyle = '#040a12'; ctx.stroke();
+        // Nimi näkyviin vasta kun on zoomattu riittävästi, ettei ruutu täyty tekstistä
+        if (kScale > 0.55) {
+          ctx.font = '11px sans-serif';
+          ctx.fillStyle = '#e6f0fa';
+          ctx.strokeStyle = 'rgba(4,10,18,0.85)';
+          ctx.lineWidth = 3;
+          const teksti = p.t.length > 26 ? p.t.slice(0, 25) + '…' : p.t;
+          ctx.strokeText(teksti, x + 9, y + 4);
+          ctx.fillText(teksti, x + 9, y + 4);
+        }
+      });
+
+      // Oma sijainti
+      if (viimeisinGps) {
+        const pk = karttaPx(viimeisinGps.lat, viimeisinGps.lon);
+        const x = pk.x * kScale + kOffX, y = pk.y * kScale + kOffY;
+        ctx.beginPath(); ctx.arc(x, y, 11, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(126,217,87,0.25)'; ctx.fill();
+        ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2);
+        ctx.fillStyle = '#7ED957'; ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = '#04121f'; ctx.stroke();
+      }
+    }
+
+    function karttaSovita() {
+      const cv = document.getElementById('karttaCanvas');
+      if (!cv || !karttaValmis) return;
+      const w = cv.clientWidth, h = cv.clientHeight;
+      kScale = Math.min(w / karttaKuva.width, h / karttaKuva.height) * 0.98;
+      kOffX = (w - karttaKuva.width * kScale) / 2;
+      kOffY = (h - karttaKuva.height * kScale) / 2;
+      const info = document.getElementById('karttaInfo');
+      if (info) info.textContent = `${karttaPisteet().length} pistettä`;
+      karttaPiirra();
+    }
+
+    function karttaKeskitaGps() {
+      const info = document.getElementById('karttaInfo');
+      if (!viimeisinGps) {
+        if (info) info.textContent = '— GPS ei käytössä, käynnistä mittari';
+        return;
+      }
+      if (!karttaValmis) return;
+      const cv = document.getElementById('karttaCanvas');
+      kScale = 1.4;
+      const pk = karttaPx(viimeisinGps.lat, viimeisinGps.lon);
+      kOffX = cv.clientWidth / 2 - pk.x * kScale;
+      kOffY = cv.clientHeight / 2 - pk.y * kScale;
+      if (info) info.textContent = 'keskitetty sijaintiisi';
+      karttaPiirra();
+    }
+
+    function avaaKartta() {
+      const ov = document.getElementById('karttaOverlay');
+      if (!ov) return;
+      ov.style.display = 'flex';
+      karttaLataa();
+      // Canvasin koko on tiedossa vasta kun peittonäkymä on näkyvissä.
+      setTimeout(() => { if (karttaValmis) karttaSovita(); }, 60);
+    }
+
+    function suljeKartta() {
+      const ov = document.getElementById('karttaOverlay');
+      if (ov) ov.style.display = 'none';
+    }
+
+    // Kosketus: yhdellä sormella siirto, kahdella zoomaus.
+    (function karttaKosketus() {
+      const cv = document.getElementById('karttaCanvas');
+      if (!cv) return;
+      let raahaus = false, viimX = 0, viimY = 0, pinchEtaisyys = 0;
+
+      const etaisyys = (t) => Math.hypot(
+        t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+
+      cv.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+          raahaus = true; viimX = e.touches[0].clientX; viimY = e.touches[0].clientY;
+        } else if (e.touches.length === 2) {
+          raahaus = false; pinchEtaisyys = etaisyys(e.touches);
+        }
+      }, { passive: true });
+
+      cv.addEventListener('touchmove', (e) => {
+        if (!karttaValmis) return;
+        if (e.touches.length === 1 && raahaus) {
+          const dx = e.touches[0].clientX - viimX, dy = e.touches[0].clientY - viimY;
+          kOffX += dx; kOffY += dy;
+          viimX = e.touches[0].clientX; viimY = e.touches[0].clientY;
+          karttaPiirra();
+        } else if (e.touches.length === 2) {
+          const uusi = etaisyys(e.touches);
+          if (pinchEtaisyys > 0) {
+            const r = cv.getBoundingClientRect();
+            const kx = (e.touches[0].clientX + e.touches[1].clientX) / 2 - r.left;
+            const ky = (e.touches[0].clientY + e.touches[1].clientY) / 2 - r.top;
+            const vanha = kScale;
+            kScale = Math.min(6, Math.max(0.15, kScale * (uusi / pinchEtaisyys)));
+            // Zoomataan sormien keskipisteen ympäri, ei kulman
+            kOffX = kx - (kx - kOffX) * (kScale / vanha);
+            kOffY = ky - (ky - kOffY) * (kScale / vanha);
+            karttaPiirra();
+          }
+          pinchEtaisyys = uusi;
+        }
+      }, { passive: true });
+
+      cv.addEventListener('touchend', () => { raahaus = false; pinchEtaisyys = 0; }, { passive: true });
+    })();
+
     // ===== GOOGLE EARTH -KARTTA =====
     // Avaa KMZ-tiedoston, jossa on Lappajärven syvyyskartta, omat merkinnät ja
     // sovelluksen ottipaikat samalla tasolla. Android tarjoaa Google Earthia
@@ -2869,6 +3053,8 @@
       const onLappajarvi = currentLocation && currentLocation.name &&
                            currentLocation.name.toLowerCase().includes('lappaj');
       b.style.display = onLappajarvi ? 'inline-block' : 'none';
+      const k = document.getElementById('earthKmzBtn');
+      if (k) k.style.display = onLappajarvi ? 'inline-block' : 'none';
     }
 
     function avaaGoogleEarth() {
@@ -5602,6 +5788,27 @@
         <p class="hint">Useimmat sivustot estävät näyttämisen toisen sivun sisällä. Se ei ole vika sovelluksessa eikä sadetutkassa.</p>
         <button class="chip" onclick="sadetutkaUuteenValilehteen()" style="border-color:var(--cyan); color:var(--cyan); font-size:16px; padding:10px 16px;">Avaa sataako.fi uudessa välilehdessä</button>
       </div>
+    </div>
+  </div>
+
+  <!-- SYVYYSKARTTA SOVELLUKSEN SISÄLLÄ -->
+  <div id="karttaOverlay" style="display:none; position:fixed; inset:0; z-index:9998; background:#040a12; flex-direction:column;">
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-bottom:1px solid var(--line); flex:0 0 auto;">
+      <div style="color:var(--amber); font-family:'Barlow Condensed',sans-serif; font-size:20px; letter-spacing:.04em;">
+        SYVYYSKARTTA <span id="karttaInfo" style="color:var(--muted); font-size:13px; letter-spacing:0;"></span>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="chip" onclick="karttaKeskitaGps()" style="border-color:var(--cyan); color:var(--cyan);">Minä</button>
+        <button class="chip" onclick="karttaSovita()" style="border-color:var(--muted); color:var(--muted);">Koko järvi</button>
+        <button class="chip" onclick="suljeKartta()" style="border-color:var(--hard-red); color:var(--hard-red);">Sulje</button>
+      </div>
+    </div>
+    <canvas id="karttaCanvas" style="flex:1 1 auto; width:100%; touch-action:none; display:block;"></canvas>
+    <div style="flex:0 0 auto; padding:8px 14px; border-top:1px solid var(--line); font-size:12px; color:var(--muted);">
+      <span style="color:#ffb020;">★</span> oma merkintä lisätiedolla &nbsp;
+      <span style="color:#45d3e8;">●</span> oma taimenmerkintä &nbsp;
+      <span style="color:#ff4d6d;">◆</span> ottipaikka &nbsp;
+      <span style="color:#7ED957;">◉</span> sinä
     </div>
   </div>
 
