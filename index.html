@@ -1005,6 +1005,19 @@
       <!-- OTTIPAIKKANEUVONTA -->
       <div class="result-panel hotspots" id="hotspotPanel">
         <h2>📍 Taktinen Ottipaikkaneuvonta — Taimen & Järvilohi</h2>
+        <!-- PUHESELOSTUS -->
+        <div style="margin-bottom:14px;">
+          <button id="puheBtn" onclick="toistaPuhe()" style="width:100%; background:var(--panel-alt); color:var(--cyan); border:1px solid var(--cyan); border-radius:12px; font-family:'Barlow Condensed',sans-serif; font-size:20px; font-weight:700; letter-spacing:.02em; padding:14px; cursor:pointer;">
+            ▶ Kuuntele päivän tilanne
+          </button>
+          <div style="display:flex; gap:8px; margin-top:8px;">
+            <button class="chip" onclick="naytaPuheteksti()" style="border-color:var(--muted); color:var(--muted);">Näytä tekstinä</button>
+            <button class="chip" onclick="puheDiagnostiikka()" style="border-color:var(--muted); color:var(--muted);">Tarkista äänet</button>
+          </div>
+          <div id="puheTekstiBox" style="display:none; margin-top:10px; background:var(--panel-alt); border-radius:10px; padding:12px;"></div>
+          <p class="hint" id="puheStatus" style="margin-top:6px;">Selostus vedestä, kelistä, syvyyksistä ja parhaasta paikasta. Kuunneltavaksi matkalla.</p>
+        </div>
+
         <div id="hotspotHeroContainer"></div>
 
         <div class="timeline">
@@ -1263,6 +1276,7 @@
     let viimeisinGps = null;      // { lat, lon }
     let viimeisinNopeus = null;   // km/h
     let viimeisinEnnuste = { taimen: null, jarvilohi: null, kuha: null, muikku: null, taimenkeli: null };
+    let viimeisinOttipaikka = null;   // puheselostusta varten
 
     // ===== SADETUTKA =====
     // Avaa sataako.fi peittonäkymässä. Ei API-avainta, ei tiliä, ei riippuvuutta
@@ -2785,6 +2799,236 @@
       });
 
       return { topSpot, whyChosen, timeline };
+    }
+
+    // ===== PÄIVÄN PUHESELOSTUS =====
+    // Selain osaa puhua ilman verkkoa ja ilman API-avainta (Web Speech API).
+    // Teksti kirjoitetaan KUUNNELTAVAKSI, ei luetteloksi: kokonaisia lauseita, ei
+    // lyhenteitä eikä sulkuja. Tarkoitus on että sen voi kuunnella ajaessa.
+    let puheKaynnissa = false;
+
+    function puheTuettu() {
+      try {
+        return typeof window !== 'undefined'
+          && typeof window.speechSynthesis === 'object'
+          && window.speechSynthesis !== null
+          && typeof window.speechSynthesis.speak === 'function'
+          && typeof SpeechSynthesisUtterance === 'function';
+      } catch (e) { return false; }
+    }
+
+    function suomiAani() {
+      if (!puheTuettu()) return null;
+      const aanet = window.speechSynthesis.getVoices() || [];
+      const fi = aanet.filter(v => (v.lang || '').toLowerCase().startsWith('fi'));
+      if (fi.length === 0) return null;
+      // Naisääntä ei voi valita luotettavasti nimellä, koska nimet vaihtelevat
+      // laitteittain. Suositaan tunnettuja naisäänten tunnisteita, muuten ensimmäinen.
+      const naismerkit = ['female', 'nainen', 'satu', 'suvi', 'heidi', 'milla', 'noora'];
+      const nainen = fi.find(v => naismerkit.some(m => (v.name || '').toLowerCase().includes(m)));
+      return nainen || fi[0];
+    }
+
+    // Näyttää selostuksen tekstinä. Tämä on varasuunnitelma jos puhe ei toimi, mutta
+    // myös itsessään hyödyllinen: tekstin voi lukea nopeasti ennen vesille lähtöä.
+    function naytaPuheteksti() {
+      const t = puheteksti();
+      const el = document.getElementById('puheTekstiBox');
+      if (!el) return;
+      if (!t) { el.innerHTML = '<p class="hint">Aja ensin analyysi.</p>'; el.style.display = 'block'; return; }
+      el.innerHTML = '<p style="font-size:15px; line-height:1.5; color:var(--text); margin:0;">' + t + '</p>';
+      el.style.display = 'block';
+    }
+
+    function puheteksti() {
+      const e = viimeisinEnnuste;
+      const a = answers;
+      if (!e || e.taimen === null) return null;
+
+      const osat = [];
+      const kello = new Date().toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' });
+      const jarvi = currentLocation ? currentLocation.name.replace(/\s*\(.*\)/, '') : 'järvellä';
+
+      // Suomen sijataivutus ei onnistu luotettavasti ohjelmallisesti (Lappajärvi ->
+      // Lappajärvellä, ei Lappajärvillä), joten muotoillaan lause niin ettei taivutusta
+      // tarvita. Kello luetaan pisteellä, jonka suomenkielinen puhesynteesi tulkitsee oikein.
+      osat.push(`Hei. Kello on ${kello}, ja kohteena on ${jarvi}.`);
+
+      // Vesi ja sää
+      const vesi = (latestSykeTemp !== null && latestSykeTemp !== undefined) ? latestSykeTemp : a.temp;
+      if (vesi !== undefined && vesi !== null) {
+        let kuvaus = '';
+        if (vesi >= 18) kuvaus = 'Se on lämmintä, ja lohikalat ovat siksi alempana.';
+        else if (vesi >= 13) kuvaus = 'Se on lohikalojen optimin tienoilla.';
+        else if (vesi >= 8) kuvaus = 'Vesi on viilenemässä, ja se on hyvä merkki.';
+        else if (vesi >= 4) kuvaus = 'Tämä on taimenen parasta aikaa.';
+        else kuvaus = 'Vesi on kylmää, ja kala on hidasliikkeistä.';
+        osat.push(`Pintavesi on ${vesi.toFixed(1).replace('.', ' pilkku ')} astetta. ${kuvaus}`);
+      }
+      if (omLatest && omLatest.wind !== undefined && omLatest.wind !== null) {
+        const suunta = omLatest.windDir !== null && omLatest.windDir !== undefined
+          ? compassName(omLatest.windDir) : null;
+        osat.push(`Tuulee ${omLatest.wind.toFixed(0)} metriä sekunnissa${suunta ? ' ' + suunta.toLowerCase() + 'tuulta' : ''}.`);
+      }
+
+      // Taimenkeli
+      if (e.taimenkeli !== null && e.taimenkeli !== undefined) {
+        osat.push(`Taimenkeli on ${e.taimenkeli} prosenttia, eli ${(e.tkLabel || '').toLowerCase()}.`);
+        // Kaksi merkittävintä tekijää, jotta kuulija ymmärtää MIKSI
+        if (Array.isArray(e.tkParts) && e.tkParts.length) {
+          const jarj = e.tkParts.slice()
+            .filter(p => p && typeof p.v === 'number' && p.t)
+            .sort((x, y) => Math.abs(y.v) - Math.abs(x.v));
+          const siisti = s => String(s).replace(/\s*\([^)]*\)/g, '')
+            .replace(/\bm\b/g, 'metrin').replace(/°C/g, ' astetta')
+            .replace(/\s+/g, ' ').trim();
+          const plussat = jarj.filter(p => p.v > 0).slice(0, 1).map(p => siisti(p.t));
+          const miinukset = jarj.filter(p => p.v < 0).slice(0, 1).map(p => siisti(p.t));
+          if (plussat.length) osat.push(`Puolesta puhuu ${plussat[0].toLowerCase()}.`);
+          if (miinukset.length) osat.push(`Vastaan puhuu ${miinukset[0].toLowerCase()}.`);
+        }
+      }
+
+      // Syvyydet — vain olennaiset, ei kaikkia kuutta
+      osat.push(`Syöttikala on noin ${e.muikku.toFixed(0)} metrissä.`);
+      osat.push(`Taimenelle suositus on ${e.taimen.toFixed(1).replace('.', ' pilkku ')} metriä, järvilohelle ${e.jarvilohi.toFixed(1).replace('.', ' pilkku ')} metriä ja kuhalle ${e.kuha.toFixed(1).replace('.', ' pilkku ')} metriä.`);
+
+      // Ottipaikka
+      if (viimeisinOttipaikka && viimeisinOttipaikka.topSpot) {
+        osat.push(`Paras paikka juuri nyt on ${viimeisinOttipaikka.topSpot.name.replace(/\s*\(.*\)/, '')}.`);
+        if (viimeisinOttipaikka.whyChosen) {
+          // Riisutaan lyhenteet ja asteet luettavaan muotoon
+          const syy = String(viimeisinOttipaikka.whyChosen)
+            .replace(/°C/g, ' astetta')
+            .replace(/(\d)\s*m\b/g, '$1 metrin')
+            .replace(/\s*\([^)]*\)/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+          osat.push(syy);
+        }
+      }
+
+      osat.push('Muista painaa kala kiinni kun tulee otti. Hyvää reissua.');
+      return osat.join(' ');
+    }
+
+    function toistaPuhe() {
+      const st = document.getElementById('puheStatus');
+      if (!puheTuettu()) {
+        // Chrome Androidilla puhesynteesi ON tuettu, joten tämä viesti tarkoittaa
+        // käytännössä aina jotain muuta: selain on hyvin vanha, sivu on rajoitetussa
+        // kehyksessä, tai laitteelta puuttuu puhemoottori kokonaan.
+        if (st) st.innerHTML = '<span style="color:var(--amber);">Puhetoiminto ei ole käytettävissä tässä selaimessa. Näytetään selostus tekstinä.</span>';
+        naytaPuheteksti();
+        return;
+      }
+      if (puheKaynnissa) { pysaytaPuhe(); return; }
+
+      const teksti = puheteksti();
+      if (!teksti) {
+        if (st) st.innerHTML = '<span style="color:var(--amber);">Aja ensin analyysi.</span>';
+        return;
+      }
+
+      // Äänilista latautuu Chromessa VIIVEELLÄ: ensimmäisellä kerralla getVoices()
+      // palauttaa tyhjän taulukon, ja jos puhe käynnistetään silloin, kieli menee
+      // väärin tai ääntä ei kuulu lainkaan. Odotetaan listaa lyhyesti ennen aloitusta.
+      const aloita = () => {
+        const u = new SpeechSynthesisUtterance(teksti);
+        const aani = suomiAani();
+        if (aani) u.voice = aani;
+        u.lang = 'fi-FI';
+        u.rate = 0.95;   // hieman hitaampi, jotta luvut ehtii kuulla ajaessa
+        u.pitch = 1.05;
+
+        u.onstart = () => {
+          puheKaynnissa = true;
+          const b = document.getElementById('puheBtn');
+          if (b) b.textContent = '⏹ Pysäytä';
+          if (st) st.innerHTML = aani
+            ? `<span style="color:var(--cyan);">Toistetaan äänellä ${aani.name}.</span>`
+            : '<span style="color:var(--amber);">Suomenkielistä ääntä ei löytynyt — laite lukee oletusäänellä. Asenna suomen kielipaketti: Asetukset, Kieli ja syöttötapa, Tekstistä puheeksi.</span>';
+        };
+        u.onend = () => {
+          puheKaynnissa = false;
+          const b = document.getElementById('puheBtn');
+          if (b) b.textContent = '▶ Kuuntele päivän tilanne';
+        };
+        u.onerror = (ev) => {
+          puheKaynnissa = false;
+          const b = document.getElementById('puheBtn');
+          if (b) b.textContent = '▶ Kuuntele päivän tilanne';
+          if (st) st.innerHTML = `<span style="color:var(--hard-red);">Puhe ei onnistunut (${ev && ev.error ? ev.error : 'tuntematon syy'}). Näytetään teksti.</span>`;
+          naytaPuheteksti();
+        };
+
+        try {
+          window.speechSynthesis.cancel();
+          window.speechSynthesis.speak(u);
+          // Varmistus: jos puhe ei käynnisty kahdessa sekunnissa, näytetään teksti.
+          setTimeout(() => {
+            if (!puheKaynnissa) {
+              if (st) st.innerHTML = '<span style="color:var(--amber);">Ääni ei käynnistynyt. Tarkista laitteen puhemoottori ja mediaäänenvoimakkuus. Selostus näkyy alla tekstinä.</span>';
+              naytaPuheteksti();
+            }
+          }, 2000);
+        } catch (e) {
+          if (st) st.innerHTML = '<span style="color:var(--hard-red);">Puhe epäonnistui: ' + e.message + '. Näytetään teksti.</span>';
+          naytaPuheteksti();
+        }
+      };
+
+      if ((window.speechSynthesis.getVoices() || []).length === 0) {
+        let aloitettu = false;
+        const kasittele = () => { if (!aloitettu) { aloitettu = true; aloita(); } };
+        window.speechSynthesis.onvoiceschanged = kasittele;
+        setTimeout(kasittele, 700);   // jos tapahtumaa ei tule, aloitetaan silti
+      } else {
+        aloita();
+      }
+    }
+
+    // Vianetsintä: kertoo mitä laitteelta oikeasti löytyy. Tämä on tarpeen, koska
+    // "ei tue puhesynteesiä" on harvoin todellinen syy — useammin puuttuu suomen
+    // kielipaketti tai äänilista ei ole ehtinyt latautua.
+    function puheDiagnostiikka() {
+      const st = document.getElementById('puheStatus');
+      if (!st) return;
+      if (!puheTuettu()) {
+        st.innerHTML = '<span style="color:var(--hard-red);">Puherajapintaa ei löydy tästä selaimesta.</span>';
+        return;
+      }
+      const nayta = () => {
+        const kaikki = window.speechSynthesis.getVoices() || [];
+        const fi = kaikki.filter(v => (v.lang || '').toLowerCase().startsWith('fi'));
+        let s = `Ääniä laitteella: ${kaikki.length}. Suomenkielisiä: ${fi.length}.`;
+        if (fi.length) {
+          s += ' Löydetyt: ' + fi.map(v => v.name).join(', ') + '.';
+          s = '<span style="color:var(--cyan);">' + s + '</span>';
+        } else if (kaikki.length) {
+          s += ' Asenna suomi: Asetukset, Kieli ja syöttötapa, Tekstistä puheeksi, Googlen puhesynteesi, Kielet.';
+          s = '<span style="color:var(--amber);">' + s + '</span>';
+        } else {
+          s = '<span style="color:var(--amber);">Ääniä ei löytynyt. Laitteelta voi puuttua puhemoottori kokonaan, tai lista ei ole vielä latautunut — kokeile uudelleen hetken päästä.</span>';
+        }
+        st.innerHTML = s;
+      };
+      if ((window.speechSynthesis.getVoices() || []).length === 0) {
+        window.speechSynthesis.onvoiceschanged = nayta;
+        setTimeout(nayta, 800);
+      } else nayta();
+    }
+
+    function pysaytaPuhe() {
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      puheKaynnissa = false;
+      const b = document.getElementById('puheBtn');
+      if (b) b.textContent = '▶ Kuuntele päivän tilanne';
+    }
+
+    // Äänilista latautuu selaimessa viiveellä.
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.onvoiceschanged = () => { /* lista päivittyi */ };
     }
 
     // ===== VASTAUSTEN MUISTI =====
@@ -4825,6 +5069,11 @@
         kuha: Number(dKuha.toFixed(1)),
         muikku: Number(activeBaitDepth.toFixed(1)),
         taimenkeli: tk.score,
+        // Puheselostusta varten
+        tkLabel: tk.label,
+        tkParts: tk.parts,
+        hauki: Number(dHauki.toFixed(1)),
+        ahven: Number(dAhven.toFixed(1)),
       };
 
       const tkColor = tk.score >= 75 ? 'var(--cyan)' : tk.score >= 60 ? '#7ED957' : tk.score >= 45 ? 'var(--amber)' : tk.score >= 30 ? '#FF9040' : 'var(--hard-red)';
@@ -4958,6 +5207,7 @@
       const hotspotResult = currentLocation.hasHotspotData
         ? evaluateHotspots(targetHour, wDir, wSpeed, curTemp, a.season)
         : genericLocationAdvice(targetHour, wDir, curTemp, a.season, currentLocation.name);
+      viimeisinOttipaikka = hotspotResult;   // puheselostusta varten
 
       document.getElementById('hotspotHeroContainer').innerHTML = `
     <div class="spot-hero">
