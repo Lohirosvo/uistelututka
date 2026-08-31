@@ -2910,40 +2910,76 @@
 
     async function haeFmiTuuli(lat, lon) {
       try {
-        const alku = new Date(Date.now() - 60 * 60 * 1000).toISOString().slice(0, 19) + 'Z';
+        // KORJATTU 29.8.2026: käytin aiemmin latlon-parametria, jota EI ole dokumentoitu
+        // havaintokyselyille — virallinen pikaohje mainitsee sen vain ennustekyselyille.
+        // Havainnoille dokumentoidut paikkaparametrit ovat place, bbox ja fmisid.
+        // Käytetään bbox:ia, joka toimii koordinaateilla ja etsii asemat alueelta.
+        //
+        // Että CORS olisi este, on epätodennäköistä: Ilmatieteen laitos julkaisee
+        // virallisen JavaScript-kirjaston (metolib) datan hakemiseen selaimessa.
+        const alku = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString().slice(0, 19) + 'Z';
+        // LEVENNETTY 29.8.2026: aiempi hakualue oli liian kapea eikä yhtään asemaa
+        // osunut siihen. Lappajärven lähimmät automaattiasemat ovat 30-50 km päässä
+        // (Kauhava, Alajärvi, Ähtäri), joten alue on nyt n. 100 km leveä.
+        const dLon = 1.0, dLat = 0.45;   // n. ±50 km
+        const bbox = `${(lon - dLon).toFixed(3)},${(lat - dLat).toFixed(3)},`
+                   + `${(lon + dLon).toFixed(3)},${(lat + dLat).toFixed(3)}`;
+        // Tuulen lisäksi näkyvyys ja ilmankosteus: molemmat kiinnostavat uistelijaa.
+        // vis = näkyvyys metreinä, rh = suhteellinen kosteus prosentteina.
         const url = 'https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature'
           + '&storedquery_id=fmi::observations::weather::simple'
-          + `&latlon=${lat.toFixed(4)},${lon.toFixed(4)}`
-          + '&parameters=ws_10min,wg_10min,wd_10min'
-          + `&starttime=${alku}&maxlocations=1`;
+          + `&bbox=${bbox}`
+          + '&parameters=ws_10min,wg_10min,wd_10min,vis,rh,t2m'
+          + `&starttime=${alku}`;
         const r = await fetch(url, { cache: 'no-store' });
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const xml = new DOMParser().parseFromString(await r.text(), 'text/xml');
         const el = xml.getElementsByTagNameNS('*', 'BsWfsElement');
-        // Otetaan kustakin suureesta VIIMEISIN ei-NaN arvo.
-        const viim = {};
-        let aika = null, asema = null;
+        if (el.length === 0) throw new Error('rajapinta ei palauttanut havaintoja');
+
+        // bbox palauttaa USEITA asemia. Ryhmitellään havainnot aseman koordinaatin
+        // mukaan ja valitaan LÄHIN, jolla on tuoreita tuuliarvoja. Aiempi koodi otti
+        // vain viimeisimmän arvon kustakin suureesta ja olisi sekoittanut eri asemat.
+        const asemat = new Map();
         for (let i = 0; i < el.length; i++) {
-          const nimi = el[i].getElementsByTagNameNS('*', 'ParameterName')[0]?.textContent;
-          const arvo = parseFloat(el[i].getElementsByTagNameNS('*', 'ParameterValue')[0]?.textContent);
-          const t = el[i].getElementsByTagNameNS('*', 'Time')[0]?.textContent;
-          if (nimi && !isNaN(arvo)) { viim[nimi] = arvo; if (t) aika = t; }
-        }
-        // KORJATTU: simple-kysely EI palauta aseman nimeä, vain koordinaatin, ajan ja
-        // arvon. Etsin aiemmin elementtiä jota ei ole olemassa. Poimitaan sen sijaan
-        // havaintopisteen koordinaatti, joka kertoo kuinka kaukana asema on.
-        const pos = xml.getElementsByTagNameNS('*', 'pos')[0];
-        if (pos) {
-          const [alat, alon] = pos.textContent.trim().split(/\s+/).map(Number);
-          if (!isNaN(alat) && !isNaN(alon)) {
-            const km = metreina(lat, lon, alat, alon) / 1000;
-            asema = `asema ${km.toFixed(0)} km päässä`;
+          const e = el[i];
+          const nimi = e.getElementsByTagNameNS('*', 'ParameterName')[0]?.textContent;
+          const arvo = parseFloat(e.getElementsByTagNameNS('*', 'ParameterValue')[0]?.textContent);
+          const aikaT = e.getElementsByTagNameNS('*', 'Time')[0]?.textContent;
+          const posT = e.getElementsByTagNameNS('*', 'pos')[0]?.textContent;
+          if (!nimi || isNaN(arvo) || !posT) continue;
+          const [alat, alon] = posT.trim().split(/\s+/).map(Number);
+          if (isNaN(alat) || isNaN(alon)) continue;
+          const avain = alat.toFixed(4) + ',' + alon.toFixed(4);
+          if (!asemat.has(avain)) {
+            asemat.set(avain, {
+              lat: alat, lon: alon,
+              etaisyys: metreina(lat, lon, alat, alon) / 1000,
+              arvot: {}, aika: null
+            });
           }
+          const a = asemat.get(avain);
+          // Uudempi havainto korvaa vanhemman samalta asemalta.
+          if (!a.aika || (aikaT && aikaT >= a.aika)) { a.arvot[nimi] = arvo; a.aika = aikaT; }
+          else if (a.arvot[nimi] === undefined) a.arvot[nimi] = arvo;
         }
-        if (viim.ws_10min === undefined && viim.wg_10min === undefined) throw new Error('ei mittausarvoja');
+
+        const kelvot = [...asemat.values()]
+          .filter(a => a.arvot.ws_10min !== undefined || a.arvot.wg_10min !== undefined)
+          .sort((a, b) => a.etaisyys - b.etaisyys);
+        if (kelvot.length === 0) throw new Error('ei tuulihavaintoja lähialueella');
+
+        const valittu = kelvot[0];
         fmiTuuli = {
-          ws: viim.ws_10min, wg: viim.wg_10min, wd: viim.wd_10min,
-          aika: aika ? new Date(aika) : null, asema: asema || 'lähin asema'
+          ws: valittu.arvot.ws_10min,
+          wg: valittu.arvot.wg_10min,
+          wd: valittu.arvot.wd_10min,
+          vis: valittu.arvot.vis,      // näkyvyys metreinä
+          rh: valittu.arvot.rh,        // suhteellinen kosteus %
+          t2m: valittu.arvot.t2m,      // ilman lämpötila
+          aika: valittu.aika ? new Date(valittu.aika) : null,
+          asema: `asema ${valittu.etaisyys.toFixed(0)} km päässä`,
+          asemia: kelvot.length
         };
         fmiVirhe = null;
         return fmiTuuli;
@@ -2987,11 +3023,26 @@
       const t = tuuliHalytysTila();
       if (!t) { box.style.display = 'none'; return; }
 
+      // Asemahavainnon lisätiedot: näkyvyys ja ilmankosteus. Näkyvyys kertoo
+      // sumusta ja utusta, kosteus kastepiste-erosta — molemmat kiinnostavat
+      // uistelijaa, mutta kumpikaan ei vaikuta syvyysmalliin.
+      const lisat = [];
+      if (fmiTuuli) {
+        if (fmiTuuli.vis !== undefined && !isNaN(fmiTuuli.vis)) {
+          const km = fmiTuuli.vis / 1000;
+          lisat.push(`näkyvyys ${km >= 20 ? 'yli 20' : km.toFixed(km < 2 ? 1 : 0)} km`);
+        }
+        if (fmiTuuli.rh !== undefined && !isNaN(fmiTuuli.rh)) lisat.push(`kosteus ${fmiTuuli.rh.toFixed(0)} %`);
+        if (fmiTuuli.t2m !== undefined && !isNaN(fmiTuuli.t2m)) lisat.push(`ilma ${fmiTuuli.t2m.toFixed(1)} °C`);
+      }
+      const lisarivi = lisat.length
+        ? `<br><span style="color:var(--muted);">${lisat.join(' · ')}</span>` : '';
+
       if (!t.halytys) {
         box.style.display = 'block';
         box.innerHTML = `<p class="hint" style="margin:0;">Tuuli ${t.ws !== null && t.ws !== undefined ? t.ws.toFixed(1) : '—'} m/s`
           + `${t.wg !== null && t.wg !== undefined ? ', puuskat ' + t.wg.toFixed(1) + ' m/s' : ''}`
-          + ` <span style="opacity:.7;">(${t.lahde})</span></p>`;
+          + ` <span style="opacity:.7;">(${t.lahde})</span>${lisarivi}</p>`;
         return;
       }
 
@@ -3018,7 +3069,7 @@
             <div style="font-size:13px; color:var(--text); line-height:1.35;">
               ${t.jatkuvaYli ? `Jatkuva tuuli ${t.ws.toFixed(1)} m/s (raja ${TUULI_JATKUVA_RAJA}).` : ''}
               ${t.puuskaYli ? `Puuskat ${t.wg.toFixed(1)} m/s (raja ${TUULI_PUUSKA_RAJA}).` : ''}
-              <span style="color:var(--muted);">Lähde: ${t.lahde}.</span>
+              <span style="color:var(--muted);">Lähde: ${t.lahde}.</span>${lisarivi}
             </div>
           </div>
         </div>`;
