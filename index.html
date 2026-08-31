@@ -2906,6 +2906,7 @@
     // (CORS). Jos ei salli, haku epäonnistuu hiljaisesti ja malli käyttää Open-Meteoa
     // kuten ennenkin — mitään ei rikkoudu.
     let fmiTuuli = null;   // { ws, wg, wd, aika, asema }
+    let fmiVirhe = null;   // viimeisin syy, näytetään käyttäjälle
 
     async function haeFmiTuuli(lat, lon) {
       try {
@@ -2928,16 +2929,33 @@
           const t = el[i].getElementsByTagNameNS('*', 'Time')[0]?.textContent;
           if (nimi && !isNaN(arvo)) { viim[nimi] = arvo; if (t) aika = t; }
         }
-        const nimiEl = xml.getElementsByTagNameNS('*', 'name')[0];
-        if (nimiEl) asema = nimiEl.textContent;
-        if (viim.ws_10min === undefined && viim.wg_10min === undefined) throw new Error('ei dataa');
+        // KORJATTU: simple-kysely EI palauta aseman nimeä, vain koordinaatin, ajan ja
+        // arvon. Etsin aiemmin elementtiä jota ei ole olemassa. Poimitaan sen sijaan
+        // havaintopisteen koordinaatti, joka kertoo kuinka kaukana asema on.
+        const pos = xml.getElementsByTagNameNS('*', 'pos')[0];
+        if (pos) {
+          const [alat, alon] = pos.textContent.trim().split(/\s+/).map(Number);
+          if (!isNaN(alat) && !isNaN(alon)) {
+            const km = metreina(lat, lon, alat, alon) / 1000;
+            asema = `asema ${km.toFixed(0)} km päässä`;
+          }
+        }
+        if (viim.ws_10min === undefined && viim.wg_10min === undefined) throw new Error('ei mittausarvoja');
         fmiTuuli = {
           ws: viim.ws_10min, wg: viim.wg_10min, wd: viim.wd_10min,
           aika: aika ? new Date(aika) : null, asema: asema || 'lähin asema'
         };
+        fmiVirhe = null;
         return fmiTuuli;
       } catch (e) {
-        console.warn('FMI-asemahaku ei onnistunut:', e.message);
+        // Virhe näkyviin, jotta syy voidaan päätellä. "Failed to fetch" samaan aikaan
+        // kun Open-Meteo toimii tarkoittaa käytännössä aina CORS-estoa: rajapinta ei
+        // salli selainkutsuja muilta sivustoilta. Sitä ei voi korjata sovelluksesta.
+        const viesti = String(e && e.message || e);
+        fmiVirhe = /failed to fetch|networkerror|load failed/i.test(viesti)
+          ? 'Ilmatieteen laitoksen rajapinta ei salli selainkutsua (CORS). Käytetään ennustetta.'
+          : 'Asemahavainto ei saatavilla: ' + viesti;
+        console.warn('FMI-asemahaku:', viesti);
         fmiTuuli = null;
         return null;
       }
@@ -3028,7 +3046,9 @@
         piirraTuuliHalytys();
         if (st) {
           const k = new Date().toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' });
-          st.innerHTML = `Päivitetty ${k}${fmiTuuli ? ' · asemahavainto: ' + fmiTuuli.asema : ''}`;
+          st.innerHTML = `Päivitetty ${k}`
+            + (fmiTuuli ? ` · <span style="color:var(--cyan);">mitattu tuuli, ${fmiTuuli.asema}</span>` : '')
+            + (fmiVirhe ? ` · <span style="color:var(--muted);">${fmiVirhe}</span>` : '');
         }
       } catch (e) {
         if (st) st.textContent = 'Päivitys ei onnistunut — verkko poissa?';
