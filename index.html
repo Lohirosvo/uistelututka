@@ -1503,12 +1503,25 @@
           ? currentLocation.name.replace(/\s*\(.*\)/, '').replace(/n tekoallas$/, '') : 'Lappajärvi';
 
         const yritykset = [
-          { nimi: `sijaintihaku 25 km säteellä (kenttä ${gk})`,
+          // CQL:n paikkasuodatin toimii TALLENNETUSSA koordinaatistossa, ei siinä
+          // jonka pyydän ulos srsName-parametrilla. Tallennettu voi olla joko
+          // ETRS-TM35FIN (metrejä) tai ETRS89 (asteita) — kokeillaan molemmat.
+          { nimi: `metrit, 25 km (${gk})`,
             cql: `DWITHIN(${gk}, POINT(${kp.E.toFixed(0)} ${kp.N.toFixed(0)}), 25000, meters)` },
-          { nimi: `nimi JA sijainti (kenttä ${gk})`,
-            cql: `syvmittausaluenimi ILIKE '%${jarviNimi}%' AND DWITHIN(${gk}, POINT(${kp.E.toFixed(0)} ${kp.N.toFixed(0)}), 50000, meters)` },
-          { nimi: `BBOX-funktio (kenttä ${gk})`,
-            cql: `BBOX(${gk}, ${(kp.E - 20000).toFixed(0)}, ${(kp.N - 25000).toFixed(0)}, ${(kp.E + 20000).toFixed(0)}, ${(kp.N + 25000).toFixed(0)})` }
+          { nimi: `asteet, pituus ensin (${gk})`,
+            cql: `DWITHIN(${gk}, POINT(${currentLocation.lon.toFixed(5)} ${currentLocation.lat.toFixed(5)}), 25000, meters)` },
+          { nimi: `asteet, leveys ensin (${gk})`,
+            cql: `DWITHIN(${gk}, POINT(${currentLocation.lat.toFixed(5)} ${currentLocation.lon.toFixed(5)}), 25000, meters)` },
+          { nimi: `BBOX asteina (${gk})`,
+            cql: `BBOX(${gk}, ${(currentLocation.lon - 0.30).toFixed(4)}, ${(currentLocation.lat - 0.14).toFixed(4)}, `
+               + `${(currentLocation.lon + 0.30).toFixed(4)}, ${(currentLocation.lat + 0.14).toFixed(4)})` },
+          { nimi: `BBOX metreinä (${gk})`,
+            cql: `BBOX(${gk}, ${(kp.E - 20000).toFixed(0)}, ${(kp.N - 25000).toFixed(0)}, ${(kp.E + 20000).toFixed(0)}, ${(kp.N + 25000).toFixed(0)})` },
+          // Viimeisenä nimihaku: se tuotti aiemmin dataa (väärästä järvestä), joten
+          // sillä varmistetaan ettei vika ole yhteydessä. Tulokset suodatetaan
+          // etäisyyden mukaan vasta haun jälkeen.
+          { nimi: 'nimihaku (suodatetaan etäisyydellä)',
+            cql: `syvmittausaluenimi ILIKE '%${jarviNimi}%'`, suodataEtaisyys: true }
         ];
 
         const alueet = [];
@@ -1559,7 +1572,15 @@
             if (!g || alaraja === null) return;
             const renkaat = (g.type === 'Polygon') ? [g.coordinates[0]]
                           : (g.type === 'MultiPolygon') ? g.coordinates.map(cc => cc[0]) : [];
-            renkaat.forEach(r2 => alueet.push({ s: ylaraja, min: alaraja, max: ylaraja, r: r2 }));
+            renkaat.forEach(r2 => {
+              // Nimihaun tulokset suodatetaan etäisyydellä: Suomessa on useampi
+              // samanniminen järvi, ja haku osui aiemmin Kainuun Lappajärveen.
+              if (kaytetty.y.suodataEtaisyys) {
+                const lahella = r2.some(pt => Math.hypot(pt[0] - kp.E, pt[1] - kp.N) < 30000);
+                if (!lahella) return;
+              }
+              alueet.push({ s: ylaraja, min: alaraja, max: ylaraja, r: r2 });
+            });
           });
           if (piirteet.length < COUNT) break;
         }
@@ -3514,7 +3535,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v24';
+    const APP_VERSIO = 'v25';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
