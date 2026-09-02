@@ -1419,37 +1419,28 @@
         // (pohjoinen, itä) — ei (itä, pohjoinen) kuten intuitiivisesti olettaisi.
         // Kokeillaan molemmat järjestykset ja lisäksi WFS 1.0.0, joka käyttää aina
         // (itä, pohjoinen). Ensimmäinen joka tuottaa kohteita voittaa.
-        // INSPIRE-tasot julkaistaan tyypillisesti ETRS89-ASTEINA (EPSG:4258), ei
-        // metreinä — INSPIRE-direktiivi edellyttää ETRS89:ää. Metrikoordinaatit ovat
-        // silloin täysin alueen ulkopuolella ja vastaus on tyhjä, kuten kävi.
-        // Kokeillaan siksi myös asteet, ja huomioidaan että EPSG:4258:n virallinen
-        // akselijärjestys on (leveys, pituus).
-        const laS = 63.05, laN = 63.26, loW = 23.50, loE = 23.82;
+        // RATKAISTU 2.9.2026 diagnostiikkakyselyn avulla. Se paljasti kolme asiaa:
+        //  1) koordinaatit OVAT metreinä (ETRS-TM35FIN), eivät asteina
+        //  2) syvyys on kentässä syvyysvali_m (syvyysväli, esim. "3 - 5")
+        //  3) mukana on järven nimi kentässä syvmittausaluenimi
+        //
+        // Kolmas on ratkaisu. bbox-rajaus ei toiminut millään kokeillulla muodolla,
+        // mutta nimihaku ohittaa koko koordinaattiongelman: haetaan suoraan ne alueet
+        // joiden mittausalueen nimi on Lappajärvi. Se on myös kevyempi palvelimelle,
+        // koska tuloksia ei tarvitse rajata jälkikäteen.
+        const jarviNimi = (currentLocation && currentLocation.name)
+          ? currentLocation.name.replace(/\s*\(.*\)/, '').replace(/n tekoallas$/, '') : 'Lappajärvi';
         const yritykset = [
-          { nimi: 'ETRS89 asteina, leveys ensin (INSPIRE-oletus)',
-            v: '2.0.0', laske: () => `${laS},${loW},${laN},${loE},urn:ogc:def:crs:EPSG::4258`,
-            idx: 'STARTINDEX', cnt: 'COUNT', tn: 'typeNames' },
-          { nimi: 'WGS84 asteina, leveys ensin',
-            v: '2.0.0', laske: () => `${laS},${loW},${laN},${loE},urn:ogc:def:crs:EPSG::4326`,
-            idx: 'STARTINDEX', cnt: 'COUNT', tn: 'typeNames' },
-          { nimi: 'CRS84 asteina, pituus ensin',
-            v: '1.0.0', laske: () => `${loW},${laS},${loE},${laN}`,
-            idx: null, cnt: 'maxFeatures', tn: 'typeName' },
-          { nimi: 'WFS 2.0.0, pohjoinen ensin (EPSG:n virallinen)',
-            v: '2.0.0', laske: (i) => `${sw.N.toFixed(0)},${sw.E.toFixed(0)},${ne.N.toFixed(0)},${ne.E.toFixed(0)},urn:ogc:def:crs:EPSG::3067`,
-            idx: 'STARTINDEX', cnt: 'COUNT', tn: 'typeNames' },
-          { nimi: 'WFS 2.0.0, itä ensin',
-            v: '2.0.0', laske: () => `${sw.E.toFixed(0)},${sw.N.toFixed(0)},${ne.E.toFixed(0)},${ne.N.toFixed(0)},EPSG:3067`,
-            idx: 'STARTINDEX', cnt: 'COUNT', tn: 'typeNames' },
-          { nimi: 'WFS 1.0.0, itä ensin',
-            v: '1.0.0', laske: () => `${sw.E.toFixed(0)},${sw.N.toFixed(0)},${ne.E.toFixed(0)},${ne.N.toFixed(0)}`,
-            idx: null, cnt: 'maxFeatures', tn: 'typeName' },
-          // Viimeinen keino: ei rajausta lainkaan, vain muutama kohde. Tämä kertoo
-          // onko tasolla dataa ylipäätään ja missä koordinaatistossa se on — vastauksen
-          // geometriasta näkee suoraan ovatko luvut metrejä vai asteita.
-          { nimi: 'ilman rajausta (diagnostiikka, 5 kohdetta)',
-            v: '2.0.0', laske: null,
-            idx: null, cnt: 'COUNT', tn: 'typeNames', maara: 5, eiBbox: true }
+          { nimi: `nimihaku: ${jarviNimi}`,
+            cql: `syvmittausaluenimi ILIKE '%${jarviNimi}%'` },
+          // Varasuunnitelma jos nimi on kirjoitettu toisin: CQL:n BBOX-funktio on
+          // akselijärjestyksestä riippumaton, toisin kuin bbox-parametri.
+          { nimi: 'CQL BBOX (akselijärjestyksestä riippumaton)',
+            cql: `BBOX(shape, ${TM35.fwd(63.05, 23.50).E.toFixed(0)}, ${TM35.fwd(63.05, 23.50).N.toFixed(0)}, `
+               + `${TM35.fwd(63.26, 23.82).E.toFixed(0)}, ${TM35.fwd(63.26, 23.82).N.toFixed(0)})` },
+          { nimi: 'CQL BBOX, geometriakenttä "the_geom"',
+            cql: `BBOX(the_geom, ${TM35.fwd(63.05, 23.50).E.toFixed(0)}, ${TM35.fwd(63.05, 23.50).N.toFixed(0)}, `
+               + `${TM35.fwd(63.26, 23.82).E.toFixed(0)}, ${TM35.fwd(63.26, 23.82).N.toFixed(0)})` }
         ];
 
         const alueet = [];
@@ -1458,31 +1449,15 @@
         const lokit = [];
 
         for (const y of yritykset) {
-          const perus = `${SYKE_WFS}?service=WFS&version=${y.v}&request=GetFeature`
-            + `&${y.tn}=${encodeURIComponent(taso)}&srsName=EPSG:3067`
-            + `&outputFormat=application/json&sykeuserid=${SYKE_ID}`
-            + (y.eiBbox ? '' : `&bbox=${y.laske()}`);
+          const perus = `${SYKE_WFS}?service=WFS&version=2.0.0&request=GetFeature`
+            + `&typeNames=${encodeURIComponent(taso)}&srsName=EPSG:3067`
+            + `&outputFormat=application/json&CQL_FILTER=${encodeURIComponent(y.cql)}`
+            + `&sykeuserid=${SYKE_ID}`;
           try {
-            const maara = y.maara || COUNT;
-            const url = perus + (y.idx ? `&${y.idx}=0&${y.cnt}=${maara}` : `&${y.cnt}=${maara}`);
-            const r = await fetch(url, { cache: 'no-store' });
+            const r = await fetch(perus + `&STARTINDEX=0&COUNT=${COUNT}`, { cache: 'no-store' });
             if (!r.ok) { lokit.push(`${y.nimi}: HTTP ${r.status}`); continue; }
             const gj = await r.json();
-            const piirteet = gj.features || [];
-            const n = piirteet.length;
-            if (y.eiBbox && n > 0) {
-              // Diagnostiikka: näytetään ensimmäisen kohteen kentät ja koordinaatti,
-              // jotta nähdään mikä on syvyyskentän nimi ja mikä koordinaatisto.
-              const p0 = piirteet[0].properties || {};
-              const g0 = piirteet[0].geometry;
-              let eka = null;
-              try {
-                const cc = (g0.type === 'Polygon') ? g0.coordinates[0][0] : g0.coordinates[0][0][0];
-                eka = `${cc[0].toFixed(1)},${cc[1].toFixed(1)}`;
-              } catch (e2) { /* ohitetaan */ }
-              lokit.push(`${y.nimi}: ${n} kohdetta. Kentät: ${Object.keys(p0).join(', ')}. Ensimmäinen koordinaatti: ${eka}`);
-              continue;   // ei käytetä hakuun, vain kerrotaan
-            }
+            const n = (gj.features || []).length;
             lokit.push(`${y.nimi}: ${n} kohdetta`);
             if (n > 0) { kaytetty = { y, perus }; break; }
           } catch (e) { lokit.push(`${y.nimi}: ${e.message}`); }
@@ -1492,43 +1467,33 @@
           throw new Error(`taso "${taso}" löytyi mutta alueelta ei tullut kohteita. Kokeillut: ${lokit.join(' · ')}`);
         }
 
-        // Haetaan loput sivut sillä muodolla joka toimi. Peräkkäin, ei rinnakkain.
+        // Haetaan loput sivut. Peräkkäin, ei rinnakkain — SYKEn ohje.
         for (let sivu = 0; sivu < 10; sivu++) {
-          const y = kaytetty.y;
-          const url = kaytetty.perus
-            + (y.idx ? `&${y.idx}=${sivu * COUNT}&${y.cnt}=${COUNT}` : `&${y.cnt}=${COUNT}`);
-          const r = await fetch(url, { cache: 'no-store' });
+          const r = await fetch(kaytetty.perus + `&STARTINDEX=${sivu * COUNT}&COUNT=${COUNT}`, { cache: 'no-store' });
           if (!r.ok) break;
           const gj = await r.json();
           const piirteet = gj.features || [];
           piirteet.forEach(ft => {
             const p = ft.properties || {};
-            // Syvyyskentän nimeä ei tiedetä etukäteen. INSPIRE käyttää usein muotoa
-            // propertyValue, elevationValue tai vastaavaa; SYKEn omissa aineistoissa
-            // se voi olla syvyys tai kaava. Etsitään ensin nimen perusteella, ja jos
-            // se ei tuota tulosta, otetaan ensimmäinen järkevällä välillä oleva luku.
-            let syvyys = null;
-            for (const k of Object.keys(p)) {
-              if (/syvyys|depth|elev|korkeus|arvo|value/i.test(k)) {
-                const v = (typeof p[k] === 'number') ? p[k] : parseFloat(p[k]);
-                if (!isNaN(v)) { syvyys = v; break; }
-              }
-            }
-            if (syvyys === null) {
-              for (const k of Object.keys(p)) {
-                const v = (typeof p[k] === 'number') ? p[k] : parseFloat(p[k]);
-                // Järvisyvyys on Suomessa käytännössä 0-100 m; tunniste- ja
-                // vuosilukukentät jäävät tämän ulkopuolelle.
-                if (!isNaN(v) && Math.abs(v) > 0 && Math.abs(v) <= 100) { syvyys = v; break; }
+            // syvyysvali_m on VÄLI, esim. "3 - 5" tai "5-10". Poimitaan molemmat päät;
+            // syvempi pää kertoo vyöhykkeen alarajan, joka on uistelijalle olennainen.
+            let alaraja = null, ylaraja = null;
+            const v = p.syvyysvali_m;
+            if (v !== undefined && v !== null) {
+              const luvut = String(v).match(/[\d.,]+/g);
+              if (luvut && luvut.length) {
+                const nums = luvut.map(x => parseFloat(x.replace(',', '.'))).filter(x => !isNaN(x));
+                if (nums.length >= 2) { alaraja = Math.min(...nums); ylaraja = Math.max(...nums); }
+                else if (nums.length === 1) { alaraja = nums[0]; ylaraja = nums[0]; }
               }
             }
             const g = ft.geometry;
-            if (!g || syvyys === null) return;
+            if (!g || alaraja === null) return;
             const renkaat = (g.type === 'Polygon') ? [g.coordinates[0]]
-                          : (g.type === 'MultiPolygon') ? g.coordinates.map(c => c[0]) : [];
-            renkaat.forEach(r2 => alueet.push({ s: Math.abs(syvyys), r: r2 }));
+                          : (g.type === 'MultiPolygon') ? g.coordinates.map(cc => cc[0]) : [];
+            renkaat.forEach(r2 => alueet.push({ s: ylaraja, min: alaraja, max: ylaraja, r: r2 }));
           });
-          if (!y.idx || piirteet.length < COUNT) break;
+          if (piirteet.length < COUNT) break;
         }
 
         if (alueet.length === 0) throw new Error(`taso "${taso}" vastasi mutta kohteista ei löytynyt syvyysarvoa eikä monikulmiota`);
@@ -1563,13 +1528,16 @@
     function pohjasyvyys(lat, lon) {
       if (!syvyysAineisto || !syvyysAineisto.alueet) return null;
       const p = TM35.fwd(lat, lon);
-      let syvin = null;
+      // Syvyysalueet ovat sisäkkäisiä vyöhykkeitä, joten piste voi osua useaan.
+      // Syvin osuma on oikea vastaus. Palautetaan koko väli, ei yhtä lukua —
+      // aineisto ei anna tarkkaa syvyyttä vaan vyöhykkeen.
+      let paras = null;
       for (const a of syvyysAineisto.alueet) {
         if (pisteRenkaassa(p.E, p.N, a.r)) {
-          if (syvin === null || a.s > syvin) syvin = a.s;
+          if (paras === null || a.s > paras.s) paras = a;
         }
       }
-      return syvin;
+      return paras;
     }
 
     // Näyttää pohjasyvyyden omilla merkinnöillä — vaihe 1 siitä mitä lupa mahdollistaa.
@@ -1590,22 +1558,26 @@
         return;
       }
 
-      const tulokset = omatMerkinnat.map(m => ({ t: m.t, lat: m.lat, lon: m.lon, s: pohjasyvyys(m.lat, m.lon) }));
-      const osui = tulokset.filter(x => x.s !== null);
-      const syvyydet = osui.map(x => x.s).sort((a, b) => a - b);
-      const mediaani = syvyydet.length ? syvyydet[Math.floor(syvyydet.length / 2)] : null;
+      const tulokset = omatMerkinnat.map(m => ({ t: m.t, v: pohjasyvyys(m.lat, m.lon) }));
+      const osui = tulokset.filter(x => x.v !== null);
+      // Vertailuluku on vyöhykkeen syvempi raja, koska se on yksikäsitteinen.
+      const arvot = osui.map(x => x.v.max).sort((a, b) => a - b);
+      const mediaani = arvot.length ? arvot[Math.floor(arvot.length / 2)] : null;
 
-      let html = `<p class="hint" style="margin:0 0 8px;">Aineisto haettu (${data.alueet.length} syvyysaluetta, taso <em>${data.taso}</em>). `
-        + `Tämä on SYKEn avointa dataa, CC BY 4.0.</p>`;
+      const vali = v => (v.min === v.max) ? `${v.max.toFixed(1)} m` : `${v.min.toFixed(1)}–${v.max.toFixed(1)} m`;
+
+      let html = `<p class="hint" style="margin:0 0 8px;">Haettu ${data.alueet.length} syvyysaluetta `
+        + `(${data.tapa}). SYKEn avointa dataa, CC BY 4.0.</p>`;
       if (mediaani !== null) {
-        html += `<p style="margin:0 0 8px; color:var(--text);"><strong>${osui.length}/${tulokset.length} merkinnästä osui syvyysalueelle.</strong> `
-          + `Mediaanipohjasyvyys ${mediaani.toFixed(1)} m, vaihteluväli ${syvyydet[0].toFixed(1)}–${syvyydet[syvyydet.length - 1].toFixed(1)} m.</p>`;
+        html += `<p style="margin:0 0 8px; color:var(--text);"><strong>${osui.length}/${tulokset.length} merkinnästä osui syvyysvyöhykkeelle.</strong> `
+          + `Mediaani ${mediaani.toFixed(1)} m, vaihteluväli ${arvot[0].toFixed(1)}–${arvot[arvot.length - 1].toFixed(1)} m `
+          + `(vyöhykkeen syvempi raja).</p>`;
       }
       html += '<div style="font-size:13px;">';
       tulokset.forEach(x => {
         html += `<div style="padding:4px 0; border-bottom:1px solid rgba(30,51,80,0.5);">`
-          + `<strong style="color:${x.s !== null ? 'var(--cyan)' : 'var(--muted)'};">`
-          + `${x.s !== null ? x.s.toFixed(1) + ' m' : '—'}</strong> `
+          + `<strong style="color:${x.v ? 'var(--cyan)' : 'var(--muted)'};">`
+          + `${x.v ? vali(x.v) : '—'}</strong> `
           + `<span style="color:var(--text);">${x.t}</span></div>`;
       });
       html += '</div>';
