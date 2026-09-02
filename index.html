@@ -1461,7 +1461,7 @@
             if (v && v.alueet && v.alueet.length) {
               for (const al of v.alueet) {
                 for (const pt of al.r) {
-                  if (Math.hypot(pt[0] - kp.E, pt[1] - kp.N) < 30000) { osuu = true; break; }
+                  if (Math.hypot(pt[0] - kp.E, pt[1] - kp.N) < 60000) { osuu = true; break; }
                 }
                 if (osuu) break;
               }
@@ -1576,7 +1576,10 @@
               // Nimihaun tulokset suodatetaan etäisyydellä: Suomessa on useampi
               // samanniminen järvi, ja haku osui aiemmin Kainuun Lappajärveen.
               if (kaytetty.y.suodataEtaisyys) {
-                const lahella = r2.some(pt => Math.hypot(pt[0] - kp.E, pt[1] - kp.N) < 30000);
+                // 60 km raja: Lappajärvi on n. 25 km pitkä, ja mittausalueen reuna voi
+                // olla kaukana järven keskipisteestä. Väärä järvi oli 257 km päässä,
+                // joten raja erottaa ne silti selvästi.
+                const lahella = r2.some(pt => Math.hypot(pt[0] - kp.E, pt[1] - kp.N) < 60000);
                 if (!lahella) return;
               }
               alueet.push({ s: ylaraja, min: alaraja, max: ylaraja, r: r2 });
@@ -1585,7 +1588,40 @@
           if (piirteet.length < COUNT) break;
         }
 
-        if (alueet.length === 0) throw new Error(`taso "${taso}" vastasi mutta kohteista ei löytynyt syvyysarvoa eikä monikulmiota`);
+        if (alueet.length === 0) {
+          // Kysely tuotti kohteita mutta yksikään ei kelvannut. Yleisin syy: nimihaku
+          // löysi väärän järven ja etäisyyssuodatin hylkäsi kaiken. Listataan siksi
+          // KAIKKI Lappaj-alkuiset mittausalueet tunnisteineen ja etäisyyksineen,
+          // jotta oikea tunniste voidaan poimia kerralla.
+          let lista = '';
+          try {
+            const url = `${SYKE_WFS}?service=WFS&version=2.0.0&request=GetFeature`
+              + `&typeNames=${encodeURIComponent(taso)}&srsName=EPSG:3067`
+              + `&outputFormat=application/json&sykeuserid=${SYKE_ID}`
+              + `&CQL_FILTER=${encodeURIComponent("syvmittausaluenimi ILIKE '%Lappaj%'")}&COUNT=500`;
+            const r = await fetch(url, { cache: 'no-store' });
+            const fs = (await r.json()).features || [];
+            const ryhmat = new Map();
+            fs.forEach(ft => {
+              const p = ft.properties || {};
+              const avain = `${p.syvmittausaluenimi} | järvitunnus ${p.jarvitunnus} | alue ${p.syvmittausaluetunnus}`;
+              if (!ryhmat.has(avain)) {
+                let etaisyys = null;
+                try {
+                  const g = ft.geometry;
+                  const cc = (g.type === 'Polygon') ? g.coordinates[0][0] : g.coordinates[0][0][0];
+                  etaisyys = Math.hypot(cc[0] - kp.E, cc[1] - kp.N) / 1000;
+                } catch (e4) { /* ohitetaan */ }
+                ryhmat.set(avain, etaisyys);
+              }
+            });
+            lista = [...ryhmat.entries()]
+              .sort((a2, b2) => (a2[1] ?? 1e9) - (b2[1] ?? 1e9))
+              .map(([k, d2]) => `${k} — ${d2 === null ? '?' : d2.toFixed(0) + ' km'}`)
+              .join(' || ');
+          } catch (e5) { lista = 'listausta ei saatu: ' + e5.message; }
+          throw new Error(`kohteita tuli, mutta yksikään ei ollut lähellä. Lappaj-alkuiset mittausalueet: ${lista || 'ei yhtään'}`);
+        }
 
         syvyysAineisto = { tallennettu: Date.now(), taso, alueet, tapa: kaytetty.y.nimi };
         try { localStorage.setItem(LS_SYVYYS, JSON.stringify(syvyysAineisto)); }
@@ -3535,7 +3571,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v25';
+    const APP_VERSIO = 'v26';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
