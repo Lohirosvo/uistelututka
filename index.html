@@ -1502,27 +1502,38 @@
         const jarviNimi = (currentLocation && currentLocation.name)
           ? currentLocation.name.replace(/\s*\(.*\)/, '').replace(/n tekoallas$/, '') : 'Lappajärvi';
 
-        const yritykset = [
-          // CQL:n paikkasuodatin toimii TALLENNETUSSA koordinaatistossa, ei siinä
-          // jonka pyydän ulos srsName-parametrilla. Tallennettu voi olla joko
-          // ETRS-TM35FIN (metrejä) tai ETRS89 (asteita) — kokeillaan molemmat.
-          { nimi: `metrit, 25 km (${gk})`,
+        // JÄRVITUNNUS ENSISIJAISEKSI — korjattu 2.9.2026.
+        // Nimihaku osui Kainuun Lappajärveen (järvitunnus 59.863.1.009, Oulujoen
+        // vesistö 59). Etelä-Pohjanmaan Lappajärvi kuuluu Ähtävänjoen vesistöön 47
+        // ja sen tunnus on 47.031.1.001. Järvitunnus on paras tunniste, koska se ei
+        // riipu nimestä eikä koordinaatistosta — ja isoilta järviltä voi puuttua
+        // syvmittausaluenimi kokonaan tai se voi olla pilkottu osiin.
+        const jt = currentLocation.jarvitunnus || null;
+        const vesistoAlue = jt ? jt.split('.').slice(0, 2).join('.') : null;
+
+        const yritykset = [];
+        if (jt) {
+          yritykset.push(
+            { nimi: `järvitunnus ${jt}`, cql: `jarvitunnus = '${jt}'` },
+            // Iso järvi voi olla pilkottu osa-alueisiin, joiden tunnus alkaa samoin.
+            { nimi: `järvitunnus alkaa ${vesistoAlue}`, cql: `jarvitunnus LIKE '${vesistoAlue}%'`, suodataEtaisyys: true }
+          );
+        }
+        yritykset.push(
+          // Akselijärjestys toisin päin: WFS 2.0.0 voi odottaa POINT(pohjoinen itä).
+          { nimi: `metrit, pohjoinen ensin (${gk})`,
+            cql: `DWITHIN(${gk}, POINT(${kp.N.toFixed(0)} ${kp.E.toFixed(0)}), 25000, meters)` },
+          { nimi: `metrit, itä ensin (${gk})`,
             cql: `DWITHIN(${gk}, POINT(${kp.E.toFixed(0)} ${kp.N.toFixed(0)}), 25000, meters)` },
           { nimi: `asteet, pituus ensin (${gk})`,
             cql: `DWITHIN(${gk}, POINT(${currentLocation.lon.toFixed(5)} ${currentLocation.lat.toFixed(5)}), 25000, meters)` },
           { nimi: `asteet, leveys ensin (${gk})`,
             cql: `DWITHIN(${gk}, POINT(${currentLocation.lat.toFixed(5)} ${currentLocation.lon.toFixed(5)}), 25000, meters)` },
-          { nimi: `BBOX asteina (${gk})`,
-            cql: `BBOX(${gk}, ${(currentLocation.lon - 0.30).toFixed(4)}, ${(currentLocation.lat - 0.14).toFixed(4)}, `
-               + `${(currentLocation.lon + 0.30).toFixed(4)}, ${(currentLocation.lat + 0.14).toFixed(4)})` },
           { nimi: `BBOX metreinä (${gk})`,
             cql: `BBOX(${gk}, ${(kp.E - 20000).toFixed(0)}, ${(kp.N - 25000).toFixed(0)}, ${(kp.E + 20000).toFixed(0)}, ${(kp.N + 25000).toFixed(0)})` },
-          // Viimeisenä nimihaku: se tuotti aiemmin dataa (väärästä järvestä), joten
-          // sillä varmistetaan ettei vika ole yhteydessä. Tulokset suodatetaan
-          // etäisyyden mukaan vasta haun jälkeen.
           { nimi: 'nimihaku (suodatetaan etäisyydellä)',
             cql: `syvmittausaluenimi ILIKE '%${jarviNimi}%'`, suodataEtaisyys: true }
-        ];
+        );
 
         const alueet = [];
         const COUNT = 2000;
@@ -1598,7 +1609,9 @@
             const url = `${SYKE_WFS}?service=WFS&version=2.0.0&request=GetFeature`
               + `&typeNames=${encodeURIComponent(taso)}&srsName=EPSG:3067`
               + `&outputFormat=application/json&sykeuserid=${SYKE_ID}`
-              + `&CQL_FILTER=${encodeURIComponent("syvmittausaluenimi ILIKE '%Lappaj%'")}&COUNT=500`;
+              + `&CQL_FILTER=${encodeURIComponent(
+                    vesistoAlue ? `jarvitunnus LIKE '${vesistoAlue}%' OR syvmittausaluenimi ILIKE '%Lappaj%'`
+                                : "syvmittausaluenimi ILIKE '%Lappaj%'")}&COUNT=500`;
             const r = await fetch(url, { cache: 'no-store' });
             const fs = (await r.json()).features || [];
             const ryhmat = new Map();
@@ -1620,7 +1633,7 @@
               .map(([k, d2]) => `${k} — ${d2 === null ? '?' : d2.toFixed(0) + ' km'}`)
               .join(' || ');
           } catch (e5) { lista = 'listausta ei saatu: ' + e5.message; }
-          throw new Error(`kohteita tuli, mutta yksikään ei ollut lähellä. Lappaj-alkuiset mittausalueet: ${lista || 'ei yhtään'}`);
+          throw new Error(`kohteita tuli, mutta yksikään ei ollut lähellä. Vesistöalueen ${vesistoAlue || '?'} ja Lappaj-nimiset mittausalueet: ${lista || 'ei yhtään'}`);
         }
 
         syvyysAineisto = { tallennettu: Date.now(), taso, alueet, tapa: kaytetty.y.nimi };
@@ -3571,7 +3584,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v26';
+    const APP_VERSIO = 'v27';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -6526,7 +6539,7 @@
     }
 
     const locations = [
-      { name: 'Lappajärvi (Karvala)', lat: 63.14378, lon: 23.53885, maxDepth: 36, clarityClass: 2, sykeTerm: 'Lappajärvi', waterLevelStationId: 2324, hasHotspotData: true, knownTasokorjaus: 13,
+      { name: 'Lappajärvi (Karvala)', jarvitunnus: '47.031.1.001', lat: 63.14378, lon: 23.53885, maxDepth: 36, clarityClass: 2, sykeTerm: 'Lappajärvi', waterLevelStationId: 2324, hasHotspotData: true, knownTasokorjaus: 13,
         // LÄHDE: Lappajärvi-artikkeli (Kalastus-lehti) — "Kun tuuli työntää aukealla selällä
         // vettä, syntyy matalikkojen päälle sekä taakse imua. Tämä vetää syvänteestä vettä ja
         // sekoittaa kalan mieleisen lämpötilan. Lappajärven kalat, myös taimenet, iskevät
