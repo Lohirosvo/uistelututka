@@ -1401,6 +1401,30 @@
 
     // Tasonimeä ei voi tietää etukäteen, joten se etsitään palvelimen omasta
     // kuvauksesta. Näin koodi ei riko itseään jos nimi on eri kuin arvattu.
+    // Geometriakentän nimeä ei voi arvata — GeoServerissä se voi olla shape, the_geom,
+    // geom tai muu. DescribeFeatureType kertoo sen. Tarvitaan sijaintihakuun, koska
+    // pelkkä nimihaku osui väärään järveen: Suomessa on useampi Lappajärvi, ja
+    // nimihaku löysi Kainuun Lappajärven 257 km päästä.
+    let sykeGeomKentta = null;
+    async function sykeEtsiGeometriakentta(taso) {
+      if (sykeGeomKentta) return sykeGeomKentta;
+      const url = `${SYKE_WFS}?service=WFS&version=2.0.0&request=DescribeFeatureType`
+        + `&typeNames=${encodeURIComponent(taso)}&sykeuserid=${SYKE_ID}`;
+      const r = await fetch(url, { cache: 'no-store' });
+      if (!r.ok) throw new Error('DescribeFeatureType HTTP ' + r.status);
+      const xml = new DOMParser().parseFromString(await r.text(), 'text/xml');
+      const el = [...xml.getElementsByTagNameNS('*', 'element')];
+      // Geometriakenttä tunnistuu tyypistä: gml:GeometryPropertyType, SurfacePropertyType jne.
+      const geom = el.find(e => /gml:.*(Geometry|Surface|MultiSurface|Polygon).*PropertyType/i
+        .test(e.getAttribute('type') || ''));
+      sykeGeomKentta = geom ? geom.getAttribute('name') : null;
+      if (!sykeGeomKentta) {
+        const nimet = el.map(e => `${e.getAttribute('name')}:${e.getAttribute('type')}`).slice(0, 12);
+        throw new Error('geometriakenttää ei tunnistettu. Kentät: ' + nimet.join(', '));
+      }
+      return sykeGeomKentta;
+    }
+
     async function sykeEtsiTaso() {
       const url = `${SYKE_WFS}?service=WFS&version=2.0.0&request=GetCapabilities&sykeuserid=${SYKE_ID}`;
       const r = await fetch(url, { cache: 'no-store' });
@@ -1448,19 +1472,23 @@
         // mutta nimihaku ohittaa koko koordinaattiongelman: haetaan suoraan ne alueet
         // joiden mittausalueen nimi on Lappajärvi. Se on myös kevyempi palvelimelle,
         // koska tuloksia ei tarvitse rajata jälkikäteen.
+        // SIJAINTIHAKU — korjattu 2.9.2026.
+        // Nimihaku osui väärään järveen (Kainuun Lappajärvi, 257 km sivussa), joten
+        // haetaan sijainnilla. Geometriakentän nimi kysytään palvelimelta, jotta
+        // CQL:n DWITHIN-funktiota voi käyttää — se on akselijärjestyksestä riippumaton
+        // toisin kuin bbox-parametri, joka ei toiminut millään kokeillulla muodolla.
+        const gk = await sykeEtsiGeometriakentta(taso);
+        const kp = TM35.fwd(currentLocation.lat, currentLocation.lon);
         const jarviNimi = (currentLocation && currentLocation.name)
           ? currentLocation.name.replace(/\s*\(.*\)/, '').replace(/n tekoallas$/, '') : 'Lappajärvi';
+
         const yritykset = [
-          { nimi: `nimihaku: ${jarviNimi}`,
-            cql: `syvmittausaluenimi ILIKE '%${jarviNimi}%'` },
-          // Varasuunnitelma jos nimi on kirjoitettu toisin: CQL:n BBOX-funktio on
-          // akselijärjestyksestä riippumaton, toisin kuin bbox-parametri.
-          { nimi: 'CQL BBOX (akselijärjestyksestä riippumaton)',
-            cql: `BBOX(shape, ${TM35.fwd(63.05, 23.50).E.toFixed(0)}, ${TM35.fwd(63.05, 23.50).N.toFixed(0)}, `
-               + `${TM35.fwd(63.26, 23.82).E.toFixed(0)}, ${TM35.fwd(63.26, 23.82).N.toFixed(0)})` },
-          { nimi: 'CQL BBOX, geometriakenttä "the_geom"',
-            cql: `BBOX(the_geom, ${TM35.fwd(63.05, 23.50).E.toFixed(0)}, ${TM35.fwd(63.05, 23.50).N.toFixed(0)}, `
-               + `${TM35.fwd(63.26, 23.82).E.toFixed(0)}, ${TM35.fwd(63.26, 23.82).N.toFixed(0)})` }
+          { nimi: `sijaintihaku 25 km säteellä (kenttä ${gk})`,
+            cql: `DWITHIN(${gk}, POINT(${kp.E.toFixed(0)} ${kp.N.toFixed(0)}), 25000, meters)` },
+          { nimi: `nimi JA sijainti (kenttä ${gk})`,
+            cql: `syvmittausaluenimi ILIKE '%${jarviNimi}%' AND DWITHIN(${gk}, POINT(${kp.E.toFixed(0)} ${kp.N.toFixed(0)}), 50000, meters)` },
+          { nimi: `BBOX-funktio (kenttä ${gk})`,
+            cql: `BBOX(${gk}, ${(kp.E - 20000).toFixed(0)}, ${(kp.N - 25000).toFixed(0)}, ${(kp.E + 20000).toFixed(0)}, ${(kp.N + 25000).toFixed(0)})` }
         ];
 
         const alueet = [];
@@ -3437,9 +3465,12 @@
       try {
         const lat = viimeisinGps ? viimeisinGps.lat : currentLocation.lat;
         const lon = viimeisinGps ? viimeisinGps.lon : currentLocation.lon;
+        // Vedenkorkeus mukaan automaattiseen päivitykseen — se oli aiemmin vain
+        // napin takana, joten se näytti tyhjältä kunnes sitä muisti painaa.
         await Promise.allSettled([
           (typeof fetchOpenMeteo === 'function') ? fetchOpenMeteo() : Promise.resolve(),
-          haeFmiTuuli(lat, lon)
+          haeFmiTuuli(lat, lon),
+          (typeof fetchVedenkorkeus === 'function') ? fetchVedenkorkeus() : Promise.resolve()
         ]);
         piirraTuuliHalytys();
         if (st) {
@@ -5549,7 +5580,11 @@
 
       } catch (err) {
         console.error("Vedenkorkeus API virhe:", err);
-        statusEl.textContent = `Virhe haettaessa vedenkorkeusdataa.`;
+        // Tarkennettu 2.9.2026: ylimalkainen "Virhe haettaessa" ei kertonut mitään.
+        const v = String(err && err.message || err);
+        statusEl.innerHTML = /failed to fetch|networkerror|load failed/i.test(v)
+          ? '<span style="color:var(--hard-red);">Vedenkorkeusrajapintaan ei saatu yhteyttä. Verkko poissa tai palvelu huollossa.</span>'
+          : `<span style="color:var(--hard-red);">Vedenkorkeus epäonnistui: ${v}</span>`;
       }
     }
 
