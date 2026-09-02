@@ -821,6 +821,7 @@
         <div class="chip" onclick="paivitaTiedot(true)" style="border-color:var(--cyan); color:var(--cyan);">↻ Päivitä</div>
       </div>
       <p class="hint" id="nayttoStatus" style="margin-top:5px;"></p>
+      <p class="hint" style="margin-top:2px; opacity:.75;">Versio <strong id="versioNro">—</strong> · <span id="swTila">tarkistetaan…</span></p>
       <p class="hint" id="paivitysStatus" style="margin-top:2px;"></p>
     </div>
 
@@ -1448,7 +1449,26 @@
       if (!pakota) {
         try {
           const raw = localStorage.getItem(LS_SYVYYS);
-          if (raw) { syvyysAineisto = JSON.parse(raw); return syvyysAineisto; }
+          if (raw) {
+            const v = JSON.parse(raw);
+            // VÄLIMUISTIN KELPOISUUSTARKISTUS — uusi 2.9.2026.
+            // Aiempi nimihaku tallensi väärän järven (Kainuun Lappajärvi, 257 km
+            // sivussa) välimuistiin, ja se jäi käyttöön vielä hakulogiikan
+            // korjaamisen jälkeen. Tarkistetaan siksi että data on oikean järven
+            // luota ennen kuin sitä käytetään.
+            const kp = TM35.fwd(currentLocation.lat, currentLocation.lon);
+            let osuu = false;
+            if (v && v.alueet && v.alueet.length) {
+              for (const al of v.alueet) {
+                for (const pt of al.r) {
+                  if (Math.hypot(pt[0] - kp.E, pt[1] - kp.N) < 30000) { osuu = true; break; }
+                }
+                if (osuu) break;
+              }
+            }
+            if (osuu) { syvyysAineisto = v; return syvyysAineisto; }
+            localStorage.removeItem(LS_SYVYYS);   // väärän järven data pois
+          }
         } catch (e) { /* rikkinäinen välimuisti, haetaan uudestaan */ }
       }
       try {
@@ -3490,6 +3510,27 @@
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') paivitaTiedot(false);
     });
+
+    // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
+    // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
+    // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
+    const APP_VERSIO = 'v24';
+    (async () => {
+      const el = () => document.getElementById('versioNro');
+      const st = () => document.getElementById('swTila');
+      if (el()) el().textContent = APP_VERSIO;
+      if (!('serviceWorker' in navigator)) { if (st()) st().textContent = 'ei service workeria'; return; }
+      try {
+        const r = await fetch('sw.js', { cache: 'no-store' });
+        const t = await r.text();
+        const m = t.match(/uistelututka-(v\d+)/);
+        if (st()) {
+          st().innerHTML = (m && m[1] === APP_VERSIO)
+            ? '<span style="color:var(--cyan);">ajan tasalla</span>'
+            : `<span style="color:var(--amber);">palvelimella ${m ? m[1] : '?'} — sulje sovellus ja avaa uudelleen</span>`;
+        }
+      } catch (e) { if (st()) st().textContent = 'version tarkistus ei onnistunut'; }
+    })();
 
     // ===== NÄYTTÖTILA: PÄIVÄ / HÄMÄRÄ / YÖ =====
     // Puuttui aiemmin kokonaan. Karttaplotterien ja merenkulun standardien (IEC 62288,
