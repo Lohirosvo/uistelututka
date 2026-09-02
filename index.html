@@ -1349,6 +1349,7 @@
     const LS_SYVYYS = 'nopeusnaytto_pro1_syvyysdata';
     let syvyysAineisto = null;   // { tallennettu, alueet: [{syvyys, rengas:[[E,N],...]}] }
     let syvyysVirhe = null;
+    let sykeTasot = null;   // palvelimen listaamat tasot, näytetään jos haku epäonnistuu
 
     // WGS84 -> ETRS-TM35FIN (EPSG:3067). Krügerin sarja, GRS80-ellipsoidi.
     // Varmistettu edestakaisella muunnoksella: paluuvirhe 0,0000 m.
@@ -1391,9 +1392,10 @@
       if (nimet.length === 0) throw new Error('palvelin ei listannut tasoja');
       // Etsitään syvyysALUE (polygoni) — siitä saa syvyyden pisteelle.
       // Käyrä (viiva) ei kelpaa, koska pistettä ei voi sijoittaa viivalle.
+      sykeTasot = nimet;   // talteen diagnostiikkaa varten
       const alue = nimet.find(x => /syvyysalue|depthare|bathymetr/i.test(x))
                 || nimet.find(x => /syvyys|depth/i.test(x));
-      if (!alue) throw new Error('syvyystasoa ei löytynyt. Tarjolla: ' + nimet.slice(0, 8).join(', '));
+      if (!alue) throw new Error('syvyystasoa ei löytynyt. Tarjolla: ' + nimet.join(', '));
       return alue;
     }
 
@@ -1410,23 +1412,61 @@
 
         // Rajaus Lappajärven ympärille TM35FIN-koordinaatteina.
         const sw = TM35.fwd(63.05, 23.50), ne = TM35.fwd(63.26, 23.82);
-        const bbox = `${sw.E.toFixed(0)},${sw.N.toFixed(0)},${ne.E.toFixed(0)},${ne.N.toFixed(0)},EPSG:3067`;
 
-        // Sivutus SYKEn ohjeen mukaan. Peräkkäin, ei rinnakkain.
+        // AKSELIJÄRJESTYS — korjattu 2.9.2026.
+        // Ensimmäinen yritys palautti tyhjän, ja todennäköisin syy on tämä: WFS 2.0.0
+        // noudattaa EPSG:n VIRALLISTA akselijärjestystä, joka on EPSG:3067:lle
+        // (pohjoinen, itä) — ei (itä, pohjoinen) kuten intuitiivisesti olettaisi.
+        // Kokeillaan molemmat järjestykset ja lisäksi WFS 1.0.0, joka käyttää aina
+        // (itä, pohjoinen). Ensimmäinen joka tuottaa kohteita voittaa.
+        const yritykset = [
+          { nimi: 'WFS 2.0.0, pohjoinen ensin (EPSG:n virallinen)',
+            v: '2.0.0', laske: (i) => `${sw.N.toFixed(0)},${sw.E.toFixed(0)},${ne.N.toFixed(0)},${ne.E.toFixed(0)},urn:ogc:def:crs:EPSG::3067`,
+            idx: 'STARTINDEX', cnt: 'COUNT', tn: 'typeNames' },
+          { nimi: 'WFS 2.0.0, itä ensin',
+            v: '2.0.0', laske: () => `${sw.E.toFixed(0)},${sw.N.toFixed(0)},${ne.E.toFixed(0)},${ne.N.toFixed(0)},EPSG:3067`,
+            idx: 'STARTINDEX', cnt: 'COUNT', tn: 'typeNames' },
+          { nimi: 'WFS 1.0.0, itä ensin',
+            v: '1.0.0', laske: () => `${sw.E.toFixed(0)},${sw.N.toFixed(0)},${ne.E.toFixed(0)},${ne.N.toFixed(0)}`,
+            idx: null, cnt: 'maxFeatures', tn: 'typeName' }
+        ];
+
         const alueet = [];
         const COUNT = 2000;
+        let kaytetty = null;
+        const lokit = [];
+
+        for (const y of yritykset) {
+          const bbox = y.laske();
+          const perus = `${SYKE_WFS}?service=WFS&version=${y.v}&request=GetFeature`
+            + `&${y.tn}=${encodeURIComponent(taso)}&srsName=EPSG:3067`
+            + `&outputFormat=application/json&bbox=${bbox}&sykeuserid=${SYKE_ID}`;
+          try {
+            const url = perus + (y.idx ? `&${y.idx}=0&${y.cnt}=${COUNT}` : `&${y.cnt}=${COUNT}`);
+            const r = await fetch(url, { cache: 'no-store' });
+            if (!r.ok) { lokit.push(`${y.nimi}: HTTP ${r.status}`); continue; }
+            const gj = await r.json();
+            const n = (gj.features || []).length;
+            lokit.push(`${y.nimi}: ${n} kohdetta`);
+            if (n > 0) { kaytetty = { y, perus }; break; }
+          } catch (e) { lokit.push(`${y.nimi}: ${e.message}`); }
+        }
+
+        if (!kaytetty) {
+          throw new Error(`taso "${taso}" löytyi mutta alueelta ei tullut kohteita. Kokeillut: ${lokit.join(' · ')}`);
+        }
+
+        // Haetaan loput sivut sillä muodolla joka toimi. Peräkkäin, ei rinnakkain.
         for (let sivu = 0; sivu < 10; sivu++) {
-          const url = `${SYKE_WFS}?service=WFS&version=2.0.0&request=GetFeature`
-            + `&typeNames=${encodeURIComponent(taso)}&srsName=EPSG:3067`
-            + `&outputFormat=application/json&bbox=${bbox}`
-            + `&STARTINDEX=${sivu * COUNT}&COUNT=${COUNT}&sykeuserid=${SYKE_ID}`;
+          const y = kaytetty.y;
+          const url = kaytetty.perus
+            + (y.idx ? `&${y.idx}=${sivu * COUNT}&${y.cnt}=${COUNT}` : `&${y.cnt}=${COUNT}`);
           const r = await fetch(url, { cache: 'no-store' });
-          if (!r.ok) throw new Error('GetFeature HTTP ' + r.status);
+          if (!r.ok) break;
           const gj = await r.json();
           const piirteet = gj.features || [];
           piirteet.forEach(ft => {
             const p = ft.properties || {};
-            // Syvyyskenttä voi olla eri nimillä; etsitään numeerinen syvyys.
             let syvyys = null;
             for (const k of Object.keys(p)) {
               if (/syvyys|depth|elev|arvo|value/i.test(k) && typeof p[k] === 'number') { syvyys = p[k]; break; }
@@ -1437,11 +1477,12 @@
                           : (g.type === 'MultiPolygon') ? g.coordinates.map(c => c[0]) : [];
             renkaat.forEach(r2 => alueet.push({ s: Math.abs(syvyys), r: r2 }));
           });
-          if (piirteet.length < COUNT) break;   // viimeinen sivu
+          if (!y.idx || piirteet.length < COUNT) break;
         }
-        if (alueet.length === 0) throw new Error('alueelta ei löytynyt syvyysalueita');
 
-        syvyysAineisto = { tallennettu: Date.now(), taso, alueet };
+        if (alueet.length === 0) throw new Error(`taso "${taso}" vastasi mutta kohteista ei löytynyt syvyysarvoa eikä monikulmiota`);
+
+        syvyysAineisto = { tallennettu: Date.now(), taso, alueet, tapa: kaytetty.y.nimi };
         try { localStorage.setItem(LS_SYVYYS, JSON.stringify(syvyysAineisto)); }
         catch (e) { console.warn('Syvyysaineisto ei mahtunut välimuistiin:', e.message); }
         return syvyysAineisto;
@@ -1488,7 +1529,13 @@
 
       const data = await haeSyvyysAineisto(pakota);
       if (!data) {
-        box.innerHTML = `<p class="hint" style="color:var(--hard-red);">${syvyysVirhe || 'Haku ei onnistunut.'}</p>`;
+        let h = `<p class="hint" style="color:var(--hard-red);">${syvyysVirhe || 'Haku ei onnistunut.'}</p>`;
+        if (sykeTasot && sykeTasot.length) {
+          h += `<p class="hint" style="margin-top:8px;">Palvelimen tasot (${sykeTasot.length}):</p>`
+             + `<div style="font-size:12px; color:var(--muted); max-height:180px; overflow:auto;">`
+             + sykeTasot.map(t => `<div>${t}</div>`).join('') + '</div>';
+        }
+        box.innerHTML = h;
         return;
       }
 
