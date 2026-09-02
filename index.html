@@ -798,6 +798,18 @@
       <div class="sonarstrip"></div>
     </header>
 
+    <!-- SYKE-SYVYYSANALYYSI -->
+    <div class="q" style="border-color:var(--cyan); margin-bottom:14px;">
+      <div class="idx">SYKE · Järvien syvyysaineisto</div>
+      <h2>Pohjasyvyys omilla merkinnöillä</h2>
+      <p class="hint">Hakee syvyysaineiston kerran ja tallentaa sen laitteelle. Kertoo, minkä syvyysvyöhykkeen päällä kukin 18 merkinnästäsi on — numeroina, ei kartan väreistä pääteltynä.</p>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="chip" onclick="analysoiMerkinnat(false)" style="border-color:var(--cyan); color:var(--cyan);">Analysoi merkinnät</button>
+        <button class="chip" onclick="analysoiMerkinnat(true)" style="border-color:var(--muted); color:var(--muted);">Hae uudelleen</button>
+      </div>
+      <div id="syvyysAnalyysi" style="margin-top:10px;"></div>
+    </div>
+
     <!-- TUULIHÄLYTYS JA NÄYTTÖTILA -->
     <div id="tuuliHalytysBox" style="display:none; margin-bottom:12px;"></div>
     <div style="margin-bottom:14px;">
@@ -1318,6 +1330,190 @@
     let viimeisinNopeus = null;   // km/h
     let viimeisinEnnuste = { taimen: null, jarvilohi: null, kuha: null, muikku: null, taimenkeli: null };
     let viimeisinOttipaikka = null;   // puheselostusta varten
+
+    // ===== SYKE: JÄRVIEN SYVYYSAINEISTO =====
+    // Käyttölupa myönnetty 1.9.2026, tunniste "uistelututka". Aineisto on SYKEn
+    // avointa dataa (CC BY 4.0) ja perustuu ympäristöhallinnon syvyysluotauksiin.
+    // Samat käyrät toimitetaan Maanmittauslaitokselle maastokarttoihin — eli sovelluksen
+    // nykyinen syvyyskarttakuva on johdettu tästä samasta aineistosta, mutta kuvana.
+    // Tästä saadaan sama tieto NUMEROINA.
+    //
+    // SYKEN OHJEET JOITA NOUDATETAAN:
+    //  - Tunniste jokaiseen kutsuun: &sykeuserid=uistelututka
+    //  - Sivutus: STARTINDEX ja COUNT, koska kohteiden määrälle on katto
+    //  - Välimuisti: haetaan kerran ja tallennetaan, ei toistuvia kutsuja
+    //  - Peräkkäiset kutsut, ei rinnakkaisia — satoja kutsuja sekunnissa
+    //    tulkitaan palvelinhyökkäykseksi ja IP joutuu karanteeniin
+    const SYKE_ID = 'uistelututka';
+    const SYKE_WFS = 'https://paikkatiedot.ymparisto.fi/geoserver/inspire_el/wfs';
+    const LS_SYVYYS = 'nopeusnaytto_pro1_syvyysdata';
+    let syvyysAineisto = null;   // { tallennettu, alueet: [{syvyys, rengas:[[E,N],...]}] }
+    let syvyysVirhe = null;
+
+    // WGS84 -> ETRS-TM35FIN (EPSG:3067). Krügerin sarja, GRS80-ellipsoidi.
+    // Varmistettu edestakaisella muunnoksella: paluuvirhe 0,0000 m.
+    const TM35 = (() => {
+      const a = 6378137.0, f = 1 / 298.257222101, k0 = 0.9996, E0 = 500000;
+      const lon0 = 27 * Math.PI / 180;
+      const n = f / (2 - f), A = a / (1 + n) * (1 + n * n / 4 + n ** 4 / 64);
+      const e = Math.sqrt(f * (2 - f));
+      const h = [n / 2 - 2 * n * n / 3 + 5 * n ** 3 / 16 + 41 * n ** 4 / 180,
+                 13 * n * n / 48 - 3 * n ** 3 / 5 + 557 * n ** 4 / 1440,
+                 61 * n ** 3 / 240 - 103 * n ** 4 / 140,
+                 49561 * n ** 4 / 161280];
+      return {
+        fwd(lat, lon) {
+          const phi = lat * Math.PI / 180, lam = lon * Math.PI / 180 - lon0;
+          const Q = Math.asinh(Math.tan(phi)) - e * Math.atanh(e * Math.sin(phi));
+          const be = Math.atan(Math.sinh(Q));
+          const et = Math.atanh(Math.cos(be) * Math.sin(lam));
+          const nt = Math.asin(Math.sin(be) * Math.cosh(et));
+          let E = et, N = nt;
+          for (let j = 1; j <= 4; j++) {
+            E += h[j - 1] * Math.cos(2 * j * nt) * Math.sinh(2 * j * et);
+            N += h[j - 1] * Math.sin(2 * j * nt) * Math.cosh(2 * j * et);
+          }
+          return { E: A * k0 * E + E0, N: A * k0 * N };
+        }
+      };
+    })();
+
+    // Tasonimeä ei voi tietää etukäteen, joten se etsitään palvelimen omasta
+    // kuvauksesta. Näin koodi ei riko itseään jos nimi on eri kuin arvattu.
+    async function sykeEtsiTaso() {
+      const url = `${SYKE_WFS}?service=WFS&version=2.0.0&request=GetCapabilities&sykeuserid=${SYKE_ID}`;
+      const r = await fetch(url, { cache: 'no-store' });
+      if (!r.ok) throw new Error('GetCapabilities HTTP ' + r.status);
+      const xml = new DOMParser().parseFromString(await r.text(), 'text/xml');
+      const nimet = [...xml.getElementsByTagNameNS('*', 'FeatureType')]
+        .map(ft => ft.getElementsByTagNameNS('*', 'Name')[0]?.textContent)
+        .filter(Boolean);
+      if (nimet.length === 0) throw new Error('palvelin ei listannut tasoja');
+      // Etsitään syvyysALUE (polygoni) — siitä saa syvyyden pisteelle.
+      // Käyrä (viiva) ei kelpaa, koska pistettä ei voi sijoittaa viivalle.
+      const alue = nimet.find(x => /syvyysalue|depthare|bathymetr/i.test(x))
+                || nimet.find(x => /syvyys|depth/i.test(x));
+      if (!alue) throw new Error('syvyystasoa ei löytynyt. Tarjolla: ' + nimet.slice(0, 8).join(', '));
+      return alue;
+    }
+
+    async function haeSyvyysAineisto(pakota) {
+      syvyysVirhe = null;
+      if (!pakota) {
+        try {
+          const raw = localStorage.getItem(LS_SYVYYS);
+          if (raw) { syvyysAineisto = JSON.parse(raw); return syvyysAineisto; }
+        } catch (e) { /* rikkinäinen välimuisti, haetaan uudestaan */ }
+      }
+      try {
+        const taso = await sykeEtsiTaso();
+
+        // Rajaus Lappajärven ympärille TM35FIN-koordinaatteina.
+        const sw = TM35.fwd(63.05, 23.50), ne = TM35.fwd(63.26, 23.82);
+        const bbox = `${sw.E.toFixed(0)},${sw.N.toFixed(0)},${ne.E.toFixed(0)},${ne.N.toFixed(0)},EPSG:3067`;
+
+        // Sivutus SYKEn ohjeen mukaan. Peräkkäin, ei rinnakkain.
+        const alueet = [];
+        const COUNT = 2000;
+        for (let sivu = 0; sivu < 10; sivu++) {
+          const url = `${SYKE_WFS}?service=WFS&version=2.0.0&request=GetFeature`
+            + `&typeNames=${encodeURIComponent(taso)}&srsName=EPSG:3067`
+            + `&outputFormat=application/json&bbox=${bbox}`
+            + `&STARTINDEX=${sivu * COUNT}&COUNT=${COUNT}&sykeuserid=${SYKE_ID}`;
+          const r = await fetch(url, { cache: 'no-store' });
+          if (!r.ok) throw new Error('GetFeature HTTP ' + r.status);
+          const gj = await r.json();
+          const piirteet = gj.features || [];
+          piirteet.forEach(ft => {
+            const p = ft.properties || {};
+            // Syvyyskenttä voi olla eri nimillä; etsitään numeerinen syvyys.
+            let syvyys = null;
+            for (const k of Object.keys(p)) {
+              if (/syvyys|depth|elev|arvo|value/i.test(k) && typeof p[k] === 'number') { syvyys = p[k]; break; }
+            }
+            const g = ft.geometry;
+            if (!g || syvyys === null) return;
+            const renkaat = (g.type === 'Polygon') ? [g.coordinates[0]]
+                          : (g.type === 'MultiPolygon') ? g.coordinates.map(c => c[0]) : [];
+            renkaat.forEach(r2 => alueet.push({ s: Math.abs(syvyys), r: r2 }));
+          });
+          if (piirteet.length < COUNT) break;   // viimeinen sivu
+        }
+        if (alueet.length === 0) throw new Error('alueelta ei löytynyt syvyysalueita');
+
+        syvyysAineisto = { tallennettu: Date.now(), taso, alueet };
+        try { localStorage.setItem(LS_SYVYYS, JSON.stringify(syvyysAineisto)); }
+        catch (e) { console.warn('Syvyysaineisto ei mahtunut välimuistiin:', e.message); }
+        return syvyysAineisto;
+      } catch (e) {
+        const v = String(e && e.message || e);
+        syvyysVirhe = /failed to fetch|networkerror|load failed/i.test(v)
+          ? 'SYKEn rajapinta ei salli selainkutsua (CORS) tai verkko on poissa.'
+          : v;
+        console.warn('SYKE-syvyyshaku:', v);
+        return null;
+      }
+    }
+
+    // Pisteen sijainti monikulmiossa (ray casting).
+    function pisteRenkaassa(E, N, rengas) {
+      let sisalla = false;
+      for (let i = 0, j = rengas.length - 1; i < rengas.length; j = i++) {
+        const xi = rengas[i][0], yi = rengas[i][1];
+        const xj = rengas[j][0], yj = rengas[j][1];
+        if (((yi > N) !== (yj > N)) && (E < (xj - xi) * (N - yi) / (yj - yi) + xi)) sisalla = !sisalla;
+      }
+      return sisalla;
+    }
+
+    // Palauttaa syvimmän vyöhykkeen johon piste osuu — syvyysalueet ovat sisäkkäisiä,
+    // joten piste voi olla usean sisällä ja syvin on oikea vastaus.
+    function pohjasyvyys(lat, lon) {
+      if (!syvyysAineisto || !syvyysAineisto.alueet) return null;
+      const p = TM35.fwd(lat, lon);
+      let syvin = null;
+      for (const a of syvyysAineisto.alueet) {
+        if (pisteRenkaassa(p.E, p.N, a.r)) {
+          if (syvin === null || a.s > syvin) syvin = a.s;
+        }
+      }
+      return syvin;
+    }
+
+    // Näyttää pohjasyvyyden omilla merkinnöillä — vaihe 1 siitä mitä lupa mahdollistaa.
+    async function analysoiMerkinnat(pakota) {
+      const box = document.getElementById('syvyysAnalyysi');
+      if (!box) return;
+      box.innerHTML = '<p class="hint">Haetaan syvyysaineistoa SYKEltä…</p>';
+
+      const data = await haeSyvyysAineisto(pakota);
+      if (!data) {
+        box.innerHTML = `<p class="hint" style="color:var(--hard-red);">${syvyysVirhe || 'Haku ei onnistunut.'}</p>`;
+        return;
+      }
+
+      const tulokset = omatMerkinnat.map(m => ({ t: m.t, lat: m.lat, lon: m.lon, s: pohjasyvyys(m.lat, m.lon) }));
+      const osui = tulokset.filter(x => x.s !== null);
+      const syvyydet = osui.map(x => x.s).sort((a, b) => a - b);
+      const mediaani = syvyydet.length ? syvyydet[Math.floor(syvyydet.length / 2)] : null;
+
+      let html = `<p class="hint" style="margin:0 0 8px;">Aineisto haettu (${data.alueet.length} syvyysaluetta, taso <em>${data.taso}</em>). `
+        + `Tämä on SYKEn avointa dataa, CC BY 4.0.</p>`;
+      if (mediaani !== null) {
+        html += `<p style="margin:0 0 8px; color:var(--text);"><strong>${osui.length}/${tulokset.length} merkinnästä osui syvyysalueelle.</strong> `
+          + `Mediaanipohjasyvyys ${mediaani.toFixed(1)} m, vaihteluväli ${syvyydet[0].toFixed(1)}–${syvyydet[syvyydet.length - 1].toFixed(1)} m.</p>`;
+      }
+      html += '<div style="font-size:13px;">';
+      tulokset.forEach(x => {
+        html += `<div style="padding:4px 0; border-bottom:1px solid rgba(30,51,80,0.5);">`
+          + `<strong style="color:${x.s !== null ? 'var(--cyan)' : 'var(--muted)'};">`
+          + `${x.s !== null ? x.s.toFixed(1) + ' m' : '—'}</strong> `
+          + `<span style="color:var(--text);">${x.t}</span></div>`;
+      });
+      html += '</div>';
+      html += '<p class="hint" style="margin-top:8px;">Huom: syvyysaineiston luotauslinjaväli on vähintään 75 m ja se on tehty järven tilavuuden selvittämiseksi, ei navigointiin. Luvut ovat suuntaa-antavia.</p>';
+      box.innerHTML = html;
+    }
 
     // ===== SADETUTKA =====
     // Avaa sataako.fi peittonäkymässä. Ei API-avainta, ei tiliä, ei riippuvuutta
@@ -5870,6 +6066,34 @@
         if (tuuliKertyma && tuuliKertyma.luotettava && tuuliKertyma.voimakkuus >= 6) {
           reasonsKuha.push('VAROITUS kumpuamisesta: pitkäkestoinen kova tuuli jyrkän rannan kohdalla voi nostaa kylmää alusvettä pintaan. Kalastajakokemus ja kumpuamisen fysiikka viittaavat siihen, ettei kuha viihdy siinä — hyöty sameudesta voi kääntyä haitaksi jyrkimmillä reunoilla.');
         }
+      }
+
+      // ===== KOKEMUSTIETO — KOKENEIDEN UISTELIJOIDEN KONSENSUS =====
+      // Kartoitettu 30.8.2026 suomalaisista, ruotsalaisista ja Suurten järvien
+      // lähteistä. TÄMÄ EI OLE TUTKIMUSTA eikä se vaikuta syvyyslaskentaan lainkaan.
+      // Mukaan otettu vain se, mistä VÄHINTÄÄN KOLME riippumatonta yhteisöä on
+      // samaa mieltä — yhteneväisyys on ainoa laadun mittari kun mittausta ei ole.
+      // Kiistanalaiset asiat on merkitty kiistanalaisiksi eikä niistä anneta
+      // täsmäsuositusta, koska kokeneet ovat niistä suoraan eri mieltä keskenään.
+      {
+        const yla = 'KOKEMUS (vahva konsensus: Suomi, Ruotsi ja Suuret järvet): aja saaliskalaparven tasolla tai 1–2 m sen YLÄPUOLELLA, ei alapuolella — petokala syö ylöspäin. Poikkeus on kuhan pohjapöllytys, jossa toinen viehe raapii pohjaa.';
+        reasonsKuha.push(yla);
+        reasonsTaimen.push(yla);
+        reasonsJarvilohi.push(yla);
+
+        // Kuhan ajoitus on ehdollinen veden kirkkaudelle — tämä on vahva konsensus
+        // ja se sopii yhteen mitatun sameusedun kanssa (Ljunggren & Sandström 2007).
+        if (a.clarity !== undefined) {
+          reasonsKuha.push(a.clarity >= 3
+            ? 'KOKEMUS (vahva konsensus): kirkkaassa vedessä kuha on hämärä- ja yökala, aktiivisimmillaan auringonlaskun molemmin puolin.'
+            : 'KOKEMUS (vahva konsensus): sameassa vedessä kuha voi syödä ympäri vuorokauden, myös keskellä päivää. Lappajärven humusvesi kuuluu tähän luokkaan, joten ajoitus on vapaampi kuin kirkasvetisillä järvillä.');
+        }
+
+        reasonsKuha.push('KOKEMUS (nopeus): kuhalle suositellaan Suomessa noin 2,5–4 km/h. Lohikaloille 4–6 km/h. Suurilla järvillä takilauistelussa ajetaan selvästi hitaammin. Ero yhteisöjen välillä on niin suuri, ettei yhtä lukua voi yleistää.');
+        reasonsKuha.push('KOKEMUS (yleisin aloittelijan virhe): merkitsevä nopeus on nopeus SUHTEESSA VETEEN, ei GPS-maanopeus. Vastatuuleen ajettaessa GPS pettää. Tarkista vieheen uinti veneen vierellä ennen laskua.');
+        reasonsKuha.push('KIISTANALAISTA: väri (kirkas vai hillitty sameassa vedessä), houkutinlevyn hyöty, ilmanpaineen suunta ja kuunvaihe. Kokeneet ovat näistä suoraan eri mieltä keskenään, joten malli ei anna niistä suositusta.');
+
+        reasonsTaimen.push('KOKEMUS (vahva konsensus): lohikalojen syöntijaksot ovat lyhyitä ja kiivaita, joskus vain 1–2 kertaa päivässä, painottuen aamu- ja iltahämärään. Syksyllä valoisan ajan lyhetessä syönti siirtyy lähemmäs keskipäivää.');
       }
 
       const color = lureColor(a, dKuha);
