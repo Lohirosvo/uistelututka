@@ -1419,7 +1419,22 @@
         // (pohjoinen, itä) — ei (itä, pohjoinen) kuten intuitiivisesti olettaisi.
         // Kokeillaan molemmat järjestykset ja lisäksi WFS 1.0.0, joka käyttää aina
         // (itä, pohjoinen). Ensimmäinen joka tuottaa kohteita voittaa.
+        // INSPIRE-tasot julkaistaan tyypillisesti ETRS89-ASTEINA (EPSG:4258), ei
+        // metreinä — INSPIRE-direktiivi edellyttää ETRS89:ää. Metrikoordinaatit ovat
+        // silloin täysin alueen ulkopuolella ja vastaus on tyhjä, kuten kävi.
+        // Kokeillaan siksi myös asteet, ja huomioidaan että EPSG:4258:n virallinen
+        // akselijärjestys on (leveys, pituus).
+        const laS = 63.05, laN = 63.26, loW = 23.50, loE = 23.82;
         const yritykset = [
+          { nimi: 'ETRS89 asteina, leveys ensin (INSPIRE-oletus)',
+            v: '2.0.0', laske: () => `${laS},${loW},${laN},${loE},urn:ogc:def:crs:EPSG::4258`,
+            idx: 'STARTINDEX', cnt: 'COUNT', tn: 'typeNames' },
+          { nimi: 'WGS84 asteina, leveys ensin',
+            v: '2.0.0', laske: () => `${laS},${loW},${laN},${loE},urn:ogc:def:crs:EPSG::4326`,
+            idx: 'STARTINDEX', cnt: 'COUNT', tn: 'typeNames' },
+          { nimi: 'CRS84 asteina, pituus ensin',
+            v: '1.0.0', laske: () => `${loW},${laS},${loE},${laN}`,
+            idx: null, cnt: 'maxFeatures', tn: 'typeName' },
           { nimi: 'WFS 2.0.0, pohjoinen ensin (EPSG:n virallinen)',
             v: '2.0.0', laske: (i) => `${sw.N.toFixed(0)},${sw.E.toFixed(0)},${ne.N.toFixed(0)},${ne.E.toFixed(0)},urn:ogc:def:crs:EPSG::3067`,
             idx: 'STARTINDEX', cnt: 'COUNT', tn: 'typeNames' },
@@ -1428,7 +1443,13 @@
             idx: 'STARTINDEX', cnt: 'COUNT', tn: 'typeNames' },
           { nimi: 'WFS 1.0.0, itä ensin',
             v: '1.0.0', laske: () => `${sw.E.toFixed(0)},${sw.N.toFixed(0)},${ne.E.toFixed(0)},${ne.N.toFixed(0)}`,
-            idx: null, cnt: 'maxFeatures', tn: 'typeName' }
+            idx: null, cnt: 'maxFeatures', tn: 'typeName' },
+          // Viimeinen keino: ei rajausta lainkaan, vain muutama kohde. Tämä kertoo
+          // onko tasolla dataa ylipäätään ja missä koordinaatistossa se on — vastauksen
+          // geometriasta näkee suoraan ovatko luvut metrejä vai asteita.
+          { nimi: 'ilman rajausta (diagnostiikka, 5 kohdetta)',
+            v: '2.0.0', laske: null,
+            idx: null, cnt: 'COUNT', tn: 'typeNames', maara: 5, eiBbox: true }
         ];
 
         const alueet = [];
@@ -1437,16 +1458,31 @@
         const lokit = [];
 
         for (const y of yritykset) {
-          const bbox = y.laske();
           const perus = `${SYKE_WFS}?service=WFS&version=${y.v}&request=GetFeature`
             + `&${y.tn}=${encodeURIComponent(taso)}&srsName=EPSG:3067`
-            + `&outputFormat=application/json&bbox=${bbox}&sykeuserid=${SYKE_ID}`;
+            + `&outputFormat=application/json&sykeuserid=${SYKE_ID}`
+            + (y.eiBbox ? '' : `&bbox=${y.laske()}`);
           try {
-            const url = perus + (y.idx ? `&${y.idx}=0&${y.cnt}=${COUNT}` : `&${y.cnt}=${COUNT}`);
+            const maara = y.maara || COUNT;
+            const url = perus + (y.idx ? `&${y.idx}=0&${y.cnt}=${maara}` : `&${y.cnt}=${maara}`);
             const r = await fetch(url, { cache: 'no-store' });
             if (!r.ok) { lokit.push(`${y.nimi}: HTTP ${r.status}`); continue; }
             const gj = await r.json();
-            const n = (gj.features || []).length;
+            const piirteet = gj.features || [];
+            const n = piirteet.length;
+            if (y.eiBbox && n > 0) {
+              // Diagnostiikka: näytetään ensimmäisen kohteen kentät ja koordinaatti,
+              // jotta nähdään mikä on syvyyskentän nimi ja mikä koordinaatisto.
+              const p0 = piirteet[0].properties || {};
+              const g0 = piirteet[0].geometry;
+              let eka = null;
+              try {
+                const cc = (g0.type === 'Polygon') ? g0.coordinates[0][0] : g0.coordinates[0][0][0];
+                eka = `${cc[0].toFixed(1)},${cc[1].toFixed(1)}`;
+              } catch (e2) { /* ohitetaan */ }
+              lokit.push(`${y.nimi}: ${n} kohdetta. Kentät: ${Object.keys(p0).join(', ')}. Ensimmäinen koordinaatti: ${eka}`);
+              continue;   // ei käytetä hakuun, vain kerrotaan
+            }
             lokit.push(`${y.nimi}: ${n} kohdetta`);
             if (n > 0) { kaytetty = { y, perus }; break; }
           } catch (e) { lokit.push(`${y.nimi}: ${e.message}`); }
@@ -1467,9 +1503,24 @@
           const piirteet = gj.features || [];
           piirteet.forEach(ft => {
             const p = ft.properties || {};
+            // Syvyyskentän nimeä ei tiedetä etukäteen. INSPIRE käyttää usein muotoa
+            // propertyValue, elevationValue tai vastaavaa; SYKEn omissa aineistoissa
+            // se voi olla syvyys tai kaava. Etsitään ensin nimen perusteella, ja jos
+            // se ei tuota tulosta, otetaan ensimmäinen järkevällä välillä oleva luku.
             let syvyys = null;
             for (const k of Object.keys(p)) {
-              if (/syvyys|depth|elev|arvo|value/i.test(k) && typeof p[k] === 'number') { syvyys = p[k]; break; }
+              if (/syvyys|depth|elev|korkeus|arvo|value/i.test(k)) {
+                const v = (typeof p[k] === 'number') ? p[k] : parseFloat(p[k]);
+                if (!isNaN(v)) { syvyys = v; break; }
+              }
+            }
+            if (syvyys === null) {
+              for (const k of Object.keys(p)) {
+                const v = (typeof p[k] === 'number') ? p[k] : parseFloat(p[k]);
+                // Järvisyvyys on Suomessa käytännössä 0-100 m; tunniste- ja
+                // vuosilukukentät jäävät tämän ulkopuolelle.
+                if (!isNaN(v) && Math.abs(v) > 0 && Math.abs(v) <= 100) { syvyys = v; break; }
+              }
             }
             const g = ft.geometry;
             if (!g || syvyys === null) return;
