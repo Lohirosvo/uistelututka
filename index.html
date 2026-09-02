@@ -1444,6 +1444,17 @@
       return alue;
     }
 
+    // Kokeiltavat tasot järjestyksessä: syvyysalueet antavat vyöhykkeen, käyrät vain
+    // lähimmän käyrän. Alueet ovat parempia, mutta ne eivät kata kaikkia järviä —
+    // Lappajärveä ei löytynyt niistä. Käyrät toimitetaan maastokarttoihin, joten ne
+    // kattavat todennäköisesti enemmän.
+    function sykeTasoJarjestys() {
+      const t = sykeTasot || [];
+      const alue = t.filter(x => /syvyysalue|depthare/i.test(x));
+      const kayra = t.filter(x => /contour|kayra|käyrä/i.test(x));
+      return [...alue, ...kayra];
+    }
+
     async function haeSyvyysAineisto(pakota) {
       syvyysVirhe = null;
       if (!pakota) {
@@ -1472,7 +1483,7 @@
         } catch (e) { /* rikkinäinen välimuisti, haetaan uudestaan */ }
       }
       try {
-        const taso = await sykeEtsiTaso();
+        let taso = await sykeEtsiTaso();
 
         // Rajaus Lappajärven ympärille TM35FIN-koordinaatteina.
         const sw = TM35.fwd(63.05, 23.50), ne = TM35.fwd(63.26, 23.82);
@@ -1552,7 +1563,15 @@
         let kaytetty = null;
         const lokit = [];
 
-        for (const y of yritykset) {
+        // Kokeillaan tasot järjestyksessä: ensin syvyysalueet, sitten käyrät.
+        const kokeiltavat = sykeTasoJarjestys();
+        if (kokeiltavat.length) taso = kokeiltavat[0];
+        const parit = [];
+        kokeiltavat.forEach(t => yritykset.forEach(y => parit.push({ t, y })));
+
+        for (const pari of parit) {
+          const y = pari.y;
+          taso = pari.t;
           const perus = `${SYKE_WFS}?service=WFS&version=2.0.0&request=GetFeature`
             + `&typeNames=${encodeURIComponent(taso)}&srsName=EPSG:3067`
             + `&outputFormat=application/json&CQL_FILTER=${encodeURIComponent(y.cql)}`
@@ -1562,9 +1581,9 @@
             if (!r.ok) { lokit.push(`${y.nimi}: HTTP ${r.status}`); continue; }
             const gj = await r.json();
             const n = (gj.features || []).length;
-            lokit.push(`${y.nimi}: ${n} kohdetta`);
-            if (n > 0) { kaytetty = { y, perus }; break; }
-          } catch (e) { lokit.push(`${y.nimi}: ${e.message}`); }
+            if (n > 0) lokit.push(`${taso.split(':').pop()} / ${y.nimi}: ${n} kohdetta`);
+            if (n > 0) { kaytetty = { y, perus, taso }; break; }
+          } catch (e) { lokit.push(`${taso.split(':').pop()} / ${y.nimi}: ${e.message}`); }
         }
 
         if (!kaytetty) {
@@ -1593,8 +1612,14 @@
             }
             const g = ft.geometry;
             if (!g || alaraja === null) return;
+            // Tuetaan sekä monikulmioita (syvyysalueet) että viivoja (syvyyskäyrät).
+            // Jos syvyysalueita ei ole, käyrät kelpaavat: silloin haetaan lähin käyrä
+            // eikä vyöhykettä johon piste osuu.
             const renkaat = (g.type === 'Polygon') ? [g.coordinates[0]]
-                          : (g.type === 'MultiPolygon') ? g.coordinates.map(cc => cc[0]) : [];
+                          : (g.type === 'MultiPolygon') ? g.coordinates.map(cc => cc[0])
+                          : (g.type === 'LineString') ? [g.coordinates]
+                          : (g.type === 'MultiLineString') ? g.coordinates : [];
+            const onViiva = (g.type === 'LineString' || g.type === 'MultiLineString');
             renkaat.forEach(r2 => {
               // Nimihaun tulokset suodatetaan etäisyydellä: Suomessa on useampi
               // samanniminen järvi, ja haku osui aiemmin Kainuun Lappajärveen.
@@ -1605,7 +1630,7 @@
                 const lahella = r2.some(pt => Math.hypot(pt[0] - kp.E, pt[1] - kp.N) < 60000);
                 if (!lahella) return;
               }
-              alueet.push({ s: ylaraja, min: alaraja, max: ylaraja, r: r2 });
+              alueet.push({ s: ylaraja, min: alaraja, max: ylaraja, r: r2, viiva: onViiva });
             });
           });
           if (piirteet.length < COUNT) break;
@@ -1645,10 +1670,34 @@
               .map(([k, d2]) => `${k} — ${d2 === null ? '?' : d2.toFixed(0) + ' km'}`)
               .join(' || ');
           } catch (e5) { lista = 'listausta ei saatu: ' + e5.message; }
-          throw new Error(`kohteita tuli, mutta yksikään ei ollut lähellä. Vesistöalueen ${vesistoAlue || '?'} ja Lappaj-nimiset mittausalueet: ${lista || 'ei yhtään'}`);
+          // TASOKOKEILU: syvyysalue-taso ei näytä kattavan tätä järveä. Kokeillaan
+          // samalla paikkasuodattimella kaikki kolme tasoa ja kerrotaan mistä löytyy
+          // kohteita. Syvyyskäyrät (ContourLine) toimitetaan maastokarttoihin, joten
+          // ne kattavat todennäköisesti enemmän järviä kuin johdetut syvyysalueet.
+          let tasoLoydot = '';
+          try {
+            const tulokset = [];
+            for (const t of (sykeTasot || [])) {
+              const u = `${SYKE_WFS}?service=WFS&version=2.0.0&request=GetFeature`
+                + `&typeNames=${encodeURIComponent(t)}&srsName=EPSG:3067`
+                + `&outputFormat=application/json&sykeuserid=${SYKE_ID}`
+                + `&CQL_FILTER=${encodeURIComponent(`intersects(${gk},${poly})`)}&COUNT=5`;
+              try {
+                const rr = await fetch(u, { cache: 'no-store' });
+                if (!rr.ok) { tulokset.push(`${t}: HTTP ${rr.status}`); continue; }
+                const ff = (await rr.json()).features || [];
+                tulokset.push(`${t}: ${ff.length} kohdetta`
+                  + (ff.length ? ` (kentät: ${Object.keys(ff[0].properties || {}).join(', ')})` : ''));
+              } catch (e6) { tulokset.push(`${t}: ${e6.message}`); }
+            }
+            tasoLoydot = tulokset.join(' || ');
+          } catch (e7) { tasoLoydot = 'tasokokeilu epäonnistui: ' + e7.message; }
+
+          throw new Error(`Lappajärveä ei löydy tästä tasosta. Vesistöalueen ${vesistoAlue || '?'} ja Lappaj-nimiset: ${lista || 'ei yhtään'}. TASOKOKEILU: ${tasoLoydot}`);
         }
 
-        syvyysAineisto = { tallennettu: Date.now(), taso, alueet, tapa: kaytetty.y.nimi };
+        syvyysAineisto = { tallennettu: Date.now(), taso: kaytetty.taso, alueet,
+                           tapa: `${kaytetty.taso.split(':').pop()} — ${kaytetty.y.nimi}` };
         try { localStorage.setItem(LS_SYVYYS, JSON.stringify(syvyysAineisto)); }
         catch (e) { console.warn('Syvyysaineisto ei mahtunut välimuistiin:', e.message); }
         return syvyysAineisto;
@@ -1681,13 +1730,28 @@
       // Syvyysalueet ovat sisäkkäisiä vyöhykkeitä, joten piste voi osua useaan.
       // Syvin osuma on oikea vastaus. Palautetaan koko väli, ei yhtä lukua —
       // aineisto ei anna tarkkaa syvyyttä vaan vyöhykkeen.
-      let paras = null;
+      const onViivoja = syvyysAineisto.alueet.some(a => a.viiva);
+      if (!onViivoja) {
+        let paras = null;
+        for (const a of syvyysAineisto.alueet) {
+          if (pisteRenkaassa(p.E, p.N, a.r)) {
+            if (paras === null || a.s > paras.s) paras = a;
+          }
+        }
+        return paras;
+      }
+      // Syvyyskäyrät ovat viivoja, joten pistettä ei voi sijoittaa "sisälle".
+      // Etsitään lähin käyrä ja kerrotaan sen syvyys sekä etäisyys — se on
+      // rehellisempi kuin arvata mihin vyöhykkeeseen piste kuuluu.
+      let lahin = null, lyhin = Infinity;
       for (const a of syvyysAineisto.alueet) {
-        if (pisteRenkaassa(p.E, p.N, a.r)) {
-          if (paras === null || a.s > paras.s) paras = a;
+        for (const pt of a.r) {
+          const d = Math.hypot(pt[0] - p.E, pt[1] - p.N);
+          if (d < lyhin) { lyhin = d; lahin = a; }
         }
       }
-      return paras;
+      if (!lahin || lyhin > 500) return null;   // yli 500 m päässä ei kerro mitään
+      return { min: lahin.min, max: lahin.max, s: lahin.s, viiva: true, etaisyys: lyhin };
     }
 
     // Näyttää pohjasyvyyden omilla merkinnöillä — vaihe 1 siitä mitä lupa mahdollistaa.
@@ -1714,7 +1778,8 @@
       const arvot = osui.map(x => x.v.max).sort((a, b) => a - b);
       const mediaani = arvot.length ? arvot[Math.floor(arvot.length / 2)] : null;
 
-      const vali = v => (v.min === v.max) ? `${v.max.toFixed(1)} m` : `${v.min.toFixed(1)}–${v.max.toFixed(1)} m`;
+      const vali = v => ((v.min === v.max) ? `${v.max.toFixed(1)} m` : `${v.min.toFixed(1)}–${v.max.toFixed(1)} m`)
+        + (v.viiva ? ` <span style="color:var(--muted); font-size:11px;">(lähin käyrä ${v.etaisyys.toFixed(0)} m)</span>` : '');
 
       let html = `<p class="hint" style="margin:0 0 8px;">Haettu ${data.alueet.length} syvyysaluetta `
         + `(${data.tapa}). SYKEn avointa dataa, CC BY 4.0.</p>`;
@@ -3596,7 +3661,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v28';
+    const APP_VERSIO = 'v29';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
