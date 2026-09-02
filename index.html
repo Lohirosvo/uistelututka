@@ -808,6 +808,17 @@
         <button class="chip" onclick="analysoiMerkinnat(true)" style="border-color:var(--muted); color:var(--muted);">Hae uudelleen</button>
       </div>
       <div id="syvyysAnalyysi" style="margin-top:10px;"></div>
+
+      <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--line);">
+        <p class="hint" style="margin:0 0 8px;">
+          <strong style="color:var(--amber);">SYKEn vastaus 2.9.2026:</strong> Lappajärveltä ei ole
+          syvyysluotausdataa olemassa — luotauksia ei ole tehty kaikilta Suomen järviltä.
+          Lappajärvi käyttää siksi edelleen georeferoitua syvyyskarttakuvaa.
+          Alta näet mitkä lähijärvet on luodattu.
+        </p>
+        <button class="chip" onclick="listaaLuodatutJarvet()" style="border-color:var(--amber); color:var(--amber);">Luodatut järvet 150 km säteeltä</button>
+        <div id="luodatutBox" style="margin-top:10px;"></div>
+      </div>
     </div>
 
     <!-- TUULIHÄLYTYS JA NÄYTTÖTILA -->
@@ -1827,6 +1838,84 @@
 
       html += '<p class="hint" style="margin-top:8px;">Huom: syvyysaineiston luotauslinjaväli on vähintään 75 m ja se on tehty järven tilavuuden selvittämiseksi, ei navigointiin. Luvut ovat suuntaa-antavia.</p>';
       box.innerHTML = html;
+    }
+
+    // ===== MISTÄ JÄRVISTÄ SYVYYSDATAA ON? =====
+    // SYKE (Iida, GIS-tuki, 2.9.2026): "Syvyysluotauksia ei ole tehty Suomen kaikilta
+    // järviltä ja valitettavasti Pohjanmaan Lappajärveltä ei ole kyseistä dataa
+    // olemassa." Lappajärvi jää siis ilman numeerista syvyyttä — sovellus käyttää
+    // sille edelleen georeferoitua syvyyskarttakuvaa.
+    //
+    // Tämä työkalu listaa mitkä lähijärvet ON luodattu, jotta tiedetään minne
+    // sovelluksen syvyysominaisuus toimii. Kysely on kertaluonteinen ja sivutettu.
+    async function listaaLuodatutJarvet() {
+      const box = document.getElementById('luodatutBox');
+      if (!box) return;
+      box.innerHTML = '<p class="hint">Haetaan luodattuja järviä 150 km säteeltä…</p>';
+      try {
+        const taso = await sykeEtsiTaso();
+        const gk = await sykeEtsiGeometriakentta(taso);
+        // Keskipiste Seinäjoki, säde 150 km.
+        const kesk = TM35.fwd(62.7903, 22.8403);
+        const R = 150000;
+        const poly = `POLYGON((${(kesk.E - R).toFixed(0)} ${(kesk.N - R).toFixed(0)},`
+                   + `${(kesk.E - R).toFixed(0)} ${(kesk.N + R).toFixed(0)},`
+                   + `${(kesk.E + R).toFixed(0)} ${(kesk.N + R).toFixed(0)},`
+                   + `${(kesk.E + R).toFixed(0)} ${(kesk.N - R).toFixed(0)},`
+                   + `${(kesk.E - R).toFixed(0)} ${(kesk.N - R).toFixed(0)}))`;
+
+        const jarvet = new Map();
+        const COUNT = 3000;
+        // Enintään kolme sivua: tarkoitus on kartoittaa, ei ladata koko aineistoa.
+        for (let sivu = 0; sivu < 3; sivu++) {
+          const url = `${SYKE_WFS}?service=WFS&version=2.0.0&request=GetFeature`
+            + `&typeNames=${encodeURIComponent(taso)}&srsName=EPSG:3067`
+            + `&outputFormat=application/json&sykeuserid=${SYKE_ID}`
+            + `&CQL_FILTER=${encodeURIComponent(`intersects(${gk},${poly})`)}`
+            + `&STARTINDEX=${sivu * COUNT}&COUNT=${COUNT}`;
+          const r = await fetch(url, { cache: 'no-store' });
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          const fs = (await r.json()).features || [];
+          fs.forEach(ft => {
+            const p = ft.properties || {};
+            const nimi = p.syvmittausaluenimi || '(nimetön)';
+            const tunnus = p.jarvitunnus || '?';
+            const avain = `${nimi}|${tunnus}`;
+            if (jarvet.has(avain)) return;
+            let et = null;
+            try {
+              const g = ft.geometry;
+              const cc = (g.type === 'Polygon') ? g.coordinates[0][0]
+                       : (g.type === 'MultiPolygon') ? g.coordinates[0][0][0]
+                       : (g.type === 'LineString') ? g.coordinates[0] : g.coordinates[0][0];
+              et = Math.hypot(cc[0] - kesk.E, cc[1] - kesk.N) / 1000;
+            } catch (e) { /* ohitetaan */ }
+            jarvet.set(avain, { nimi, tunnus, et });
+          });
+          if (fs.length < COUNT) break;
+        }
+
+        const lista = [...jarvet.values()]
+          .filter(j => j.et === null || j.et <= 150)
+          .sort((a, b) => (a.et ?? 1e9) - (b.et ?? 1e9));
+
+        if (lista.length === 0) {
+          box.innerHTML = '<p class="hint" style="color:var(--amber);">Alueelta ei löytynyt luodattuja järviä.</p>';
+          return;
+        }
+        let html = `<p class="hint" style="margin:0 0 8px;">Löytyi <strong>${lista.length}</strong> luodattua mittausaluetta 150 km säteeltä Seinäjoelta, lähin ensin.</p>`
+          + '<div style="font-size:13px; max-height:340px; overflow:auto;">';
+        lista.forEach(j => {
+          html += `<div style="padding:4px 0; border-bottom:1px solid rgba(30,51,80,0.5);">`
+            + `<strong style="color:var(--cyan);">${j.et === null ? '?' : j.et.toFixed(0) + ' km'}</strong> `
+            + `<span style="color:var(--text);">${j.nimi}</span> `
+            + `<span style="color:var(--muted); font-size:11px;">${j.tunnus}</span></div>`;
+        });
+        html += '</div><p class="hint" style="margin-top:8px;">Etäisyys on mittausalueen reunalta Seinäjoen keskustaan, joten se on suuntaa-antava. SYKEn avointa dataa, CC BY 4.0.</p>';
+        box.innerHTML = html;
+      } catch (e) {
+        box.innerHTML = `<p class="hint" style="color:var(--hard-red);">Haku ei onnistunut: ${e.message}</p>`;
+      }
     }
 
     // ===== SADETUTKA =====
@@ -3661,7 +3750,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v29';
+    const APP_VERSIO = 'v30';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
