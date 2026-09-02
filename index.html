@@ -1519,7 +1519,19 @@
             { nimi: `järvitunnus alkaa ${vesistoAlue}`, cql: `jarvitunnus LIKE '${vesistoAlue}%'`, suodataEtaisyys: true }
           );
         }
+        // SYKEN OMA ESIMERKKI käyttää intersects-funktiota ja POLYGON-muotoa
+        // metreinä (itä pohjoinen), ei DWITHIN-funktiota. Tämä on siksi ensimmäinen
+        // paikkasuodatin jota kokeillaan — se on dokumentoitu toimivaksi:
+        //   CQL_FILTER=intersects(location_geometry_data,POLYGON((379388 6665705, ...)))
+        const nw = TM35.fwd(63.26, 23.50), se2 = TM35.fwd(63.05, 23.82);
+        const poly = `POLYGON((${nw.E.toFixed(0)} ${se2.N.toFixed(0)},`
+                   + `${nw.E.toFixed(0)} ${nw.N.toFixed(0)},`
+                   + `${se2.E.toFixed(0)} ${nw.N.toFixed(0)},`
+                   + `${se2.E.toFixed(0)} ${se2.N.toFixed(0)},`
+                   + `${nw.E.toFixed(0)} ${se2.N.toFixed(0)}))`;
         yritykset.push(
+          { nimi: `intersects POLYGON metreinä (${gk}) — SYKEn esimerkin mukainen`,
+            cql: `intersects(${gk},${poly})` },
           // Akselijärjestys toisin päin: WFS 2.0.0 voi odottaa POINT(pohjoinen itä).
           { nimi: `metrit, pohjoinen ensin (${gk})`,
             cql: `DWITHIN(${gk}, POINT(${kp.N.toFixed(0)} ${kp.E.toFixed(0)}), 25000, meters)` },
@@ -3584,7 +3596,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v27';
+    const APP_VERSIO = 'v28';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
