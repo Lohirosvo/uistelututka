@@ -1375,6 +1375,26 @@
             N += h[j - 1] * Math.sin(2 * j * nt) * Math.cosh(2 * j * et);
           }
           return { E: A * k0 * E + E0, N: A * k0 * N };
+        },
+        // Käänteismuunnos vain diagnostiikkaa varten: kertoo missä haettu aineisto
+        // oikeasti sijaitsee. Suomessa on useampi Lappajärvi, joten nimihaku voi
+        // osua väärään järveen — se näkyy heti leveys- ja pituusasteista.
+        inv(E, N) {
+          const hi = [n / 2 - 2 * n * n / 3 + 37 * n ** 3 / 96 - n ** 4 / 360,
+                      n * n / 48 + n ** 3 / 15 - 437 * n ** 4 / 1440,
+                      17 * n ** 3 / 480 - 37 * n ** 4 / 840,
+                      4397 * n ** 4 / 161280];
+          const et = (E - E0) / (A * k0), nt = N / (A * k0);
+          let e2 = et, n2 = nt;
+          for (let j = 1; j <= 4; j++) {
+            e2 -= hi[j - 1] * Math.cos(2 * j * nt) * Math.sinh(2 * j * et);
+            n2 -= hi[j - 1] * Math.sin(2 * j * nt) * Math.cosh(2 * j * et);
+          }
+          const be = Math.asin(Math.sin(n2) / Math.cosh(e2));
+          let Q = Math.asinh(Math.tan(be)), Q2 = Q;
+          for (let i = 0; i < 8; i++) Q2 = Q + e * Math.atanh(e * Math.tanh(Q2));
+          return { lat: Math.atan(Math.sinh(Q2)) * 180 / Math.PI,
+                   lon: (lon0 + Math.asin(Math.tanh(e2) / Math.cos(be))) * 180 / Math.PI };
         }
       };
     })();
@@ -1581,6 +1601,35 @@
           + `<span style="color:var(--text);">${x.t}</span></div>`;
       });
       html += '</div>';
+      // SIJAINTITARKISTUS: jos yksikään merkintä ei osu, vika on lähes varmasti
+      // koordinaatistossa eikä sijainnissa. Näytetään aineiston ulottuvuus ja oman
+      // merkinnän koordinaatti samassa yksikössä, jolloin epäsuhta näkyy heti.
+      if (osui.length === 0 && data.alueet.length) {
+        let minE = Infinity, maxE = -Infinity, minN = Infinity, maxN = -Infinity;
+        data.alueet.forEach(a2 => a2.r.forEach(pt => {
+          if (pt[0] < minE) minE = pt[0]; if (pt[0] > maxE) maxE = pt[0];
+          if (pt[1] < minN) minN = pt[1]; if (pt[1] > maxN) maxN = pt[1];
+        }));
+        const oma = TM35.fwd(omatMerkinnat[0].lat, omatMerkinnat[0].lon);
+        const sisalla = (oma.E >= minE && oma.E <= maxE && oma.N >= minN && oma.N <= maxN);
+        html += `<div style="margin-top:10px; padding:10px; background:var(--panel-alt); border-radius:8px; font-size:12px;">`
+          + `<strong style="color:var(--amber);">Sijaintitarkistus</strong><br>`
+          + `Aineiston ulottuvuus: X ${minE.toFixed(0)}…${maxE.toFixed(0)}, Y ${minN.toFixed(0)}…${maxN.toFixed(0)}<br>`
+          + `Oma merkintä samassa yksikössä: ${oma.E.toFixed(0)}, ${oma.N.toFixed(0)}<br>`
+          + `Merkintä ulottuvuuden sisällä: <strong>${sisalla ? 'kyllä' : 'EI'}</strong><br>`
+          + `Renkaita: ${data.alueet.length}, pisteitä ensimmäisessä: ${data.alueet[0].r.length}<br>`
+          + `Syvyysvälit: ${[...new Set(data.alueet.map(a2 => a2.min + '–' + a2.max))].join(', ')}<br>`
+          + (() => {
+              const k = TM35.inv((minE + maxE) / 2, (minN + maxN) / 2);
+              const omaK = omatMerkinnat[0];
+              const ero = Math.hypot((k.lat - omaK.lat) * 111.3, (k.lon - omaK.lon) * 50.4);
+              return `Aineiston keskipiste: ${k.lat.toFixed(4)}, ${k.lon.toFixed(4)} — `
+                + `${ero.toFixed(0)} km omista merkinnöistä.`
+                + (ero > 30 ? ' <strong style="color:var(--hard-red);">Nimihaku osui todennäköisesti eri järveen.</strong>' : '');
+            })()
+          + `</div>`;
+      }
+
       html += '<p class="hint" style="margin-top:8px;">Huom: syvyysaineiston luotauslinjaväli on vähintään 75 m ja se on tehty järven tilavuuden selvittämiseksi, ei navigointiin. Luvut ovat suuntaa-antavia.</p>';
       box.innerHTML = html;
     }
