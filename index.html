@@ -798,10 +798,12 @@
       <div class="sonarstrip"></div>
     </header>
 
-    <!-- SYKE-SYVYYSANALYYSI -->
-    <div class="q" style="border-color:var(--cyan); margin-bottom:14px;">
-      <div class="idx">SYKE · Järvien syvyysaineisto</div>
-      <h2>Pohjasyvyys omilla merkinnöillä</h2>
+    <!-- SYKE-SYVYYSANALYYSI — kutistettu 2.9.2026: tämä on kotikäyttöä, ei venekäyttöä -->
+    <details class="q" style="border-color:var(--cyan); margin-bottom:14px;">
+      <summary style="cursor:pointer; list-style:none;">
+        <span class="idx">SYKE · Järvien syvyysaineisto</span>
+        <h2 style="margin:2px 0 0;"><span style="color:var(--muted);">▸</span> Pohjasyvyys omilla merkinnöillä</h2>
+      </summary>
       <p class="hint">Hakee syvyysaineiston kerran ja tallentaa sen laitteelle. Kertoo, minkä syvyysvyöhykkeen päällä kukin 18 merkinnästäsi on — numeroina, ei kartan väreistä pääteltynä.</p>
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
         <button class="chip" onclick="analysoiMerkinnat(false)" style="border-color:var(--cyan); color:var(--cyan);">Analysoi merkinnät</button>
@@ -819,10 +821,18 @@
         <button class="chip" onclick="listaaLuodatutJarvet()" style="border-color:var(--amber); color:var(--amber);">Luodatut järvet 150 km säteeltä</button>
         <div id="luodatutBox" style="margin-top:10px;"></div>
       </div>
-    </div>
+    </details>
 
     <!-- TUULIHÄLYTYS JA NÄYTTÖTILA -->
     <div id="tuuliHalytysBox" style="display:none; margin-bottom:12px;"></div>
+    <div style="margin-bottom:12px;">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+        <span style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;">Tuuli</span>
+        <div class="chip" onclick="piirraTuuliEnnuste(3)" style="padding:3px 10px; font-size:13px;">3 h</div>
+        <div class="chip" onclick="piirraTuuliEnnuste(24)" style="padding:3px 10px; font-size:13px;">24 h</div>
+      </div>
+      <div id="tuuliEnnusteBox"></div>
+    </div>
     <div style="margin-bottom:14px;">
       <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
         <span style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;">Näyttö</span>
@@ -1037,16 +1047,18 @@
 
     <div class="progress" id="progress"></div>
     <!-- PIKAPANEELI: kolme arvoa jotka muuttuvat joka reissulla -->
-    <div class="q" id="pikapaneeli" style="border-color:var(--amber); background:radial-gradient(ellipse at top left, rgba(255,176,32,0.05) 0%, var(--panel) 75%);">
-      <div class="idx">Pikasäätö</div>
-      <h2>Muuttuu joka reissulla</h2>
+    <details class="q" id="pikapaneeli" style="border-color:var(--amber); background:radial-gradient(ellipse at top left, rgba(255,176,32,0.05) 0%, var(--panel) 75%);">
+      <summary style="cursor:pointer; list-style:none;">
+        <span class="idx">Pikasäätö</span>
+        <h2 style="margin:2px 0 0;"><span style="color:var(--muted);">▸</span> Muuttuu joka reissulla</h2>
+      </summary>
       <p class="hint">Vesi, tuuli ja valo vaihtuvat jokaisella kerralla. Muut vastaukset muistetaan, joten näitä kolmea säätämällä pääset useimmiten suoraan analyysiin.</p>
       <div id="pikaSisalto"></div>
       <button onclick="analyze(); document.getElementById('resultsSection').scrollIntoView({behavior:'smooth'});"
               style="width:100%; margin-top:12px; background:var(--amber); color:#1a1200; border:none; border-radius:10px; font-family:'Barlow Condensed',sans-serif; font-size:20px; font-weight:700; letter-spacing:.02em; padding:14px; cursor:pointer;">
         Analysoi näillä
       </button>
-    </div>
+    </details>
 
     <div id="questions"></div>
 
@@ -3256,7 +3268,10 @@
     const lappajarviHotspots = {
       karna: {
         id: "karna",
-        name: "Kärnänsaaren Pohjoiskärki",
+        // KORJATTU 2.9.2026: nimi oli väärin. Koordinaatti (63.1346278, 23.64655)
+        // on Kärnänsaaren ETELÄkärki, ei pohjoiskärki. Koordinaatti on oikein —
+        // se luettiin OziExplorer .map-tiedoston georeferoinnista — vain nimi oli väärä.
+        name: "Kärnänsaaren eteläkärki",
         lat: 63.1346278, lon: 23.64655,
         // KORJATTU 26.8.2026 OziExplorer .map-tiedoston georeferoinnista (oma karttatyö
         // 2014). Aiempi koordinaatti (63.14007, 23.64242) oli 640 m pielessä — se oli
@@ -3674,6 +3689,51 @@
       }
     }
 
+    // ===== TUULEN ENNUSTE 3 h / 24 h =====
+    // Data on jo haettu tuulikertymää varten, joten tämä on vain esitystapa.
+    // Kolme tuntia näkyy oletuksena yhdellä rivillä; 24 h avataan napista.
+    let tuuliTunnit = null;
+
+    function tuuliNuoli(deg) {
+      // Nuoli osoittaa MIHIN tuuli puhaltaa, koska se on veneessä olennaisempi
+      // kuin mistä se tulee — se kertoo mihin aallokko työntää.
+      const n = ['↓','↙','←','↖','↑','↗','→','↘'];
+      return n[(Math.round(((deg % 360) / 45)) % 8 + 8) % 8];
+    }
+
+    function piirraTuuliEnnuste(tunteja) {
+      const box = document.getElementById('tuuliEnnusteBox');
+      if (!box) return;
+      if (!tuuliTunnit || !tuuliTunnit.time) { box.innerHTML = ''; return; }
+      const sp = tuuliTunnit.wind_speed_10m, dir = tuuliTunnit.wind_direction_10m;
+      const nyt = Date.now();
+      const rivit = [];
+      for (let i = 0; i < tuuliTunnit.time.length; i++) {
+        const t = new Date(tuuliTunnit.time[i]);
+        const ero = (t - nyt) / 3600000;
+        if (ero < -0.5 || ero > tunteja + 0.5) continue;
+        if (sp[i] === null || dir[i] === null) continue;
+        rivit.push({ t, v: sp[i], d: dir[i], ero });
+      }
+      if (rivit.length === 0) { box.innerHTML = '<p class="hint">Ennustetta ei saatavilla.</p>'; return; }
+
+      const solu = r => {
+        const otsikko = (Math.abs(r.ero) < 0.5) ? 'nyt'
+          : r.t.toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' });
+        const vari = (r.v >= TUULI_JATKUVA_RAJA) ? 'var(--hard-red)'
+                   : (r.v >= 5) ? 'var(--amber)' : 'var(--cyan)';
+        return `<div style="flex:1 1 0; min-width:52px; text-align:center; padding:4px 2px;">`
+          + `<div style="font-size:11px; color:var(--muted);">${otsikko}</div>`
+          + `<div style="font-size:20px; color:${vari}; line-height:1.1;">${tuuliNuoli(r.d)}</div>`
+          + `<div style="font-size:13px; color:var(--text);">${r.v.toFixed(0)}</div></div>`;
+      };
+      // 24 h näytetään harvennettuna kolmen tunnin välein, muuten rivi ei mahdu.
+      const naytettavat = (tunteja > 6) ? rivit.filter((r, i) => i % 3 === 0) : rivit;
+      box.innerHTML = `<div style="display:flex; flex-wrap:wrap; gap:2px;">${naytettavat.map(solu).join('')}</div>`
+        + `<p class="hint" style="margin:4px 0 0;">Nuoli osoittaa mihin tuuli puhaltaa, luku on m/s. `
+        + `<span style="color:var(--amber);">Keltainen 5 m/s</span>, <span style="color:var(--hard-red);">punainen ${TUULI_JATKUVA_RAJA} m/s</span>.</p>`;
+    }
+
     // ===== TUULIHÄLYTYS =====
     // Rajat käyttäjän oman kokemuksen mukaan: puuska yli 15 m/s tai jatkuva yli 7 m/s.
     // Nämä ovat veneilyturvallisuuden rajoja, eivät kalabiologiaa — siksi ne eivät
@@ -3796,7 +3856,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v32';
+    const APP_VERSIO = 'v33';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -6106,6 +6166,8 @@
 
         recentWindSummary = mixText;
         laskeTuuliKertyma(data, now);
+        tuuliTunnit = data.hourly;   // talteen 3 h / 24 h ennustetta varten
+        piirraTuuliEnnuste(3);
         if (el) el.innerHTML = `Mennyt sää (3 vrk): keskituuli ${avgWind.toFixed(1)} m/s, huippu ${maxWind.toFixed(1)} m/s. ${mixText}`;
       } catch (err) {
         console.error("Menneen tuulen haku epäonnistui:", err);
