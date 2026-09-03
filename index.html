@@ -3856,7 +3856,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v36';
+    const APP_VERSIO = 'v37';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -5900,9 +5900,45 @@
         }
 
         if (!placeData) {
-          statusEl.textContent = `Ei SYKE-asemaa hakusanoilla ${hakuTermit.join(' / ')}. Käytetään tilastollista oletusta.`;
-          autoFillTemp();
-          return;
+          // DIAGNOSTIIKKA: löysäämme suodatinta askel kerrallaan ja kerromme mitä
+          // löytyy. Näin tiedetään onko kyse siitä että asemaa ei ole, että se on
+          // poistettu käytöstä, vai ettei se mittaa pintalämpötilaa.
+          //   Suure_Id 11 = pintaveden lämpötila, Tila_Id 1 = aktiivinen
+          const havainnot = [];
+          const kokeile = async (kuvaus, suodatin) => {
+            try {
+              const u = new URL(`${baseUrl}/Paikka`);
+              u.searchParams.set('$filter', suodatin);
+              u.searchParams.set('$top', '10');
+              const r = await fetch(u, { cache: 'no-store' });
+              if (!r.ok) { havainnot.push(`${kuvaus}: HTTP ${r.status}`); return []; }
+              const d = await r.json();
+              const v = d.value || [];
+              havainnot.push(`${kuvaus}: ${v.length}`
+                + (v.length ? ` (${v.slice(0, 3).map(x => x.Nimi).join(', ')})` : ''));
+              return v;
+            } catch (e) { havainnot.push(`${kuvaus}: ${e.message}`); return []; }
+          };
+
+          const nimi = hakuTermit[hakuTermit.length - 1];
+          await kokeile('nimi + lämpötila + aktiivinen', `substringof('${nimi}', Nimi) and Suure_Id eq 11 and Tila_Id eq 1`);
+          const eiTila = await kokeile('nimi + lämpötila, myös poistetut', `substringof('${nimi}', Nimi) and Suure_Id eq 11`);
+          const kaikkiSuureet = await kokeile('nimi, mikä tahansa suure', `substringof('${nimi}', Nimi)`);
+
+          if (eiTila.length > 0) {
+            // Asema on olemassa mutta merkitty ei-aktiiviseksi. Käytetään sitä silti —
+            // vanhentunut mittaus karsiutuu myöhemmin ikätarkistuksessa.
+            placeData = { value: eiTila };
+            kaytettyTermi = nimi + ' (ei-aktiivinen asema)';
+          } else {
+            const suureet = [...new Set(kaikkiSuureet.map(x => x.Suure_Id))].join(', ');
+            statusEl.innerHTML = `<span style="color:var(--amber);">Kohteelle ei ole pintaveden lämpötila-asemaa (Suure_Id 11).</span> `
+              + `Käytetään tilastollista oletusta.<br>`
+              + `<span style="font-size:12px; color:var(--muted);">${havainnot.join(' · ')}`
+              + (suureet ? `. Asemalta löytyvät suureet: ${suureet}` : '') + `</span>`;
+            autoFillTemp();
+            return;
+          }
         }
 
         // LÄHIN ASEMA, EI ENSIMMÄINEN — korjattu 2.9.2026.
