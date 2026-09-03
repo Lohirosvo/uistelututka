@@ -1132,8 +1132,10 @@
       </div>
 
       <!-- SYÖTTIKALA -->
-      <div class="result-panel syotti">
-        <h2>Syöttikalat — Tavoitetilanne <span class="tgtTime"></span></h2>
+      <div id="lajiKontti">
+      <div class="result-panel syotti" id="panelSyotti" data-laji="syotti">
+        <h2 onclick="vaihdaLaji('syotti')" style="cursor:pointer; user-select:none;"><span class="lajiNuoli">▸</span> Syöttikalat — Tavoitetilanne <span class="tgtTime"></span></h2>
+        <div class="lajiSisus" style="display:none;">
         <div class="depthviz">
           <div class="scale syotti" id="scaleSyotti"></div>
           <div class="result-figures">
@@ -1147,11 +1149,13 @@
           <summary class="label" style="cursor:pointer;"><span class="arrow">▸</span> Perustelu — Syöttikala</summary>
           <ul id="reasonsOutSyotti"></ul>
         </details>
+        </div>
       </div>
 
       <!-- TAIMEN -->
-      <div class="result-panel taimen">
-        <h2>Taimen — Tavoitetilanne <span class="tgtTime"></span></h2>
+      <div class="result-panel taimen" id="panelTaimen" data-laji="taimen">
+        <h2 onclick="vaihdaLaji('taimen')" style="cursor:pointer; user-select:none;"><span class="lajiNuoli">▸</span> Taimen — Tavoitetilanne <span class="tgtTime"></span></h2>
+        <div class="lajiSisus" style="display:none;">
         <div class="depthviz">
           <div class="scale taimen" id="scaleTaimen"></div>
           <div class="result-figures">
@@ -1165,11 +1169,13 @@
           <summary class="label" style="cursor:pointer;"><span class="arrow">▸</span> Perustelu — Taimen (Syvä vs. Matala)</summary>
           <ul id="reasonsOutTaimen"></ul>
         </details>
+        </div>
       </div>
 
       <!-- KUHA -->
-      <div class="result-panel">
-        <h2>Kuha — Tavoitetilanne <span class="tgtTime"></span></h2>
+      <div class="result-panel" id="panelKuha" data-laji="kuha">
+        <h2 onclick="vaihdaLaji('kuha')" style="cursor:pointer; user-select:none;"><span class="lajiNuoli">▸</span> Kuha — Tavoitetilanne <span class="tgtTime"></span></h2>
+        <div class="lajiSisus" style="display:none;">
         <div class="depthviz">
           <div class="scale" id="scaleKuha"></div>
           <div class="result-figures">
@@ -1195,11 +1201,13 @@
           <summary class="label" style="cursor:pointer;"><span class="arrow">▸</span> Perustelu — Kuha</summary>
           <ul id="reasonsOutKuha"></ul>
         </details>
+        </div>
       </div>
 
       <!-- HAUKI -->
-      <div class="result-panel hauki">
-        <h2>Hauki — Tavoitetilanne <span class="tgtTime"></span></h2>
+      <div class="result-panel hauki" id="panelHauki" data-laji="hauki">
+        <h2 onclick="vaihdaLaji('hauki')" style="cursor:pointer; user-select:none;"><span class="lajiNuoli">▸</span> Hauki — Tavoitetilanne <span class="tgtTime"></span></h2>
+        <div class="lajiSisus" style="display:none;">
         <div class="depthviz">
           <div class="scale hauki" id="scaleHauki"></div>
           <div class="result-figures">
@@ -1213,11 +1221,13 @@
           <summary class="label" style="cursor:pointer;"><span class="arrow">▸</span> Perustelu — Hauki</summary>
           <ul id="reasonsOutHauki"></ul>
         </details>
+        </div>
       </div>
 
       <!-- AHVEN -->
-      <div class="result-panel ahven">
-        <h2>Ahven (>30cm) — Tavoitetilanne <span class="tgtTime"></span></h2>
+      <div class="result-panel ahven" id="panelAhven" data-laji="ahven">
+        <h2 onclick="vaihdaLaji('ahven')" style="cursor:pointer; user-select:none;"><span class="lajiNuoli">▸</span> Ahven (>30cm) — Tavoitetilanne <span class="tgtTime"></span></h2>
+        <div class="lajiSisus" style="display:none;">
         <div class="depthviz">
           <div class="scale ahven" id="scaleAhven"></div>
           <div class="result-figures">
@@ -1231,11 +1241,13 @@
           <summary class="label" style="cursor:pointer;"><span class="arrow">▸</span> Perustelu — Ahven</summary>
           <ul id="reasonsOutAhven"></ul>
         </details>
+        </div>
       </div>
 
       <!-- JÄRVILOHI -->
-      <div class="result-panel jarvilohi">
-        <h2>Järvilohi — Tavoitetilanne <span class="tgtTime"></span></h2>
+      <div class="result-panel jarvilohi" id="panelJarvilohi" data-laji="jarvilohi">
+        <h2 onclick="vaihdaLaji('jarvilohi')" style="cursor:pointer; user-select:none;"><span class="lajiNuoli">▸</span> Järvilohi — Tavoitetilanne <span class="tgtTime"></span></h2>
+        <div class="lajiSisus" style="display:none;">
         <div class="depthviz">
           <div class="scale jarvilohi" id="scaleJarvilohi"></div>
           <div class="result-figures">
@@ -1249,11 +1261,13 @@
           <summary class="label" style="cursor:pointer;"><span class="arrow">▸</span> Perustelu — Järvilohi</summary>
           <ul id="reasonsOutJarvilohi"></ul>
         </details>
+        </div>
       </div>
 
       <!-- KIRJOLOHI — näkyy vain istutusvesillä -->
-      <div class="result-panel" id="panelKirjolohi" style="display:none; border-color:#FF9F5A;">
-        <h2>Kirjolohi — Tavoitetilanne <span class="tgtTime"></span></h2>
+      <div class="result-panel" id="panelKirjolohi" data-laji="kirjolohi" style="display:none; border-color:#FF9F5A;">
+        <h2 onclick="vaihdaLaji('kirjolohi')" style="cursor:pointer; user-select:none;"><span class="lajiNuoli">▸</span> Kirjolohi — Tavoitetilanne <span class="tgtTime"></span></h2>
+        <div class="lajiSisus" style="display:none;">
         <div class="depthviz">
           <div class="scale" id="scaleKirjolohi" style="background:linear-gradient(180deg,#FF9F5A,#7a4a25);"></div>
           <div class="result-figures">
@@ -1267,6 +1281,9 @@
           <summary class="label" style="cursor:pointer;"><span class="arrow">▸</span> Perustelu — Kirjolohi</summary>
           <ul id="reasonsOutKirjolohi"></ul>
         </details>
+        </div>
+      </div>
+
       </div>
 
       <button class="cta secondary" onclick="resetForm()">Muokkaa parametreja</button>
@@ -3779,7 +3796,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v31';
+    const APP_VERSIO = 'v32';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -6755,6 +6772,89 @@
       scale.appendChild(fish);
     }
 
+    // ===== LAJIPANEELIEN JÄRJESTYS JA KUTISTUS =====
+    // Kuusi paneelia allekkain on veneessä liikaa. Käyttäjän kuvaama kiinnostus ei ole
+    // kiinteä vaan EHDOLLINEN, ja sovellus tietää jo ehdot:
+    //   - kuha on tyypillisin uistelukala, oletus, kiinnostus loppuu elokuun lopussa
+    //   - taimen kiinnostaa eniten kun sille on perustellut edellytykset (taimenkeli)
+    //   - järvilohi on ykkönen kun edellytykset ovat erinomaiset (kausikäyrä)
+    //   - kirjolohi on istutusten jälkeisen sesongin kala
+    //
+    // Siksi järjestys lasketaan eikä valita käsin. Tärkein avataan, muut kutistetaan.
+    // JÄRJESTYS EI MUUTU KESKEN REISSUN: se päätetään analyysissä ja pysyy siihen asti
+    // kunnes ajat sen uudelleen. Vaihtuva järjestys olisi veneessä hämmentävä.
+    //
+    // KYNNYKSET OVAT SÄÄDETTÄVIÄ ARVIOITA, eivät tutkimustuloksia — ne kuvaavat
+    // käyttäjän omaa kiinnostusta, ei kalan käyttäytymistä.
+    const LAJI_TAIMENKELI_KYNNYS = 65;    // taimenkeli-% jolla taimen nousee kärkeen
+    const LAJI_JARVILOHI_KYNNYS = 75;     // kausikäyrän % jolla järvilohi nousee ykköseksi
+    let lajiAvattu = null;                // käsin avattu laji, säilyy analyysiin asti
+
+    function lajiPrioriteetit(tkScore, jlKausi) {
+      const a = answers;
+      const kk = new Date().getMonth() + 1;   // 1-12
+      const p = {};
+
+      // Kuha: oletusykkönen, mutta kiinnostus loppuu elokuun lopussa.
+      p.kuha = (kk >= 9 || kk <= 4) ? 30 : 70;
+
+      // Taimen: nousee kärkeen kun taimenkeli on korkea.
+      p.taimen = (tkScore !== null && tkScore !== undefined)
+        ? (tkScore >= LAJI_TAIMENKELI_KYNNYS ? 85 + (tkScore - LAJI_TAIMENKELI_KYNNYS) / 5 : 40 + tkScore / 4)
+        : 45;
+
+      // Järvilohi: ykkönen kun kausikäyrä on erinomainen.
+      p.jarvilohi = (jlKausi !== null && jlKausi !== undefined)
+        ? (jlKausi >= LAJI_JARVILOHI_KYNNYS ? 90 + (jlKausi - LAJI_JARVILOHI_KYNNYS) / 5 : 35 + jlKausi / 4)
+        : 40;
+
+      // Kirjolohi: istutusten jälkeisen sesongin kala, vain istutusvesillä.
+      const onIstutus = currentLocation && /hirvij|kalajärvi|kyrkös/i.test(currentLocation.name);
+      if (!onIstutus) p.kirjolohi = -1;
+      else if (a.istutusPaivat === 'tuore') p.kirjolohi = 95;
+      else if (a.istutusPaivat === 'asettunut') p.kirjolohi = 80;
+      else if (a.istutusPaivat === 'hajaantunut') p.kirjolohi = 50;
+      else p.kirjolohi = 35;
+
+      p.hauki = 25;
+      p.ahven = 20;
+      p.syotti = 15;   // syöttikala on tausta­tieto, ei kohde
+      return p;
+    }
+
+    function jarjestaLajit(tkScore, jlKausi) {
+      const kontti = document.getElementById('lajiKontti')
+                  || (document.querySelector('[data-laji]') || {}).parentElement;
+      if (!kontti) return;
+      const p = lajiPrioriteetit(tkScore, jlKausi);
+      const paneelit = [...kontti.querySelectorAll('[data-laji]')];
+      paneelit
+        .sort((x, y) => (p[y.dataset.laji] ?? 0) - (p[x.dataset.laji] ?? 0))
+        .forEach(el => kontti.appendChild(el));   // uudelleenjärjestys DOM:issa
+
+      // Avataan aina tärkein. Käsivalinta nollautuu analyysissä — se on
+      // ennustettavampaa kuin että vanha valinta jäisi roikkumaan uuteen tilanteeseen.
+      const nakyvat = paneelit.filter(el => el.style.display !== 'none');
+      const karki = nakyvat.sort((x, y) => (p[y.dataset.laji] ?? 0) - (p[x.dataset.laji] ?? 0))[0];
+      asetaAvattuLaji(karki ? karki.dataset.laji : null);
+    }
+
+    function asetaAvattuLaji(laji) {
+      lajiAvattu = laji;
+      document.querySelectorAll('[data-laji]').forEach(el => {
+        const auki = (el.dataset.laji === laji);
+        const sisus = el.querySelector('.lajiSisus');
+        const nuoli = el.querySelector('.lajiNuoli');
+        if (sisus) sisus.style.display = auki ? '' : 'none';
+        if (nuoli) nuoli.textContent = auki ? '▼' : '▸';
+        el.style.opacity = auki ? '1' : '0.82';
+      });
+    }
+
+    function vaihdaLaji(laji) {
+      asetaAvattuLaji(lajiAvattu === laji ? null : laji);
+    }
+
     function renderResult({ lowS, highS, lowK, highK, lowH, highH, lowT, highT, lowA, highA, lowJL, highJL, dKirjolohi, reasonsKirjolohi, color, area, gearTip, reasonsSyotti, reasonsKuha, reasonsHauki, reasonsTaimen, reasonsAhven, reasonsJarvilohi, svgGraph }) {
       document.getElementById('forecastGraph').innerHTML = svgGraph;
 
@@ -6774,6 +6874,18 @@
       document.getElementById('depthOutTaimen').innerHTML = syvyysTeksti(lowT, highT);
       document.getElementById('depthOutAhven').innerHTML = syvyysTeksti(lowA, highA);
       document.getElementById('depthOutJarvilohi').innerHTML = syvyysTeksti(lowJL, highJL);
+      // Lajipaneelien järjestys ja kutistus. Kutsutaan vasta kun kaikki paneelit on
+      // täytetty, jotta piilotettu kirjolohi ei päädy kärkeen.
+      setTimeout(() => {
+        const t = (answers.temp !== undefined) ? answers.temp
+                : (latestSykeTemp !== null ? latestSykeTemp : 12);
+        let jlKausi = null;
+        try { jlKausi = pintavetoSuccessJarvilohi(t); } catch (e) { /* ohitetaan */ }
+        const tkNyt = (viimeisinEnnuste && viimeisinEnnuste.taimenkeli !== undefined)
+          ? viimeisinEnnuste.taimenkeli : null;
+        jarjestaLajit(tkNyt, jlKausi);
+      }, 0);
+
       // Kirjolohi näkyy vain istutusvesillä. Lappajärvelle sitä ei istuteta.
       {
         const onIstutus = currentLocation && /hirvij|kalajärvi|kyrkös/i.test(currentLocation.name);
