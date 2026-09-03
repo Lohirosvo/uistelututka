@@ -3856,7 +3856,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v33';
+    const APP_VERSIO = 'v35';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -5876,25 +5876,53 @@
       const statusEl = document.getElementById('sykeStatus');
       if (!statusEl) return;
 
-      const searchTerm = currentLocation.sykeTerm || currentLocation.name.split(' ')[0];
+      // TARKKA NIMI ENSIN, sitten lyhyempi varareitti — uusi 2.9.2026.
+      // Hirvijärven tarkka nimi on "Hirvijärven tekojärvi". Tarkka nimi tekee hausta
+      // yksikäsitteisen, mutta jos SYKEn tietokannassa nimi on lyhyempi, haku ei
+      // löydä mitään. Siksi kokeillaan molemmat.
+      const hakuTermit = [currentLocation.sykeTerm, currentLocation.sykeTermVara]
+        .filter(Boolean);
+      if (hakuTermit.length === 0) hakuTermit.push(currentLocation.name.split(' ')[0]);
+      const searchTerm = hakuTermit[0];
       statusEl.textContent = `Etsitään asemaa '${searchTerm}' SYKE-rajapinnasta...`;
 
       const baseUrl = "https://rajapinnat.ymparisto.fi/api/Hydrologiarajapinta/1.0/odata";
 
       try {
-        const placeUrl = new URL(`${baseUrl}/Paikka`);
-        placeUrl.searchParams.set('$filter', `substringof('${searchTerm}', Nimi) and Suure_Id eq 11 and Tila_Id eq 1`);
-        const placeRes = await fetch(placeUrl, { cache: 'no-store' });
-        if (!placeRes.ok) throw new Error('Network error');
-        const placeData = await placeRes.json();
+        let placeData = null, kaytettyTermi = null;
+        for (const termi of hakuTermit) {
+          const placeUrl = new URL(`${baseUrl}/Paikka`);
+          placeUrl.searchParams.set('$filter', `substringof('${termi}', Nimi) and Suure_Id eq 11 and Tila_Id eq 1`);
+          const placeRes = await fetch(placeUrl, { cache: 'no-store' });
+          if (!placeRes.ok) throw new Error('Network error');
+          const d = await placeRes.json();
+          if (d.value && d.value.length > 0) { placeData = d; kaytettyTermi = termi; break; }
+        }
 
-        if (!placeData.value || placeData.value.length === 0) {
-          statusEl.textContent = `Ei SYKE-asemaa kohteelle ${searchTerm}. Käytetään tilastollista oletusta.`;
+        if (!placeData) {
+          statusEl.textContent = `Ei SYKE-asemaa hakusanoilla ${hakuTermit.join(' / ')}. Käytetään tilastollista oletusta.`;
           autoFillTemp();
           return;
         }
 
-        const station = placeData.value[0];
+        // LÄHIN ASEMA, EI ENSIMMÄINEN — korjattu 2.9.2026.
+        // Koodi otti aiemmin listan ensimmäisen osuman. Se on sama ansa joka osui
+        // syvyysaineistossa: Suomessa on useampi Hirvijärvi ja useampi Lappajärvi,
+        // ja nimihaku voi löytää väärän. Valitaan koordinaattien perusteella lähin.
+        let station = placeData.value[0];
+        let asemaEtaisyys = null;
+        if (placeData.value.length > 1) {
+          const kp = TM35.fwd(currentLocation.lat, currentLocation.lon);
+          let paras = null, lyhin = Infinity;
+          placeData.value.forEach(s => {
+            const E = s.KoordErTmIta ?? s.KoordItaEtrs ?? s.Ita ?? null;
+            const N = s.KoordErTmPohj ?? s.KoordPohjEtrs ?? s.Pohjoinen ?? null;
+            if (E === null || N === null) return;
+            const d = Math.hypot(E - kp.E, N - kp.N);
+            if (d < lyhin) { lyhin = d; paras = s; }
+          });
+          if (paras) { station = paras; asemaEtaisyys = lyhin / 1000; }
+        }
         const tempUrl = new URL(`${baseUrl}/LampoPintavesi`);
         tempUrl.searchParams.set('$filter', `Paikka_Id eq ${station.Paikka_Id}`);
         tempUrl.searchParams.set('$orderby', 'Aika desc');
@@ -5912,8 +5940,27 @@
         }
 
         if (tempVal !== null) {
-          latestSykeTemp = tempVal;
-          statusEl.innerHTML = `Lähin SYKE-mittaus: <strong style="color:var(--cyan)">${tempVal.toFixed(1)} °C</strong> (${tempTime})`;
+          // MITTAUKSEN IKÄ — uusi 2.9.2026. Aiemmin viimeisin lukema näytettiin
+          // sellaisenaan riippumatta siitä oliko se eilinen vai vuosien takainen.
+          // Osa asemista lopettaa mittaukset kesken kauden tai kokonaan.
+          const ikaVrk = (Date.now() - new Date(tempData.value[0].Aika)) / 86400000;
+          latestSykeTemp = (ikaVrk <= 14) ? tempVal : null;
+
+          let huom = '';
+          huom += ` <span style="color:var(--muted);">${station.Nimi}`;
+          if (kaytettyTermi !== hakuTermit[0]) huom += ` (haettu sanalla "${kaytettyTermi}")`;
+          huom += '</span>';
+          if (asemaEtaisyys !== null) {
+            huom += ` <span style="color:var(--muted);">${asemaEtaisyys.toFixed(0)} km</span>`;
+            if (asemaEtaisyys > 50) huom += ' <span style="color:var(--hard-red);">— kaukana, tarkista onko oikea järvi</span>';
+          }
+          if (ikaVrk > 14) {
+            statusEl.innerHTML = `<span style="color:var(--hard-red);">SYKE-mittaus on ${Math.round(ikaVrk)} vrk vanha (${tempVal.toFixed(1)} °C, ${tempTime})</span> — ei käytetä. Syötä lämpötila itse.${huom}`;
+            autoFillTemp();
+            return;
+          }
+          statusEl.innerHTML = `Lähin SYKE-mittaus: <strong style="color:var(--cyan)">${tempVal.toFixed(1)} °C</strong> (${tempTime}`
+            + (ikaVrk > 2 ? `, <span style="color:var(--amber);">${Math.round(ikaVrk)} vrk vanha</span>` : '') + `)${huom}`;
 
           const q = questions.find(x => x.id === 'temp');
           let bestIdx = 0, bestDiff = Infinity;
@@ -7035,7 +7082,7 @@
         // Koskee UISTELUN ISKUSYVYYTTÄ lohikaloilla — ei kuhaa, joka artikkelin mukaan ei
         // juuri iske uistelulle tässä järvessä.
         salmonidStrikeZone: { min: 2, max: 5, source: 'Kalastus-lehden Lappajärvi-artikkeli + oma jälkidata' } }, // vahvistettu käsin 22.8.2026: raaka 6955 cm vs. todellinen N60 69.68 m (6968 cm)
-      { name: 'Hirvijärven tekoallas', lat: 62.775, lon: 23.011, maxDepth: 7.5, clarityClass: 2, sykeTerm: 'Hirvijärvi', waterLevelStationId: 2312, secchiMeters: 0.88, secchiNote: 'itse mitattu talvella jään alta — avovesikaudella todennäköisesti sameampi' },
+      { name: 'Hirvijärven tekoallas', lat: 62.775, lon: 23.011, maxDepth: 7.5, clarityClass: 2, sykeTerm: 'Hirvijärven tekojärvi', sykeTermVara: 'Hirvijärvi', waterLevelStationId: 2312, secchiMeters: 0.88, secchiNote: 'itse mitattu talvella jään alta — avovesikaudella todennäköisesti sameampi' },
       { name: 'Inarijärvi', lat: 68.919, lon: 27.733, maxDepth: 92, clarityClass: 5, sykeTerm: 'Inari', waterLevelStationId: 2564 }
     ];
     let currentLocation = locations[0];
