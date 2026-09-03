@@ -3856,7 +3856,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v35';
+    const APP_VERSIO = 'v36';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -5912,7 +5912,10 @@
         let station = placeData.value[0];
         let asemaEtaisyys = null;
         if (placeData.value.length > 1) {
-          const kp = TM35.fwd(currentLocation.lat, currentLocation.lon);
+          // Verrataan SYKEn viralliseen havaintopisteeseen jos sellainen on tiedossa,
+          // muuten kalastusalueeseen. Iso allas voi olla kilometrejä pitkä.
+          const kp = TM35.fwd(currentLocation.sykeLat ?? currentLocation.lat,
+                              currentLocation.sykeLon ?? currentLocation.lon);
           let paras = null, lyhin = Infinity;
           placeData.value.forEach(s => {
             const E = s.KoordErTmIta ?? s.KoordItaEtrs ?? s.Ita ?? null;
@@ -7082,7 +7085,12 @@
         // Koskee UISTELUN ISKUSYVYYTTÄ lohikaloilla — ei kuhaa, joka artikkelin mukaan ei
         // juuri iske uistelulle tässä järvessä.
         salmonidStrikeZone: { min: 2, max: 5, source: 'Kalastus-lehden Lappajärvi-artikkeli + oma jälkidata' } }, // vahvistettu käsin 22.8.2026: raaka 6955 cm vs. todellinen N60 69.68 m (6968 cm)
-      { name: 'Hirvijärven tekoallas', lat: 62.775, lon: 23.011, maxDepth: 7.5, clarityClass: 2, sykeTerm: 'Hirvijärven tekojärvi', sykeTermVara: 'Hirvijärvi', waterLevelStationId: 2312, secchiMeters: 0.88, secchiNote: 'itse mitattu talvella jään alta — avovesikaudella todennäköisesti sameampi' },
+      { name: 'Hirvijärven tekoallas', lat: 62.775, lon: 23.011, maxDepth: 7.5, clarityClass: 2, sykeTerm: 'Hirvijärven tekojärvi', sykeTermVara: 'Hirvijärvi', waterLevelStationId: 2312,
+        // SYKEn virallinen havaintopiste (vesistöennustejärjestelmä, tunnus
+        // l440922001y, Lapuanjoen vesistöalue 44). Se on 4,2 km kalastusalueesta,
+        // mutta saman altaan sisällä. Käytetään aseman etäisyysvertailuun, jottei
+        // varoitus laukea turhaan.
+        sykeLat: 62.80938, sykeLon: 23.04584, secchiMeters: 0.88, secchiNote: 'itse mitattu talvella jään alta — avovesikaudella todennäköisesti sameampi' },
       { name: 'Inarijärvi', lat: 68.919, lon: 27.733, maxDepth: 92, clarityClass: 5, sykeTerm: 'Inari', waterLevelStationId: 2564 }
     ];
     let currentLocation = locations[0];
