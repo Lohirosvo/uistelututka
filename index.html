@@ -1251,6 +1251,24 @@
         </details>
       </div>
 
+      <!-- KIRJOLOHI — näkyy vain istutusvesillä -->
+      <div class="result-panel" id="panelKirjolohi" style="display:none; border-color:#FF9F5A;">
+        <h2>Kirjolohi — Tavoitetilanne <span class="tgtTime"></span></h2>
+        <div class="depthviz">
+          <div class="scale" id="scaleKirjolohi" style="background:linear-gradient(180deg,#FF9F5A,#7a4a25);"></div>
+          <div class="result-figures">
+            <div class="fig">
+              <div class="label">Iskusyvyys</div>
+              <div class="value" id="depthOutKirjolohi" style="color:#FF9F5A">—</div>
+            </div>
+          </div>
+        </div>
+        <details class="reasons">
+          <summary class="label" style="cursor:pointer;"><span class="arrow">▸</span> Perustelu — Kirjolohi</summary>
+          <ul id="reasonsOutKirjolohi"></ul>
+        </details>
+      </div>
+
       <button class="cta secondary" onclick="resetForm()">Muokkaa parametreja</button>
     </div>
 
@@ -3182,6 +3200,17 @@
         defaultVal: 'large'
       },
       {
+        id: 'istutusPaivat', title: 'Päiviä kirjolohen istutuksesta',
+        hint: 'Kirjolohi on ainoa laji jonka käyttäytyminen riippuu istutuksesta kuluneesta ajasta. Ivasauskas & Bettoli 2011 (Dale Hollow Lake, ultraäänitelemetria, 44 kalaa, 8 viikkoa) mittasi kolmivaiheisen hajaantumisen: nopea siirtyminen pois istutuspaikalta ensimmäisellä viikolla, vähän liikettä viikot 2–4, uusi hajaantuminen viikot 5–8.',
+        options: [
+          { l: '0–7 vrk (tuore istukas)', v: 'tuore' },
+          { l: '1–4 viikkoa', v: 'asettunut' },
+          { l: 'Yli kuukausi', v: 'hajaantunut' },
+          { l: 'Ei istutuksia / en tiedä', v: 'ei' }
+        ],
+        defaultVal: 'ei'
+      },
+      {
         id: 'haukiKoko', title: 'Tavoitekoko (hauki)',
         hint: 'Pierce ym. 2013 (telemetria, 3 järveä): kesähelteellä isot hauet seuraavat termokliiniä viileämpään veteen (3–8 m, 16–21 °C), kun pienet pysyvät alle 2 m kasvillisuudessa yli 20 °C vedessä. HUOM: tarkkaa kokorajaa ei ole mitattu — tutkimuksessa jako oli alle 60 cm vs. yli 70 cm.',
         options: [
@@ -3750,7 +3779,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v30';
+    const APP_VERSIO = 'v31';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -5412,6 +5441,75 @@
     //     Säilytetty vain kohtalaisesti tuettu ero: järvilohi on ulappahakuisempi.
     // (c) KORJATTU lämpöoptimi: ei 9–12 °C vaan n. 13 °C tai korkeampi
     //     (Elliott & Elliott 2010; Hevrøy ym. 2013), eli sama luokka kuin taimenella.
+    // ===== KIRJOLOHEN SYVYYS =====
+    // Lisätty 2.9.2026 tutkimushaun perusteella. Kirjolohi eroaa mallin muista
+    // lajeista kahdella tavalla:
+    //
+    // 1) SE ON ISTUKAS. Käyttäytyminen riippuu siitä montako päivää istutuksesta on
+    //    kulunut — ainoa laji jolla on tämä muuttuja. Ivasauskas & Bettoli 2011
+    //    (J. Southeastern Assoc. Fish Wildl. Agencies 65:83-91, Dale Hollow Lake,
+    //    44 kalaa ultraäänitelemetrialla, 8 viikkoa) mittasi kolmivaiheisen
+    //    hajaantumisen: nopea siirtyminen pois istutuspaikalta 1. viikolla, vähän
+    //    liikettä viikot 2-4, uusi hajaantuminen viikot 5-8. Kalat suosivat poukamia
+    //    ja välttivät pääuomaa.
+    //
+    // 2) MATALASSA ALTAASSA EI OLE PAKOSYVYYTTÄ. Hirvijärvessä on 7,5 m eikä pysyvää
+    //    harppauskerrosta, joten lämmetessään kala ei pääse mihinkään. Tämä on
+    //    olennaisin ero syvään järveen ja se määrää kauden pituuden.
+    //
+    // LÄMPÖTILA: preferenssi 10-15 °C, yläletaali n. 26 °C (Hosseinpour ym. 2024,
+    // Sci. Rep. 14:11375). Kasvu ja syönti heikkenevät selvästi yli 20 °C.
+    // HAPPI: >7 mg/l alle 15 °C, >9 mg/l yli 15 °C (Raleigh ym. 1984). Lämmin vesi
+    // pitää vähemmän happea, joten rajoite kiristyy juuri kun tarve kasvaa.
+    // SYVYYS: Stables & Thomas 1992 (J. Fish Biol. 40:191-203, Spada Lake): keskimäärin
+    // 3 m, päivällä ulapalla 4-16 m, hämärästä aamuun 0-4 m ja lähempänä rantaa.
+    //
+    // EI KYTKETTY: vuorokausirytmi. Alanärä & Brännäs 1997 (CJFAS 54:2894-2900)
+    // mittasi ettei kirjolohella ole selvää vuorokausipreferenssiä kun ravintoa on —
+    // yksilöt jakautuvat päivä- ja yöaktiivisiin. Rytmiä ei siis kannata mallintaa.
+    function estimateKirjolohiDepth(hour, light, wind) {
+      const a = answers;
+      const t = a.temp;
+      let d;
+
+      // Hämärässä ylempänä ja lähempänä rantaa (Stables & Thomas 1992).
+      const hamara = (hour < (cachedSunData.rise + 2)) || (hour > (cachedSunData.set - 2));
+
+      if (t === undefined) {
+        d = hamara ? 2.0 : 3.0;
+      } else if (t >= 20) {
+        // Yli optimin: kala hakeutuu niin syvälle kuin happi sallii. Matalassa
+        // altaassa se ei riitä — siksi perusteluihin tulee varoitus.
+        d = 4.5;
+      } else if (t >= 15) {
+        d = hamara ? 2.5 : 4.0;
+      } else if (t >= 10) {
+        // Preferenssialue: kala voi olla missä vain, hämärässä ylempänä.
+        d = hamara ? 1.5 : 3.0;
+      } else {
+        d = hamara ? 1.0 : 2.5;
+      }
+
+      // Tuore istukas pysyy lähellä istutuspaikkaa ja on pinnanläheisempi —
+      // se on tottunut altaaseen jossa ruoka tulee ylhäältä.
+      if (a.istutusPaivat === 'tuore') d = Math.min(d, 2.5);
+
+      // Happirajoite: jos termokliini on tiedossa, kirjolohi ei mene sen alle
+      // lämpimällä kaudella, koska alusvesi on vähähappista.
+      if (a.thermo === 'known' && t !== undefined && t >= 15) {
+        const el = document.getElementById('thermoDepth');
+        const val = el ? parseFloat(el.value) : NaN;
+        if (!isNaN(val)) d = Math.min(d, val);
+      }
+
+      let bias = 0;
+      if (wind === 'foam') bias += 1;
+      if (light === 'cloudy') bias += 1;
+      d = Math.max(0.5, d - bias * 0.4);
+      if (currentLocation.maxDepth) d = Math.min(d, currentLocation.maxDepth - 1.0);
+      return d;
+    }
+
     function estimateJarvilohiDepth(hour, light, wind, activeBaitDepth) {
       const a = answers;
       const t = a.temp;
@@ -6176,6 +6274,7 @@
       const reasonsSyotti = [];
       const reasonsAhven = [];
       const reasonsJarvilohi = [];
+      const reasonsKirjolohi = [];
 
       let thermoVal = NaN;
       if (a.thermo === 'known') {
@@ -6196,6 +6295,39 @@
       const dTaimen = estimateTaimenDepth(targetHour, a.light, a.wind, activeBaitDepth);
       const dAhven = estimateAhvenDepth(targetHour, a.light, a.wind, activeBaitDepth);
       const dJarvilohi = estimateJarvilohiDepth(targetHour, a.light, a.wind, activeBaitDepth);
+      const dKirjolohi = estimateKirjolohiDepth(targetHour, a.light, a.wind);
+
+      // ===== KIRJOLOHEN PERUSTELUT =====
+      {
+        const t = a.temp;
+        if (t !== undefined) {
+          if (t >= 20) {
+            reasonsKirjolohi.push(`Vesi ${t} °C on YLI kirjolohen sietorajan. Preferenssi on 10–15 °C ja yläletaali n. 26 °C (Hosseinpour ym. 2024, Sci. Rep. 14:11375), mutta kasvu ja syönti heikkenevät jo yli 20 °C. Matalassa altaassa ei ole viileää alusvettä johon paeta — kala passivoituu eikä syvemmälle ajaminen auta.`);
+          } else if (t >= 15) {
+            reasonsKirjolohi.push(`Vesi ${t} °C on preferenssin yläpuolella (10–15 °C). Kala syö vielä, mutta hakeutuu viileämpään jos sellaista on. Happirajoite kiristyy: yli 15 °C tarvitaan yli 9 mg/l, alle 15 °C riittää 7 mg/l (Raleigh ym. 1984) — ja lämmin vesi pitää sisällään vähemmän happea kuin viileä.`);
+          } else if (t >= 10) {
+            reasonsKirjolohi.push(`Vesi ${t} °C on kirjolohen preferenssialueella (10–15 °C). Paras jakso.`);
+          } else {
+            reasonsKirjolohi.push(`Vesi ${t} °C on preferenssin alapuolella mutta kirjolohi on aktiivinen kylmässäkin. Syksy ja kevät ovat siksi tuottoisia.`);
+          }
+        }
+        // Istutusaika — mallin ainoa laji jolla tämä on.
+        if (a.istutusPaivat === 'tuore') {
+          reasonsKirjolohi.push('TUORE ISTUKAS (0–7 vrk): Ivasauskas & Bettoli 2011 mittasi telemetrialla, että kalat siirtyvät nopeasti pois istutuspaikalta ensimmäisen viikon aikana ja suosivat poukamia, ei pääuomaa. Kala on vielä pinnanläheinen — se on tottunut altaaseen jossa ruoka tulee ylhäältä.');
+          reasonsKirjolohi.push('Saalistuskyky on vielä kehittymätön. Allaskokeissa (Ward ym. 2018) teho parani 28 % neljäntoista vuorokauden ja 29 % kolmenkymmenen vuorokauden elävän ravinnon jälkeen. Järvestä ei ole mitattua siirtymäaikaa — suuruusluokka on 2–4 viikkoa.');
+        } else if (a.istutusPaivat === 'asettunut') {
+          reasonsKirjolohi.push('1–4 VIIKKOA: Ivasauskas & Bettoli 2011 havaitsi tässä vaiheessa vähän liikettä — kalat ovat asettuneet mutta eivät vielä hajaantuneet laajalle. Etsi poukamista ja lahdista.');
+        } else if (a.istutusPaivat === 'hajaantunut') {
+          reasonsKirjolohi.push('YLI KUUKAUSI: Ivasauskas & Bettoli 2011 mittasi uuden hajaantumisvaiheen viikoilla 5–8. Kalat ovat levinneet laajalle ja käyttäytyvät luonnonvaraisemmin. Ravinto on jo luonnonravintoa.');
+        }
+        // Käyttäjän oma havainto virtauspaikoista — merkitty hypoteesiksi.
+        reasonsKirjolohi.push('Virtauspaikat: kirjolohi on kasvatettu virtaavassa vedessä ja on positiivisesti reotaktinen (Waldrop ym. 2020). JÄRVESTÄ ei ole mitattua näyttöä virtaushakuisuudesta istutuksen jälkeen. Todennäköisin selitys hyville virtauspaikoille on happi ja ravinnon kertyminen, ei virtaus sinänsä.');
+        reasonsKirjolohi.push('EI KYTKETTY vuorokausirytmiä: Alanärä & Brännäs 1997 (CJFAS 54:2894–2900) mittasi, ettei kirjolohella ole selvää vuorokausipreferenssiä kun ravintoa on tarjolla — yksilöt jakautuvat päivä- ja yöaktiivisiin. Rytmiä ei siksi mallinneta.');
+        if (t !== undefined && t >= 17) {
+          reasonsKirjolohi.push('MAKUHAITTA: geosmiini ja 2-metyyli-isoborneoli kertyvät kalan rasvakudokseen, ja kirjolohi on rasvainen laji. Aistikynnys kirjolohen lihassa on n. 900 ng/kg (Robertson ym. 2005, Aquaculture 245:89–99) ja puhdistuminen puhtaassa vedessä kestää 10–15 vrk (Davidson ym. 2017). Oma 17 °C:n kynnyksesi on paikallinen nyrkkisääntö, ei fysiologinen vakio — mutta se on todennäköisesti oikea Hirvijärvelle.');
+        }
+      }
+
 
       const lowS = Math.max(1, activeBaitDepth - 1.5), highS = activeBaitDepth + 1.5;
       const lowK = Math.max(1, dKuha - 1.5), highK = dKuha + 1.5;
@@ -6596,6 +6728,7 @@
       updateLakeStatus(targetHour, thermoVal, activeBaitDepth, dKuha, dHauki, dTaimen, dAhven, dJarvilohi, dKuore);
 
       renderResult({
+        dKirjolohi, reasonsKirjolohi,
         lowS, highS, lowK, highK, lowH, highH, lowT, highT, lowA, highA, lowJL, highJL,
         color, area, gearTip, reasonsSyotti, reasonsKuha, reasonsHauki, reasonsTaimen, reasonsAhven, reasonsJarvilohi, svgGraph
       });
@@ -6622,7 +6755,7 @@
       scale.appendChild(fish);
     }
 
-    function renderResult({ lowS, highS, lowK, highK, lowH, highH, lowT, highT, lowA, highA, lowJL, highJL, color, area, gearTip, reasonsSyotti, reasonsKuha, reasonsHauki, reasonsTaimen, reasonsAhven, reasonsJarvilohi, svgGraph }) {
+    function renderResult({ lowS, highS, lowK, highK, lowH, highH, lowT, highT, lowA, highA, lowJL, highJL, dKirjolohi, reasonsKirjolohi, color, area, gearTip, reasonsSyotti, reasonsKuha, reasonsHauki, reasonsTaimen, reasonsAhven, reasonsJarvilohi, svgGraph }) {
       document.getElementById('forecastGraph').innerHTML = svgGraph;
 
       // METRIT JA JALAT RINNAKKAIN — uusi 29.8.2026.
@@ -6641,6 +6774,20 @@
       document.getElementById('depthOutTaimen').innerHTML = syvyysTeksti(lowT, highT);
       document.getElementById('depthOutAhven').innerHTML = syvyysTeksti(lowA, highA);
       document.getElementById('depthOutJarvilohi').innerHTML = syvyysTeksti(lowJL, highJL);
+      // Kirjolohi näkyy vain istutusvesillä. Lappajärvelle sitä ei istuteta.
+      {
+        const onIstutus = currentLocation && /hirvij|kalajärvi|kyrkös/i.test(currentLocation.name);
+        const panel = document.getElementById('panelKirjolohi');
+        if (panel) panel.style.display = onIstutus ? '' : 'none';
+        if (onIstutus) {
+          const lowKL = Math.max(0.5, dKirjolohi - 1.0), highKL = dKirjolohi + 1.0;
+          document.getElementById('depthOutKirjolohi').innerHTML = syvyysTeksti(lowKL, highKL);
+          const ulKL = document.getElementById('reasonsOutKirjolohi');
+          ulKL.innerHTML = '';
+          reasonsKirjolohi.forEach(r => { const li = document.createElement('li'); li.textContent = r; ulKL.appendChild(li); });
+          merkitseMaara('reasonsOutKirjolohi', reasonsKirjolohi.length);
+        }
+      }
 
       document.getElementById('colorOut').textContent = color;
       document.getElementById('areaOut').textContent = area;
