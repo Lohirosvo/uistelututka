@@ -1141,6 +1141,11 @@
           </div>
         </div>
         <div id="forecastGraph"></div>
+        <p class="hint" style="margin:6px 0 0; text-align:center;">
+          Haalea viiva = lajille on kyseisellä syvyydellä varmasti liian pimeää.
+          Vihje perustuu laskettuun valoon, ei mittaukseen — se ei muuta syvyyslukemaa
+          eikä taimenkeliä.
+        </p>
       </div>
 
       <!-- SYÖTTIKALA -->
@@ -3856,7 +3861,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v37';
+    const APP_VERSIO = 'v38';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -4597,6 +4602,96 @@
       return depth * scale;
     }
 
+    // ===== VALOLASKENTA =====
+    // Fysiikkaa, ei biologiaa: Fresnel-heijastus ja Beer-Lambert ovat vahvoja.
+    // Epävarmuus on muunnoksissa (W/m² -> lx kertoimella 120) ja hämärämallissa,
+    // joka on karkea interpolaatio eikä mitattu.
+    //
+    // KÄYTETÄÄN VAIN KÄYRÄN VAALENTAMISEEN JA RINNAKKAISENA SIGNAALINA.
+    // Ei korvaa Keränen & Lindiä: se on mitattu, tämä on laskettu kolmen arvion
+    // ketjusta (luksi-ikkuna, hämärämalli, lx-muunnos).
+    const VALO_D2R = Math.PI / 180;
+
+    function auringonKorkeus(t, doy, lat, lon, tzOffset) {
+      const dec = 23.45 * Math.sin(VALO_D2R * 360 * (284 + doy) / 365);
+      const solarNoon = 12 - (lon - tzOffset * 15) / 15;
+      const H = 15 * (t - solarNoon);
+      const s = Math.sin(lat * VALO_D2R) * Math.sin(dec * VALO_D2R)
+              + Math.cos(lat * VALO_D2R) * Math.cos(dec * VALO_D2R) * Math.cos(H * VALO_D2R);
+      return Math.asin(s) / VALO_D2R;
+    }
+
+    function pintaLux(h, cloudPct) {
+      if (h > 3) {
+        let ghi = Math.max(0, 910 * Math.sin(h * VALO_D2R) - 30);
+        if (cloudPct != null) {
+          const n = (cloudPct / 100) * 8;
+          ghi *= 1 - 0.75 * Math.pow(n / 8, 3.4);
+        }
+        return ghi * 120;
+      }
+      if (h >= -6)  return 400 * Math.pow(10, 0.345 * h);
+      if (h >= -12) return 3.4 * Math.pow(10, 0.438 * (h + 6));
+      return Math.max(0.0008, 0.008 * Math.pow(10, 0.1875 * (h + 12)));
+    }
+
+    function pinnanLapaisy(h, windMs) {
+      if (h <= 0) return 0.94;
+      const th = (90 - h) * VALO_D2R, n = 1.333;
+      const st = Math.sin(th) / n, ct = Math.sqrt(1 - st * st), ci = Math.cos(th);
+      const rs = Math.pow((ci - n * ct) / (ci + n * ct), 2);
+      const rp = Math.pow((n * ci - ct) / (n * ci + ct), 2);
+      let R = (rs + rp) / 2;
+      if (h < 12) {
+        const sigma = Math.sqrt(0.003 + 0.00512 * (windMs || 0));
+        R *= Math.max(0.4, 1 - 2.5 * sigma);
+      }
+      return 1 - R;
+    }
+
+    // Lajikohtaiset valoikkunat (lx). Optimin ylä- ja alaraja.
+    const VALO_IKKUNAT = {
+      kuha:      { lo: 1,   hi: 30 },
+      taimen:    { lo: 15,  hi: 100 },
+      jarvilohi: { lo: 15,  hi: 100 },
+      kirjolohi: { lo: 15,  hi: 100 },
+      hauki:     { lo: 0.5, hi: 10 },
+      ahven:     { lo: 50,  hi: 1000 }
+    };
+
+    // Kuinka hyvin laji näkee annetulla syvyydellä: 0 = ei näe, 1 = optimissa.
+    // Käytetään käyrän läpinäkyvyyteen.
+    function nakyvyysOsuus(laji, syvyys, tunti) {
+      const ik = VALO_IKKUNAT[laji];
+      if (!ik || !currentLocation) return 1;
+      const nyt = new Date();
+      const doy = Math.floor((nyt - new Date(nyt.getFullYear(), 0, 0)) / 86400000);
+      const tz = -nyt.getTimezoneOffset() / 60;
+      const h = auringonKorkeus(tunti, doy, currentLocation.lat, currentLocation.lon, tz);
+      const pilvi = (omLatest && omLatest.cloud != null) ? omLatest.cloud : 40;
+      const tuuli = (omLatest && omLatest.wind != null) ? omLatest.wind : 3;
+      const secchi = (typeof currentLocation.secchiMeters === 'number')
+        ? currentLocation.secchiMeters
+        : ({ 1: 0.4, 2: 1.8, 3: 2.8, 4: 4.5, 5: 7.0 }[answers.clarity] || 1.8);
+      const kd = 2.7 / secchi;
+      const E0 = pintaLux(h, pilvi) * pinnanLapaisy(h, tuuli);
+      const E = E0 * Math.exp(-kd * Math.max(0, syvyys));
+
+      // KAVENNETTU 3.9.2026 TESTIN JÄLKEEN.
+      // Ensimmäinen versio vaalensi taimenen käyrän hämärässä, koska luksi-ikkuna
+      // 15-100 lx on kirkas hämäräsaalistajalle ja Lappajärven sameassa vedessä
+      // kahdessa metrissä on hämärässä alle 1 lx. Se olisi kumonnut mitatun tiedon
+      // (Keränen & Lind, Björnsson) juuri sillä hetkellä joka on mallin ydin.
+      //
+      // Ikkunarajat ovat siis epäluotettavia tässä vedessä. Siksi vaalennetaan VAIN
+      // silloin kun valoa on RAJUSTI liian vähän — alle kymmenesosa alarajasta —
+      // ja pohjaksi jätetään 0,55, jottei viiva katoa. Tämä merkitsee "tässä on
+      // varmasti liian pimeää", ei "tässä ei kannata olla".
+      if (E >= ik.lo * 0.1) return 1;
+      const suhde = E / (ik.lo * 0.1);
+      return Math.max(0.55, 0.55 + 0.45 * suhde);
+    }
+
     // ===== TAIMENEN SYÖNTIAKTIIVISUUS — Keränen & Lind =====
     // Lähde: julkaistu tutkimuskuvaaja (Keränen & Lind), luettu käyttäjän omasta
     // lehtiartikkelista 23.8.2026.
@@ -4643,11 +4738,43 @@
     // Palauttaa aktiivisuustilanteen annetulle hetkelle.
     function keranenLindStatus(date, wallHour) {
       const month = date.getMonth() + 1;
-      const windows = keranenLindActivity[month];
+      let windows = keranenLindActivity[month];
       if (!windows) return null;
 
       const dst = isDST(date);
       const stdHour = toStandardHour(date, wallHour);
+
+      // KUUKAUSIRAJOJEN TASOITUS — lisätty 3.9.2026.
+      // Taulukon ikkunat ovat kellonaikoja KUUKAUSITTAIN, eivät sidottuja
+      // auringonnousuun. Siksi kuukauden vaihtuessa ikkuna hyppää tunteja yhdessä
+      // yössä, vaikka aurinko liikkuu minuutteja. Esimerkiksi 30.6. ikkuna on 19-24
+      // ja 1.7. se on 18-22.
+      //
+      // Tämä on ESITYSTAPAONGELMA, ei biologiaongelma: Keränen & Lind mittasi
+      // kuukausikeskiarvoja, ja totuus niiden välillä on liukuva. Interpoloidaan siksi
+      // viereisten kuukausien välillä kuukauden päivän mukaan. Se on saman datan
+      // uskollisempi luku, EI uusi malli — ikkunoiden lukumäärä ja luonne säilyvät.
+      const paiva = date.getDate();
+      const pvKk = new Date(date.getFullYear(), month, 0).getDate();
+      const osuus = (paiva - 1) / (pvKk - 1);        // 0 = kuun alku, 1 = kuun loppu
+      let liukuvat = windows;
+      if (osuus < 0.25 || osuus > 0.75) {
+        // Lähempänä edellistä tai seuraavaa kuukautta: siirretään ikkunoiden reunoja
+        // kohti naapurikuukauden vastaavia. Vain jos ikkunoita on yhtä monta —
+        // muuten rakenne muuttuisi ja interpolointi olisi keksimistä.
+        const naapuriKk = (osuus < 0.25) ? (month === 1 ? 12 : month - 1)
+                                         : (month === 12 ? 1 : month + 1);
+        const naapuri = keranenLindActivity[naapuriKk];
+        if (naapuri && naapuri.length === windows.length) {
+          // paino 0 keskellä kuuta, kasvaa reunoja kohti enintään 0,5:een
+          const w = (osuus < 0.25) ? (0.25 - osuus) * 2 : (osuus - 0.75) * 2;
+          liukuvat = windows.map(([a2, b2], i) => {
+            const [na, nb] = naapuri[i];
+            return [a2 + (na - a2) * w, b2 + (nb - b2) * w];
+          });
+        }
+      }
+      windows = liukuvat;
 
       const inWindow = windows.find(([a, b]) => stdHour >= a && stdHour < b);
 
@@ -4661,7 +4788,16 @@
 
       // Näytetään ajat käyttäjän seinäkellossa (kesäaikana +1 h).
       const toWall = (h) => dst ? (h + 1) % 24 : h;
-      const fmt = ([a, b]) => `${String(toWall(a)).padStart(2, '0')}–${String(toWall(b)).padStart(2, '0')}`;
+      // Interpoloidut rajat ovat desimaalilukuja, joten pyöristetään näyttöä varten
+      // lähimpään varttiin — tarkempi luku antaisi vaikutelman tarkkuudesta jota
+      // kuukausikeskiarvoissa ei ole.
+      const kello = h => {
+        const varttiin = Math.round(h * 4) / 4;
+        const tunti = Math.floor(varttiin);
+        const min = Math.round((varttiin - tunti) * 60);
+        return `${String(toWall(tunti)).padStart(2, '0')}${min ? '.' + String(min).padStart(2, '0') : ''}`;
+      };
+      const fmt = ([a, b]) => `${kello(a)}–${kello(b)}`;
 
       return {
         active: !!inWindow,
@@ -5711,19 +5847,40 @@
       const getX = (i) => padX + (i / 24) * drawW;
       const getY = (val) => padY + (Math.min(val, maxY) / maxY) * drawH;
 
-      const makePath = (arr, color, dashed) => {
-        let dStr = arr.map((val, i) => (i === 0 ? 'M' : 'L') + getX(i) + ',' + getY(val)).join(' ');
-        let dashStr = dashed ? `stroke-dasharray="6 6"` : '';
-        return `<path d="${dStr}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" ${dashStr}/>`;
+      // VALON MUKAAN VAALENEVA KÄYRÄ — lisätty 3.9.2026.
+      // Kun laji ei näe kyseisellä syvyydellä, viiva piirretään haaleampana. Käyrä
+      // katkaistaan tunnin mittaisiin pätkiin, koska läpinäkyvyys vaihtuu vuorokauden
+      // mittaan — yhtenäinen viiva ei voisi haalistua osittain.
+      //
+      // TÄMÄ ON VISUAALINEN VIHJE, EI ENNUSTE. Valoketjussa on kolme epävarmaa
+      // lenkkiä (luksi-ikkuna, hämärämalli, W/m²->lx-muunnos), joten se ei muuta
+      // syvyyslukemaa eikä pisteytystä — vain viivan sävyä.
+      const makePath = (arr, color, dashed, laji) => {
+        const dashStr = dashed ? ` stroke-dasharray="6 6"` : '';
+        if (!laji) {
+          const dStr = arr.map((val, i) => (i === 0 ? 'M' : 'L') + getX(i) + ',' + getY(val)).join(' ');
+          return `<path d="${dStr}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round"${dashStr}/>`;
+        }
+        let ulos = '';
+        for (let i = 0; i < arr.length - 1; i++) {
+          let nakyy = 1;
+          try { nakyy = nakyvyysOsuus(laji, (arr[i] + arr[i + 1]) / 2, i + 0.5); }
+          catch (e) { /* valolaskenta ei saa kaataa käyrää */ }
+          const op = (0.25 + 0.75 * nakyy).toFixed(2);
+          ulos += `<path d="M ${getX(i)},${getY(arr[i])} L ${getX(i + 1)},${getY(arr[i + 1])}" `
+            + `fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" `
+            + `opacity="${op}"${dashStr}/>`;
+        }
+        return ulos;
       };
 
       svg += makePath(pts.S, 'var(--silver)', true);
       svg += makePath(pts.KO, '#7E93AC', true);
-      svg += makePath(pts.H, 'var(--cyan)', false);
-      svg += makePath(pts.T, 'var(--pink)', false);
-      svg += makePath(pts.K, 'var(--amber)', false);
-      svg += makePath(pts.A, 'var(--olive)', false);
-      svg += makePath(pts.JL, 'var(--navy)', false);
+      svg += makePath(pts.H, 'var(--cyan)', false, 'hauki');
+      svg += makePath(pts.T, 'var(--pink)', false, 'taimen');
+      svg += makePath(pts.K, 'var(--amber)', false, 'kuha');
+      svg += makePath(pts.A, 'var(--olive)', false, 'ahven');
+      svg += makePath(pts.JL, 'var(--navy)', false, 'jarvilohi');
 
       for (let i = 0; i <= 24; i += 4) {
         let x = getX(i);
