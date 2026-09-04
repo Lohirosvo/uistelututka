@@ -1119,6 +1119,15 @@
             <div class="leg-box" style="background:rgba(255,176,32,0.5)"></div> Aurinko
           </div>
           <div class="leg-item">
+            <div class="leg-box" style="background:rgba(255,255,255,0.16)"></div> Liian kirkas
+          </div>
+          <div class="leg-item">
+            <div class="leg-box" style="background:rgba(126,217,87,0.16)"></div> Valo-optimi
+          </div>
+          <div class="leg-item">
+            <div class="leg-box" style="background:rgba(0,0,0,0.30)"></div> Liian pimeä
+          </div>
+          <div class="leg-item">
             <div class="leg-box" style="border-top:3px dashed var(--silver)"></div> Muikku
           </div>
           <div class="leg-item">
@@ -1286,7 +1295,7 @@
         <h2 onclick="vaihdaLaji('kirjolohi')" style="cursor:pointer; user-select:none;"><span class="lajiNuoli">▸</span> Kirjolohi — Tavoitetilanne <span class="tgtTime"></span></h2>
         <div class="lajiSisus" style="display:none;">
         <div class="depthviz">
-          <div class="scale" id="scaleKirjolohi" style="background:linear-gradient(180deg,#FF9F5A,#7a4a25);"></div>
+          <div class="scale" id="scaleKirjolohi"></div>
           <div class="result-figures">
             <div class="fig">
               <div class="label">Iskusyvyys</div>
@@ -3861,7 +3870,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v38';
+    const APP_VERSIO = 'v39';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -7056,10 +7065,56 @@
       });
     }
 
-    function drawScale(elId, low, high, isSchool = false) {
+    // Laskee kolme valovyöhykettä lajille nykyhetkellä: syvyys jossa valo putoaa
+    // ikkunan ylärajan alle (sen yläpuolella liian kirkasta) ja syvyys jossa se
+    // putoaa alarajan alle (sen alapuolella liian pimeää).
+    //
+    // VAROITUS: luksi-ikkunat ovat mallin epävarmin osa. Testissä ne väittivät
+    // taimenen olevan hämärässä pimeässä kahdessa metrissä, mikä on ristiriidassa
+    // mitatun tiedon kanssa. Vyöhykkeet näytetään siksi vaimeina ja suositusmerkki
+    // jää päälle — jos ne ovat eri mieltä, se NÄKYY eikä piiloudu.
+    function valoVyohykkeet(laji, tunti) {
+      const ik = VALO_IKKUNAT[laji];
+      if (!ik || !currentLocation) return null;
+      const nyt = new Date();
+      const doy = Math.floor((nyt - new Date(nyt.getFullYear(), 0, 0)) / 86400000);
+      const tz = -nyt.getTimezoneOffset() / 60;
+      const h = auringonKorkeus(tunti, doy, currentLocation.lat, currentLocation.lon, tz);
+      const pilvi = (omLatest && omLatest.cloud != null) ? omLatest.cloud : 40;
+      const tuuli = (omLatest && omLatest.wind != null) ? omLatest.wind : 3;
+      const secchi = (typeof currentLocation.secchiMeters === 'number')
+        ? currentLocation.secchiMeters
+        : ({ 1: 0.4, 2: 1.8, 3: 2.8, 4: 4.5, 5: 7.0 }[answers.clarity] || 1.8);
+      const kd = 2.7 / secchi;
+      const E0 = pintaLux(h, pilvi) * pinnanLapaisy(h, tuuli);
+      const syv = L => (E0 <= L) ? 0 : Math.log(E0 / L) / kd;
+      return { kirkasAsti: syv(ik.hi), pimeaAlkaa: syv(ik.lo) };
+    }
+
+    function drawScale(elId, low, high, isSchool = false, laji = null) {
       const scale = document.getElementById(elId);
       scale.innerHTML = '';
       const maxM = 15;
+
+      // Valovyöhykkeet pohjimmaisena, jotta suositusmerkki jää niiden päälle.
+      if (laji) {
+        const v = valoVyohykkeet(laji, new Date().getHours() + new Date().getMinutes() / 60);
+        if (v) {
+          const pros = m => Math.max(0, Math.min(100, (m / maxM) * 100));
+          const kirkas = pros(v.kirkasAsti), pimea = pros(v.pimeaAlkaa);
+          const lisaa = (ylo, kork, vari, otsikko) => {
+            if (kork <= 0.5) return;
+            const d = document.createElement('div');
+            d.style.cssText = `position:absolute; left:0; right:0; top:${ylo.toFixed(1)}%; height:${kork.toFixed(1)}%;`
+              + `background:${vari}; pointer-events:none;`;
+            d.title = otsikko;
+            scale.appendChild(d);
+          };
+          lisaa(0, kirkas, 'rgba(255,255,255,0.16)', 'Liian kirkasta');
+          lisaa(kirkas, pimea - kirkas, 'rgba(126,217,87,0.16)', 'Valo-optimi');
+          lisaa(pimea, 100 - pimea, 'rgba(0,0,0,0.30)', 'Liian pimeää');
+        }
+      }
       for (let m = 0; m <= maxM; m += 3) {
         const pct = (m / maxM) * 100;
         const tick = document.createElement('div'); tick.className = 'tick'; tick.style.top = pct + '%'; scale.appendChild(tick);
@@ -7199,6 +7254,7 @@
         if (onIstutus) {
           const lowKL = Math.max(0.5, dKirjolohi - 1.0), highKL = dKirjolohi + 1.0;
           document.getElementById('depthOutKirjolohi').innerHTML = syvyysTeksti(lowKL, highKL);
+          drawScale('scaleKirjolohi', lowKL, highKL, false, 'kirjolohi');
           const ulKL = document.getElementById('reasonsOutKirjolohi');
           ulKL.innerHTML = '';
           reasonsKirjolohi.forEach(r => { const li = document.createElement('li'); li.textContent = r; ulKL.appendChild(li); });
@@ -7251,11 +7307,11 @@
       reasonsJarvilohi.forEach(r => { const li = document.createElement('li'); li.textContent = r; ulJL.appendChild(li); });
 
       drawScale('scaleSyotti', lowS, highS, true);
-      drawScale('scaleKuha', lowK, highK, false);
-      drawScale('scaleHauki', lowH, highH, false);
-      drawScale('scaleAhven', lowA, highA, false);
-      drawScale('scaleJarvilohi', lowJL, highJL, false);
-      drawScale('scaleTaimen', lowT, highT, false);
+      drawScale('scaleKuha', lowK, highK, false, 'kuha');
+      drawScale('scaleHauki', lowH, highH, false, 'hauki');
+      drawScale('scaleAhven', lowA, highA, false, 'ahven');
+      drawScale('scaleJarvilohi', lowJL, highJL, false, 'jarvilohi');
+      drawScale('scaleTaimen', lowT, highT, false, 'taimen');
 
       document.getElementById('result').style.display = 'block';
       document.getElementById('ctaBar').style.display = 'none';
