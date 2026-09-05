@@ -928,6 +928,12 @@
         </span>
       </div>
 
+      <!-- TrollingPro: erillinen syvyyslaskin samassa GitHub-tilissä.
+           Aukeaa uuteen välilehteen, jotta tämä sovellus jää auki taustalle. -->
+      <button onclick="avaaTrollingPro()" style="width:100%; margin-top:10px; background:transparent; color:var(--pink); border:1px solid var(--pink); border-radius:12px; font-family:'Barlow Condensed',sans-serif; font-size:20px; font-weight:700; letter-spacing:.02em; padding:14px; cursor:pointer;">
+        📐 TROLLINGPRO — syvyyslaskin
+      </button>
+
 
     <!-- TUULIHÄLYTYS JA NÄYTTÖTILA -->
     <div id="tuuliHalytysBox" style="display:none; margin-bottom:12px;"></div>
@@ -2189,6 +2195,11 @@
         + tunnit.map(solu).join('') + '</div>'
         + `<p class="hint" style="margin:4px 0 0;">Ylhäältä alas: kello, sää, lämpötila, tuulen suunta, `
         + `nopeus ja puuska, sade. Nuoli näyttää mihin tuuli puhaltaa.</p>`;
+    }
+
+    // Vetouistelun syvyyslaskin, erillinen sovellus samassa GitHub-tilissä.
+    function avaaTrollingPro() {
+      window.open('https://lohirosvo.github.io/trollingpro/', '_blank', 'noopener');
     }
 
     // ===== SADETUTKA =====
@@ -4093,7 +4104,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v48';
+    const APP_VERSIO = 'v49';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
