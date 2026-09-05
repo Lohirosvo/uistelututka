@@ -847,7 +847,7 @@
           <button class="chip" onclick="testaaAanet('himmaa')">Himmaa</button>
           <button class="chip" onclick="testaaAanet('otti')" style="border-color:var(--cyan); color:var(--cyan);">Ottipisteääni</button>
         </div>
-        <p class="hint" id="aaniTestiStatus" style="margin-top:8px;">Testaa äänet ennen vesille lähtöä. Jos testi ei kuulu, vika on laitteen äänenvoimakkuudessa tai äänettömässä tilassa.</p>
+        <p class="hint" id="aaniTestiStatus" style="margin-top:8px;"></p>
       </div>
 
       <!-- OTTIPISTEHÄLYTYS -->
@@ -939,7 +939,6 @@
         <div class="chip" data-tilanappi="yo"     onclick="asetaNaytto('yo')">☾ Yö</div>
         <div class="chip" onclick="paivitaTiedot(true)" style="border-color:var(--cyan); color:var(--cyan);">↻ Päivitä</div>
       </div>
-      <p class="hint" id="nayttoStatus" style="margin-top:5px;"></p>
       <p class="hint" style="margin-top:2px; opacity:.75;">Versio <strong id="versioNro">—</strong> · <span id="swTila">tarkistetaan…</span></p>
       <p class="hint" id="paivitysStatus" style="margin-top:2px;"></p>
     </div>
@@ -2119,7 +2118,7 @@
       } else if (pwaAsennusKehote) {
         el.innerHTML = '<span style="color:var(--muted);">Voit asentaa sovelluksen aloitusnäytölle.</span>';
       } else {
-        el.innerHTML = '<span style="color:var(--muted);">Jos asennusnappi ei toimi, käytä selaimen valikkoa: <em>Lisää aloitusnäyttöön</em>.</span>';
+        el.innerHTML = '';   // ohje poistettu 3.9.2026: nappi riittää, ruututila on rajallinen
       }
     }
 
@@ -2134,7 +2133,7 @@
     async function asennaPwa() {
       if (!pwaAsennusKehote) {
         document.getElementById('pwaStatus').innerHTML =
-          '<span style="color:var(--amber);">Selain ei tarjonnut asennusta juuri nyt. Käytä selaimen valikkoa: <em>Lisää aloitusnäyttöön</em>.</span>';
+          '<span style="color:var(--amber);">Selain ei tarjonnut asennusta juuri nyt.</span>';
         return;
       }
       pwaAsennusKehote.prompt();
@@ -3927,7 +3926,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v42';
+    const APP_VERSIO = 'v43';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -3977,10 +3976,8 @@
       document.querySelectorAll('[data-tilanappi]').forEach(b => {
         b.classList.toggle('selected', b.getAttribute('data-tilanappi') === tila);
       });
-      const st = document.getElementById('nayttoStatus');
-      if (st) st.textContent = (tila === 'auto')
-        ? `Automaattinen — nyt ${nimet[t].toLowerCase()}. Vaihtuu auringonnousun ja -laskun mukaan.`
-        : `Kiinteä: ${nimet[tila].toLowerCase()}.`;
+      // Selite poistettu 3.9.2026: valittu nappi kertoo tilan itse, eikä ruudulla
+      // ole tilaa toistaa sitä sanoin.
     }
 
     function palautaNaytto() {
