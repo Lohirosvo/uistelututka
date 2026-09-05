@@ -3927,7 +3927,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v41';
+    const APP_VERSIO = 'v42';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -4550,7 +4550,28 @@
 
     function applyStaticDefaults() {
       questions.forEach(q => {
-        if (q.defaultVal !== undefined && answers[q.id] === undefined) {
+        // 1) MUISTETUT VASTAUKSET RUUDULLE — korjattu 3.9.2026.
+        // palautaVastaukset() asetti arvon answers-olioon mutta ei merkinnyt sitä
+        // valituksi, joten ruutu näytti tyhjältä ja kaikki piti näpytellä uudelleen.
+        // Arvo oli koko ajan tallessa — vain merkintä puuttui.
+        if (answers[q.id] !== undefined) {
+          const opts = document.getElementById(`opts-${q.id}`);
+          if (!opts) return;
+          const chipit = [...opts.children];
+          const arvot = Array.isArray(answers[q.id]) ? answers[q.id] : [answers[q.id]];
+          chipit.forEach((ch, i) => {
+            const o = q.options[i];
+            if (o && arvot.includes(o.v)) ch.classList.add('selected');
+          });
+          // Numerokenttä näkyviin jos valinta sitä vaatii (esim. termokliinin syvyys).
+          if (q.numField && arvot.includes(q.numField.show)) {
+            const nf = document.getElementById(`num-${q.id}`);
+            if (nf) nf.style.display = 'flex';
+          }
+          return;
+        }
+        // 2) OLETUSARVO jos vastausta ei ole.
+        if (q.defaultVal !== undefined) {
           const idx = q.options.findIndex(o => o.v === q.defaultVal);
           const opts = document.getElementById(`opts-${q.id}`);
           if (opts && opts.children[idx]) {
