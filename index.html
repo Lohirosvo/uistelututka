@@ -798,61 +798,8 @@
       <div class="sonarstrip"></div>
     </header>
 
-    <!-- SYKE-SYVYYSANALYYSI — kutistettu 2.9.2026: tämä on kotikäyttöä, ei venekäyttöä -->
-    <details class="q" style="border-color:var(--cyan); margin-bottom:14px;">
-      <summary style="cursor:pointer; list-style:none;">
-        <span class="idx">SYKE · Järvien syvyysaineisto</span>
-        <h2 style="margin:2px 0 0;"><span style="color:var(--muted);">▸</span> Pohjasyvyys omilla merkinnöillä</h2>
-      </summary>
-      <p class="hint">Hakee syvyysaineiston kerran ja tallentaa sen laitteelle. Kertoo, minkä syvyysvyöhykkeen päällä kukin 18 merkinnästäsi on — numeroina, ei kartan väreistä pääteltynä.</p>
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <button class="chip" onclick="analysoiMerkinnat(false)" style="border-color:var(--cyan); color:var(--cyan);">Analysoi merkinnät</button>
-        <button class="chip" onclick="analysoiMerkinnat(true)" style="border-color:var(--muted); color:var(--muted);">Hae uudelleen</button>
-      </div>
-      <div id="syvyysAnalyysi" style="margin-top:10px;"></div>
-
-      <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--line);">
-        <p class="hint" style="margin:0 0 8px;">
-          <strong style="color:var(--amber);">SYKEn vastaus 2.9.2026:</strong> Lappajärveltä ei ole
-          syvyysluotausdataa olemassa — luotauksia ei ole tehty kaikilta Suomen järviltä.
-          Lappajärvi käyttää siksi edelleen georeferoitua syvyyskarttakuvaa.
-          Alta näet mitkä lähijärvet on luodattu.
-        </p>
-        <button class="chip" onclick="listaaLuodatutJarvet()" style="border-color:var(--amber); color:var(--amber);">Luodatut järvet 150 km säteeltä</button>
-        <div id="luodatutBox" style="margin-top:10px;"></div>
-      </div>
-    </details>
-
-    <!-- TUULIHÄLYTYS JA NÄYTTÖTILA -->
-    <div id="tuuliHalytysBox" style="display:none; margin-bottom:12px;"></div>
-    <div style="margin-bottom:12px;">
-      <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
-        <span style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;">Tuuli</span>
-        <div class="chip" onclick="piirraTuuliEnnuste(3)" style="padding:3px 10px; font-size:13px;">3 h</div>
-        <div class="chip" onclick="piirraTuuliEnnuste(24)" style="padding:3px 10px; font-size:13px;">24 h</div>
-      </div>
-      <div id="tuuliEnnusteBox"></div>
-    </div>
-    <div style="margin-bottom:14px;">
-      <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
-        <span style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;">Näyttö</span>
-        <div class="chip" data-tilanappi="auto"   onclick="asetaNaytto('auto')">Auto</div>
-        <div class="chip" data-tilanappi="hamara" onclick="asetaNaytto('hamara')">◐ Normaali</div>
-        <div class="chip" data-tilanappi="yo"     onclick="asetaNaytto('yo')">☾ Yö</div>
-        <div class="chip" onclick="paivitaTiedot(true)" style="border-color:var(--cyan); color:var(--cyan);">↻ Päivitä</div>
-      </div>
-      <p class="hint" id="nayttoStatus" style="margin-top:5px;"></p>
-      <p class="hint" style="margin-top:2px; opacity:.75;">Versio <strong id="versioNro">—</strong> · <span id="swTila">tarkistetaan…</span></p>
-      <p class="hint" id="paivitysStatus" style="margin-top:2px;"></p>
-    </div>
-
-    <!-- SADETUTKA — nappi nopeusnäytön yläpuolella -->
-    <div style="margin-bottom:14px;">
-      <button onclick="avaaSadetutka()" style="width:100%; background:transparent; color:var(--cyan); border:1px solid var(--cyan); border-radius:12px; font-family:'Barlow Condensed',sans-serif; font-size:20px; font-weight:700; letter-spacing:.02em; padding:14px; cursor:pointer;">
-        🌧 SATAAKO? — sadetutka
-      </button>
-    </div>
-
+    <!-- JÄRJESTYS 3.9.2026: veneessä liikkeessä tarvittavat ylimmäksi.
+         Kriteeri: kosketanko tätä kun vene liikkuu? -->
     <!-- GPS NOPEUSMITTARI & ÄÄNIHÄLYTYKSET -->
     <div class="q" id="speedMonitorSection"
       style="border-color: var(--cyan); background: radial-gradient(ellipse at top left, rgba(69,211,232,0.05) 0%, var(--panel) 75%);">
@@ -967,6 +914,39 @@
       </div>
     </div>
     <!-- /GPS NOPEUSMITTARI -->
+
+    <div style="margin-bottom:14px;">
+      <button onclick="avaaSadetutka()" style="width:100%; background:transparent; color:var(--cyan); border:1px solid var(--cyan); border-radius:12px; font-family:'Barlow Condensed',sans-serif; font-size:20px; font-weight:700; letter-spacing:.02em; padding:14px; cursor:pointer;">
+        🌧 SATAAKO? — sadetutka
+      </button>
+
+
+    <!-- TUULIHÄLYTYS JA NÄYTTÖTILA -->
+    <div id="tuuliHalytysBox" style="display:none; margin-bottom:12px;"></div>
+    <div style="margin-bottom:12px;">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+        <span style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;">Tuuli</span>
+        <div class="chip" onclick="piirraTuuliEnnuste(3)" style="padding:3px 10px; font-size:13px;">3 h</div>
+        <div class="chip" onclick="piirraTuuliEnnuste(24)" style="padding:3px 10px; font-size:13px;">24 h</div>
+      </div>
+      <div id="tuuliEnnusteBox"></div>
+    </div>
+    <div style="margin-bottom:14px;">
+      <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+        <span style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;">Näyttö</span>
+        <div class="chip" data-tilanappi="auto"   onclick="asetaNaytto('auto')">Auto</div>
+        <div class="chip" data-tilanappi="hamara" onclick="asetaNaytto('hamara')">◐ Normaali</div>
+        <div class="chip" data-tilanappi="yo"     onclick="asetaNaytto('yo')">☾ Yö</div>
+        <div class="chip" onclick="paivitaTiedot(true)" style="border-color:var(--cyan); color:var(--cyan);">↻ Päivitä</div>
+      </div>
+      <p class="hint" id="nayttoStatus" style="margin-top:5px;"></p>
+      <p class="hint" style="margin-top:2px; opacity:.75;">Versio <strong id="versioNro">—</strong> · <span id="swTila">tarkistetaan…</span></p>
+      <p class="hint" id="paivitysStatus" style="margin-top:2px;"></p>
+    </div>
+
+    <!-- SADETUTKA — nappi nopeusnäytön yläpuolella -->
+    </div>
+
 
     <div class="q" id="tripinfo">
       <div class="idx">Reissu</div>
@@ -1120,6 +1100,13 @@
             Irrallinen laskuri. Säätimet eivät muuta analyysia.
           </p>
           <div id="valoLajit" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;"></div>
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
+            <div class="chip" id="nakoTaulukkoNappi" onclick="vaihdaNakoTaulukko()"
+                 style="padding:7px 12px; font-size:13px;">Käytä taulukkoarvoa</div>
+            <div class="chip" id="valoPaivaNappi" onclick="vaihdaValoPaiva()"
+                 style="padding:7px 12px; font-size:13px;">Tänään</div>
+            <span class="hint" id="valoSecchiLahde" style="font-size:12px;"></span>
+          </div>
           <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
             <span class="hint" style="min-width:74px;">Näkösyvyys</span>
             <input type="range" id="valoSecchi" min="0.3" max="8" step="0.1" value="1.8"
@@ -1428,6 +1415,33 @@
   <div class="cta-bar" id="ctaBar">
     <button class="cta" id="analyzeBtn" onclick="analyze()">Analysoi & Suosittele ottipisteet</button>
   </div>
+
+    <!-- SYKE viimeiseksi: kotikäyttöä, ei venekäyttöä -->
+    <!-- SYKE-SYVYYSANALYYSI — kutistettu 2.9.2026: tämä on kotikäyttöä, ei venekäyttöä -->
+    <details class="q" style="border-color:var(--cyan); margin-bottom:14px;">
+      <summary style="cursor:pointer; list-style:none;">
+        <span class="idx">SYKE · Järvien syvyysaineisto</span>
+        <h2 style="margin:2px 0 0;"><span style="color:var(--muted);">▸</span> Pohjasyvyys omilla merkinnöillä</h2>
+      </summary>
+      <p class="hint">Hakee syvyysaineiston kerran ja tallentaa sen laitteelle. Kertoo, minkä syvyysvyöhykkeen päällä kukin 18 merkinnästäsi on — numeroina, ei kartan väreistä pääteltynä.</p>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="chip" onclick="analysoiMerkinnat(false)" style="border-color:var(--cyan); color:var(--cyan);">Analysoi merkinnät</button>
+        <button class="chip" onclick="analysoiMerkinnat(true)" style="border-color:var(--muted); color:var(--muted);">Hae uudelleen</button>
+      </div>
+      <div id="syvyysAnalyysi" style="margin-top:10px;"></div>
+
+      <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--line);">
+        <p class="hint" style="margin:0 0 8px;">
+          <strong style="color:var(--amber);">SYKEn vastaus 2.9.2026:</strong> Lappajärveltä ei ole
+          syvyysluotausdataa olemassa — luotauksia ei ole tehty kaikilta Suomen järviltä.
+          Lappajärvi käyttää siksi edelleen georeferoitua syvyyskarttakuvaa.
+          Alta näet mitkä lähijärvet on luodattu.
+        </p>
+        <button class="chip" onclick="listaaLuodatutJarvet()" style="border-color:var(--amber); color:var(--amber);">Luodatut järvet 150 km säteeltä</button>
+        <div id="luodatutBox" style="margin-top:10px;"></div>
+      </div>
+    </details>
+
 
   <script>
     // Viimeisimmät arvot saaliskirjausta varten (päivittyvät GPS:stä ja analyysistä).
@@ -3168,13 +3182,24 @@
     const questions = [
       {
         id: 'season', title: 'Kausivaihe',
-        hint: 'Määrää lähtöoletuksen ennen mittauksia.',
+        hint: 'Esivalittu kalenterin mukaan. Muuta jos kausi on aikaisessa tai myöhässä — '
+            + 'jäiden lähtö vaihtelee vuosittain viikkoja.',
         options: [
           { l: 'Kevät (jäät juuri lähteneet)', v: 'spring' },
           { l: 'Alkukesä', v: 'earlysummer' },
           { l: 'Keskikesä (lämpimin)', v: 'midsummer' },
           { l: 'Syksy (viilenevä)', v: 'autumn' },
-        ]
+        ],
+        // Kalenteri antaa lähtöoletuksen. Rajat ovat Etelä-Pohjanmaan tyypillisiä,
+        // eivät tutkimustulos — siksi kysymys on yhä muutettavissa.
+        get defaultVal() {
+          const kk = new Date().getMonth() + 1, pv = new Date().getDate();
+          if (kk <= 3 || kk === 12) return 'spring';        // jääkausi, lähtöoletus kevät
+          if (kk === 4 || (kk === 5 && pv <= 20)) return 'spring';
+          if ((kk === 5 && pv > 20) || kk === 6) return 'earlysummer';
+          if (kk === 7 || (kk === 8 && pv <= 20)) return 'midsummer';
+          return 'autumn';                                  // 21.8. alkaen
+        }
       },
       {
         id: 'temp', title: 'Pintaveden lämpötila',
@@ -3244,7 +3269,7 @@
           { l: 'Penkan reuna', v: 'edge' },
           { l: 'Syvänne (>15 m)', v: 'basin' },
         ],
-        defaultVal: 'rocky'
+        defaultVal: 'edge'
       },
       {
         id: 'pressure', title: 'Ilmanpaineen trendi',
@@ -3902,7 +3927,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v40';
+    const APP_VERSIO = 'v41';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -4643,6 +4668,82 @@
       return depth * scale;
     }
 
+    // ===== NÄKÖSYVYYSTAULUKKO =====
+    // Käyttäjän toimittama koostelista Suomen järvistä ja tekoaltaista.
+    // HUOM LUOTTAMUSTASO: tämä on koostetta eri lähteistä, EI mitattu aineisto —
+    // asiakirja itse varoittaa että arvot voivat sisältää virheitä. Arvot ovat
+    // lisäksi haarukoita, jotka vaihtelevat vuodenajan, sadannan, sulamisvesien ja
+    // levätilanteen mukaan.
+    //
+    // Siksi taulukko on OLETUS, ei totuus: se otetaan käyttöön napista, ja itse
+    // mitattu arvo (esim. Hirvijärven 0,88 m) voittaa sen aina.
+    const NAKOSYVYYDET = {
+      'Alajärvi': [1.0, 1.8], 'Bodominjärvi': [1.0, 1.8], 'Evijärvi': [1.2, 2.0],
+      'Haukivesi': [2.5, 4.0], 'Hiidenvesi': [0.5, 1.2],
+      'Hirvijärven tekoallas': [1.0, 1.2], 'Höytiäinen': [3.0, 4.5],
+      'Iijärvi': [5.0, 7.0], 'Immalanjärvi': [3.5, 4.5],
+      'Inarijärvi': [7.0, 10.0], 'Iso-Melkutin': [4.5, 7.0], 'Jerisjärvi': [2.0, 3.2],
+      'Juojärvi': [5.0, 7.0], 'Kalajärven tekoallas': [1.0, 1.5],
+      'Kalajärvi': [1.0, 1.8], 'Kallavesi': [2.0, 3.2], 'Keitele': [3.5, 5.0],
+      'Kemijärvi': [1.5, 2.5], 'Kermajärvi': [4.0, 5.5], 'Kevojärvi': [4.0, 6.0],
+      'Kiantajärvi': [1.5, 2.5], 'Kilpisjärvi': [6.0, 11.0],
+      'Ala-Kitka': [3.5, 5.0], 'Yli-Kitka': [4.5, 6.0],
+      'Kivijärvi': [2.5, 4.5], 'Koitere': [1.2, 2.2], 'Konnevesi': [5.0, 6.5],
+      'Kostonjärvi': [2.0, 3.2], 'Kuolimo': [5.0, 7.0], 'Kuortaneenjärvi': [1.2, 2.0],
+      'Muojärvi': [3.0, 4.5], 'Kuusvesi': [2.0, 3.0],
+      'Kyrkösjärven tekoallas': [0.7, 1.0], 'Kyrösjärvi': [1.5, 2.5],
+      'Kyyvesi': [1.0, 1.8], 'Lankojärvi': [1.5, 2.2], 'Lappajärvi': [2.5, 3.8],
+      'Larijärvi': [8.0, 12.0], 'Lentuajärvi': [2.5, 3.8], 'Lestijärvi': [1.5, 2.5],
+      'Lohilampi': [8.0, 11.0], 'Lohjanjärvi': [2.0, 3.5], 'Längelmävesi': [2.5, 4.0],
+      'Maaninkajärvi': [1.5, 2.2], 'Mallasvesi': [3.0, 4.5], 'Miekojärvi': [2.5, 3.5],
+      'Nilakka': [1.5, 2.5], 'Nuasjärvi': [1.5, 2.5], 'Näsijärvi': [3.0, 4.5],
+      'Onkivesi': [1.0, 1.8], 'Ontojärvi': [1.8, 2.5], 'Orivesi': [3.5, 5.0],
+      'Oulujärvi': [1.5, 2.5], 'Ounasjärvi': [4.0, 5.5], 'Pallasjärvi': [5.0, 7.5],
+      'Patanan tekoallas': [0.5, 1.0], 'Pielinen': [2.0, 3.5], 'Pihlajavesi': [3.0, 4.5],
+      'Puruvesi': [6.0, 8.0], 'Puula': [4.5, 6.0], 'Pyhäselkä': [2.0, 3.0],
+      'Päijänne': [4.5, 6.0], 'Pälkänevesi': [3.0, 4.5], 'Pääjärvi': [5.0, 7.0],
+      'Pöyrisjärvi': [3.5, 5.0], 'Roine': [3.5, 5.0], 'Ruovesi': [2.0, 3.0],
+      'Suur-Saimaa': [3.0, 4.5], 'Sevettijärvi': [4.5, 6.5], 'Simpelejärvi': [2.5, 3.5],
+      'Sonnanen': [6.0, 8.5], 'Sorsavesi': [4.0, 5.5], 'Suontee': [4.5, 6.0],
+      'Suvasvesi': [3.5, 5.0], 'Syväri': [1.8, 2.8], 'Sääksjärvi': [4.5, 7.5],
+      'Taivallampi': [4.0, 6.0], 'Tarjanne': [2.5, 3.5], 'Toisvesi': [1.5, 2.5],
+      'Tuusulanjärvi': [0.5, 1.5], 'Ukonvesi': [2.5, 3.8], 'Unari': [1.8, 2.8],
+      'Unnukka': [2.0, 3.0], 'Valkealampi': [7.0, 10.0], 'Valkiajärvi': [10.0, 20.0],
+      'Vesijärvi': [2.0, 3.5], 'Joutsenvesi': [3.5, 4.5], 'Vuokkijärvi': [2.0, 3.0],
+      'Vääräjärvi': [8.0, 12.0], 'Ähtärinjärvi': [2.0, 3.2], 'Äkäslompolo': [1.5, 2.5]
+    };
+
+    // Etsii paikan nimen perusteella. Pisin osuma voittaa, jotta
+    // "Hirvijärven tekoallas" ei osu pelkkään "Hirvijärvi"-alkuiseen.
+    function etsiNakosyvyys(nimi) {
+      if (!nimi) return null;
+      const n = nimi.toLowerCase();
+      let paras = null, pisin = 0;
+      for (const [avain, arvo] of Object.entries(NAKOSYVYYDET)) {
+        const a = avain.toLowerCase();
+        if ((n.includes(a) || a.includes(n.split('(')[0].trim())) && a.length > pisin) {
+          pisin = a.length; paras = { nimi: avain, min: arvo[0], max: arvo[1] };
+        }
+      }
+      return paras;
+    }
+
+    let taulukkoNakosyvyysKaytossa = false;
+
+    // Palauttaa käytettävän näkösyvyyden ja sen lähteen. Järjestys:
+    // 1) itse mitattu, 2) taulukko jos päällä, 3) kirkkausluokan oletus.
+    function kaytettavaNakosyvyys() {
+      if (typeof currentLocation.secchiMeters === 'number') {
+        return { m: currentLocation.secchiMeters, lahde: 'itse mitattu' };
+      }
+      if (taulukkoNakosyvyysKaytossa) {
+        const t = etsiNakosyvyys(currentLocation.name);
+        if (t) return { m: (t.min + t.max) / 2, lahde: `taulukko ${t.nimi} (${t.min}–${t.max} m)` };
+      }
+      const luokka = { 1: 0.4, 2: 1.8, 3: 2.8, 4: 4.5, 5: 7.0 }[answers.clarity] || 1.8;
+      return { m: luokka, lahde: 'kirkkausluokka' };
+    }
+
     // ===== VALOLASKENTA =====
     // Fysiikkaa, ei biologiaa: Fresnel-heijastus ja Beer-Lambert ovat vahvoja.
     // Epävarmuus on muunnoksissa (W/m² -> lx kertoimella 120) ja hämärämallissa,
@@ -4711,9 +4812,7 @@
       const h = auringonKorkeus(tunti, doy, currentLocation.lat, currentLocation.lon, tz);
       const pilvi = (omLatest && omLatest.cloud != null) ? omLatest.cloud : 40;
       const tuuli = (omLatest && omLatest.wind != null) ? omLatest.wind : 3;
-      const secchi = (typeof currentLocation.secchiMeters === 'number')
-        ? currentLocation.secchiMeters
-        : ({ 1: 0.4, 2: 1.8, 3: 2.8, 4: 4.5, 5: 7.0 }[answers.clarity] || 1.8);
+      const secchi = kaytettavaNakosyvyys().m;
       const kd = 2.7 / secchi;
       const E0 = pintaLux(h, pilvi) * pinnanLapaisy(h, tuuli);
       const E = E0 * Math.exp(-kd * Math.max(0, syvyys));
@@ -4959,6 +5058,10 @@
           const setD = new Date(data.daily.sunset[d]);
           const sunRise = riseD.getHours() + riseD.getMinutes() / 60;
           const sunSet = setD.getHours() + setD.getMinutes() / 60;
+
+          // Talletetaan koko tuntiaineisto valokuvaajaa varten: se tarvitsee sekä
+          // tämän että huomisen tunnit, ei vain tätä päivää.
+          forecastHourly = H;
 
           let best = null;
           const hourly = [];
@@ -5861,7 +5964,9 @@
         pts.JL.push(estimateJarvilohiDepth(calcH, a.light, a.wind, bs));
       }
 
-      const w = 500; const h_svg = 220;
+      // Korkeus kaksinkertaistettu 3.9.2026: käyrät olivat liian lähekkäin, ja
+      // syvyyseroja oli vaikea erottaa puhelimen ruudulla.
+      const w = 500; const h_svg = 440;
       const padX = 25; const padY = 35;
       const drawW = w - padX * 2;
       const drawH = h_svg - padY - 20;
@@ -7114,9 +7219,7 @@
       const h = auringonKorkeus(tunti, doy, currentLocation.lat, currentLocation.lon, tz);
       const pilvi = (omLatest && omLatest.cloud != null) ? omLatest.cloud : 40;
       const tuuli = (omLatest && omLatest.wind != null) ? omLatest.wind : 3;
-      const secchi = (typeof currentLocation.secchiMeters === 'number')
-        ? currentLocation.secchiMeters
-        : ({ 1: 0.4, 2: 1.8, 3: 2.8, 4: 4.5, 5: 7.0 }[answers.clarity] || 1.8);
+      const secchi = kaytettavaNakosyvyys().m;
       const kd = 2.7 / secchi;
       const E0 = pintaLux(h, pilvi) * pinnanLapaisy(h, tuuli);
       const syv = L => (E0 <= L) ? 0 : Math.log(E0 / L) / kd;
@@ -7175,20 +7278,35 @@
     const VALO_TOL = { alaKerroin: 0.1, ylaKerroin: 3 };
     let valoLaji = 'kuha';
     let valoSecchi = 1.8;
+    let forecastHourly = null;   // Open-Meteon koko tuntiaineisto
+    let valoHuominen = 0;        // 0 = tänään, 1 = huomenna
+    let valoPilviKasin = false;  // true kun käyttäjä on siirtänyt pilvisyyssäädintä
 
     function valoKuvaajaData() {
-      const nyt = new Date();
+      const nyt = new Date(Date.now() + valoHuominen * 86400000);
       const doy = Math.floor((nyt - new Date(nyt.getFullYear(), 0, 0)) / 86400000);
       const tz = -nyt.getTimezoneOffset() / 60;
       const pilviEl = document.getElementById('valoPilvi');
-      const pilvi = pilviEl ? parseFloat(pilviEl.value) : 40;
-      const tuuli = (omLatest && omLatest.wind != null) ? omLatest.wind : 3;
+      const kasinPilvi = pilviEl ? parseFloat(pilviEl.value) : 40;
+      const tuuliOletus = (omLatest && omLatest.wind != null) ? omLatest.wind : 3;
+      // Tuntikohtainen pilvisyys ennusteesta, jos saatavilla. Säädin ylikirjoittaa
+      // sen vasta kun käyttäjä koskee siihen (valoPilviKasin).
+      const ennuste = (typeof forecastHourly === 'object' && forecastHourly
+        && forecastHourly.cloud_cover) ? forecastHourly : null;
       const ik = VALO_IKKUNAT[valoLaji];
       const kd = 2.7 / valoSecchi;
       const ulos = [];
       for (let i = 0; i <= 96; i++) {
         const t = i * 24 / 96;
         const h = auringonKorkeus(t, doy, currentLocation.lat, currentLocation.lon, tz);
+        let pilvi = kasinPilvi, tuuli = tuuliOletus;
+        if (ennuste && !valoPilviKasin) {
+          const idx = valoHuominen * 24 + Math.round(t);
+          if (ennuste.cloud_cover[idx] != null) pilvi = ennuste.cloud_cover[idx];
+          if (ennuste.wind_speed_10m && ennuste.wind_speed_10m[idx] != null) {
+            tuuli = ennuste.wind_speed_10m[idx];
+          }
+        }
         const E0 = pintaLux(h, pilvi) * pinnanLapaisy(h, tuuli);
         const dz = L => (E0 <= L) ? 0 : Math.log(E0 / L) / kd;
         ulos.push({ t, h,
@@ -7270,7 +7388,36 @@
       piirraValoKuvaaja();
     }
 
+    // Taulukkoarvo päälle tai pois. Valinta muistetaan laitteessa.
+    // Tänään tai huomenna. Ennuste kattaa molemmat, joten kuvaajan voi katsoa
+    // etukäteen — hyödyllistä kun reissua suunnitellaan illalla.
+    function vaihdaValoPaiva() {
+      valoHuominen = valoHuominen ? 0 : 1;
+      const n = document.getElementById('valoPaivaNappi');
+      if (n) {
+        n.textContent = valoHuominen ? 'Huomenna' : 'Tänään';
+        n.classList.toggle('on', valoHuominen === 1);
+      }
+      piirraValoKuvaaja();
+    }
+
+    function vaihdaNakoTaulukko() {
+      taulukkoNakosyvyysKaytossa = !taulukkoNakosyvyysKaytossa;
+      try { localStorage.setItem('nakoTaulukko', taulukkoNakosyvyysKaytossa ? '1' : '0'); }
+      catch (e) { /* ei kriittistä */ }
+      alustaValoKuvaaja();
+    }
+
     function alustaValoKuvaaja() {
+      try { taulukkoNakosyvyysKaytossa = localStorage.getItem('nakoTaulukko') === '1'; }
+      catch (e) { /* ei kriittistä */ }
+      const nappi = document.getElementById('nakoTaulukkoNappi');
+      if (nappi) {
+        const t = etsiNakosyvyys(currentLocation.name);
+        nappi.classList.toggle('on', taulukkoNakosyvyysKaytossa);
+        nappi.textContent = t ? `Taulukko: ${t.min}–${t.max} m` : 'Ei taulukossa';
+        nappi.style.opacity = t ? '1' : '0.45';
+      }
       const napit = document.getElementById('valoLajit');
       if (!napit) return;
       napit.innerHTML = Object.keys(LAJI_VARIT).map(k =>
@@ -7278,10 +7425,11 @@
         + `style="padding:7px 12px; font-size:13px;">${LAJI_NIMET[k]}</div>`).join('');
 
       // Oletus paikan omasta näkösyvyydestä, tai kirkkausluokasta jos mitattua ei ole.
-      const oletus = (typeof currentLocation.secchiMeters === 'number')
-        ? currentLocation.secchiMeters
-        : ({ 1: 0.4, 2: 1.8, 3: 2.8, 4: 4.5, 5: 7.0 }[answers.clarity] || 1.8);
+      const ns = kaytettavaNakosyvyys();
+      const oletus = ns.m;
       valoSecchi = oletus;
+      const lahdeEl = document.getElementById('valoSecchiLahde');
+      if (lahdeEl) lahdeEl.textContent = ns.lahde;
       const sEl = document.getElementById('valoSecchi');
       if (sEl) {
         sEl.value = String(oletus);
@@ -7298,6 +7446,7 @@
         pEl.value = String(pOletus);
         document.getElementById('valoPilviArvo').textContent = pOletus + ' %';
         pEl.oninput = e => {
+          valoPilviKasin = true;   // käsisäätö ohittaa ennusteen
           document.getElementById('valoPilviArvo').textContent = e.target.value + ' %';
           piirraValoKuvaaja();
         };
