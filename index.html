@@ -1084,10 +1084,12 @@
           </button>
           <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
             <button class="chip" onclick="naytaPuheteksti()" style="border-color:var(--muted); color:var(--muted);">Näytä tekstinä</button>
+            <button class="chip" onclick="jaaPuhe()" style="border-color:var(--cyan); color:var(--cyan);">Jaa kaverille</button>
             <button class="chip" onclick="puheDiagnostiikka()" style="border-color:var(--muted); color:var(--muted);">Tarkista äänet</button>
             <button class="chip" id="earthBtn" onclick="avaaKartta()" style="display:none; border-color:var(--amber); color:var(--amber);">🗺 Syvyyskartta ja merkinnät</button>
             <button class="chip" id="earthKmzBtn" onclick="avaaGoogleEarth()" style="display:none; border-color:var(--muted); color:var(--muted);">Google Earthiin</button>
           </div>
+          <p class="hint" id="jakoTila" style="margin-top:6px;"></p>
           <div id="puheTekstiBox" style="display:none; margin-top:10px; background:var(--panel-alt); border-radius:10px; padding:12px;"></div>
           <p class="hint" id="puheStatus" style="margin-top:6px;">Selostus vedestä, kelistä, syvyyksistä ja parhaasta paikasta. Kuunneltavaksi matkalla.</p>
         </div>
@@ -4091,7 +4093,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v47';
+    const APP_VERSIO = 'v48';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -4387,6 +4389,55 @@
       const naismerkit = ['female', 'nainen', 'satu', 'suvi', 'heidi', 'milla', 'noora'];
       const nainen = fi.find(v => naismerkit.some(m => (v.name || '').toLowerCase().includes(m)));
       return nainen || fi[0];
+    }
+
+    // ===== SELOSTUKSEN JAKAMINEN =====
+    // ÄÄNTÄ EI VOI JAKAA. Selaimen puhesynteesi (Web Speech API) puhuu suoraan
+    // kaiuttimeen eikä anna tallennettavaa tiedostoa, eikä sitä voi ohjata
+    // MediaRecorderiin. Äänitiedosto vaatisi palvelinpuolen puhesynteesin.
+    // Teksti sen sijaan menee minne tahansa: WhatsApp, viestit, sähköposti.
+    //
+    // Käytetään Androidin omaa jakovalikkoa (Web Share API). Jos selain ei tue sitä,
+    // teksti kopioidaan leikepöydälle — ja jos sekään ei onnistu, se näytetään
+    // ruudulla valittavaksi. Kolme porrasta, jotta jotain toimii aina.
+    async function jaaPuhe() {
+      const t = puheteksti();
+      const tila = document.getElementById('jakoTila');
+      const kerro = (viesti, vari) => {
+        if (!tila) return;
+        // Tyhjä viesti tyhjentää rivin kokonaan, ei jätä tyhjää elementtiä.
+        tila.innerHTML = viesti
+          ? `<span style="color:${vari || 'var(--cyan)'};">${viesti}</span>` : '';
+      };
+      if (!t) { kerro('Aja ensin analyysi.', 'var(--amber)'); return; }
+
+      const jarvi = currentLocation ? currentLocation.name.replace(/\s*\(.*\)/, '') : 'Järvi';
+      const pvm = new Date().toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' });
+      const teksti = `Uistelutilanne ${jarvi} ${pvm}\n\n${t}`;
+
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: `Uistelutilanne ${jarvi}`, text: teksti });
+          kerro('Jaettu.');
+          return;
+        } catch (e) {
+          // AbortError = käyttäjä perui itse, se ei ole vika.
+          if (e && e.name === 'AbortError') { kerro(''); return; }
+        }
+      }
+      try {
+        await navigator.clipboard.writeText(teksti);
+        kerro('Kopioitu leikepöydälle — liitä viestiin.');
+        return;
+      } catch (e) { /* siirrytään viimeiseen keinoon */ }
+
+      const el = document.getElementById('puheTekstiBox');
+      if (el) {
+        el.innerHTML = '<p class="hint" style="margin:0 0 6px;">Kopioi teksti painamalla pitkään:</p>'
+          + `<p style="font-size:15px; line-height:1.5; color:var(--text); margin:0; user-select:text;">${teksti.replace(/\n/g, '<br>')}</p>`;
+        el.style.display = 'block';
+      }
+      kerro('Jakaminen ei onnistunut — teksti on alla valittavaksi.', 'var(--amber)');
     }
 
     // Näyttää selostuksen tekstinä. Tämä on varasuunnitelma jos puhe ei toimi, mutta
