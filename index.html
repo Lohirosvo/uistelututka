@@ -834,7 +834,6 @@
 
       <!-- PWA-ASENNUS -->
       <div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--line);">
-        <div style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Sovellus</div>
         <button id="pwaAsennaBtn" class="chip" onclick="asennaPwa()" style="display:none; border-color:var(--cyan); color:var(--cyan);">Asenna aloitusnäytölle</button>
         <p class="hint" id="pwaStatus" style="margin-top:8px;"></p>
       </div>
@@ -918,6 +917,10 @@
     <div style="margin-bottom:14px;">
       <button onclick="avaaSadetutka()" style="width:100%; background:transparent; color:var(--cyan); border:1px solid var(--cyan); border-radius:12px; font-family:'Barlow Condensed',sans-serif; font-size:20px; font-weight:700; letter-spacing:.02em; padding:14px; cursor:pointer;">
         🌧 SATAAKO? — sadetutka
+      </button>
+
+      <button onclick="avaaMaastokartta()" style="width:100%; margin-top:8px; background:transparent; color:var(--olive); border:1px solid var(--olive); border-radius:12px; font-family:'Barlow Condensed',sans-serif; font-size:20px; font-weight:700; letter-spacing:.02em; padding:14px; cursor:pointer;">
+        🗺 MAASTOKARTTA — Karttapaikka
       </button>
 
 
@@ -2022,6 +2025,26 @@
       } catch (e) {
         box.innerHTML = `<p class="hint" style="color:var(--hard-red);">Haku ei onnistunut: ${e.message}</p>`;
       }
+    }
+
+    // ===== MAASTOKARTTA (MML Karttapaikka) =====
+    // Osoitemuoto on Maanmittauslaitoksen oma, ei arvattu:
+    //   https://asiointi.maanmittauslaitos.fi/karttapaikka/?n=6710746&e=239291&zoom=10
+    // Koordinaatit ovat ETRS-TM35FIN-metrejä, ja muunnos siihen on jo koodissa (TM35).
+    // Zoom 1-13, jossa suurempi = lähempänä. 10 näyttää järvenselän mittakaavassa.
+    //
+    // Jos puhelimeen on asennettu Karttapaikkaa käsittelevä sovellus, Android tarjoaa
+    // sen avaamista. Muuten linkki aukeaa selaimessa — kumpikin toimii.
+    function avaaMaastokartta() {
+      // GPS-sijainti jos saatavilla, muuten valitun järven koordinaatti.
+      const gps = (typeof viimeisinGps === 'object' && viimeisinGps
+        && typeof viimeisinGps.lat === 'number') ? viimeisinGps : null;
+      const lat = gps ? gps.lat : currentLocation.lat;
+      const lon = gps ? gps.lon : currentLocation.lon;
+      const k = TM35.fwd(lat, lon);
+      const url = 'https://asiointi.maanmittauslaitos.fi/karttapaikka/'
+        + `?lang=fi&n=${k.N.toFixed(0)}&e=${k.E.toFixed(0)}&zoom=10`;
+      window.open(url, '_blank', 'noopener');
     }
 
     // ===== SADETUTKA =====
@@ -3926,7 +3949,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v43';
+    const APP_VERSIO = 'v44';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
