@@ -919,9 +919,14 @@
         🌧 SATAAKO? — sadetutka
       </button>
 
-      <button onclick="avaaMaastokartta()" style="width:100%; margin-top:8px; background:transparent; color:var(--olive); border:1px solid var(--olive); border-radius:12px; font-family:'Barlow Condensed',sans-serif; font-size:20px; font-weight:700; letter-spacing:.02em; padding:14px; cursor:pointer;">
-        🗺 MAASTOKARTTA — Karttapaikka
+      <button onclick="avaaKarttaSovellus()" style="width:100%; margin-top:8px; background:transparent; color:var(--olive); border:1px solid var(--olive); border-radius:12px; font-family:'Barlow Condensed',sans-serif; font-size:20px; font-weight:700; letter-spacing:.02em; padding:14px; cursor:pointer;">
+        🗺 AVAA KARTTASOVELLUKSESSA
       </button>
+      <div style="text-align:center; margin-top:6px;">
+        <span class="chip" onclick="avaaMaastokartta()" style="padding:6px 12px; font-size:13px;">
+          tai Karttapaikka selaimessa
+        </span>
+      </div>
 
 
     <!-- TUULIHÄLYTYS JA NÄYTTÖTILA -->
@@ -2035,13 +2040,32 @@
     //
     // Jos puhelimeen on asennettu Karttapaikkaa käsittelevä sovellus, Android tarjoaa
     // sen avaamista. Muuten linkki aukeaa selaimessa — kumpikin toimii.
-    function avaaMaastokartta() {
-      // GPS-sijainti jos saatavilla, muuten valitun järven koordinaatti.
+    // Nykyinen sijainti: GPS jos saatavilla, muuten valitun järven koordinaatti.
+    function karttaSijainti() {
       const gps = (typeof viimeisinGps === 'object' && viimeisinGps
         && typeof viimeisinGps.lat === 'number') ? viimeisinGps : null;
-      const lat = gps ? gps.lat : currentLocation.lat;
-      const lon = gps ? gps.lon : currentLocation.lon;
-      const k = TM35.fwd(lat, lon);
+      return { lat: gps ? gps.lat : currentLocation.lat,
+               lon: gps ? gps.lon : currentLocation.lon,
+               gpsKaytossa: !!gps };
+    }
+
+    // ANDROIDIN VAKIOTAPA: geo:-osoite. Android tarjoaa sitä käsitteleville
+    // sovelluksille, ja käyttäjä valitsee listasta — myös Maastokartat, JOS se on
+    // rekisteröitynyt geo:-osoitteille. Sitä ei ole dokumentoitu julkisesti, joten
+    // tämä on ainoa tapa selvittää se kokeilemalla. Ei arvattua osoitemuotoa.
+    function avaaKarttaSovellus() {
+      const s = karttaSijainti();
+      const lat = s.lat.toFixed(6), lon = s.lon.toFixed(6);
+      const nimi = encodeURIComponent(currentLocation.name);
+      window.location.href = `geo:${lat},${lon}?q=${lat},${lon}(${nimi})&z=14`;
+    }
+
+    // MML Karttapaikka selaimessa. Osoitemuoto on Maanmittauslaitoksen oma:
+    //   https://asiointi.maanmittauslaitos.fi/karttapaikka/?n=6710746&e=239291&zoom=10
+    // Koordinaatit ETRS-TM35FIN-metreinä, zoom 1-13 (suurempi = lähempänä).
+    function avaaMaastokartta() {
+      const s = karttaSijainti();
+      const k = TM35.fwd(s.lat, s.lon);
       const url = 'https://asiointi.maanmittauslaitos.fi/karttapaikka/'
         + `?lang=fi&n=${k.N.toFixed(0)}&e=${k.E.toFixed(0)}&zoom=10`;
       window.open(url, '_blank', 'noopener');
@@ -3949,7 +3973,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v44';
+    const APP_VERSIO = 'v45';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
