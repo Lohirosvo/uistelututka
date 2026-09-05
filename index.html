@@ -1110,6 +1110,38 @@
 
       <!-- ENNUSTEKUVAUS 0-24 -->
       <div class="result-panel forecast">
+        <!-- VALOVYÖHYKEKUVAAJA — itsenäinen kokeilutyökalu.
+             Ei vaikuta analyysiin eikä syvyyslukemiin: säätimillä voi kokeilla
+             vapaasti miten näkösyvyys ja pilvisyys siirtävät valovyöhykettä. -->
+        <div style="border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:16px;
+                    background:rgba(4,10,18,.5);">
+          <h2 style="margin:0 0 2px; text-align:center;">Valovyöhyke — kokeilu</h2>
+          <p class="hint" style="margin:0 0 10px; text-align:center;">
+            Irrallinen laskuri. Säätimet eivät muuta analyysia.
+          </p>
+          <div id="valoLajit" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;"></div>
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
+            <span class="hint" style="min-width:74px;">Näkösyvyys</span>
+            <input type="range" id="valoSecchi" min="0.3" max="8" step="0.1" value="1.8"
+                   style="flex:1; height:40px; accent-color:var(--cyan);">
+            <span id="valoSecchiArvo" style="font-family:'JetBrains Mono',monospace; font-size:18px;
+                  color:var(--cyan); min-width:62px; text-align:right;">1.8 m</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+            <span class="hint" style="min-width:74px;">Pilvisyys</span>
+            <input type="range" id="valoPilvi" min="0" max="100" step="5" value="40"
+                   style="flex:1; height:40px; accent-color:var(--amber);">
+            <span id="valoPilviArvo" style="font-family:'JetBrains Mono',monospace; font-size:18px;
+                  color:var(--amber); min-width:62px; text-align:right;">40 %</span>
+          </div>
+          <canvas id="valoCanvas" height="300" style="width:100%; display:block; border-radius:9px;
+                  background:#040A12; touch-action:pan-y;"></canvas>
+          <p class="hint" style="margin:6px 0 0;">
+            Tumma alue = optimivalo, vaalea = toiminta-alue. Keltainen viiva = auringon korkeus,
+            pystyviiva = nyt. Kd = 2,7 / näkösyvyys (Koenings &amp; Edmundson 1991).
+          </p>
+        </div>
+
         <h2 style="margin-bottom:10px; text-align:center;">Dynaaminen syvyyskäyrä & Aurinko (00:00 – 24:00)</h2>
         <div id="sunTimesInfo"
           style="text-align:center; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--amber); margin-bottom:14px;">
@@ -3870,7 +3902,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v39';
+    const APP_VERSIO = 'v40';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -7132,6 +7164,147 @@
       scale.appendChild(fish);
     }
 
+    // ===== VALOVYÖHYKEKUVAAJA — itsenäinen kokeilutyökalu =====
+    // Ei kytketty analyysiin: omat säätimet, oma tila. Tarkoitus on antaa tuntuma
+    // siihen miten näkösyvyys ja pilvisyys siirtävät valovyöhykettä, ei tuottaa
+    // suositusta. Siksi tämä ei kirjoita answers-olioon eikä kutsu analyze():a.
+    //
+    // Toiminta-alue on optimin ympärille levitetty haarukka: kymmenesosa alarajasta
+    // ja kolminkertainen yläraja. Se on ARVIO, ei mitattu — merkitty vaaleaksi juuri
+    // siksi, ettei sitä lueta tarkkana rajana.
+    const VALO_TOL = { alaKerroin: 0.1, ylaKerroin: 3 };
+    let valoLaji = 'kuha';
+    let valoSecchi = 1.8;
+
+    function valoKuvaajaData() {
+      const nyt = new Date();
+      const doy = Math.floor((nyt - new Date(nyt.getFullYear(), 0, 0)) / 86400000);
+      const tz = -nyt.getTimezoneOffset() / 60;
+      const pilviEl = document.getElementById('valoPilvi');
+      const pilvi = pilviEl ? parseFloat(pilviEl.value) : 40;
+      const tuuli = (omLatest && omLatest.wind != null) ? omLatest.wind : 3;
+      const ik = VALO_IKKUNAT[valoLaji];
+      const kd = 2.7 / valoSecchi;
+      const ulos = [];
+      for (let i = 0; i <= 96; i++) {
+        const t = i * 24 / 96;
+        const h = auringonKorkeus(t, doy, currentLocation.lat, currentLocation.lon, tz);
+        const E0 = pintaLux(h, pilvi) * pinnanLapaisy(h, tuuli);
+        const dz = L => (E0 <= L) ? 0 : Math.log(E0 / L) / kd;
+        ulos.push({ t, h,
+          optYla: dz(ik.hi), optAla: dz(ik.lo),
+          tolYla: dz(ik.hi * VALO_TOL.ylaKerroin), tolAla: dz(ik.lo * VALO_TOL.alaKerroin) });
+      }
+      return ulos;
+    }
+
+    function piirraValoKuvaaja() {
+      const cv = document.getElementById('valoCanvas');
+      if (!cv || !currentLocation || !cv.getContext) return;
+      const dpr = window.devicePixelRatio || 1;
+      const W = cv.clientWidth || 360, H = 300;
+      if (cv.width !== W * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+      const ctx = cv.getContext('2d');
+      if (!ctx || typeof ctx.setTransform !== 'function') return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+
+      const data = valoKuvaajaData();
+      const vari = LAJI_VARIT[valoLaji] || '#FFB020';
+      const MAXZ = Math.min(20, currentLocation.maxDepth || 15);
+      const ml = 34, mr = 8, mt = 8, mb = 22;
+      const pw = W - ml - mr, ph = H - mt - mb;
+      const X = t => ml + (t / 24) * pw;
+      const Y = z => mt + (Math.max(0, Math.min(z, MAXZ)) / MAXZ) * ph;
+
+      ctx.strokeStyle = 'rgba(30,51,80,.85)'; ctx.lineWidth = 1;
+      ctx.fillStyle = '#7E93AC'; ctx.font = '10px monospace';
+      const askel = MAXZ > 12 ? 5 : 3;
+      for (let z = 0; z <= MAXZ; z += askel) {
+        ctx.beginPath(); ctx.moveTo(ml, Y(z)); ctx.lineTo(W - mr, Y(z)); ctx.stroke();
+        ctx.textAlign = 'right'; ctx.fillText(z + 'm', ml - 4, Y(z) + 3);
+      }
+      for (let t = 0; t <= 24; t += 6) {
+        ctx.beginPath(); ctx.moveTo(X(t), mt); ctx.lineTo(X(t), H - mb); ctx.stroke();
+        ctx.textAlign = 'center'; ctx.fillText(String(t).padStart(2, '0'), X(t), H - 7);
+      }
+
+      const alue = (yla, ala, alpha) => {
+        ctx.beginPath();
+        data.forEach((d, i) => {
+          const y = Y(d[yla]);
+          if (i === 0) ctx.moveTo(X(d.t), y); else ctx.lineTo(X(d.t), y);
+        });
+        for (let i = data.length - 1; i >= 0; i--) ctx.lineTo(X(data[i].t), Y(data[i][ala]));
+        ctx.closePath(); ctx.fillStyle = vari + alpha; ctx.fill();
+      };
+      alue('tolYla', 'tolAla', '30');
+      alue('optYla', 'optAla', '95');
+
+      // Auringon korkeus omalla asteikolla (-20..60 astetta)
+      ctx.beginPath();
+      data.forEach((d, i) => {
+        const y = mt + ph * (1 - (d.h + 20) / 80);
+        if (i === 0) ctx.moveTo(X(d.t), y); else ctx.lineTo(X(d.t), y);
+      });
+      ctx.strokeStyle = 'rgba(255,176,32,.7)'; ctx.lineWidth = 1.5; ctx.stroke();
+
+      const tn = new Date().getHours() + new Date().getMinutes() / 60;
+      ctx.strokeStyle = '#E7EEF6'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(X(tn), mt); ctx.lineTo(X(tn), H - mb); ctx.stroke();
+    }
+
+    const LAJI_VARIT = {
+      kuha: '#FFB020', taimen: '#FF66B2', jarvilohi: '#4C8DFF',
+      kirjolohi: '#FF9F5A', hauki: '#45D3E8', ahven: '#C9A227'
+    };
+    const LAJI_NIMET = {
+      kuha: 'Kuha', taimen: 'Taimen', jarvilohi: 'Järvilohi',
+      kirjolohi: 'Kirjolohi', hauki: 'Hauki', ahven: 'Ahven'
+    };
+
+    function valitseValoLaji(k) {
+      valoLaji = k;
+      document.querySelectorAll('#valoLajit .chip').forEach(el =>
+        el.classList.toggle('on', el.dataset.k === k));
+      piirraValoKuvaaja();
+    }
+
+    function alustaValoKuvaaja() {
+      const napit = document.getElementById('valoLajit');
+      if (!napit) return;
+      napit.innerHTML = Object.keys(LAJI_VARIT).map(k =>
+        `<div class="chip" data-k="${k}" onclick="valitseValoLaji('${k}')" `
+        + `style="padding:7px 12px; font-size:13px;">${LAJI_NIMET[k]}</div>`).join('');
+
+      // Oletus paikan omasta näkösyvyydestä, tai kirkkausluokasta jos mitattua ei ole.
+      const oletus = (typeof currentLocation.secchiMeters === 'number')
+        ? currentLocation.secchiMeters
+        : ({ 1: 0.4, 2: 1.8, 3: 2.8, 4: 4.5, 5: 7.0 }[answers.clarity] || 1.8);
+      valoSecchi = oletus;
+      const sEl = document.getElementById('valoSecchi');
+      if (sEl) {
+        sEl.value = String(oletus);
+        document.getElementById('valoSecchiArvo').textContent = oletus.toFixed(1) + ' m';
+        sEl.oninput = e => {
+          valoSecchi = parseFloat(e.target.value);
+          document.getElementById('valoSecchiArvo').textContent = valoSecchi.toFixed(1) + ' m';
+          piirraValoKuvaaja();
+        };
+      }
+      const pEl = document.getElementById('valoPilvi');
+      if (pEl) {
+        const pOletus = (omLatest && omLatest.cloud != null) ? Math.round(omLatest.cloud) : 40;
+        pEl.value = String(pOletus);
+        document.getElementById('valoPilviArvo').textContent = pOletus + ' %';
+        pEl.oninput = e => {
+          document.getElementById('valoPilviArvo').textContent = e.target.value + ' %';
+          piirraValoKuvaaja();
+        };
+      }
+      valitseValoLaji(valoLaji);
+    }
+
     // ===== LAJIPANEELIEN JÄRJESTYS JA KUTISTUS =====
     // Kuusi paneelia allekkain on veneessä liikaa. Käyttäjän kuvaama kiinnostus ei ole
     // kiinteä vaan EHDOLLINEN, ja sovellus tietää jo ehdot:
@@ -7217,6 +7390,8 @@
 
     function renderResult({ lowS, highS, lowK, highK, lowH, highH, lowT, highT, lowA, highA, lowJL, highJL, dKirjolohi, reasonsKirjolohi, color, area, gearTip, reasonsSyotti, reasonsKuha, reasonsHauki, reasonsTaimen, reasonsAhven, reasonsJarvilohi, svgGraph }) {
       document.getElementById('forecastGraph').innerHTML = svgGraph;
+      // Kuvaaja on kokeilutyökalu — sen kaatuminen ei saa kaataa analyysia.
+      try { alustaValoKuvaaja(); } catch (e) { console.warn('Valokuvaaja:', e.message); }
 
       // METRIT JA JALAT RINNAKKAIN — uusi 29.8.2026.
       // Takila on jalkamitoitettu, joten molemmat yksiköt tarvitaan samaan silmäykseen.
