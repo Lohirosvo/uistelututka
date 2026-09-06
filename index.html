@@ -883,6 +883,25 @@
             </div>
           </div>
 
+          <!-- VIEHE JA VÄRI ERIKSEEN — lisätty 5.9.2026.
+               Erikseen siksi, että väri on ainoa asia jota ei voi todentaa mitenkään
+               muuten kuin omalla saalisdatalla: viehemalleja on neljä, värejä kymmeniä.
+               Yhtenä kenttänä ne eivät koskaan erotu toisistaan tilastossa.
+               Esitäytetään viehevalinnan viimeisimmästä suosituksesta jos sellainen on. -->
+          <p class="hint" style="margin:12px 0 6px;">Viehe</p>
+          <div class="options" id="opts-saalisViehe" style="margin-bottom:8px;"></div>
+
+          <div class="numfield">
+            <div style="flex:1;">
+              <label style="display:block;color:var(--muted);font-size:13px;">Väri</label>
+              <input type="text" id="kalaVari" placeholder="esim. Kulta Muikku" style="width:100%; max-width:230px;">
+            </div>
+          </div>
+          <p class="hint" style="margin:4px 0 0;">
+            Väri kirjataan sanoina, koska valikoima on mallikohtainen eikä listaa ole rajattu.
+            Kirjoita se muoto jota itse käytät — pysy samassa, niin tilasto toimii.
+          </p>
+
           <div style="margin-top:12px; display:flex; gap:8px;">
             <button class="chip" onclick="tallennaSaalis()" style="border-color:var(--cyan); color:var(--cyan);">Tallenna</button>
             <button class="chip" onclick="peruSaalis()" style="border-color:var(--muted); color:var(--muted);">Peru</button>
@@ -2219,6 +2238,14 @@
     const VV_VIEHEET = {
       taimen10:      { nimi: 'HK Varma Taimen 10 cm',       syvyys: 1.5, min: 2.5, max: 6.0 },
       taimen13:      { nimi: 'HK Varma Taimen 13 cm',       syvyys: 1.5, min: 2.5, max: 6.0 },
+      // PINTAPRO 10 cm — LUVUT VAHVISTETTU 5.9.2026.
+      // Verkkokaupan (Happy Angler) tuotekuvaus 10 cm:n mallista ilmoittaa nopeudeksi
+      // 2-6 km/h ja syvyydeksi 0,20-0,40 m, mikä poikkeaa alla olevista. Luvut 2,0-5,0
+      // esiintyvät samassa kaupassa 13 cm:n PintaPron kohdalla.
+      // Käyttäjä on vahvistanut alla olevat sekä omalla kokemuksellaan että
+      // valmistajan tiedolla, joten ne jäävät voimaan. Ristiriita on kirjattu tähän
+      // jottei se katoa: jos luvut joskus kyseenalaistetaan uudelleen, tässä on syy
+      // miksi verkkokauppa sanoo toisin.
       pintapro10:    { nimi: 'HK Varma PintaPro 10 cm',     syvyys: 0.5, min: 2.0, max: 5.0 },
       pintataimen13: { nimi: 'HK Varma Pinta Taimen 13 cm', syvyys: 0.5, min: 2.5, max: 6.0 }
     };
@@ -2258,6 +2285,84 @@
 
     const vvTila = { kala: 'taimen', tapa: 'plaanari', valo: null };
 
+    // Viimeisin viehevalinnan suosittelema malli. Käytetään saaliskirjauksen
+    // esitäyttöön — ei muuhun, eikä se vaikuta viehevalinnan omaan logiikkaan.
+    let vvViimeisinViehe = null;
+    let vvSiimaM = 30;   // vapaasti uivan vieheen siimapituus, metriä
+    let vvViimeisinHaarukka = null;   // [min, max] km/h, hälytysrajojen asettamista varten
+
+    // ===== UINTISYVYYS SIIMAMÄÄRÄN FUNKTIONA =====
+    // VALMISTAJA EI JULKAISE TÄTÄ. HK Varma ilmoittaa yhden luvun ("n. 1,5 m"),
+    // eikä kerro millä siimapituudella se pätee tai miten se muuttuu. Kaikki alla
+    // oleva on siis PÄÄTTELYÄ, ei valmistajan tietoa — ja merkitään sellaiseksi.
+    //
+    // MALLIN MUOTO on kuitenkin fysiikasta, ei arvattu. Vapaasti uiva viehe
+    // saavuttaa syvyytensä asymptoottisesti: alussa syvyys kasvaa nopeasti
+    // siimaa päästettäessä, sitten käyrä litistyy kun siiman oma vastus alkaa
+    // kannatella vieheen lippaa. Tämä on sama muoto joka näkyy julkaistuissa
+    // sukellustaulukoissa (esim. Precision Trolling) kaikilla vaapuilla.
+    //
+    //   syvyys(L) = Smax * (1 - e^(-L / tau))
+    //
+    // TAU on ainoa vapaa parametri: se kertoo kuinka nopeasti käyrä kyllästyy.
+    // Oletus 12 m tarkoittaa, että 90 % syvyydestä saavutetaan noin 28 metrillä.
+    // Se on valittu niin, että ilmoitettu syvyys osuu tyypilliselle vetopituudelle
+    // (25-35 m), koska juuri sillä valmistaja on vieheensä testannut.
+    //
+    // KALIBROITAVISSA: jos mittaat oikean syvyyden tunnetulla siimapituudella,
+    // tau ratkaistaan siitä eikä oletuksesta. Sama periaate kuin Dipsyn
+    // kalibroinnissa — mitattu voittaa mallin aina.
+    const VIEHE_TAU_OLETUS = 12;
+    let vieheTauKalibroitu = null;   // metriä, käyttäjän mittauksesta
+
+    function lataaViehekalibrointi() {
+      try {
+        const raw = localStorage.getItem('viehekalibrointi');
+        vieheTauKalibroitu = raw ? parseFloat(raw) : null;
+        if (!isFinite(vieheTauKalibroitu) || vieheTauKalibroitu <= 0) vieheTauKalibroitu = null;
+      } catch (e) { vieheTauKalibroitu = null; }
+    }
+
+    // Ratkaisee taun mittauksesta: L metriä siimaa antoi d metriä syvyyttä,
+    // kun vieheen ilmoitettu maksimi on Smax.
+    //   d = Smax * (1 - e^(-L/tau))  =>  tau = -L / ln(1 - d/Smax)
+    function ratkaiseVieheTau(L, d, Smax) {
+      if (!(L > 0) || !(d > 0) || !(Smax > 0)) return null;
+      const suhde = d / Smax;
+      if (suhde >= 0.98) return null;   // liian lähellä maksimia, ratkaisu epävakaa
+      const tau = -L / Math.log(1 - suhde);
+      return (isFinite(tau) && tau > 1 && tau < 200) ? tau : null;
+    }
+
+    // Palauttaa uintisyvyyden ja sen luotettavuuden annetulla siimapituudella.
+    function vieheUintisyvyys(viehe, siimaM) {
+      const Smax = viehe.syvyys;
+      if (!(siimaM > 0)) return { m: Smax, tapa: 'ilmoitettu', kalibroitu: false };
+      const tau = vieheTauKalibroitu || VIEHE_TAU_OLETUS;
+      const m = Smax * (1 - Math.exp(-siimaM / tau));
+      return { m: m, tapa: 'laskettu', kalibroitu: !!vieheTauKalibroitu, tau: tau, smax: Smax };
+    }
+
+    // ===== KYNNYSARVOJEN REHELLISYYS =====
+    // Viehevalinnan rajat (syvyys 0,8 m, vesi 6 ja 10 ja 16 °C, näkösyvyys 1,2 ja
+    // 2,6 m) EIVÄT ole tutkimustuloksia. Ne ovat valittuja lukuja, joilla piti
+    // aloittaa jostakin. Ongelma ei ole niiden olemassaolo vaan se, että ne
+    // näyttävät tarkoilta: 0,79 m ja 0,81 m antavat eri vieheen, vaikka ero on
+    // mittausvirheen sisällä.
+    //
+    // Ratkaisu ei ole liu'uttaa rajaa — se piilottaisi ongelman. Ratkaisu on
+    // KERTOA kun ollaan rajan tuntumassa, jotta tiedät että toinen vaihtoehto on
+    // yhtä perusteltu. Silloin päätöksen tekee kokemuksesi, ei keksitty luku.
+    //
+    // Vyöhykkeen leveys on suhteessa suureen omaan tarkkuuteen: syvyys ±0,2 m
+    // (luotaimen lukutarkkuus), lämpötila ±1 °C, näkösyvyys ±0,3 m (Secchi-levyn
+    // toistettavuus). Nekään eivät ole mitattuja vaan arvioita — mutta ne kuvaavat
+    // sitä epävarmuutta joka mittauksessa oikeasti on.
+    function vvRajanTuntumassa(arvo, raja, leveys) {
+      if (arvo === null || arvo === undefined) return false;
+      return Math.abs(arvo - raja) <= leveys;
+    }
+
     function vvNro(x, d) { return x.toFixed(d === undefined ? 1 : d).replace('.', ','); }
 
     // Kaikki peritty data yhdessä paikassa. Jos jokin puuttuu, se on null eikä
@@ -2265,35 +2370,131 @@
     function vvPeritty() {
       const ns = (typeof kaytettavaNakosyvyys === 'function') ? kaytettavaNakosyvyys() : { m: 1.8, lahde: 'oletus' };
       const valoAuto = answers.light === 'sun' ? 'aurinko' : (answers.light ? 'pilvi' : null);
+      // Hämärä auringon mukaan: sovellus tietää nousun ja laskun, joten sitä ei
+      // tarvitse kysyä. Kaksi tuntia laskun jälkeen ja ennen nousua = hämärä.
+      const h = new Date().getHours() + new Date().getMinutes() / 60;
+      const hamaraNyt = (typeof cachedSunData === 'object' && cachedSunData)
+        ? (h < cachedSunData.rise + 1 || h > cachedSunData.set - 1) : false;
       return {
         paikka: currentLocation ? currentLocation.name : '—',
         secchi: ns.m, secchiLahde: ns.lahde,
         vesiC: (answers.temp !== undefined) ? answers.temp : null,
-        valo: vvTila.valo || valoAuto || 'pilvi',
-        valoPeritty: !vvTila.valo && !!valoAuto,
-        nopeus: (typeof viimeisinNopeus === 'number') ? viimeisinNopeus : null
+        valo: vvTila.valo || (hamaraNyt ? 'hamara' : (valoAuto || 'pilvi')),
+        valoPeritty: !vvTila.valo && (hamaraNyt || !!valoAuto),
+        valoSyy: vvTila.valo ? 'käsin' : (hamaraNyt ? 'auringon mukaan' : (valoAuto ? 'kyselystä' : 'oletus')),
+        nopeus: (typeof viimeisinNopeus === 'number') ? viimeisinNopeus : null,
+        // Syöttikalaparvi: käsin annettu jos on, muuten mallin arvio. Erotellaan,
+        // koska havainto on eri asia kuin arvio eikä sitä saa esittää samana.
+        syotti: (answers.bait !== null && answers.bait !== undefined) ? answers.bait : null,
+        syottiArvio: (function () {
+          if (answers.bait !== null && answers.bait !== undefined) return null;
+          try {
+            const th = (answers.thermo === 'known')
+              ? (parseFloat((document.getElementById('thermoDepth') || {}).value) || null) : null;
+            const h = new Date().getHours() + new Date().getMinutes() / 60;
+            return estimateSyottikalaDepth(h, answers.light, answers.wind, answers.temp, th, answers.season);
+          } catch (e) { return null; }
+        })(),
+        termokliini: (answers.thermo === 'known')
+          ? (parseFloat((document.getElementById('thermoDepth') || {}).value) || null) : null,
+        iskuvyohyke: (currentLocation && currentLocation.salmonidStrikeZone) ? currentLocation.salmonidStrikeZone : null
       };
     }
 
     // Dipsyn siimapituus samalla mallilla kuin syvyyslaskurissa, käyttäjän
     // kalibrointi mukaan lukien. Ei valmistajan taulukkoa: se koskee O-rengasta.
-    function vvDipsySiima(syvyys, kmh) {
+    // Nopeus on SUOSITELTU vetonopeus, ei nykyinen GPS-lukema — muuten siima
+    // laskettaisiin vauhdille, jonka työkalu itse kehottaa vaihtamaan.
+    function vvDipsySiima(syvyys, suositeltuKmh) {
       if (typeof sdComputeRatio !== 'function') return null;
       const diaEl = document.getElementById('sdLineDia');
       const dia = diaEl ? parseFloat(diaEl.value) || 0.45 : 0.45;
-      const v = (kmh && kmh > 1) ? kmh : 4.0;
-      const ratio = sdComputeRatio(sdSetting, sdLineType, dia, v);
+      const ratio = sdComputeRatio(sdSetting, sdLineType, dia, suositeltuKmh);
       const metria = syvyys * ratio;
-      return { m: metria, ft: Math.round(metria / 0.3048), asetus: sdSetting, dia: dia,
-               kalibroitu: (typeof sdCalibration !== 'undefined' && sdCalibration !== null) };
+      const kalibroitu = (typeof sdCalibration !== 'undefined' && sdCalibration !== null);
+      // Kalibroimaton luku on arvio: pyöristetään 5 jalan tarkkuuteen, jottei
+      // näytä mitatulta. Kalibroitu saa olla tarkempi.
+      const ftRaaka = metria / 0.3048;
+      const ft = kalibroitu ? Math.round(ftRaaka) : Math.round(ftRaaka / 5) * 5;
+      return { m: metria, ft: ft, asetus: sdSetting, dia: dia, kmh: suositeltuKmh, kalibroitu: kalibroitu };
     }
 
-    function vvValitseVarit(secchi, valo, kala) {
+    // Valon määrä vieheen syvyydellä. Beer-Lambert ja Kd = 2,7 / näkösyvyys
+    // (Koenings & Edmundson 1991) — sama laskenta jota valovyöhykekuvaaja käyttää.
+    // Tämä osuus on FYSIIKKAA. Se mitä väriä siitä seuraa, on päättelyä.
+    function vvValoSyvyydella(secchi, syvyysM) {
+      try {
+        const nyt = new Date();
+        const doy = Math.floor((nyt - new Date(nyt.getFullYear(), 0, 0)) / 86400000);
+        const tz = -nyt.getTimezoneOffset() / 60;
+        const h = auringonKorkeus(nyt.getHours() + nyt.getMinutes() / 60, doy,
+                                  currentLocation.lat, currentLocation.lon, tz);
+        const pilvi = (omLatest && omLatest.cloud != null) ? omLatest.cloud : 40;
+        const tuuli = (omLatest && omLatest.wind != null) ? omLatest.wind : 3;
+        const kd = 2.7 / secchi;
+        const E0 = pintaLux(h, pilvi) * pinnanLapaisy(h, tuuli);
+        return E0 * Math.exp(-kd * Math.max(0, syvyysM));
+      } catch (e) { return null; }
+    }
+
+    // VÄRIVALINTA TUNTEE NYT SYVYYDEN — muutettu 5.9.2026.
+    // Aiemmin valinta perustui pelkkään näkösyvyyteen ja karkeaan kolmiportaiseen
+    // valoon. Se antoi saman värin puolessa metrissä ja kymmenessä metrissä, vaikka
+    // valoa on niissä eri kertaluokka: Lappajärvessä (Secchi 1,8 m) valo vaimenee
+    // kymmenkertaisesti noin 0,85 metrin matkalla.
+    //
+    // Kaksi tekijää ratkaisee, ja ne ovat eri asioita:
+    //   MÄÄRÄ  — kuinka paljon valoa syvyydellä on. Vähän valoa = siluetti ratkaisee.
+    //   LAATU  — mitkä aallonpituudet ovat jäljellä. Humus suodattaa sinisen ensin,
+    //            joten syvällä humusvedessä on vain kellertävää valoa jäljellä.
+    //            Siksi kulta säilyy näkyvänä siellä missä hopea on jo harmaa.
+    function vvValitseVarit(secchi, valo, kala, syvyysM) {
       let ryhma, syy;
-      if (secchi < 1.2) { ryhma = 'rajut'; syy = 'Näkösyvyys alle 1,2 m: kala löytää vieheen kontrastilla, ei luonnonjäljitelmällä.'; }
-      else if (valo === 'hamara') { ryhma = 'tumma'; syy = 'Hämärässä siluetti ratkaisee: tumma selkä erottuu ylöspäin katsovalle kalalle.'; }
-      else if (secchi < 2.6) { ryhma = 'kulta'; syy = 'Humuksinen vesi suodattaa sinisen pois, joten kulta ja kupari säilyttävät näkyvyytensä syvimmälle.'; }
-      else { ryhma = 'hopea'; syy = 'Kirkkaassa vedessä luonnonväriset kuosit ovat turvallisin lähtökohta.'; }
+      const lx = (syvyysM !== undefined && syvyysM !== null)
+        ? vvValoSyvyydella(secchi, syvyysM) : null;
+      // Muotoilu: hyvin pienet arvot eivät kelpaa desimaaleina ("0.00 lx" on
+      // hyödytön), joten alle 0,01 lx sanotaan sanoin.
+      const lxTeksti = (lx === null) ? ''
+        : (lx < 0.01 ? 'olematon'
+        : (lx < 1 ? vvNro(lx, 2) + ' lx'
+        : (lx < 100 ? vvNro(lx, 0) + ' lx' : Math.round(lx) + ' lx')));
+
+      if (lx !== null && lx < 1) {
+        // Alle 1 lx: väri ei enää välity, vain muoto ja liike. Tämä on määrä, ei laatu.
+        ryhma = 'tumma';
+        syy = `Valoa on ${vvNro(syvyysM)} m:ssä enää ${lxTeksti === 'olematon' ? 'olemattoman vähän' : 'noin ' + lxTeksti}. Siinä väri ei välity — `
+            + 'siluetti ratkaisee, ja tumma selkä erottuu ylöspäin katsovalle kalalle parhaiten.';
+      } else if (secchi < 1.2) {
+        ryhma = 'rajut';
+        syy = `Näkösyvyys alle 1,2 m: kala löytää vieheen kontrastilla, ei luonnonjäljitelmällä.`
+            + (lx !== null ? ` Valoa ${vvNro(syvyysM)} m:ssä ${lxTeksti === 'olematon' ? 'olemattoman vähän' : 'noin ' + lxTeksti}.` : '');
+      } else if (valo === 'hamara') {
+        ryhma = 'tumma';
+        syy = 'Hämärässä siluetti ratkaisee: tumma selkä erottuu ylöspäin katsovalle kalalle.';
+      } else if (secchi < 2.6) {
+        ryhma = 'kulta';
+        syy = 'Humuksinen vesi suodattaa sinisen pois, joten kulta ja kupari säilyttävät näkyvyytensä syvimmälle.'
+            + (lx !== null ? ` Valoa ${vvNro(syvyysM)} m:ssä ${lxTeksti === 'olematon' ? 'olemattoman vähän' : 'noin ' + lxTeksti}.` : '');
+      } else if (lx !== null && lx < 30 && syvyysM > 3) {
+        // Kirkas vesi mutta syvällä: hopea alkaa menettää tehonsa ennen kuin
+        // valo loppuu kokonaan. Kulta on tässä välissä turvallisempi.
+        ryhma = 'kulta';
+        syy = `Vesi on kirkasta, mutta ${vvNro(syvyysM)} m:ssä valoa on enää ${lxTeksti === 'olematon' ? 'olemattoman vähän' : 'noin ' + lxTeksti}. `
+            + 'Siinä kulta säilyttää kontrastinsa pidempään kuin hopea.';
+      } else {
+        ryhma = 'hopea';
+        syy = 'Kirkkaassa vedessä luonnonväriset kuosit ovat turvallisin lähtökohta.'
+            + (lx !== null ? ` Valoa ${vvNro(syvyysM)} m:ssä ${lxTeksti === 'olematon' ? 'olemattoman vähän' : 'noin ' + lxTeksti}.` : '');
+      }
+      // Rajan tuntumassa kerrotaan naapuriryhmä. Näkösyvyys on epätarkka mittaus
+      // (Secchi-levyn toistettavuus n. ±0,3 m), joten raja ei erota kahta tilannetta
+      // jyrkästi vaikka koodi niin tekee.
+      if (vvRajanTuntumassa(secchi, 1.2, 0.3)) {
+        syy += ' HUOM: näkösyvyys on 1,2 m:n rajan tuntumassa — kultasävyt olisivat lähes yhtä perusteltuja.';
+      } else if (vvRajanTuntumassa(secchi, 2.6, 0.3)) {
+        syy += ' HUOM: näkösyvyys on 2,6 m:n rajan tuntumassa — '
+             + (secchi < 2.6 ? 'hopeasävyt' : 'kultasävyt') + ' olisivat lähes yhtä perusteltuja.';
+      }
       let lista = VV_VARIT[ryhma].slice();
       if (kala === 'jarvilohi' && ryhma !== 'rajut') { lista = VV_VARIT.muikku.concat(lista); syy += ' Järvilohelle painotetaan muikkukuoseja.'; }
       const nahty = {}, ulos = [];
@@ -2309,23 +2510,91 @@
 
     function vvAseta(avain, arvo) { vvTila[avain] = arvo; piirraViehevalinta(); }
 
+    function vvAsetaSiima(v) {
+      vvSiimaM = parseFloat(v);
+      const el = document.getElementById('vvSiimaArvo');
+      if (el) el.textContent = vvSiimaM + ' m';
+      piirraViehevalinta();
+    }
+
+    // Kalibrointi: ratkaisee tau-parametrin yhdestä mittauksesta.
+    function vvKalibroi() {
+      const tila = document.getElementById('vvKalTila');
+      const L = parseFloat((document.getElementById('vvKalSiima') || {}).value);
+      const d = parseFloat((document.getElementById('vvKalSyvyys') || {}).value);
+      const kerro = (t, v) => { if (tila) tila.innerHTML = `<span style="color:${v};">${t}</span>`; };
+      if (!(L > 0) || !(d > 0)) { kerro('Anna molemmat luvut.', 'var(--amber)'); return; }
+      // Kalibrointi tehdään sille vieheelle joka on nyt suositeltu.
+      const viehe = vvViimeisinViehe ? VV_VIEHEET[vvViimeisinViehe] : VV_VIEHEET.taimen10;
+      if (d >= viehe.syvyys) {
+        kerro(`Mitattu ${vvNro(d)} m on vähintään ilmoitettu maksimi ${vvNro(viehe.syvyys)} m. `
+          + 'Silloin käyrää ei voi ratkaista — joko siimaa oli hyvin paljon, tai '
+          + 'valmistajan luku on liian matala tälle vieheelle.', 'var(--amber)');
+        return;
+      }
+      const tau = ratkaiseVieheTau(L, d, viehe.syvyys);
+      if (tau === null) { kerro('Luvuista ei saa ratkaisua — tarkista ne.', 'var(--amber)'); return; }
+      vieheTauKalibroitu = tau;
+      try { localStorage.setItem('viehekalibrointi', String(tau)); } catch (e) { /* ei kriittistä */ }
+      kerro(`Kalibroitu: ${viehe.nimi}, ${vvNro(L, 0)} m siimaa → ${vvNro(d)} m. `
+        + `Käyrä on nyt sinun (tau ${vvNro(tau)} m).`, 'var(--cyan)');
+      piirraViehevalinta();
+    }
+
+    // Siirtää lasketun haarukan nopeushälytyksen rajoiksi. Tehdään VAIN napista,
+    // koska hälytysrajat ovat turvatoiminto — työkalu ei muuta niitä itsestään.
+    function vvAsetaHalytysrajat() {
+      if (!vvViimeisinHaarukka) return;
+      const [mn, mx] = vvViimeisinHaarukka;
+      const eMin = document.getElementById('minSpeedLimit');
+      const eMax = document.getElementById('maxSpeedLimit');
+      if (!eMin || !eMax) return;
+      eMin.value = mn.toFixed(1);
+      eMax.value = mx.toFixed(1);
+      // Tallennus samalla mekanismilla kuin käsin muutettaessa, jotta rajat säilyvät.
+      try { saveSettings(); } catch (e) { /* tallennus ei saa estää asetusta */ }
+      const tila = document.getElementById('vvHalytysTila');
+      if (tila) tila.innerHTML = `<span style="color:var(--cyan);">Asetettu ${vvNro(mn)}–${vvNro(mx)}.</span>`;
+      piirraViehevalinta();
+    }
+
+    function vvNollaaKalibrointi() {
+      vieheTauKalibroitu = null;
+      try { localStorage.removeItem('viehekalibrointi'); } catch (e) { /* ei kriittistä */ }
+      const tila = document.getElementById('vvKalTila');
+      if (tila) tila.innerHTML = '<span style="color:var(--muted);">Palattu oletuskäyrään.</span>';
+      piirraViehevalinta();
+    }
+
+    // Nopeus pyöristetään 0,5 km/h:n tarkkuuteen. Kymmenesosat olisivat
+    // valheellista tarkkuutta mallissa, jonka rajat ovat itse valittuja.
+    function vvPyoristaNopeus(x) { return Math.round(x * 2) / 2; }
+
     function piirraViehevalinta() {
       const ov = document.getElementById('viehevalintaOverlay');
       if (!ov || ov.style.display === 'none') return;
       const P = vvPeritty();
       const d = parseFloat(document.getElementById('vvSyvyys').value);
+      // Siimapituus koskee vain vapaasti uivaa viehettä: Dipsyllä ja downriggerilla
+      // syvyyden määrää asetus tai paino, ei siiman määrä.
+      const vapaastiUiva = (vvTila.tapa === 'plaanari' || vvTila.tapa === 'suora');
+      const sRivi = document.getElementById('vvSiimaRivi');
+      if (sRivi) sRivi.style.display = vapaastiUiva ? 'block' : 'none';
       const T = VV_TAVAT[vvTila.tapa];
       const kala = vvTila.kala;
+      const lohikala = (kala === 'taimen' || kala === 'jarvilohi' || kala === 'kirjolohi');
       document.getElementById('vvSyvyysArvo').textContent = vvNro(d) + ' m';
 
-      // Peritty rivi
       document.getElementById('vvPeritty').innerHTML =
         `<b style="color:var(--text);">${P.paikka}</b> · näkösyvyys ${vvNro(P.secchi)} m <span style="opacity:.7;">(${P.secchiLahde})</span>`
         + ` · vesi ${P.vesiC !== null ? vvNro(P.vesiC) + ' °C' : '<span style="color:var(--amber);">ei lukemaa</span>'}`
-        + ` · valo ${P.valo}${P.valoPeritty ? ' <span style="opacity:.7;">(kyselystä)</span>' : ''}`
-        + (P.nopeus !== null ? ` · GPS ${vvNro(P.nopeus)} km/h` : '');
+        + ` · valo ${P.valo} <span style="opacity:.7;">(${P.valoSyy})</span>`
+        + (P.nopeus !== null ? ` · GPS ${vvNro(P.nopeus)} km/h` : '')
+        + (P.syotti !== null ? ` · syötti ${vvNro(P.syotti)} m` :
+           (P.syottiArvio !== null && P.syottiArvio !== undefined
+             ? ` · syötti ~${vvNro(P.syottiArvio)} m <span style="opacity:.7;">(arvio)</span>` : ''))
+        + (P.termokliini !== null ? ` · termokliini ${vvNro(P.termokliini)} m` : '');
 
-      // Napit
       document.getElementById('vvKala').innerHTML = Object.keys(VV_LAJI)
         .map(k => vvChip(VV_LAJI[k].nimi, kala === k, `vvAseta('kala','${k}')`)).join('');
       document.getElementById('vvTapa').innerHTML = Object.keys(VV_TAVAT)
@@ -2333,37 +2602,144 @@
       document.getElementById('vvValo').innerHTML =
         [['aurinko', 'Kirkas'], ['pilvi', 'Pilvinen'], ['hamara', 'Hämärä']]
           .map(v => vvChip(v[1], P.valo === v[0], `vvAseta('valo','${v[0]}')`)).join('')
-        + vvChip('Peri kyselystä', !vvTila.valo, `vvAseta('valo',null)`);
+        + vvChip('Automaatti', !vvTila.valo, `vvAseta('valo',null)`);
 
-      const perustelut = [], huomiot = [];
+      const perustelut = [], huomiot = [], alaviitteet = [];
       const t = P.vesiC;
+      // Kokosääntö koskee vain lohikaloja. Kuha ja kirjolohi saavat 10 cm:n mallin,
+      // eikä se ole kylmän veden sääntö vaan lajivalinta — sanotaan se ääneen.
       const isoKoko = (kala === 'jarvilohi') || (kala === 'taimen' && t !== null && t < 10);
-      let viehe, asetusrivi;
+      if (kala === 'taimen' && vvRajanTuntumassa(t, 10, 1)) alaviitteet.push(
+        `Vesi ${vvNro(t)} °C on kokorajan (10 °C) tuntumassa. Toinen koko olisi tässä `
+        + 'lähes yhtä perusteltu — jos isot kalat eivät ota, kokeile pienempää.');
+      if (!lohikala || kala === 'kirjolohi') alaviitteet.push('Kokosääntö (13 cm kylmässä vedessä) koskee vain taimenta ja järvilohta. ' + VV_LAJI[kala].nimi + ' saa aina 10 cm:n mallin.');
+      let viehe, asetusrivi, dipsyTiedot = null;
+
+      // Nopeus lasketaan ENNEN esitystapaa, koska Dipsyn siima riippuu siitä.
+      let nMin = VV_LAJI[kala].nopeus[0], nMax = VV_LAJI[kala].nopeus[1];
+      if (t !== null && t < 6) { nMin -= 0.5; nMax -= 0.5; perustelut.push(['arvio', 'Alle 6 °C vedessä hidastettu veto on yleensä tuottavampi.']); }
+      if (t !== null && t > 16 && kala !== 'kuha') { nMin += 0.3; nMax += 0.3; }
+      if (vvRajanTuntumassa(t, 6, 1)) alaviitteet.push(
+        `Vesi ${vvNro(t)} °C on 6 °C:n rajan tuntumassa. Sen ylitys hidastaa suositusta `
+        + '0,5 km/h — raja on valittu luku, joten kokeile molempia puolia.');
+      if (vvRajanTuntumassa(t, 16, 1) && kala !== 'kuha') alaviitteet.push(
+        `Vesi ${vvNro(t)} °C on 16 °C:n rajan tuntumassa. Sen ylitys nopeuttaa suositusta `
+        + '0,3 km/h — raja on valittu luku.');
+      const lajiMin = nMin, lajiMax = nMax;
 
       if (vvTila.tapa === 'downrigger') {
         viehe = isoKoko ? VV_VIEHEET.pintataimen13 : VV_VIEHEET.pintapro10;
-        asetusrivi = `Paino ${vvNro(d)} m, viehe 2–4 m sen takana`;
         perustelut.push(['arvio', 'Downriggerillä vieheen oma uintisyvyys ei ratkaise, joten pintamalli ja paino hoitavat työn.']);
       } else if (vvTila.tapa === 'dipsy') {
         viehe = isoKoko ? VV_VIEHEET.taimen13 : VV_VIEHEET.taimen10;
-        const ds = vvDipsySiima(d, P.nopeus);
-        if (ds) {
-          asetusrivi = `Asetus ${ds.asetus} · ${vvNro(ds.m, 0)} m siimaa (${ds.ft} ft)`;
-          perustelut.push([ds.kalibroitu ? 'oma' : 'arvio',
-            ds.kalibroitu
-              ? `Siimapituus omasta kalibroinnistasi, ${vvNro(ds.dia, 2)} mm siimalla.`
-              : `Siimapituus syvyyslaskurin arviomallista — kalibroi se pohjakosketuksella, niin luku tarkentuu.`]);
+      } else if (d <= 0.8) {
+        if (vvRajanTuntumassa(d, 0.8, 0.2)) alaviitteet.push(
+          'Olet 0,8 m:n rajan tuntumassa. Se raja on valittu luku, ei tutkimustulos — '
+          + 'Taimen-malli olisi tässä lähes yhtä perusteltu. Jos kalat käyvät hetkittäin '
+          + 'syvemmällä, valitse se.');
+        viehe = (kala === 'jarvilohi') ? VV_VIEHEET.pintataimen13 : VV_VIEHEET.pintapro10;
+        perustelut.push(['valm', 'Valmistaja ilmoittaa pintamalleille n. 0,5 m uintisyvyyden.']);
+        if (kala === 'jarvilohi') perustelut.push(['valm', 'Pinta Taimen kestää 6,0 km/h, PintaPron suositus loppuu 5,0 km/h:iin.']);
+      } else {
+        viehe = isoKoko ? VV_VIEHEET.taimen13 : VV_VIEHEET.taimen10;
+        perustelut.push(['valm', 'Valmistaja ilmoittaa Taimen-mallille n. 1,5 m uintisyvyyden.']);
+        if (vvRajanTuntumassa(d, 0.8, 0.2)) alaviitteet.push(
+          'Olet 0,8 m:n rajan tuntumassa. Pintamalli olisi tässä lähes yhtä perusteltu — '
+          + 'raja on valittu luku, ei tutkimustulos.');
+      }
+
+      // ===== SYÖTTIKALAPARVI =====
+      // Kokeneiden uistelijoiden VAHVIN konsensus koko mallissa: aja saaliskalaparven
+      // YLÄPUOLELLA tai sen tasolla, ei alapuolella. Perustelu on näkösuunnassa —
+      // petokala katsoo ylös ja näkee saaliin vasten valoisaa pintaa, mutta alaspäin
+      // katsottaessa saalis katoaa tummaa pohjaa vasten.
+      //
+      // Tämä tieto oli jo vastauksissa mutta viehevalinta ei käyttänyt sitä.
+      {
+        const sy = (P.syotti !== null) ? P.syotti : P.syottiArvio;
+        const havainto = (P.syotti !== null);
+        if (sy !== null && sy !== undefined) {
+          if (d > sy + 0.5) {
+            huomiot.push(`Syöttikalaparvi on ${vvNro(sy)} m:ssä${havainto ? '' : ' (mallin arvio)'}, `
+              + `mutta ajat ${vvNro(d)} m:ssä eli sen ALApuolella. `
+              + `Kokeneet ovat tästä yhtä mieltä: petokala katsoo ylös. `
+              + `Nosta ${vvNro(sy)} m:iin tai ylemmäs.`);
+          } else if (Math.abs(d - sy) <= 0.5) {
+            perustelut.push([havainto ? 'oma' : 'arvio',
+              `Olet syöttikalaparven tasolla (${vvNro(sy)} m)${havainto ? ', oma havaintosi' : ', mallin arvio'}. `
+              + 'Se on kokemustiedon mukaan oikea paikka.']);
+          } else {
+            perustelut.push([havainto ? 'oma' : 'arvio',
+              `Ajat syöttikalaparven yläpuolella (parvi ${vvNro(sy)} m)${havainto ? '' : ', mallin arvio'}. `
+              + 'Kokemustiedon mukaan oikea suunta.']);
+          }
+        }
+      }
+
+      // ===== TERMOKLIINI =====
+      // Fysikaalinen rajoite, ei kokemustietoa: alusvesi on lämpimänä kautena
+      // vähähappista, eikä lohikala viihdy siellä pitkään vaikka lämpötila
+      // houkuttelisi. Kerrotaan vain kun se on mitattu — arvausta ei tehdä.
+      if (P.termokliini !== null && d > P.termokliini + 0.5 && lohikala) {
+        huomiot.push(`Termokliini on ${vvNro(P.termokliini)} m:ssä ja ajat sen alapuolella. `
+          + 'Alusvesi on lämpimänä kautena vähähappista — kala voi käydä siellä, '
+          + 'mutta ei viivy. Harkitse harppauskerroksen yläpuolta.');
+      }
+
+      // ===== YKSI NOPEUSAUKTORITEETTI =====
+      // Sovelluksessa oli kolme kilpailevaa nopeuslukua: käsin asetetut
+      // hälytysrajat, kalustovinkin kiinteä 3,5 km/h ja tämä laskettu haarukka.
+      // Ne eivät tienneet toisistaan, ja veneessä se tarkoitti kolmea eri totuutta.
+      //
+      // Ratkaisu: TÄMÄ on auktoriteetti, koska vain tässä yhdistyvät laji, viehe ja
+      // esitystapa. Hälytysrajat eivät muutu automaattisesti — se olisi vaarallista,
+      // koska rajat ovat turvatoiminto — mutta ristiriita näytetään ja rajat voi
+      // asettaa yhdellä napautuksella.
+      // (Laskenta on alempana; tämä lohko vain merkitsee paikan.)
+
+      // Talteen saaliskirjauksen esitäyttöä varten.
+      for (const k of Object.keys(VV_VIEHEET)) {
+        if (VV_VIEHEET[k] === viehe) { vvViimeisinViehe = k; break; }
+      }
+
+      // Nopeuden rajaus: laji × viehe × esitystapa. Jos haarukat eivät leikkaa,
+      // se kerrotaan eikä keksitä hätävaraa.
+      const raja = [Math.max(lajiMin, viehe.min, T.nopeus[0]), Math.min(lajiMax, viehe.max, T.nopeus[1])];
+      let nopeusTeksti;
+      if (raja[0] >= raja[1]) {
+        nopeusTeksti = 'ristiriita';
+        huomiot.push(`Kattaus on ristiriitainen: ${VV_LAJI[kala].nimi.toLowerCase()} haluaa ${vvNro(lajiMin)}–${vvNro(lajiMax)}, `
+          + `${viehe.nimi} sallii ${vvNro(viehe.min)}–${vvNro(viehe.max)} ja ${T.nimi.toLowerCase()} ${vvNro(T.nopeus[0])}–${vvNro(T.nopeus[1])} km/h. `
+          + 'Nämä eivät leikkaa — vaihda esitystapaa tai hyväksy että joku niistä ylitetään.');
+        nMin = raja[1]; nMax = raja[0];
+      } else {
+        nMin = vvPyoristaNopeus(raja[0]); nMax = vvPyoristaNopeus(raja[1]);
+        nopeusTeksti = `${vvNro(nMin)}–${vvNro(nMax)} km/h`;
+      }
+      const suositeltuKmh = (raja[0] < raja[1]) ? (nMin + nMax) / 2 : 4.0;
+
+      // Esitystapakohtainen asetusrivi — Dipsy vasta nyt, kun nopeus on tiedossa.
+      if (vvTila.tapa === 'downrigger') {
+        asetusrivi = `Paino ${vvNro(d)} m, viehe 2–4 m sen takana`;
+      } else if (vvTila.tapa === 'dipsy') {
+        dipsyTiedot = vvDipsySiima(d, suositeltuKmh);
+        if (dipsyTiedot) {
+          asetusrivi = `Asetus ${dipsyTiedot.asetus} · ${dipsyTiedot.ft} ft siimaa`;
+          perustelut.push([dipsyTiedot.kalibroitu ? 'oma' : 'arvio',
+            dipsyTiedot.kalibroitu
+              ? `Siimapituus omasta kalibroinnistasi, ${vvNro(dipsyTiedot.dia, 2)} mm siimalla ja ${vvNro(dipsyTiedot.kmh)} km/h nopeudella.`
+              : `Siimapituus syvyyslaskurin kalibroimattomasta arviomallista, ${vvNro(dipsyTiedot.kmh)} km/h nopeudelle. Pyöristetty 5 jalkaan, koska tarkempi luku olisi harhaanjohtava. Kalibroi pohjakosketuksella.`]);
         } else { asetusrivi = 'Laske siimapituus syvyyslaskurista'; }
       } else {
-        if (d <= 0.8) {
-          viehe = (kala === 'jarvilohi') ? VV_VIEHEET.pintataimen13 : VV_VIEHEET.pintapro10;
-          perustelut.push(['valm', 'Pintamallien ilmoitettu uintisyvyys n. 0,5 m osuu kohdesyvyyteen suoraan.']);
-          if (kala === 'jarvilohi') perustelut.push(['valm', 'Pinta Taimen kestää 6,0 km/h, PintaPron suositus loppuu 5,0 km/h:iin.']);
-        } else {
-          viehe = isoKoko ? VV_VIEHEET.taimen13 : VV_VIEHEET.taimen10;
-          perustelut.push(['valm', 'Taimen-mallin ilmoitettu uintisyvyys n. 1,5 m kattaa tämän vyöhykkeen.']);
+        const us = vieheUintisyvyys(viehe, vvSiimaM);
+        asetusrivi = `${vvSiimaM} m siimaa → n. ${vvNro(us.m)} m`;
+        if (us.tapa === 'laskettu') {
+          perustelut.push([us.kalibroitu ? 'oma' : 'arvio', us.kalibroitu
+            ? `Uintisyvyys omasta kalibroinnistasi (tau ${vvNro(us.tau)} m).`
+            : `Uintisyvyys laskettu: syvyys lähestyy ilmoitettua ${vvNro(us.smax)} m:ä siimaa `
+              + `päästettäessä. Valmistaja EI julkaise tätä käyrää — muoto on fysiikasta, `
+              + `mutta jyrkkyys on oletus. Kalibroi mittaamalla, niin luvusta tulee sinun.`]);
         }
-        asetusrivi = `Vieheen oma uinti, n. ${vvNro(viehe.syvyys)} m`;
       }
 
       // Yltääkö valittu tapa
@@ -2375,32 +2751,54 @@
           : `${T.nimi} on tähän liian järeä — kala on ${vvNro(d)} m:ssä. Kevyempi tapa: ${nimet || 'plaanari'}.`);
       }
 
-      // Nopeus: laji × viehe × esitystapa
-      let nMin = VV_LAJI[kala].nopeus[0], nMax = VV_LAJI[kala].nopeus[1];
-      if (t !== null && t < 6) { nMin -= 0.5; nMax -= 0.5; perustelut.push(['arvio', 'Alle 6 °C vedessä hidastettu veto on yleensä tuottavampi.']); }
-      if (t !== null && t > 16 && kala !== 'kuha') { nMin += 0.3; nMax += 0.3; }
-      nMin = Math.max(nMin, viehe.min, T.nopeus[0]);
-      nMax = Math.min(nMax, viehe.max, T.nopeus[1]);
-      if (nMin >= nMax) nMin = Math.max(Math.min(viehe.min, T.nopeus[0]), nMax - 0.5);
-      if (P.nopeus !== null && P.nopeus > 1.0) {
+      // ISKUVYÖHYKE: sovelluksen oma järvikohtainen tieto. Lohikala nousee vieheeseen,
+      // joten vieheen ei tarvitse olla kalan tasolla. Tämä on lisätieto, ei ohitus.
+      if (P.iskuvyohyke && lohikala && d >= P.iskuvyohyke.min && d <= P.iskuvyohyke.max && (vvTila.tapa === 'dipsy' || vvTila.tapa === 'downrigger')) {
+        perustelut.push(['oma', `Tämän järven iskuvyöhyke on ${P.iskuvyohyke.min}–${P.iskuvyohyke.max} m ja lohikala nousee vieheeseen. `
+          + `Pintakattaus plaanarilla on tässä syvyydessä varteenotettava vaihtoehto, vaikka kalat näkyvät ${vvNro(d)} m:ssä.`]);
+      }
+
+      if (P.nopeus !== null && P.nopeus > 1.0 && raja[0] < raja[1]) {
         if (P.nopeus < nMin) huomiot.push(`Ajat nyt ${vvNro(P.nopeus)} km/h — suositus alkaa ${vvNro(nMin)} km/h:sta.`);
         else if (P.nopeus > nMax) huomiot.push(`Ajat nyt ${vvNro(P.nopeus)} km/h — tälle kattaukselle yläraja on ${vvNro(nMax)} km/h.`);
       }
 
-      const V = vvValitseVarit(P.secchi, P.valo, kala);
+      // Hälytysrajat vs. tämä suositus. Kerrotaan ristiriita, ei korjata itse:
+      // rajat ovat turvatoiminto, eikä työkalu saa muuttaa niitä käyttäjän selän takana.
+      vvViimeisinHaarukka = (raja[0] < raja[1]) ? [nMin, nMax] : null;
+      if (vvViimeisinHaarukka) {
+        const hMin = parseFloat((document.getElementById('minSpeedLimit') || {}).value);
+        const hMax = parseFloat((document.getElementById('maxSpeedLimit') || {}).value);
+        if (isFinite(hMin) && isFinite(hMax)
+            && (Math.abs(hMin - nMin) > 0.4 || Math.abs(hMax - nMax) > 0.4)) {
+          huomiot.push(`Nopeushälytys on nyt ${vvNro(hMin)}–${vvNro(hMax)} km/h, `
+            + `mutta tälle kattaukselle suositus on ${vvNro(nMin)}–${vvNro(nMax)}. `
+            + `Aseta napista, tai jätä ennalleen jos rajasi ovat tarkoituksella eri.`);
+        }
+      }
+
+      // Syvyys mukaan: väri riippuu siitä paljonko valoa siellä oikeasti on,
+      // ei vain siitä miltä pinta näyttää.
+      const V = vvValitseVarit(P.secchi, P.valo, kala, d);
       perustelut.push(['arvio', V.syy]);
       if (P.vesiC === null) huomiot.push('Pintaveden lämpötila puuttuu, joten koko- ja nopeussäätö perustuu pelkkään lajiin. Täytä lämpötila kyselyssä.');
-      if (kala === 'taimen') huomiot.push('Taimenen alamitta 50 cm.');
+      if (kala === 'taimen') alaviitteet.push('Taimenen alamitta 50 cm.');
 
-      const lahdeNimi = { valm: 'valmistaja', oma: 'oma kalibrointi', arvio: 'päättely' };
+      const lahdeNimi = { valm: 'valmistaja', oma: 'oma data', arvio: 'päättely' };
       document.getElementById('vvTulos').innerHTML = `
         <div style="border:1px solid var(--amber); border-radius:12px; padding:14px;">
           <div style="font-family:'Barlow Condensed',sans-serif; font-size:26px; font-weight:700; color:var(--text); line-height:1.15;">${viehe.nimi}</div>
           <div style="font-size:12px; color:var(--muted); margin-top:4px;">Ilmoitettu uintisyvyys n. ${vvNro(viehe.syvyys)} m · ${vvNro(viehe.min)}–${vvNro(viehe.max)} km/h</div>
           <div style="display:flex; justify-content:space-between; gap:10px; padding:10px 0; border-top:1px solid var(--line); margin-top:12px;">
             <span style="color:var(--muted); font-size:13px;">Vetonopeus nyt</span>
-            <span style="font-family:'JetBrains Mono',monospace; font-weight:700; color:var(--cyan);">${vvNro(nMin)}–${vvNro(nMax)} km/h</span>
+            <span style="font-family:'JetBrains Mono',monospace; font-weight:700; color:${nopeusTeksti === 'ristiriita' ? 'var(--hard-red)' : 'var(--cyan)'};">${nopeusTeksti}</span>
           </div>
+          ${vvViimeisinHaarukka ? `<div style="padding:0 0 10px;">
+            <span class="chip" onclick="vvAsetaHalytysrajat()" style="padding:6px 12px; font-size:13px; border-color:var(--cyan); color:var(--cyan);">
+              Aseta nopeushälytys näihin
+            </span>
+            <span class="hint" id="vvHalytysTila" style="margin-left:8px;"></span>
+          </div>` : ''}
           <div style="display:flex; justify-content:space-between; gap:10px; padding:10px 0; border-top:1px solid var(--line);">
             <span style="color:var(--muted); font-size:13px;">${T.asettaa}</span>
             <span style="text-align:right; font-size:14px;">${asetusrivi}</span>
@@ -2414,10 +2812,12 @@
             ${perustelut.map(p => `<li style="margin-bottom:5px;"><span style="font-size:11px; color:var(--olive);">[${lahdeNimi[p[0]]}]</span> ${p[1]}</li>`).join('')}
           </ul>
           ${huomiot.length ? `<div style="margin-top:12px; padding:10px; border:1px solid var(--amber); border-radius:10px; color:var(--amber); font-size:13px;">${huomiot.map(h => `<div style="margin-bottom:4px;">${h}</div>`).join('')}</div>` : ''}
+          ${alaviitteet.length ? `<div style="margin-top:10px; font-size:12px; color:var(--muted);">${alaviitteet.join(' · ')}</div>` : ''}
         </div>`;
     }
 
     function avaaViehevalinta() {
+      lataaViehekalibrointi();
       const ov = document.getElementById('viehevalintaOverlay');
       if (!ov) return;
       ov.style.display = 'flex';
@@ -2772,6 +3172,12 @@
         (snap.nopeusKmh !== null ? ' · ' + snap.nopeusKmh.toFixed(1) + ' km/h' : '');
       document.getElementById('kalaTaydennaBox').style.display = 'block';
       renderKalaLajit();
+      // Esitäyttö viehevalinnasta: jos suositus on juuri katsottu, se on
+      // todennäköisin viehe vedessä. Käyttäjä voi vaihtaa yhdellä napautuksella.
+      if (saalisViehe === null && typeof vvViimeisinViehe === 'string') {
+        saalisViehe = vvViimeisinViehe;
+      }
+      renderSaalisVieheet();
       // Esitäytetään syvyysarvio mallin ennusteella — helpompi korjata kuin kirjoittaa.
       const el = document.getElementById('kalaSyvyys');
       if (el && !el.value && snap.ennusteTaimen !== null) el.value = snap.ennusteTaimen.toFixed(1);
@@ -2794,6 +3200,22 @@
       });
     }
 
+    // Viehevalinnan mallit valintalistaksi, plus "muu" käsin kirjattavaa varten.
+    let saalisViehe = null;
+
+    function renderSaalisVieheet() {
+      const el = document.getElementById('opts-saalisViehe');
+      if (!el) return;
+      const avaimet = (typeof VV_VIEHEET === 'object') ? Object.keys(VV_VIEHEET) : [];
+      const rivit = avaimet.map(k => [k, VV_VIEHEET[k].nimi.replace('HK Varma ', '')]);
+      rivit.push(['muu', 'Muu / ei tiedossa']);
+      el.innerHTML = rivit.map(([k, nimi]) =>
+        `<div class="opt${saalisViehe === k ? ' selected' : ''}" onclick="valitseSaalisViehe('${k}')">${nimi}</div>`
+      ).join('');
+    }
+
+    function valitseSaalisViehe(k) { saalisViehe = k; renderSaalisVieheet(); }
+
     function tallennaSaalis() {
       if (!keskenerainenSaalis) return;
       keskenerainenSaalis.laji = kalaLaji;
@@ -2801,6 +3223,18 @@
       const s = parseFloat((document.getElementById('kalaSyvyys') || {}).value);
       keskenerainenSaalis.pituusCm = isNaN(p) ? null : p;
       keskenerainenSaalis.syvyysM = isNaN(s) ? null : s;
+
+      // Viehe ja väri. Tyhjä kenttä tallentuu nulliksi eikä tyhjänä merkkijonona,
+      // jotta CSV:ssä erottuu "ei kirjattu" ja "kirjattu tyhjäksi".
+      const v = (saalisViehe && saalisViehe !== 'muu' && typeof VV_VIEHEET === 'object')
+        ? VV_VIEHEET[saalisViehe] : null;
+      keskenerainenSaalis.viehe = v ? v.nimi : (saalisViehe === 'muu' ? 'muu' : null);
+      keskenerainenSaalis.viehesyvyysM = v ? v.syvyys : null;
+      const variEl = document.getElementById('kalaVari');
+      const variTeksti = variEl ? variEl.value.trim() : '';
+      keskenerainenSaalis.vari = variTeksti || null;
+      keskenerainenSaalis.esitystapa = (typeof vvTila === 'object' && vvTila && vvTila.tapa)
+        ? (VV_TAVAT[vvTila.tapa] ? VV_TAVAT[vvTila.tapa].nimi : vvTila.tapa) : null;
 
       const lista = lataaSaaliit();
       lista.push(keskenerainenSaalis);
@@ -2814,6 +3248,9 @@
       document.getElementById('kalaTaydennaBox').style.display = 'none';
       document.getElementById('kalaPituus').value = '';
       document.getElementById('kalaSyvyys').value = '';
+      // Väri ja viehe EI tyhjennetä: seuraava kala tulee useimmiten samalla
+      // kattauksella, ja uudelleen näpyttely veneessä on juuri se este joka
+      // saa kirjaamisen jäämään väliin.
       paivitaSaalisLista();
     }
 
@@ -2837,24 +3274,28 @@
         const d = new Date(s.aika);
         const pvm = d.toLocaleDateString('fi-FI', {day:'numeric',month:'numeric'}) + ' ' + d.toLocaleTimeString('fi-FI', {hour:'2-digit',minute:'2-digit'});
         if (s.nollareissu) {
-          return `<div style="padding:6px 0;border-bottom:1px solid rgba(30,51,80,0.5);font-size:13px;color:var(--muted);">${pvm} — nollareissu${s.vesiC !== null ? ' · vesi ' + s.vesiC.toFixed(1) + ' °C' : ''}</div>`;
+          return `<div style="padding:6px 0;border-bottom:1px solid rgba(30,51,80,0.5);font-size:13px;color:var(--muted);">${pvm} — nollareissu${typeof s.vesiC === 'number' ? ' · vesi ' + s.vesiC.toFixed(1) + ' °C' : ''}</div>`;
         }
         const ennuste = s.laji === 'jarvilohi' ? s.ennusteJarvilohi : (s.laji === 'kuha' ? s.ennusteKuha : s.ennusteTaimen);
         let osuma = '';
-        if (s.syvyysM !== null && ennuste !== null && ennuste !== undefined) {
+        // KORJATTU 5.9.2026: aiemmin tarkistettiin vain !== null, jolloin puuttuva
+        // (undefined) kenttä läpäisi tarkistuksen ja kaatoi koko listan renderöinnin.
+        // Yksi vaillinainen kirjaus olisi vienyt mukanaan kaikki muutkin.
+        if (typeof s.syvyysM === 'number' && typeof ennuste === 'number') {
           const ero = s.syvyysM - ennuste;
           osuma = ` <span style="color:${Math.abs(ero) <= 1.5 ? 'var(--cyan)' : 'var(--amber)'};">(malli ${ennuste.toFixed(1)} m, ero ${ero >= 0 ? '+' : ''}${ero.toFixed(1)})</span>`;
         }
         return `<div style="padding:6px 0;border-bottom:1px solid rgba(30,51,80,0.5);font-size:13px;">
-          <strong style="color:var(--text);">${pvm} · ${s.laji || '?'}</strong>${s.pituusCm ? ' ' + s.pituusCm + ' cm' : ''}${s.syvyysM !== null ? ' · ' + s.syvyysM.toFixed(1) + ' m' : ''}${osuma}
-          <br><span style="color:var(--muted);">${s.vesiC !== null ? 'vesi ' + s.vesiC.toFixed(1) + ' °C · ' : ''}${s.tuuliMs !== null ? 'tuuli ' + s.tuuliMs.toFixed(1) + ' m/s · ' : ''}${s.taimenkeli !== null && s.taimenkeli !== undefined ? 'taimenkeli ' + s.taimenkeli + ' %' : ''}</span>
+          <strong style="color:var(--text);">${pvm} · ${s.laji || '?'}</strong>${s.pituusCm ? ' ' + s.pituusCm + ' cm' : ''}${typeof s.syvyysM === 'number' ? ' · ' + s.syvyysM.toFixed(1) + ' m' : ''}${osuma}
+          ${s.viehe ? `<br><span style="color:var(--amber);">${s.viehe}${s.vari ? ' · ' + s.vari : ''}${s.esitystapa ? ' · ' + s.esitystapa : ''}</span>` : ''}
+          <br><span style="color:var(--muted);">${typeof s.vesiC === 'number' ? 'vesi ' + s.vesiC.toFixed(1) + ' °C · ' : ''}${typeof s.tuuliMs === 'number' ? 'tuuli ' + s.tuuliMs.toFixed(1) + ' m/s · ' : ''}${s.taimenkeli !== null && s.taimenkeli !== undefined ? 'taimenkeli ' + s.taimenkeli + ' %' : ''}</span>
         </div>`;
       }).join('');
     }
 
     // Muodostaa CSV:n kaikista kirjauksista. Yhteinen sekä automaattiselle
     // tiedostovarmuuskopiolle että käsin tehtävälle viennille.
-    const SAALIS_KENTAT = ['aika','nollareissu','paikka','lat','lon','laji','pituusCm','syvyysM','ennusteTaimen','ennusteJarvilohi','ennusteKuha','ennusteMuikku','taimenkeli','vesiC','vesiLahde','vedenkorkeusCm','nopeusKmh','ilmaC','tuuliMs','tuuliSuunta','pilvisyysPros','paineHpa','painetrendi','kausi','kirkkaus','termokliini','tuuliLuokka','valo','pohja','tuulenPuoli','kattaus'];
+    const SAALIS_KENTAT = ['aika','nollareissu','paikka','lat','lon','laji','pituusCm','syvyysM','ennusteTaimen','ennusteJarvilohi','ennusteKuha','ennusteMuikku','taimenkeli','vesiC','vesiLahde','vedenkorkeusCm','nopeusKmh','ilmaC','tuuliMs','tuuliSuunta','pilvisyysPros','paineHpa','painetrendi','kausi','kirkkaus','termokliini','tuuliLuokka','valo','pohja','tuulenPuoli','kattaus','viehe','vari','viehesyvyysM','esitystapa'];
 
     function saaliitCsv(lista) {
       return [SAALIS_KENTAT.join(';')].concat(
@@ -4331,7 +4772,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v50';
+    const APP_VERSIO = 'v56';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -7483,7 +7924,11 @@
       }
       if (setupArr.includes('flasher')) {
         gearDepthBias += 1.0;
-        gearTips.push("6-tuumainen VK-Salmon: Vaatii riittävän vetonopeuden (yli 3.5 km/h) pyöriäkseen oikein. Tekee laajan houkutusympyrän.");
+        // MUUTETTU 5.9.2026: aiemmin tässä oli kiinteä 3,5 km/h, joka kilpaili
+        // viehevalinnan lasketun haarukan kanssa. Nyt viitataan siihen eikä anneta
+        // neljättä lukua — yksi nopeusauktoriteetti.
+        gearTips.push("6-tuumainen VK-Salmon: Vaatii riittävän vetonopeuden pyöriäkseen oikein — "
+          + "tarkista haarukka viehevalinnasta. Tekee laajan houkutusympyrän.");
       }
       if (setupArr.includes('bare') || setupArr.length === 0) {
         gearTips.push("Puhdas pelti (Tintti Tane / Järväri, Iitin Pikku Tiltu) tai vaappu (HK Varma Taimen Pro / Pinta Pro, Iitin 9 cm): Reagoi herkästi nopeuden muutoksiin. Sisäkaarteen puolella vajoaa, ulkokaarteessa nousee.");
@@ -8434,7 +8879,41 @@
           <span id="vvSyvyysArvo" style="font-family:'JetBrains Mono',monospace; font-size:20px; color:var(--text); min-width:4.5em; text-align:right;">1.2 m</span>
         </div>
       </div>
+      <!-- SIIMAPITUUS — näkyy vain vapaasti uivilla tavoilla, koska Dipsyllä ja
+           downriggerilla siima ei määrää vieheen syvyyttä. -->
+      <div id="vvSiimaRivi" style="margin-bottom:14px; display:none;">
+        <div style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">Siimaa ulkona</div>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <input type="range" id="vvSiima" min="5" max="80" step="5" value="30"
+                 oninput="vvAsetaSiima(this.value)" style="flex:1;">
+          <span id="vvSiimaArvo" style="font-family:'JetBrains Mono',monospace; font-size:20px; color:var(--text); min-width:4.5em; text-align:right;">30 m</span>
+        </div>
+      </div>
       <div id="vvTulos"></div>
+
+      <!-- KALIBROINTI: mitattu voittaa mallin. Sama periaate kuin Dipsyllä. -->
+      <details style="margin-top:14px; border-top:1px solid var(--line); padding-top:12px;">
+        <summary style="cursor:pointer; list-style:none; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em;">
+          ▸ Kalibroi uintisyvyys
+        </summary>
+        <p class="hint" style="margin:8px 0;">
+          Aja viehe pohjaan tunnetulla siimapituudella tai lue syvyys luotaimesta.
+          Yksi mittaus riittää — se korvaa oletuskäyrän kokonaan.
+        </p>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end;">
+          <div>
+            <label style="display:block;color:var(--muted);font-size:13px;">Siimaa (m)</label>
+            <input type="number" id="vvKalSiima" step="1" placeholder="30" style="width:88px;">
+          </div>
+          <div>
+            <label style="display:block;color:var(--muted);font-size:13px;">Mitattu syvyys (m)</label>
+            <input type="number" id="vvKalSyvyys" step="0.1" placeholder="1.2" style="width:110px;">
+          </div>
+          <button class="chip" onclick="vvKalibroi()" style="border-color:var(--cyan); color:var(--cyan);">Tallenna</button>
+          <button class="chip" onclick="vvNollaaKalibrointi()" style="border-color:var(--muted); color:var(--muted);">Nollaa</button>
+        </div>
+        <p class="hint" id="vvKalTila" style="margin-top:8px;"></p>
+      </details>
     </div>
   </div>
 
