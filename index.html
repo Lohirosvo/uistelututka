@@ -2276,6 +2276,73 @@
       muikku: [['Hilemuikku','hopeahile'],['Kulta Muikku','kultahologrammi'],['Pinkkiposki Muikku','tinapaperi']]
     };
 
+    // ===== PINTA — lisätty 9.9.2026 =====
+    // PUUTE JOKA KORJATTIIN: pinta oli tallessa jokaisen värin kohdalla
+    // (kromi, hile, hologrammi, tinapaperi, maali) ja se myös näytettiin,
+    // mutta se ei vaikuttanut valintaan mitenkään. Se oli tarra, ei tekijä.
+    // Pinta on kuitenkin juuri se ominaisuus, jota valolaskenta osaa käsitellä:
+    // väri kertoo mitkä aallonpituudet heijastuvat, pinta kertoo MIHIN SUUNTAAN.
+    //
+    // Kolme luokkaa, ja ne käyttäytyvät fysikaalisesti eri tavalla:
+    //   PEILI    (kromi, tinapaperi) heijastaa suunnattuna. Kirkkaassa suorassa
+    //            valossa se välähtää kauas. Hajavalossa ja pimeässä peili
+    //            heijastaa taustan kirkkauden eli katoaa — juuri siksi oikeat
+    //            särkikalat ovat hopeisia, se on naamiointia eikä näkyvyyttä.
+    //   HAJOTIN  (hile, hologrammi) sirottaa valon moneen suuntaan, joten se
+    //            toimii laajemmalla valokulmalla. Hologrammi lisäksi hajottaa
+    //            spektrin, joten se palauttaa jotain näkyvää silloinkin kun
+    //            jäljellä on enää kapea kaista — humusveden tapaus.
+    //   MATTA    (maali) ei välkähdä lainkaan. Kun valoa ei ole, jäljellä on
+    //            vain siluetti, ja silloin matta tumma on paras.
+    //
+    // TÄMÄ ON PÄÄTTELYÄ, EI VALMISTAJAN TIETOA. HK Varma jäsentää värinsä
+    // pinnan mukaan mutta ei kerro mitä pintaa käyttää milloinkin. Heijastuksen
+    // fysiikka on kovaa, se mikä pinta pyytää ei ole mitattu.
+    const VV_PINTALUOKKA = {
+      kromi: 'peili', tinapaperi: 'peili',
+      hile: 'hajotin', hopeahile: 'hajotin', kultahile: 'hajotin',
+      hologrammi: 'hajotin', kultahologrammi: 'hajotin',
+      maali: 'matta', 'UV-pisteillä': 'matta'
+    };
+    const VV_PINTANIMI = { peili: 'peilipinta (kromi, tinapaperi)',
+                           hajotin: 'hajottava pinta (hile, hologrammi)',
+                           matta: 'matta pinta (maali)' };
+
+    // Onko valo suunnattua vai hajavaloa. Peili tarvitsee suunnatun valon
+    // välähtääkseen; pilvipeite muuttaa taivaan tasaiseksi valolaatikoksi,
+    // jolloin peilistä ei tule välähdystä vaan tasainen harmaa.
+    function vvValonSuunta() {
+      try {
+        const nyt = new Date();
+        const doy = Math.floor((nyt - new Date(nyt.getFullYear(), 0, 0)) / 86400000);
+        const tz = -nyt.getTimezoneOffset() / 60;
+        const kork = auringonKorkeus(nyt.getHours() + nyt.getMinutes() / 60, doy,
+                                     currentLocation.lat, currentLocation.lon, tz);
+        const pilvi = (omLatest && omLatest.cloud != null) ? omLatest.cloud : 40;
+        return { suora: (kork > 10 && pilvi < 40), korkeus: kork, pilvi: pilvi };
+      } catch (e) { return { suora: false, korkeus: null, pilvi: null }; }
+    }
+
+    // Pintasuositus valon määrästä ja laadusta. Palauttaa luokan ja perustelun.
+    function vvPintaSuositus(lx, secchi) {
+      const vs = vvValonSuunta();
+      if (lx !== null && lx < 1)
+        return { luokka: 'matta',
+                 syy: 'Peilipinta tarvitsee valoa heijastaakseen. Tällä syvyydellä sitä ei ole, '
+                    + 'joten kromi näyttää samalta kuin tausta — matta ja tumma antaa siluetin.' };
+      if (vs.suora)
+        return { luokka: 'peili',
+                 syy: `Aurinko on ${Math.round(vs.korkeus)}° ja pilvisyys ${Math.round(vs.pilvi)} % eli valo tulee suunnattuna. `
+                    + 'Peilipinta välähtää siinä kauimmas.' };
+      if (secchi < 2.6)
+        return { luokka: 'hajotin',
+                 syy: 'Humusvedessä jäljellä on kapea kaista valoa ja se tulee hajavalona. '
+                    + 'Hologrammi ja hile palauttavat siitä jotain näkyvää, peili ei.' };
+      return { luokka: 'hajotin',
+               syy: (vs.pilvi !== null ? `Pilvisyys ${Math.round(vs.pilvi)} % eli valo on hajavaloa. ` : 'Valo on hajavaloa. ')
+                  + 'Hajottava pinta toimii laajemmalla kulmalla kuin peili.' };
+    }
+
     const VV_LAJI = {
       taimen:    { nimi: 'Taimen',    nopeus: [3.5, 5.5] },
       jarvilohi: { nimi: 'Järvilohi', nopeus: [4.0, 6.0] },
@@ -2497,9 +2564,24 @@
       }
       let lista = VV_VARIT[ryhma].slice();
       if (kala === 'jarvilohi' && ryhma !== 'rajut') { lista = VV_VARIT.muikku.concat(lista); syy += ' Järvilohelle painotetaan muikkukuoseja.'; }
+
+      // PINTA JÄRJESTÄÄ LISTAN. Väriryhmä päätetään ensin — se on aallonpituus-
+      // kysymys. Pinta ei vaihda ryhmää vaan nostaa ryhmän sisältä ne mallit,
+      // joiden pinta sopii vallitsevaan valoon. Näin pinta vaikuttaa, muttei
+      // ohita värin perustelua.
+      const pinta = vvPintaSuositus(lx, secchi);
+      lista = lista.slice().sort((a, b) => {
+        const pa = VV_PINTALUOKKA[a[1]] === pinta.luokka ? 0 : 1;
+        const pb = VV_PINTALUOKKA[b[1]] === pinta.luokka ? 0 : 1;
+        return pa - pb;
+      });
+      const onSopivaa = lista.some(v => VV_PINTALUOKKA[v[1]] === pinta.luokka);
+      syy += ' PINTA: ' + pinta.syy
+           + (onSopivaa ? ` Suositeltu ${VV_PINTANIMI[pinta.luokka]} on nostettu listan kärkeen.`
+                        : ` Tässä väriryhmässä ei kuitenkaan ole ${VV_PINTANIMI[pinta.luokka]} — järjestys on siis pelkän värin mukaan.`);
       const nahty = {}, ulos = [];
       for (const v of lista) { if (nahty[v[0]]) continue; nahty[v[0]] = 1; ulos.push(v); if (ulos.length === 3) break; }
-      return { varit: ulos, syy: syy };
+      return { varit: ulos, syy: syy, pinta: pinta.luokka };
     }
 
     function vvChip(teksti, aktiivinen, onclick) {
@@ -2804,7 +2886,8 @@
             <span style="text-align:right; font-size:14px;">${asetusrivi}</span>
           </div>
           <div style="margin-top:12px; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em;">Värit</div>
-          ${V.varit.map(v => `<div style="padding:7px 0; border-bottom:1px dotted var(--line);"><b style="color:var(--text);">${v[0]}</b> <span style="color:var(--muted); font-size:13px;">${v[1]}</span></div>`).join('')}
+          ${V.varit.map(v => { const sopii = VV_PINTALUOKKA[v[1]] === V.pinta;
+            return `<div style="padding:7px 0; border-bottom:1px dotted var(--line);"><b style="color:var(--text);">${v[0]}</b> <span style="color:${sopii ? 'var(--amber)' : 'var(--muted)'}; font-size:13px;">${v[1]}${sopii ? ' ✓' : ''}</span></div>`; }).join('')}
           <div style="margin-top:12px; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em;">${T.nimi}</div>
           <ul style="margin:6px 0 0; padding-left:18px; font-size:14px;">${T.ohjeet.map(o => `<li style="margin-bottom:4px;">${o}</li>`).join('')}</ul>
           <div style="margin-top:12px; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em;">Miksi</div>
@@ -4840,7 +4923,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v57';
+    const APP_VERSIO = 'v58';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
