@@ -3532,6 +3532,55 @@
       return base * sdLineTypeFactor(lineType) * sdDiameterFactor(dia) * sdSpeedFactor(kmh);
     }
 
+    // ===== DIPSYN SIVUKULMA — lisätty 9.9.2026 =====
+    // PUUTE JOKA KORJATTIIN: malli vei diverin vain alas ja taakse. Oikeasti
+    // Dipsy on kiekko, joka planeeraa myös ULOS SIVULLE — juuri siksi asetukset
+    // 0-3 ovat olemassa. Asetus 0 menee suoraan alas, ja 1-2-3 kääntävät kiekkoa
+    // yhä enemmän sivulle, jolloin syvyys jää pienemmäksi.
+    //
+    // SIVUKULMA EI OLE UUSI VAPAA PARAMETRI. Painolevyn siirto kiertää
+    // planeerauspintaa, joten sama voima vain osoittaa eri suuntaan: pystyosuus
+    // pienenee ja sivuosuus kasvaa. Kulma sisältyy siis jo perussuhteisiin:
+    //
+    //     syvyys(s) proportional cos(phi)  ->  phi = arccos( suhde(0) / suhde(s) )
+    //     0 -> 0°     1 -> 32°     2 -> 43°     3 -> 52°
+    //
+    // KALIBROINTI EI MUUTA KULMAA. sdComputeRatio skaalaa kaikkia asetuksia
+    // samalla kertoimella (settingScale), joten asetusten keskinäinen suhde —
+    // ja siten kulma — pysyy ennallaan. Se on hyvä ja huono: kalibrointi korjaa
+    // syvyyden mutta EI korjaa sitä, että perussuhteet on alun perin viritetty
+    // väärälle diverille. Kulma perii saman epävarmuuden.
+    //
+    // YLLÄPITOSÄÄNTÖ: jos oma havainto sanoo sivupoikkeamasta muuta, korjaa
+    // SD_BASE_RATIO — älä lisää tähän omaa kerrointa, tai syvyys ja sivusuunta
+    // eivät enää tule samasta voimasta.
+    //
+    // SAMA MALLI KUIN TrollingPro v5.4:ssä. Kaksi sovellusta ei saa olla eri
+    // mieltä samasta asiasta.
+    function sdSideAngleRad(setting) {
+      const b  = SD_BASE_RATIO[setting] !== undefined ? SD_BASE_RATIO[setting] : SD_BASE_RATIO[0];
+      const r0 = SD_BASE_RATIO[0];
+      const c  = Math.min(1, Math.max(0, b > 0 ? r0 / b : 1));
+      return Math.acos(c);
+    }
+    function sdSideAngleDeg(setting) { return sdSideAngleRad(setting) * 180 / Math.PI; }
+
+    // Diverin paikka kolmessa ulottuvuudessa. lineOut = siimaa ulkona (m).
+    // Siima on käytännössä suora, joten vaakaetäisyys jakautuu kulman mukaan:
+    //   taakse = vaaka * cos(phi)     sivulle = vaaka * sin(phi)
+    function sdGeometry(lineOut, ratio, setting) {
+      const L = Math.max(0, lineOut);
+      const syvyys = Math.min(L, ratio > 0 ? L / ratio : 0);
+      const vaaka  = Math.sqrt(Math.max(0, L * L - syvyys * syvyys));
+      const phi    = sdSideAngleRad(setting);
+      return {
+        syvyys:  syvyys,
+        taakse:  vaaka * Math.cos(phi),
+        sivulle: vaaka * Math.sin(phi),
+        kulma:   sdSideAngleDeg(setting)
+      };
+    }
+
     // ===== KAKSOISKATTAUS: ULOMPI + SISEMPI DIVER =====
     // Idea peräisin käyttäjän omasta luonnoksesta: yhdellä puolella kaksi diveriä eri
     // asetuksilla ja eri siimalla — ulompi leveämmälle ja matalammalle, sisempi
@@ -3569,6 +3618,13 @@
       const lUlko = matala * rUlko;
       const lSisa = syva * rSisa;
 
+      // LEVITYS LUKUNA — lisätty 9.9.2026. Aiemmin tässä luki vain "leveämmälle".
+      // Nyt sivusiirtymä lasketaan, joten näkee montako metriä eroa asetuksilla
+      // 3 ja 1 oikeasti tulee. Se on koko kaksoiskattauksen idea.
+      const gUlko = sdGeometry(lUlko, rUlko, 3);
+      const gSisa = sdGeometry(lSisa, rSisa, 1);
+      const levitys = gUlko.sivulle - gSisa.sivulle;
+
       const ft = m => Math.round(m * 3.28084);
       const kalib = sdCalibration !== null;
       // Käytännön raja: diver tarvitsee riittävästi siimaa jotta se ehtii sukeltaa ja
@@ -3581,16 +3637,20 @@
             <div style="color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.06em;">Ulompi · asetus 3 · kuitu</div>
             <div style="font-size:26px; font-family:'Barlow Condensed',sans-serif; color:var(--cyan);">${lUlko.toFixed(0)} m</div>
             <div style="font-size:12px; color:var(--muted);">${ft(lUlko)} ft · tavoite ${matala.toFixed(1)} m</div>
+            <div style="font-size:12px; color:var(--muted);">${gUlko.sivulle.toFixed(0)} m sivulle · ${gUlko.taakse.toFixed(0)} m taakse</div>
           </div>
           <div style="background:var(--panel-alt); border-radius:8px; padding:10px;">
             <div style="color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.06em;">Sisempi · asetus 1 · mono</div>
             <div style="font-size:26px; font-family:'Barlow Condensed',sans-serif; color:var(--cyan);">${lSisa.toFixed(0)} m</div>
             <div style="font-size:12px; color:var(--muted);">${ft(lSisa)} ft · tavoite ${syva.toFixed(1)} m</div>
+            <div style="font-size:12px; color:var(--muted);">${gSisa.sivulle.toFixed(0)} m sivulle · ${gSisa.taakse.toFixed(0)} m taakse</div>
           </div>
         </div>
         <p class="hint" style="margin-top:8px;">
           Tavoitesyvyydet tulevat mallista (taimen ${e.taimen.toFixed(1)} m, järvilohi ${e.jarvilohi.toFixed(1)} m), eivät erillisestä lämpötilasäännöstä.
           Nopeus ${isNaN(kmh) ? '—' : kmh.toFixed(1)} km/h vaikuttaa molempiin.
+          Ulompi kulkee <strong>${Math.abs(levitys).toFixed(0)} m</strong> sisempää kauempana sivulla — se on levitys, jonka asetusten ero antaa.
+          Kulmat (0°, 32°, 43°, 52°) johdetaan perussuhteista, eivät ole mittauksia.
           ${kalib
             ? '<span style="color:var(--cyan);">Kalibrointisi on käytössä molemmissa.</span>'
             : '<span style="color:var(--hard-red);">Ei kalibrointia — luvut perustuvat väärälle diverille viritettyihin oletuksiin. Kalibroi ennen kuin luotat näihin.</span>'}
@@ -3612,6 +3672,9 @@
       const ratio = sdComputeRatio(sdSetting, sdLineType, dia, kmh);
       const lineOut = target * ratio;
       sdLastResult = { ratio, lineOut, target, setting: sdSetting, lineType: sdLineType, dia };
+      // Sivusuunta: sama malli kuin TrollingProssa. Syvyys ei muutu, vain se
+      // mihin diver asettuu veneeseen nähden.
+      const geo = sdGeometry(lineOut, ratio, sdSetting);
 
       // Käytännön varoitus: diver tarvitsee riittävästi siimaa toimiakseen lainkaan.
       let practicalWarn = '';
@@ -3634,6 +3697,11 @@
           </div>
           <div style="font-size:13px;color:#BAC9DB;margin-top:6px;">
             Suhde ${ratio.toFixed(2)}:1 (${lahde}) · asetus ${sdSetting} · ${sdLineType === 'kuitu' ? 'kuitu' : 'monofiili'} ${dia.toFixed(2)} mm · ${kmh.toFixed(1)} km/h
+          </div>
+          <div style="font-size:13px;color:#BAC9DB;margin-top:4px;">
+            Missä diver on: <strong>${geo.taakse.toFixed(0)} m</strong> suoraan takana ja
+            <strong>${geo.sivulle.toFixed(0)} m</strong> sivulle (${geo.kulma.toFixed(0)}°).
+            Asetus 0 menee suoraan taakse, isompi asetus yhä kauemmas sivulle ja matalampaan.
           </div>
           ${practicalWarn}
         </div>`;
@@ -4772,7 +4840,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v56';
+    const APP_VERSIO = 'v57';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
