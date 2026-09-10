@@ -5039,7 +5039,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v59';
+    const APP_VERSIO = 'v61';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -5521,19 +5521,14 @@
         const nyt = new Date();
         const doy = Math.floor((nyt - new Date(nyt.getFullYear(), 0, 0)) / 86400000);
         const tz = -nyt.getTimezoneOffset() / 60;
-        const pilvi = (omLatest && omLatest.cloud != null) ? omLatest.cloud : 40;
         // Kaksi muotoa, jotta lauseet taipuvat luontevasti puheessa:
         // "valoa on hyvin vähän" ja "ollaan tasolla kirkas".
         const sanat = ['erittäin pimeää', 'hyvin pimeää', 'hyvin hämärää', 'hämärää',
                        'himmeää', 'kohtalaisesti valoa', 'selvästi valoa', 'runsaasti valoa',
                        'kirkasta', 'häikäisevän kirkasta'];
-        const porras = tunti => {
-          const h = auringonKorkeus(tunti, doy, currentLocation.lat, currentLocation.lon, tz);
-          const lx = pintaLux(h, pilvi);
-          // 0,001 lx = porras 1, 100000 lx = porras 10
-          const p = Math.round((Math.log10(Math.max(0.001, lx)) + 3) / 8 * 9) + 1;
-          return Math.max(1, Math.min(10, p));
-        };
+        // Käyttää yhteistä valoPorras-funktiota, jotta puhe ja tekstit eivät
+        // voi olla eri mieltä valosta.
+        const porras = valoPorras;
         const tNyt = nyt.getHours() + nyt.getMinutes() / 60;
         const pNyt = porras(tNyt);
 
@@ -5753,6 +5748,7 @@
           chip.textContent = o.l;
           chip.onclick = () => {
             answers[q.id] = o.v;
+            if (q.id === 'wind') tuuliLuokkaKasin = true;
             tallennaVastaukset();
             renderPika();
             renderQuestions();   // pidetään alempi lista synkassa
@@ -6055,18 +6051,83 @@
       return Math.asin(s) / VALO_D2R;
     }
 
-    function pintaLux(h, cloudPct) {
+    // PINTAVALO — laajennettu 10.9.2026: pilvi vaikuttaa nyt myös hämärässä,
+    // ja sade on mukana.
+    //
+    // KAKSI VIKAA JOTKA KORJATTIIN:
+    //   1) Pilvipeite vaikutti vain kun aurinko oli yli 3°. Sen alapuolella
+    //      sateinen aamuhämärä luki täsmälleen saman lukeman kuin pilvetön.
+    //   2) Sade ei vaikuttanut lainkaan, vaikka se on juuri se asia jonka
+    //      kalastaja näkee veneestä.
+    //
+    // Hämärässä pilvi vaimentaa VÄHEMMÄN kuin päivällä (kerroin puolitettu):
+    // matalalla auringolla valo on jo valmiiksi hajavaloa taivaankannelta,
+    // eikä pilvi katkaise suoraa sädettä samalla tavalla kuin keskipäivällä.
+    // Sateen kerroin on ARVIO, ei mittaus — pilvipeite kattaa jo suurimman
+    // osan vaikutuksesta, ja tämä on sen päälle tuleva lisävaimennus.
+    function pintaLux(h, cloudPct, sadeMmH) {
+      const pilviKerroin = (cloudPct == null) ? 1
+        : 1 - 0.75 * Math.pow(Math.max(0, Math.min(100, cloudPct)) / 100, 3.4);
+      const sadeKerroin = (sadeMmH > 0) ? 1 - 0.25 * Math.min(1, sadeMmH / 3) : 1;
       if (h > 3) {
-        let ghi = Math.max(0, 910 * Math.sin(h * VALO_D2R) - 30);
-        if (cloudPct != null) {
-          const n = (cloudPct / 100) * 8;
-          ghi *= 1 - 0.75 * Math.pow(n / 8, 3.4);
-        }
-        return ghi * 120;
+        const ghi = Math.max(0, 910 * Math.sin(h * VALO_D2R) - 30) * pilviKerroin;
+        return ghi * 120 * sadeKerroin;
       }
-      if (h >= -6)  return 400 * Math.pow(10, 0.345 * h);
-      if (h >= -12) return 3.4 * Math.pow(10, 0.438 * (h + 6));
-      return Math.max(0.0008, 0.008 * Math.pow(10, 0.1875 * (h + 12)));
+      const hamaraPilvi = 1 - 0.5 * (1 - pilviKerroin);
+      let lx;
+      if (h >= -6)       lx = 400 * Math.pow(10, 0.345 * h);
+      else if (h >= -12) lx = 3.4 * Math.pow(10, 0.438 * (h + 6));
+      else               lx = 0.008 * Math.pow(10, 0.1875 * (h + 12));
+      return Math.max(0.0008, lx * hamaraPilvi * sadeKerroin);
+    }
+
+    // ===== YKSI SÄÄKUVA — lisätty 10.9.2026 =====
+    // Valo laskettiin Open-Meteon pilvestä, tuuliluokka tuli kyselyn vastauksesta,
+    // ja tuulen numero FMI:n havainnosta. Kolme lähdettä, jotka pääsivät eri
+    // mieltä: ruudulla luki "tyyni" samaan aikaan kun mitattu tuuli oli 2,7 m/s.
+    // Nyt kaikki mittaava tieto tulee tästä yhdestä funktiosta.
+    //
+    // PRIORITEETTI: FMI ensin, Open-Meteo varmistuksena.
+    //   tuuli  — FMI:n 10 min havainto (mitattu) > Open-Meteo
+    //   pilvi  — FMI HARMONIE kuluva tunti > Open-Meteo
+    //   sade   — FMI HARMONIE (Precipitation1h); Open-Meteolta ei haeta sadetta
+    // Havainto voittaa ennusteen, ja tuorein voittaa vanhemman.
+    function saaNyt() {
+      const ulos = { tuuli: null, tuuliLahde: null, pilvi: null, pilviLahde: null,
+                     sade: null, sadeLahde: null };
+      if (typeof fmiTuuli === 'object' && fmiTuuli && fmiTuuli.ws != null) {
+        ulos.tuuli = fmiTuuli.ws; ulos.tuuliLahde = 'FMI havainto';
+      } else if (omLatest && omLatest.wind != null) {
+        ulos.tuuli = omLatest.wind; ulos.tuuliLahde = 'Open-Meteo';
+      }
+      if (Array.isArray(fmiEnnuste) && fmiEnnuste.length) {
+        const nyt = Date.now();
+        const rivi = fmiEnnuste.reduce((a2, b2) =>
+          Math.abs(b2.aika - nyt) < Math.abs(a2.aika - nyt) ? b2 : a2);
+        if (rivi) {
+          if (rivi.TotalCloudCover != null) { ulos.pilvi = rivi.TotalCloudCover; ulos.pilviLahde = 'FMI HARMONIE'; }
+          if (rivi.Precipitation1h != null) { ulos.sade = rivi.Precipitation1h; ulos.sadeLahde = 'FMI HARMONIE'; }
+        }
+      }
+      if (ulos.pilvi === null && omLatest && omLatest.cloud != null) {
+        ulos.pilvi = omLatest.cloud; ulos.pilviLahde = 'Open-Meteo';
+      }
+      return ulos;
+    }
+
+    // Valon määrä portaina 1-10 annetulle tunnille. Auringon korkeus, pilvi ja
+    // sade — kaikki mitatusta datasta. TÄMÄ ON SOVELLUKSEN AINOA VALOKÄSITE.
+    // Asteikko on logaritminen, koska sekä ihmisen valohavainto että veden
+    // vaimennus ovat logaritmisia: 0,001 lx = porras 1, 100 000 lx = porras 10.
+    function valoPorras(tunti) {
+      const nyt = new Date();
+      const doy = Math.floor((nyt - new Date(nyt.getFullYear(), 0, 0)) / 86400000);
+      const tz = -nyt.getTimezoneOffset() / 60;
+      const saa = saaNyt();
+      const h = auringonKorkeus(tunti, doy, currentLocation.lat, currentLocation.lon, tz);
+      const lx = pintaLux(h, saa.pilvi != null ? saa.pilvi : 40, saa.sade || 0);
+      const p = Math.round((Math.log10(Math.max(0.001, lx)) + 3) / 8 * 9) + 1;
+      return Math.max(1, Math.min(10, p));
     }
 
     function pinnanLapaisy(h, windMs) {
@@ -7957,6 +8018,24 @@
       if (o4 && o4.children[pi]) o4.children[pi].click();
     }
 
+    // ONKO VALOISAA — korjattu 10.9.2026.
+    // Aiemmin tekstit käyttivät kiinteää ikkunaa targetHour >= 9 && <= 16.
+    // Se antoi kello 7:ltä vastauksen "hämärässä/yöllä", vaikka sovellus samaan
+    // aikaan kertoi valoa olevan 8/10 — kesäkuun aamuseitsemän on Suomessa
+    // täysin valoisa. Auringon korkeus tiedetään jo, joten käytetään sitä.
+    // Raja 5°: sen alapuolella valo on hyvin vaimeaa ja vinossa.
+    function onkoValoisa(hour) {
+      // Sama asteikko kuin puheselostuksessa: valoa on tai ei ole, eikä kahta
+      // eri valokäsitettä pääse syntymään. Porras 6 = "kohtalaisesti valoa",
+      // eli näkösaalistaja näkee. Pelkkä auringon kulma ei riitä rajaksi:
+      // syyskuun aamuseitsemältä aurinko on 2,7° mutta valoa on jo 3000 lx.
+      try {
+        return valoPorras(hour) >= 6;
+      } catch (e) {
+        return hour >= 9 && hour <= 16;   // vanha sääntö varalle
+      }
+    }
+
     function updateLakeStatus(targetHour, thermoVal, activeBaitDepth, dKuha, dHauki, dTaimen, dAhven, dJarvilohi, dKuore) {
       const a = answers;
       const t = latestSykeTemp !== null ? latestSykeTemp : (a.temp || omLatest?.temp || 15);
@@ -7979,7 +8058,7 @@
       }
 
       // Kausikohtainen huomio ahvenen käänteisestä vuorokausirytmistä.
-      const isDayHour = targetHour >= 9 && targetHour <= 16;
+      const isDayHour = onkoValoisa(targetHour);
 
       // Keränen & Lind -syöntiaktiivisuus omana kohtanaan, koska se on ajoituskysymys
       // eikä syvyyskysymys — eri asia kuin muut kohdat.
@@ -8000,7 +8079,7 @@
       
       <h3>2. Biologinen aktiivisuus — syöttikalat</h3>
       <p><strong>Muikku</strong> n. ${activeBaitDepth.toFixed(1)} m — <strong>kuore</strong> n. ${dKuore.toFixed(1)} m.
-      Kuore on kylmähakuisempi (preferenssi 5,5–12 °C) ja hakeutuu päivällä termokliinin tienoille, tyypillisesti 7–15 m.
+      Kuore on kylmähakuisempi (preferenssi 5,5–12 °C).${isNaN(thermoVal) ? ' Termokliinia ei ole annettu, joten sen syvyyttä ei voi tässä käyttää — luku alla tulee valomallista.' : ' Kerrostuneessa vedessä se hakeutuu päivällä termokliinin tienoille, tyypillisesti 7–15 m.'}
       Nousu väliveteen alkaa jo <em>ennen auringonlaskua</em>, ei vasta pimeällä.
       Huomaa: ero muikkuun ei ole yksisuuntainen — päivällä lajit ovat usein samassa kerroksessa, ja
       <em>keskiyöllä kuore on mitattu muikkua ylempänä</em> (Vesijärvi).
@@ -8129,7 +8208,7 @@
       const lowT = Math.max(0.5, dTaimen - havaintoYlos), highT = dTaimen + 0.5;
       const lowJL = Math.max(1.5, dJarvilohi - havaintoYlos), highJL = dJarvilohi + 0.5;
 
-      const isDayHour = targetHour >= 9 && targetHour <= 16;
+      const isDayHour = onkoValoisa(targetHour);
       reasonsAhven.push(`Ahven on päiväaktiivinen näkösaalistaja — käänteinen kuvio muihin lajeihin nähden. ${isDayHour ? `Päivällä se nousee patteille/termokliiniin, n. ${dAhven.toFixed(1)} m.` : `Hämärässä/illalla se painuu pohjaa kohti nukkumaan, n. ${dAhven.toFixed(1)} m.`}`);
       if (a.wind === 'hard') reasonsAhven.push('Kova tuuli työntää ahventa hieman syvemmälle suojaan.');
 
@@ -8467,8 +8546,46 @@
         <div class="stat-box"><div class="lbl">Ihannelämpö / Tuuli</div><div class="val" style="color:var(--amber)">${hotspotResult.topSpot.idealWind}</div></div>
         <div class="stat-box"><div class="lbl">Uistelunopeus (GPS)</div><div class="val" style="color:var(--cyan)">4.0 – 4.8 km/h</div></div>
       </div>
-      <p style="font-size:14px;line-height:1.45;margin:10px 0 0;color:#BAC9DB;"><strong>Taktinen valintaperuste:</strong> ${hotspotResult.whyChosen}</p>
-      <p style="font-size:14px;line-height:1.45;margin:6px 0 0;color:var(--text);"><strong>Ajolinja & Kattaus:</strong> ${hotspotResult.topSpot.tactic}</p>
+      ${(() => {
+        // KOVAKOODATTU PAIKKAPERUSTELU POISTETTU KÄYTÖSTÄ 10.9.2026.
+        //
+        // MIKSI: hotspotWhy- ja tactic-merkkijonot on kirjoitettu käsin jonain
+        // päivänä, jolloin ne pitivät paikkansa. Ne tulostuivat sen jälkeen aina
+        // sellaisenaan, olosuhteista riippumatta. Siitä syntyi ristiriitoja
+        // saman ruudun sisällä: Karvalan perustelu väitti kylmän alusveden
+        // kumpuavan, vaikka malli kertoi vesipilarin olevan tasalämpöinen —
+        // tasalämpöisessä järvessä ei ole kylmää alusvettä kumpuamassa. Ja
+        // ajolinja käski laskea vieheet 7–10 metriin, kun lajimalli sanoi
+        // taimenelle 2,3 m ja järvilohelle 3,1 m samassa näkymässä.
+        //
+        // Vanha teksti ei ollut väärin silloin kun se kirjoitettiin. Se oli
+        // väärin siksi, että se esitti yhden päivän havainnon tämän päivän
+        // päättelynä. Perustelu rakennetaan nyt siitä mitä TÄNÄÄN tiedetään.
+        //
+        // Merkkijonot jäävät kirjastoon: ne ovat paikkatietoa ja voivat palata
+        // käyttöön, jos ne joskus sidotaan ehtoihin. Niitä ei vain tulosteta.
+        //
+        // Muille kuin Lappajärven kovakoodatuille paikoille whyChosen tulee
+        // genericLocationAdvice-funktiosta, joka laskee sen tämän päivän
+        // datasta. Se saa jäädä ennalleen.
+        if (!currentLocation.hasHotspotData) {
+          return `<p style="font-size:14px;line-height:1.45;margin:10px 0 0;color:#BAC9DB;"><strong>Valintaperuste:</strong> ${hotspotResult.whyChosen}</p>`;
+        }
+        const sp = hotspotResult.topSpot;
+        const tuuliTxt = (wDir !== null && wDir !== undefined)
+          ? `${wDir.toFixed(0)}° (${wSpeed.toFixed(1)} m/s)` : 'ei tiedossa';
+        return `
+      <p style="font-size:14px;line-height:1.45;margin:10px 0 0;color:#BAC9DB;">
+        <strong>Miksi tämä paikka:</strong> Valinta tehtiin tuulen suunnan ja pohjanmuodon perusteella.
+        Tuuli nyt ${tuuliTxt}, paikan ihannetuuli ${sp.idealWind}.
+        Pohjanmuoto ja kovuus ovat karttatietoa, eivät tämän päivän havaintoja —
+        malli ei tunne veden tilaa juuri tällä paikalla.
+      </p>
+      <p style="font-size:14px;line-height:1.45;margin:6px 0 0;color:var(--text);">
+        <strong>Ajolinja:</strong> Aja pohjanmuodon mukaan: ${sp.type}.
+        Vieheet mallin laskemiin syvyyksiin — taimen ${dTaimen.toFixed(1)} m, järvilohi ${dJarvilohi.toFixed(1)} m.
+      </p>`;
+      })()}
       ${(() => {
         if (!currentLocation.hasHotspotData) return '';
         const alt = pickAlternativeSpot(curTemp, a.season);
@@ -9080,6 +9197,37 @@
       return 'autumn';
     }
 
+    // ===== TUULILUOKKA MITATUSTA — lisätty 10.9.2026 =====
+    // Tuuliluokka tuli kyselyn napista ja tuulen numero mittauksesta. Ne pääsivät
+    // eri mieltä: pisteytys vähensi 5 pistettä "tyynestä" samalla kun ruudulla
+    // luki 2,7 m/s. Luokka johdetaan nyt samasta mitatusta luvusta, jonka
+    // käyttäjä näkee. Rajat ovat kyselyn omat: tyyni 0-2, kova yli 6.
+    //
+    // Käyttäjä voi silti valita luokan käsin — paikan päällä näkee asioita joita
+    // lähin havaintoasema ei näe. Käsin valittu ei ylikirjoitu.
+    let tuuliLuokkaKasin = false;
+
+    function tuuliLuokkaMitatusta() {
+      const saa = saaNyt();
+      if (saa.tuuli === null) return null;
+      const ms = saa.tuuli;
+      return { v: ms <= 2 ? 'calm' : (ms > 6 ? 'hard' : 'foam'), ms: ms, lahde: saa.tuuliLahde };
+    }
+
+    function autoFillTuuli() {
+      if (tuuliLuokkaKasin) return;
+      const t = tuuliLuokkaMitatusta();
+      if (!t) return;
+      if (answers.wind === t.v) return;
+      answers.wind = t.v;
+      const el = document.getElementById('tuuliAutoTila');
+      if (el) {
+        const nimi = { calm: 'Tyyni', foam: 'Kohtalainen', hard: 'Kova' }[t.v];
+        el.textContent = `Tuuliluokka ${nimi.toLowerCase()} — ${t.ms.toFixed(1)} m/s (${t.lahde}). Voit vaihtaa käsin.`;
+      }
+      if (typeof renderQuestions === 'function') { try { renderQuestions(); } catch (e) {} }
+    }
+
     function autoFillSeason() {
       if (answers.season !== undefined) return;
       const dateStr = document.getElementById('tripDate').value;
@@ -9110,6 +9258,15 @@
       applyLocationDefaults();
       fetchOpenMeteo();
       fetchSykeData();
+      // Tuuliluokka mitatusta heti kun säädata on saapunut. Kevyt kysely muutaman
+      // sekunnin välein on yksinkertaisempi kuin haun sisään kytkeminen, ja
+      // lopettaa itsensä kun luokka on kerran asetettu tai käyttäjä valinnut käsin.
+      let tuuliYrityksia = 0;
+      const tuuliAjastin = setInterval(() => {
+        tuuliYrityksia++;
+        if (tuuliLuokkaKasin || tuuliYrityksia > 20) { clearInterval(tuuliAjastin); return; }
+        if (tuuliLuokkaMitatusta()) { autoFillTuuli(); clearInterval(tuuliAjastin); }
+      }, 2000);
     })();
   </script>
 
