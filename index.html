@@ -2757,11 +2757,172 @@
     // valheellista tarkkuutta mallissa, jonka rajat ovat itse valittuja.
     function vvPyoristaNopeus(x) { return Math.round(x * 2) / 2; }
 
+    // ============================================================
+    // PÄIVÄN UISTELUSUUNNITELMA — lisätty 10.9.2026
+    // ============================================================
+    // Kalan syvyys luotaimessa on havainto ja voittaa aina mallin. Mutta ennen
+    // kuin vesille on lähdetty, luotaimessa ei ole mitään — ja juuri silloin
+    // suunnitelmaa tarvitaan. Siksi mallin arvio on oletus ja liukusäädin jää
+    // käsivalinnaksi, sama periaate kuin tuuliluokassa.
+    //
+    // MITÄ TÄMÄ EI TEE: ei arvaa lyijypainojen grammoja. Tässä sovelluksessa ei
+    // ole painon ja vedenvastuksen mallia — se on TrollingProssa. Syvyyden
+    // asettava tekijä on tässä Dipsyn asetus tai takilan painon syvyys, ja ne
+    // lasketaan oikeasti. Grammalukujen keksiminen olisi juuri sitä, mitä
+    // kovakoodatuista paikkaperusteluista opittiin.
+    const VV_MAX_FT = 150;        // ei ylitetä koskaan
+    const VV_TAVOITE_FT = 75;     // tähän pyritään
+
+    let vvSyvyysLahde = 'malli';  // 'malli' | 'luotain'
+
+    function vvAsetaSyvyysLahde(l) { vvSyvyysLahde = l; piirraViehevalinta(); }
+
+    // Lajin syvyysarvio annetulle tunnille. Syöttikalan syvyys lasketaan samalle
+    // tunnille, koska se liikkuu pystysuunnassa vuorokauden mukana.
+    function vvLajinSyvyys(kala, tunti) {
+      const a = answers;
+      let thermoVal = NaN;
+      if (a.thermo === 'known') thermoVal = parseFloat((document.getElementById('thermoDepth') || {}).value);
+      let syotti = a.bait;
+      if (syotti === null || syotti === undefined) {
+        syotti = estimateSyottikalaDepth(tunti, a.light, a.wind, a.temp, thermoVal, a.season);
+      }
+      try {
+        if (kala === 'taimen')    return estimateTaimenDepth(tunti, a.light, a.wind, syotti);
+        if (kala === 'jarvilohi') return estimateJarvilohiDepth(tunti, a.light, a.wind, syotti);
+        if (kala === 'kuha')      return estimateKuhaDepth(tunti, a.light, a.wind, syotti);
+        if (kala === 'kirjolohi') return estimateKirjolohiDepth(tunti, a.light, a.wind);
+      } catch (e) { return null; }
+      return null;
+    }
+
+    // Esitystapa ja siimapituus tavoitesyvyydelle.
+    // DIPSY-LOGIIKKA: asetus 0 vetää syvimmälle eli tarvitsee LYHIMMÄN siiman.
+    // Isompi asetus planaa sivulle ja levittää siimat, mutta vaatii pidemmän
+    // siiman samaan syvyyteen. Valitaan siis SUURIN asetus joka vielä mahtuu
+    // 75 jalkaan — levitys on ilmaista niin kauan kuin siimabudjetti kestää.
+    function vvEsitystapa(syvyys, kmh) {
+      if (!(syvyys > 0)) return null;
+      if (syvyys <= 1.5) {
+        return { tapa: 'Plaanari tai veneen takaa', mekanismi: 'vieheen oma uinti',
+                 ft: null, huom: 'Syvyys tulee vieheen uinnista ja siimamäärästä.' };
+      }
+      if (syvyys <= 12 && typeof sdComputeRatio === 'function') {
+        const diaEl = document.getElementById('sdLineDia');
+        const dia = diaEl ? (parseFloat(diaEl.value) || 0.45) : 0.45;
+        const tyyppi = (typeof sdLineType !== 'undefined') ? sdLineType : 'mono';
+        const ftlle = as => Math.round((syvyys * sdComputeRatio(as, tyyppi, dia, kmh)) / 0.3048);
+        for (const as of [3, 2, 1, 0]) {
+          const ft = ftlle(as);
+          if (ft <= VV_TAVOITE_FT) {
+            return { tapa: `Dipsy asetus ${as}`, mekanismi: 'Dipsyn asetus', ft: ft,
+                     huom: as > 0 ? 'Planaa sivulle — levittää siimat.' : 'Vetää suoraan taakse.' };
+          }
+        }
+        const ft0 = ftlle(0);
+        if (ft0 <= VV_MAX_FT) {
+          return { tapa: 'Dipsy asetus 0', mekanismi: 'Dipsyn asetus', ft: ft0, yliTavoitteen: true,
+                   huom: `Yli 75 ft tavoitteen — lyhin mahdollinen tähän syvyyteen.` };
+        }
+      }
+      return { tapa: 'Downrigger', mekanismi: 'painon syvyys', ft: null,
+               huom: `Paino ${vvNro(syvyys)} m, viehe 2–4 m painon takana. Siimapituus ei aseta syvyyttä.` };
+    }
+
+    // Kattauksen painopiste. Tämä on järjestysohje, ei laskettu luku.
+    function vvKattausPaino(syvyys) {
+      if (syvyys <= 1.5) return 'Painopiste plaanareilla — vieheet kuplavanan ulkopuolelle.';
+      if (syvyys <= 5)   return 'Dipsyt kärkeen, plaanarit ulommas leveydelle.';
+      if (syvyys <= 12)  return 'Dipsyt matalilla asetuksilla, takila mukaan syvimmälle vavalle.';
+      return 'Takilat kärkeen, Dipsyt tukena matalammalle.';
+    }
+
+    // Valoluokka tunnille samasta valoPorras-asteikosta, jotta väriehdotus ja
+    // muu sovellus eivät voi olla eri mieltä valosta.
+    function vvValoLuokka(tunti) {
+      const p = valoPorras(tunti);
+      if (p <= 5) return 'hamara';
+      const saa = saaNyt();
+      return (saa.pilvi !== null && saa.pilvi < 40) ? 'aurinko' : 'pilvi';
+    }
+
+    // Päivän tunnit: valoisat + aamu- ja iltahämärä. Raja on siviilihämärä
+    // (aurinko yli -6°), koska sen alapuolella näkösaalistus käytännössä loppuu.
+    function vvPaivanTunnit() {
+      const nyt = new Date();
+      const doy = Math.floor((nyt - new Date(nyt.getFullYear(), 0, 0)) / 86400000);
+      const tz = -nyt.getTimezoneOffset() / 60;
+      const ulos = [];
+      for (let t = 0; t < 24; t++) {
+        try {
+          if (auringonKorkeus(t, doy, currentLocation.lat, currentLocation.lon, tz) > -6) ulos.push(t);
+        } catch (e) { /* ohitetaan */ }
+      }
+      return ulos;
+    }
+
+    function vvPaivanSuunnitelma(kala, secchi) {
+      const tunnit = vvPaivanTunnit();
+      if (!tunnit.length) return '<p class="hint">Aurinko ei nouse siviilihämärän yläpuolelle tänään.</p>';
+      const haarukka = VV_LAJI[kala] ? VV_LAJI[kala].nopeus : [3.5, 5.5];
+      const kmh = (haarukka[0] + haarukka[1]) / 2;
+      const nytTunti = new Date().getHours();
+
+      const rivit = tunnit.map(t => {
+        const d = vvLajinSyvyys(kala, t);
+        if (d === null || isNaN(d)) return '';
+        const e = vvEsitystapa(d, kmh);
+        const valo = vvValoLuokka(t);
+        let vari = '';
+        try {
+          const V = vvValitseVarit(secchi, valo, kala, d);
+          if (V && V.varit && V.varit.length) vari = V.varit[0][0];
+        } catch (err) { vari = ''; }
+        const nykyinen = (t === nytTunti);
+        return `<tr style="${nykyinen ? 'background:rgba(255,255,255,.06);' : ''}">
+          <td style="padding:5px 6px;font-family:'JetBrains Mono',monospace;${nykyinen ? 'color:var(--cyan);font-weight:700;' : ''}">${String(t).padStart(2, '0')}</td>
+          <td style="padding:5px 6px;font-family:'JetBrains Mono',monospace;">${vvNro(d)} m</td>
+          <td style="padding:5px 6px;">${e ? e.tapa : '—'}${e && e.ft ? `<br><span style="color:${e.yliTavoitteen ? 'var(--amber)' : 'var(--muted)'};font-size:12px;">${e.ft} ft</span>` : ''}</td>
+          <td style="padding:5px 6px;font-size:13px;">${vari || '—'}</td>
+        </tr>`;
+      }).filter(Boolean).join('');
+
+      const dNyt = vvLajinSyvyys(kala, nytTunti);
+      return `
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead><tr style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em;">
+            <th style="text-align:left;padding:4px 6px;">Klo</th>
+            <th style="text-align:left;padding:4px 6px;">Syvyys</th>
+            <th style="text-align:left;padding:4px 6px;">Tapa ja siima</th>
+            <th style="text-align:left;padding:4px 6px;">Väri</th>
+          </tr></thead>
+          <tbody>${rivit}</tbody>
+        </table>
+        <p class="hint" style="margin-top:8px;"><strong>Kattaus nyt:</strong> ${dNyt !== null ? vvKattausPaino(dNyt) : '—'}</p>
+        <p class="hint" style="margin-top:4px;">Nopeus ${vvNro(haarukka[0])}–${vvNro(haarukka[1])} km/h, siimapituudet laskettu ${vvNro(kmh)} km/h:lla.
+        Siimakatto ${VV_MAX_FT} ft, tavoite alle ${VV_TAVOITE_FT} ft. Keltainen jalkaluku ylittää tavoitteen.</p>
+        <p class="hint" style="margin-top:4px;">Lyijypainojen grammoja ei ehdoteta: tässä sovelluksessa ei ole painon ja vedenvastuksen mallia.
+        Syvyyden asettaa Dipsyn asetus tai takilan painon syvyys, ja ne on laskettu.</p>`;
+    }
+
     function piirraViehevalinta() {
       const ov = document.getElementById('viehevalintaOverlay');
       if (!ov || ov.style.display === 'none') return;
       const P = vvPeritty();
-      const d = parseFloat(document.getElementById('vvSyvyys').value);
+      // Syvyyden lähde: mallin arvio oletuksena, luotainhavainto käsin.
+      const mallinD = vvLajinSyvyys(vvTila.kala, new Date().getHours());
+      const liukuEl = document.getElementById('vvSyvyys');
+      let d = parseFloat(liukuEl.value);
+      if (vvSyvyysLahde === 'malli' && mallinD !== null && !isNaN(mallinD)) {
+        d = Math.min(parseFloat(liukuEl.max), Math.max(parseFloat(liukuEl.min), mallinD));
+        liukuEl.value = d;
+      }
+      liukuEl.disabled = (vvSyvyysLahde === 'malli');
+      liukuEl.style.opacity = liukuEl.disabled ? '0.45' : '1';
+      const lahdeEl = document.getElementById('vvSyvyysLahde');
+      if (lahdeEl) lahdeEl.innerHTML =
+        vvChip('Mallin arvio', vvSyvyysLahde === 'malli', "vvAsetaSyvyysLahde('malli')")
+        + vvChip('Luotain', vvSyvyysLahde === 'luotain', "vvAsetaSyvyysLahde('luotain')");
       // Siimapituus koskee vain vapaasti uivaa viehettä: Dipsyllä ja downriggerilla
       // syvyyden määrää asetus tai paino, ei siiman määrä.
       const vapaastiUiva = (vvTila.tapa === 'plaanari' || vvTila.tapa === 'suora');
@@ -3001,6 +3162,10 @@
           </ul>
           ${huomiot.length ? `<div style="margin-top:12px; padding:10px; border:1px solid var(--amber); border-radius:10px; color:var(--amber); font-size:13px;">${huomiot.map(h => `<div style="margin-bottom:4px;">${h}</div>`).join('')}</div>` : ''}
           ${alaviitteet.length ? `<div style="margin-top:10px; font-size:12px; color:var(--muted);">${alaviitteet.join(' · ')}</div>` : ''}
+          <div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--line); font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em;">
+            Päivän suunnitelma — ${VV_LAJI[kala] ? VV_LAJI[kala].nimi : kala}
+          </div>
+          ${vvPaivanSuunnitelma(kala, P.secchi)}
         </div>`;
     }
 
@@ -5039,7 +5204,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v61';
+    const APP_VERSIO = 'v62';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -9297,7 +9462,8 @@
         <div id="vvValo" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
       </div>
       <div style="margin-bottom:14px;">
-        <div style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">Kalan syvyys luotaimessa</div>
+        <div style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">Tavoitesyvyys</div>
+          <div id="vvSyvyysLahde" class="chips" style="margin-bottom:6px;"></div>
         <div style="display:flex; align-items:center; gap:12px;">
           <input type="range" id="vvSyvyys" min="0.2" max="12" step="0.1" value="1.2" oninput="piirraViehevalinta()" style="flex:1;">
           <span id="vvSyvyysArvo" style="font-family:'JetBrains Mono',monospace; font-size:20px; color:var(--text); min-width:4.5em; text-align:right;">1.2 m</span>
