@@ -2901,8 +2901,75 @@
         <p class="hint" style="margin-top:8px;"><strong>Kattaus nyt:</strong> ${dNyt !== null ? vvKattausPaino(dNyt) : '—'}</p>
         <p class="hint" style="margin-top:4px;">Nopeus ${vvNro(haarukka[0])}–${vvNro(haarukka[1])} km/h, siimapituudet laskettu ${vvNro(kmh)} km/h:lla.
         Siimakatto ${VV_MAX_FT} ft, tavoite alle ${VV_TAVOITE_FT} ft. Keltainen jalkaluku ylittää tavoitteen.</p>
+        <div style="margin-top:12px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <button class="chip" onclick="vvVieTrollingProlle()">Lähetä TrollingProlle</button>
+          <span id="vvVientiTila" style="font-size:12px;"></span>
+        </div>
+        <p class="hint" style="margin-top:6px;">Paketti sisältää kaikkien lajien tavoitesyvyydet ja värit koko päivälle.
+        Siimapituudet TrollingPro laskee omalla fysiikallaan — niitä ei siirretä.</p>
         <p class="hint" style="margin-top:4px;">Lyijypainojen grammoja ei ehdoteta: tässä sovelluksessa ei ole painon ja vedenvastuksen mallia.
         Syvyyden asettaa Dipsyn asetus tai takilan painon syvyys, ja ne on laskettu.</p>`;
+    }
+
+    // ============================================================
+    // PAKETTI TROLLINGPROLLE — lisätty 10.9.2026
+    // ============================================================
+    // MITÄ SIIRRETÄÄN: tavoitesyvyydet ja värit. EI siimapituuksia.
+    // Uistelututka tietää kuinka syvälle ja millä värillä — se on paikallistietoa.
+    // TrollingPro tietää miten sinne päästään: sillä on painon ja vedenvastuksen
+    // fysiikka, Dipsyn sivukulmat ja plaanarigeometria, joita täällä ei ole.
+    // Jos siirrettäisiin jalkaluvut, kaksi mallia laskisi saman asian ja päätyisi
+    // eri tuloksiin — sama vika kuin kovakoodatuissa paikkaperusteluissa.
+    //
+    // SIIRTOTAPA: jaettu localStorage. Molemmat sovellukset ovat originissa
+    // lohirosvo.github.io, joten avain näkyy molemmille. Tämä toimii vain omalla
+    // laitteella — ja se on kunnossa, koska TrollingPron puolella osiota ei
+    // renderöidä lainkaan jos pakettia ei ole. Muut käyttäjät eivät näe nappia,
+    // eivät virhettä eivätkä tyhjää laatikkoa.
+    const TP_PAKETTI_AVAIN = 'tp2_uistelututka_paketti';
+
+    function vvRakennaPaketti() {
+      const ns = kaytettavaNakosyvyys();
+      const tunnit = vvPaivanTunnit();
+      const lajit = {};
+      Object.keys(VV_LAJI).forEach(kala => {
+        const rivit = [];
+        tunnit.forEach(t => {
+          const d = vvLajinSyvyys(kala, t);
+          if (d === null || isNaN(d)) return;
+          const valo = vvValoLuokka(t);
+          let varit = [];
+          try {
+            const V = vvValitseVarit(ns.m, valo, kala, d);
+            if (V && V.varit) varit = V.varit.map(v => [v[0], variPinta(v[0]) || v[1]]);
+          } catch (e) { /* väri jää tyhjäksi, syvyys on silti käyttökelpoinen */ }
+          rivit.push({ t: t, syvyys: Math.round(d * 10) / 10, valo: valo, varit: varit });
+        });
+        lajit[kala] = { nimi: VV_LAJI[kala].nimi, nopeus: VV_LAJI[kala].nopeus, tunnit: rivit };
+      });
+      return {
+        versio: 1,
+        luotu: new Date().toISOString(),
+        lahde: 'uistelututka ' + (typeof APP_VERSIO === 'string' ? APP_VERSIO : ''),
+        paikka: currentLocation ? currentLocation.name : null,
+        nakosyvyys: ns.m, nakosyvyysLahde: ns.lahde,
+        lajit: lajit
+      };
+    }
+
+    function vvVieTrollingProlle() {
+      const tila = document.getElementById('vvVientiTila');
+      try {
+        const paketti = vvRakennaPaketti();
+        localStorage.setItem(TP_PAKETTI_AVAIN, JSON.stringify(paketti));
+        const n = Object.keys(paketti.lajit).length;
+        const h = paketti.lajit.taimen ? paketti.lajit.taimen.tunnit.length : 0;
+        if (tila) tila.innerHTML = `<span style="color:var(--cyan);">✓ Lähetetty: ${n} lajia, ${h} tuntia. `
+          + `Avaa TrollingPro — suositus näkyy Vedot-välilehdellä.</span>`;
+      } catch (e) {
+        if (tila) tila.innerHTML = '<span style="color:var(--hard-red);">Lähetys epäonnistui: '
+          + (e && e.message ? e.message : 'muisti täynnä?') + '</span>';
+      }
     }
 
     function piirraViehevalinta() {
@@ -5204,7 +5271,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v62';
+    const APP_VERSIO = 'v63';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
