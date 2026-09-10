@@ -894,7 +894,24 @@
           <div class="numfield">
             <div style="flex:1;">
               <label style="display:block;color:var(--muted);font-size:13px;">Väri</label>
-              <input type="text" id="kalaVari" placeholder="esim. Kulta Muikku" style="width:100%; max-width:230px;">
+              <input type="text" id="kalaVari" list="variLista" placeholder="valitse tai kirjoita uusi"
+                     oninput="kalaVariMuuttui()" style="width:100%; max-width:230px;">
+              <datalist id="variLista"></datalist>
+              <div id="kalaVariVihje" style="font-size:12px; margin-top:4px; min-height:15px;"></div>
+            </div>
+          </div>
+          <div class="numfield">
+            <div style="flex:1;">
+              <label style="display:block;color:var(--muted);font-size:13px;">Pinta</label>
+              <select id="kalaPinta" style="width:100%; max-width:230px;">
+                <option value="">—</option>
+                <option value="hile">Hile</option>
+                <option value="hologrammi">Hologrammiteippi</option>
+                <option value="kromi">Kromi</option>
+                <option value="maali">Maali</option>
+                <option value="tinapaperi">Tinapaperi</option>
+                <option value="muu">Muu</option>
+              </select>
             </div>
           </div>
           <p class="hint" style="margin:4px 0 0;">
@@ -2265,6 +2282,93 @@
                  'Vauhti taivuttaa vaijeria, joten mittarin lukema on todellista syvyyttä suurempi.'] }
     };
 
+    // ===== VÄRITAULUKKO — lisätty 10.9.2026 =====
+    // SAMA TAULUKKO KUIN TrollingPro v6.0:ssa. Avaimena on värin NIMI, ei
+    // numerokoodi: HK Varma ei käytä Taimenessa asiakkaalle näkyviä koodeja.
+    // Kuvatiedostojen nimissä on sisäisiä tunnuksia (tk210, tk108) mutta ne
+    // eivät ole johdonmukaisia, eikä niihin siksi rakenneta.
+    //
+    // Esitäyttö on valmistajan oma jaottelu: pinta näkyy tuotteen osoitteessa
+    // (…/vaaput/taimen/KROMIPINTAISET/lapinkulta). Haettu 10.9.2026, 25 väriä,
+    // tasan viisi kutakin pintaa.
+    //
+    // Taulukko kasvaa itsestään: saaliskirjauksessa annettu tuntematon väri
+    // lisätään tähän valitulla pinnalla. Muiden valmistajien vieheet ja
+    // poistuneet värit menevät samaan taulukkoon.
+    //
+    // MIKSI TÄMÄ ON TÄRKEÄ JUURI SAALISLOKISSA: väri oli vapaa tekstikenttä,
+    // ja "Kulta Muikku", "kultamuikku" ja "k.muikku" ovat tilastolle kolme eri
+    // väriä. Ilman vakioitua nimeä saalisdatasta ei koskaan saada väriehdotusta.
+    const HK_VARMA_TAIMEN = {
+      'Saimaan Perinteinen':'hile', 'Pielisen moniväri':'hile', 'Kymppiuutinen':'hile',
+      'Hilemuikku':'hile', 'Hilekuore':'hile',
+      'Inari Special':'hologrammi', 'Puruvesi Special':'hologrammi', 'Raatokärpänen':'hologrammi',
+      'Holokuore':'hologrammi', 'Taika':'hologrammi',
+      'Lapinkulta':'kromi', 'Sinipinkki':'kromi', 'Kutumuikku':'kromi',
+      'Mustaa Kuparia':'kromi', 'Järvilohen herkku':'kromi',
+      'Verihile':'maali', 'UV-Pistepirkko':'maali', 'Illankainen':'maali',
+      'Marjapuuro':'maali', 'Sini Marinmekko':'maali',
+      'Tuksu':'tinapaperi', 'Kirjokala':'tinapaperi', 'Pinkkiposki':'tinapaperi',
+      'Cocktail':'tinapaperi', 'Katko':'tinapaperi'
+    };
+    const LS_VARIT = 'nopeusnaytto_pro1_varit';
+    let varitaulu = Object.assign({}, HK_VARMA_TAIMEN);
+
+    function lataaVaritaulu() {
+      try {
+        const raw = localStorage.getItem(LS_VARIT);
+        const omat = raw ? JSON.parse(raw) : {};
+        // Esitäyttö pohjaksi, omat päälle: oma korjaus voittaa, mutta omaa
+        // taulukkoa ei täytetä esitäytön kopiolla, jotta valmistajan
+        // päivitykset menevät läpi seuraavassa versiossa.
+        varitaulu = Object.assign({}, HK_VARMA_TAIMEN, omat);
+      } catch (e) { varitaulu = Object.assign({}, HK_VARMA_TAIMEN); }
+      paivitaVariLista();
+    }
+
+    function opiVari(nimi, pinta) {
+      if (!nimi || !pinta || varitaulu[nimi] === pinta) return;
+      try {
+        const raw = localStorage.getItem(LS_VARIT);
+        const omat = raw ? JSON.parse(raw) : {};
+        omat[nimi] = pinta;
+        localStorage.setItem(LS_VARIT, JSON.stringify(omat));
+      } catch (e) { /* tallennus voi epäonnistua, mutta kirjaus jatkuu */ }
+      varitaulu[nimi] = pinta;
+      paivitaVariLista();
+    }
+
+    function paivitaVariLista() {
+      const dl = document.getElementById('variLista');
+      if (!dl) return;
+      dl.innerHTML = Object.keys(varitaulu).sort((a, b) => a.localeCompare(b, 'fi'))
+        .map(n => `<option value="${n}">`).join('');
+    }
+
+    // Pinta värin nimestä. Palauttaa null jos väriä ei tunneta.
+    function variPinta(nimi) {
+      if (!nimi) return null;
+      return varitaulu[nimi] || null;
+    }
+
+    // Saaliskirjauksen väri-kentän vihje: kertoo tunnistiko taulukko värin.
+    function kalaVariMuuttui() {
+      const el = document.getElementById('kalaVari');
+      const vihje = document.getElementById('kalaVariVihje');
+      const pintaEl = document.getElementById('kalaPinta');
+      if (!el || !vihje) return;
+      const nimi = el.value.trim();
+      const p = variPinta(nimi);
+      if (p) {
+        if (pintaEl) pintaEl.value = p;
+        vihje.innerHTML = '<span style="color:var(--cyan);">Pinta tunnistettu: ' + p + '</span>';
+      } else if (nimi) {
+        vihje.innerHTML = '<span style="color:var(--amber);">Uusi väri — valitse pinta, se opitaan tallennettaessa</span>';
+      } else {
+        vihje.textContent = '';
+      }
+    }
+
     const VV_VARIT = {
       kulta:  [['Kulta Muikku','kultahologrammi'],['Pielisen Moniväri','kultahile'],['Lapinkulta','kromi'],
                ['Kultasuper Kupari','kultahologrammi'],['Kulta Kuore','kultahologrammi']],
@@ -2272,7 +2376,7 @@
                ['Katko','tinapaperi'],['Punakurkkumuikku','hopeahile']],
       tumma:  [['Mustaa Kuparia','kromi'],['Mustakulta','kromi'],['Kyykäärme','kromi']],
       rajut:  [['Pinkkisini','kromi'],['Sinipinkki','kromi'],['Raatokärpänen','hologrammi'],
-               ['10-Uutinen','UV-pisteillä'],['Papukaija','maali'],['Rainbow','maali']],
+               ['Kymppiuutinen','hile'],['Papukaija','maali'],['Rainbow','maali']],
       muikku: [['Hilemuikku','hopeahile'],['Kulta Muikku','kultahologrammi'],['Pinkkiposki Muikku','tinapaperi']]
     };
 
@@ -2570,12 +2674,13 @@
       // joiden pinta sopii vallitsevaan valoon. Näin pinta vaikuttaa, muttei
       // ohita värin perustelua.
       const pinta = vvPintaSuositus(lx, secchi);
-      lista = lista.slice().sort((a, b) => {
-        const pa = VV_PINTALUOKKA[a[1]] === pinta.luokka ? 0 : 1;
-        const pb = VV_PINTALUOKKA[b[1]] === pinta.luokka ? 0 : 1;
-        return pa - pb;
-      });
-      const onSopivaa = lista.some(v => VV_PINTALUOKKA[v[1]] === pinta.luokka);
+      // Pinta haetaan ensisijaisesti väritaulukosta, joka on valmistajan oma
+      // jaottelu. Listan oma pintamerkintä on vain varalla niille väreille
+      // joita ei enää ole valikoimassa. Näin tieto on yhdessä paikassa.
+      const pintaOf = v => VV_PINTALUOKKA[variPinta(v[0]) || v[1]];
+      lista = lista.slice().sort((a, b) =>
+        (pintaOf(a) === pinta.luokka ? 0 : 1) - (pintaOf(b) === pinta.luokka ? 0 : 1));
+      const onSopivaa = lista.some(v => pintaOf(v) === pinta.luokka);
       syy += ' PINTA: ' + pinta.syy
            + (onSopivaa ? ` Suositeltu ${VV_PINTANIMI[pinta.luokka]} on nostettu listan kärkeen.`
                         : ` Tässä väriryhmässä ei kuitenkaan ole ${VV_PINTANIMI[pinta.luokka]} — järjestys on siis pelkän värin mukaan.`);
@@ -2886,8 +2991,8 @@
             <span style="text-align:right; font-size:14px;">${asetusrivi}</span>
           </div>
           <div style="margin-top:12px; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em;">Värit</div>
-          ${V.varit.map(v => { const sopii = VV_PINTALUOKKA[v[1]] === V.pinta;
-            return `<div style="padding:7px 0; border-bottom:1px dotted var(--line);"><b style="color:var(--text);">${v[0]}</b> <span style="color:${sopii ? 'var(--amber)' : 'var(--muted)'}; font-size:13px;">${v[1]}${sopii ? ' ✓' : ''}</span></div>`; }).join('')}
+          ${V.varit.map(v => { const sopii = VV_PINTALUOKKA[variPinta(v[0]) || v[1]] === V.pinta;
+            return `<div style="padding:7px 0; border-bottom:1px dotted var(--line);"><b style="color:var(--text);">${v[0]}</b> <span style="color:${sopii ? 'var(--amber)' : 'var(--muted)'}; font-size:13px;">${variPinta(v[0]) || v[1]}${sopii ? ' ✓' : ''}</span></div>`; }).join('')}
           <div style="margin-top:12px; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em;">${T.nimi}</div>
           <ul style="margin:6px 0 0; padding-left:18px; font-size:14px;">${T.ohjeet.map(o => `<li style="margin-bottom:4px;">${o}</li>`).join('')}</ul>
           <div style="margin-top:12px; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em;">Miksi</div>
@@ -3044,6 +3149,10 @@
     } else {
       window.addEventListener('load', pwaTila);
     }
+
+    // Väritaulukko käyttöön heti: valintalista täytetään ennen ensimmäistä
+    // saaliskirjausta, jotta nimet pysyvät vakioina alusta asti.
+    window.addEventListener('load', lataaVaritaulu);
 
     // ===== OMAT MERKINNÄT — OziExplorer-karttatyö 2014 =====
     // Nämä ovat käyttäjän OMIA lohikalamerkintöjä Lappajärveltä, luettu .map-tiedoston
@@ -3316,6 +3425,13 @@
       const variEl = document.getElementById('kalaVari');
       const variTeksti = variEl ? variEl.value.trim() : '';
       keskenerainenSaalis.vari = variTeksti || null;
+      // Pinta talteen erikseen. Se on se ominaisuus jota valolaskenta käyttää,
+      // eikä sitä saa myöhemmin johdettua nimestä jos väri on poistunut
+      // valikoimasta. Uusi väri opitaan taulukkoon samalla.
+      const pintaEl = document.getElementById('kalaPinta');
+      const pintaArvo = pintaEl ? pintaEl.value : '';
+      keskenerainenSaalis.pinta = pintaArvo || variPinta(variTeksti) || null;
+      opiVari(variTeksti, keskenerainenSaalis.pinta);
       keskenerainenSaalis.esitystapa = (typeof vvTila === 'object' && vvTila && vvTila.tapa)
         ? (VV_TAVAT[vvTila.tapa] ? VV_TAVAT[vvTila.tapa].nimi : vvTila.tapa) : null;
 
@@ -3378,7 +3494,7 @@
 
     // Muodostaa CSV:n kaikista kirjauksista. Yhteinen sekä automaattiselle
     // tiedostovarmuuskopiolle että käsin tehtävälle viennille.
-    const SAALIS_KENTAT = ['aika','nollareissu','paikka','lat','lon','laji','pituusCm','syvyysM','ennusteTaimen','ennusteJarvilohi','ennusteKuha','ennusteMuikku','taimenkeli','vesiC','vesiLahde','vedenkorkeusCm','nopeusKmh','ilmaC','tuuliMs','tuuliSuunta','pilvisyysPros','paineHpa','painetrendi','kausi','kirkkaus','termokliini','tuuliLuokka','valo','pohja','tuulenPuoli','kattaus','viehe','vari','viehesyvyysM','esitystapa'];
+    const SAALIS_KENTAT = ['aika','nollareissu','paikka','lat','lon','laji','pituusCm','syvyysM','ennusteTaimen','ennusteJarvilohi','ennusteKuha','ennusteMuikku','taimenkeli','vesiC','vesiLahde','vedenkorkeusCm','nopeusKmh','ilmaC','tuuliMs','tuuliSuunta','pilvisyysPros','paineHpa','painetrendi','kausi','kirkkaus','termokliini','tuuliLuokka','valo','pohja','tuulenPuoli','kattaus','viehe','vari','pinta','viehesyvyysM','esitystapa'];
 
     function saaliitCsv(lista) {
       return [SAALIS_KENTAT.join(';')].concat(
@@ -4923,7 +5039,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v58';
+    const APP_VERSIO = 'v59';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
