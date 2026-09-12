@@ -1067,12 +1067,18 @@
       <div class="idx">Kaikuluotain</div>
       <h2>Depth Raider -lämpötilaprofiili</h2>
       <p class="hint">Valinnainen — jos juuri mitattu, tarkempi kuin SYKE tai tilastollinen oletus.</p>
-      <div class="numfield">
-        <label>3 m</label><input type="number" step="0.1" id="dr3" style="width:70px;">
-        <label>6 m</label><input type="number" step="0.1" id="dr6" style="width:70px;">
-        <label>9 m</label><input type="number" step="0.1" id="dr9" style="width:70px;">
-        <label>12 m</label><input type="number" step="0.1" id="dr12" style="width:70px;">
+      <div class="numfield" style="flex-wrap:wrap; gap:8px;">
+        <label>2 m</label><input type="number" step="0.1" id="dr2" style="width:64px;">
+        <label>4 m</label><input type="number" step="0.1" id="dr4" style="width:64px;">
+        <label>6 m</label><input type="number" step="0.1" id="dr6" style="width:64px;">
+        <label>8 m</label><input type="number" step="0.1" id="dr8" style="width:64px;">
+        <label>10 m</label><input type="number" step="0.1" id="dr10" style="width:64px;">
+        <label>12 m</label><input type="number" step="0.1" id="dr12" style="width:64px;">
+        <label>14 m</label><input type="number" step="0.1" id="dr14" style="width:64px;">
       </div>
+      <p class="hint" style="margin-top:8px;">Täytä vain ne joita mittasit. Tyhjät täydennetään annetuista:
+      väliin jäävät interpoloidaan, päiden ulkopuolelle jatketaan samana. Yksi lukema tarkoittaa siis
+      tasalämpöistä patsasta.</p>
       <button class="chip" onclick="applyDepthRaider()" style="margin-top:12px;">Käytä lukemat</button>
       <p class="hint" id="drStatus" style="margin-top:10px;"></p>
     </div>
@@ -1479,6 +1485,22 @@
 
   <div class="cta-bar" id="ctaBar">
     <button class="cta" id="analyzeBtn" onclick="analyze()">Analysoi & Suosittele ottipisteet</button>
+
+    <!-- RELEASE THE DRAGON — koko ketju yhdellä napilla, lisätty 11.9.2026.
+         Analysoi, rakentaa paketin, lähettää sen ja avaa TrollingPron. -->
+    <button class="cta" id="dragonBtn" onclick="releaseTheDragon()"
+            style="margin-top:10px; background:linear-gradient(135deg,#10202c,#1b3a2c); border:1px solid #2e7d5b; color:#7ef0b8; display:flex; align-items:center; justify-content:center; gap:12px;">
+      <svg viewBox="0 0 64 40" width="44" height="28" aria-hidden="true" style="flex:none;">
+        <path d="M2 32 q6 -6 12 0 t12 0 t12 0 t12 0 t12 0" fill="none" stroke="#2e7d5b" stroke-width="2" opacity=".7"/>
+        <path d="M8 30 q4 -10 12 -6 q-6 -12 6 -16 q10 -3 14 6 q3 6 -2 9 q-4 2 -6 -1"
+              fill="none" stroke="#7ef0b8" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M40 13 q7 -5 12 -1 q-4 1 -5 4" fill="none" stroke="#7ef0b8" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="36" cy="10" r="1.8" fill="#ffe08a"/>
+        <path d="M20 24 q6 3 12 1" fill="none" stroke="#2e7d5b" stroke-width="1.6"/>
+      </svg>
+      <span style="font-weight:800; letter-spacing:.04em;">RELEASE THE DRAGON</span>
+    </button>
+    <p class="hint" id="dragonTila" style="margin-top:8px; min-height:18px;"></p>
   </div>
 
     <!-- SYKE viimeiseksi: kotikäyttöä, ei venekäyttöä -->
@@ -5271,7 +5293,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v63';
+    const APP_VERSIO = 'v66';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -6128,49 +6150,135 @@
       updateProgress();
     }
 
-    function detectThermoclineFromReadings(readings) {
-      if (readings.length < 2) return null;
-      let maxDrop = 0, estDepth = null;
-      for (let i = 0; i < readings.length - 1; i++) {
-        const drop = readings[i].temp - readings[i + 1].temp;
-        const span = readings[i + 1].depth - readings[i].depth;
-        if (drop > maxDrop && (drop / span) >= 0.5) {
-          maxDrop = drop;
-          estDepth = (readings[i].depth + readings[i + 1].depth) / 2;
+    // ============================================================
+    // DEPTH RIDER -LÄMPÖTILAPROFIILI — uusittu 10.9.2026
+    // ============================================================
+    // AIEMPI VIKA: mittaus luettiin vain harppauskerroksen etsimiseen. Jos
+    // 0,5 °C/m pudotusta ei löytynyt, sovellus kirjasi pintalämmön ja HEITTI
+    // LOPUT LUKEMAT POIS — ja päätteli ettei tietoa ollut. Lappajärvellä lämpö
+    // menee syvälle ja patsas on suuren osan kaudesta liki tasalämpöinen, joten
+    // ehto ei täyttynyt käytännössä koskaan.
+    //
+    // TASALÄMPÖINEN PATSAS ON VAHVA TIETO, EI PUUTTUVA TIETO. Se kertoo ettei
+    // lämpötila rajaa kalaa pystysuunnassa lainkaan, ja että valo ja syöttikala
+    // ratkaisevat yksin. Se on nyt oma tila.
+    //
+    // TYHJÄT KENTÄT: väliin jäävät interpoloidaan lineaarisesti annetuista,
+    // päiden ulkopuolelle jatketaan viimeisenä annettuna arvona. Yksi lukema
+    // tarkoittaa siis tasalämpöistä patsasta — juuri niin kuin pyydettiin.
+    //
+    // HARPPAUSTA EI ETSITÄ 0-2 METRISTÄ. Pinnan päiväinen lämpiäminen tekee
+    // sinne jyrkän gradientin joka ei ole termokliini eikä rajaa kalaa.
+    const DR_SYVYYDET = [2, 4, 6, 8, 10, 12, 14];
+    const DR_HARPPAUS_MIN_SYVYYS = 2;   // matalampaa ei tulkita termokliiniksi
+    const DR_HARPPAUS_MIN_GRAD = 0.5;   // °C per metri
+    const DR_LAMPO_RAJA = 1.0;          // kuinka paljon pinnasta saa jäädä jäljessä
+                                        // ja silti lasketaan "lämpimäksi"
+    let drProfiili = null;   // { lukemat:[{depth,temp,mitattu}], pinta, pohja, ero,
+                             //   termokliini, lampoUlottuu, tasalampoinen }
+
+    /* Täydentää profiilin annetuista lukemista. */
+    function drTaydenna(annetut){
+      if(!annetut.length) return [];
+      const jarj = annetut.slice().sort((a, b) => a.depth - b.depth);
+      return DR_SYVYYDET.map(d => {
+        const tarkka = jarj.find(r => r.depth === d);
+        if(tarkka) return { depth: d, temp: tarkka.temp, mitattu: true };
+        if(d < jarj[0].depth) return { depth: d, temp: jarj[0].temp, mitattu: false };
+        if(d > jarj[jarj.length-1].depth) return { depth: d, temp: jarj[jarj.length-1].temp, mitattu: false };
+        let ala = jarj[0], yla = jarj[jarj.length-1];
+        for(let i = 0; i < jarj.length - 1; i++){
+          if(jarj[i].depth <= d && d <= jarj[i+1].depth){ ala = jarj[i]; yla = jarj[i+1]; break; }
+        }
+        const t = (d - ala.depth) / (yla.depth - ala.depth);
+        return { depth: d, temp: ala.temp + (yla.temp - ala.temp) * t, mitattu: false };
+      });
+    }
+
+    /* Harppauskerros MITATUISTA pareista, ei interpoloiduista: interpolointi
+       tuottaa vakion gradientin, joka näyttäisi harppaukselta vaikka mittausta
+       ei ole. Etsitään jyrkin gradientti joka ylittää kynnyksen. */
+    function drTermokliini(annetut){
+      if(annetut.length < 2) return null;
+      const jarj = annetut.slice().sort((a, b) => a.depth - b.depth);
+      let paras = null;
+      for(let i = 0; i < jarj.length - 1; i++){
+        if(jarj[i].depth < DR_HARPPAUS_MIN_SYVYYS) continue;
+        const span = jarj[i+1].depth - jarj[i].depth;
+        if(span <= 0) continue;
+        const grad = (jarj[i].temp - jarj[i+1].temp) / span;
+        if(grad >= DR_HARPPAUS_MIN_GRAD && (paras === null || grad > paras.grad)){
+          paras = { grad: grad, depth: (jarj[i].depth + jarj[i+1].depth) / 2 };
         }
       }
-      return estDepth;
+      return paras ? paras.depth : null;
+    }
+
+    /* Syvyys johon lämpö ulottuu: syvin lukema joka on korkeintaan DR_LAMPO_RAJA
+       astetta pintaa kylmempi. Tämä on Lappajärven oma erityispiirre — lämpö
+       menee syvälle — ja se on juuri se luku jota vanha malli ei kysynyt. */
+    function drLampoUlottuu(lukemat, pinta){
+      let syvin = null;
+      lukemat.forEach(r => { if(pinta - r.temp <= DR_LAMPO_RAJA) syvin = r.depth; });
+      return syvin;
     }
 
     function applyDepthRaider() {
-      const depths = [3, 6, 9, 12];
-      const readings = depths
+      const annetut = DR_SYVYYDET
         .map(d => ({ depth: d, temp: parseFloat((document.getElementById('dr' + d) || {}).value) }))
         .filter(r => !isNaN(r.temp));
 
       const statusEl = document.getElementById('drStatus');
-      if (readings.length === 0) {
+      if (annetut.length === 0) {
         statusEl.textContent = 'Syötä vähintään yksi lukema.';
+        drProfiili = null;
         return;
       }
 
-      const surface = readings[0];
-      answers.temp = surface.temp;
+      const lukemat = drTaydenna(annetut);
+      const pinta = lukemat[0].temp;
+      const pohja = lukemat[lukemat.length - 1].temp;
+      const term = drTermokliini(annetut);
+      const ulottuu = drLampoUlottuu(lukemat, pinta);
+
+      drProfiili = {
+        lukemat: lukemat, pinta: pinta, pohja: pohja,
+        ero: pinta - pohja, termokliini: term,
+        lampoUlottuu: ulottuu, tasalampoinen: (term === null),
+        mitattuja: annetut.length,
+        syvinMitattu: annetut[annetut.length - 1].depth,
+        aika: new Date().toISOString()
+      };
+
+      // Pintalämpö malliin. Tämä osa toimi ennenkin ja vaikuttaa kaikkeen.
+      answers.temp = pinta;
       const tempOpts = document.getElementById('opts-temp');
       if (tempOpts) tempOpts.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
 
-      const thermoDepthEst = detectThermoclineFromReadings(readings);
-      if (thermoDepthEst !== null) {
+      if (term !== null) {
         const thermoQ = questions.find(q => q.id === 'thermo');
         const idx = thermoQ.options.findIndex(o => o.v === 'known');
         const thermoOpts = document.getElementById('opts-thermo');
         if (thermoOpts && thermoOpts.children[idx]) thermoOpts.children[idx].click();
         const thermoInput = document.getElementById('thermoDepth');
-        if (thermoInput) thermoInput.value = thermoDepthEst.toFixed(1);
-        statusEl.innerHTML = `Pinta ${surface.temp.toFixed(1)} °C (${surface.depth} m) · Termokliini arvioitu ${thermoDepthEst.toFixed(1)} m:iin.`;
-      } else {
-        statusEl.innerHTML = `Pinta ${surface.temp.toFixed(1)} °C (${surface.depth} m) käytössä. Ei selvää harppauskerrosta annetuista pisteistä.`;
+        if (thermoInput) thermoInput.value = term.toFixed(1);
       }
+
+      const osat = [`Pinta ${pinta.toFixed(1)} °C · ${drProfiili.syvinMitattu} m ${pohja.toFixed(1)} °C · ero ${drProfiili.ero.toFixed(1)} °C`];
+      if (term !== null) {
+        osat.push(`Harppauskerros ${term.toFixed(1)} m.`);
+      } else {
+        osat.push(`<strong>Tasalämpöinen ${drProfiili.syvinMitattu} m asti</strong> — lämpötila ei rajaa kalaa pystysuunnassa, joten valo ja syöttikala ratkaisevat.`);
+      }
+      if (ulottuu !== null && term === null && ulottuu >= drProfiili.syvinMitattu) {
+        osat.push(`Lämpö ulottuu ainakin ${ulottuu} m:iin.`);
+      } else if (ulottuu !== null && term !== null) {
+        osat.push(`Lämpö ulottuu ${ulottuu} m:iin.`);
+      }
+      if (annetut.length < DR_SYVYYDET.length) {
+        osat.push(`<span style="opacity:.75;">${annetut.length} mitattua lukemaa, loput täydennetty.</span>`);
+      }
+      statusEl.innerHTML = osat.join(' ');
       updateProgress();
     }
 
@@ -8319,7 +8427,7 @@
       Tällä on merkitystä: <em>kuha ja iso ahven syövät pääosin kuoretta, taimen muikkua</em> (Oulujärvi, Vehanen ym. 1998) — mutta kyse on ravintotutkimuksesta, ei mitatusta pystysuuntaisesta seurannasta.</p>
       
       <h3>3. Taktinen lohikalatilanne</h3>
-      <p>Selkävesillä ja syvänteiden yllä taimen saalistaa optimaalisesti n. ${dTaimen.toFixed(1)} metrissä. Järvilohi on taimentakin kylmähakuisempi ja pysyttelee n. ${dJarvilohi.toFixed(1)} metrissä. Jos kuitenkin siirryt suosituksen mukaiseen rantamatalikkoon (1.5–3.0 m käyrä), ohita syvyyslaskelma kokonaan ja pyydä kaloja pintaharavalla 0.1–0.7 metrin kalvosta.</p>
+      <p>Selkävesillä ja syvänteiden yllä taimen saalistaa optimaalisesti n. ${dTaimen.toFixed(1)} metrissä. Järvilohi on taimentakin kylmähakuisempi ja pysyttelee n. ${dJarvilohi.toFixed(1)} metrissä. Jos kuitenkin ajat rantavyöhykkeellä tai matalikolla, missä pohjaa on 0,5–8 m, ohita syvyyslaskelma kokonaan ja pyydä kaloja pintaharavalla aivan kalvosta (0,1–0,7 m).</p>
 
       <h3>4. Muut petokalat</h3>
       <p>Kuha n. ${dKuha.toFixed(1)} m, hauki n. ${dHauki.toFixed(1)} m. Ahven (yli 30 cm) n. ${dAhven.toFixed(1)} m — ahven on päiväaktiivinen näkösaalistaja, ja sen rytmi on käänteinen muihin nähden: ${isDayHour ? 'nyt päiväsaikaan se on aktiivisimmillaan sublittoraalilla ja matalikoiden reunoilla.' : 'nyt hämärässä/yöllä se on palannut matalan rantavyöhykkeen pohjalle lepäämään — se ei mene yöksi syvemmälle ulapalle (Imbrock ym. 1996; Jacobsen ym. 2015).'}</p>
@@ -8327,6 +8435,137 @@
     </div>
   `;
       document.getElementById('lakeStatusPanel').innerHTML = html;
+    }
+
+    // ============================================================
+    // RELEASE THE DRAGON — lisätty 11.9.2026
+    // ============================================================
+    // Koko ketju yhdellä napilla: analysoi, rakentaa paketin, lähettää sen
+    // ja avaa TrollingPron.
+    //
+    // VARMAN PÄÄLLE: odotetaan tuoretta dataa ennen analyysia. analyze() ei ole
+    // asynkroninen, mutta se lukee omLatest- ja SYKE-muuttujia jotka täyttyvät
+    // hauista. Siksi haut käynnistetään ensin ja niiden tulosta odotetaan
+    // kyselemällä — enintään 25 s, sitten jatketaan sillä mitä on.
+    //
+    // KETJU PYSÄHTYY VIRHEESEEN. Nappi tekee neljä asiaa joista kolme on
+    // peruuttamattomia: se ylikirjoittaa paketin ja vie pois sovelluksesta.
+    // Jos jokin vaihe kaatuu, siirtymää ei tehdä ja ruudulle jää kertomus
+    // siitä missä mentiin pieleen. Muuten käyttäjä olisi jo TrollingProssa
+    // eikä näkisi virhettä.
+    //
+    // SAMAAN VÄLILEHTEEN: selain estäisi uuden ikkunan, koska odottelu katkaisee
+    // käyttäjän eleen ja popup-lupa raukeaa. location.href toimii aina, ja
+    // takaisin pääsee selaimen omalla napilla.
+    function dragonSano(txt, vari){
+      const el = document.getElementById('dragonTila');
+      if(el) el.innerHTML = vari ? `<span style="color:${vari};">${txt}</span>` : txt;
+    }
+
+    /* Möräys Web Audio API:lla. Ei äänitiedostoa, ei latausta. Laskeva
+       sahalaita matalalla plus kohina antaa hirviömäisen soinnin. Ääni lähtee
+       napin painalluksesta eli käyttäjän eleestä, joten automaattitoiston
+       esto ei osu tähän. */
+    function dragonAani(){
+      try{
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if(!AC) return;
+        const ctx = new AC();
+        const nyt = ctx.currentTime;
+
+        const osc = ctx.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(110, nyt);
+        osc.frequency.exponentialRampToValueAtTime(38, nyt + 1.1);
+
+        const suodin = ctx.createBiquadFilter();
+        suodin.type = 'lowpass';
+        suodin.frequency.setValueAtTime(900, nyt);
+        suodin.frequency.exponentialRampToValueAtTime(160, nyt + 1.1);
+
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.0001, nyt);
+        gain.gain.exponentialRampToValueAtTime(0.35, nyt + 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.0001, nyt + 1.3);
+
+        osc.connect(suodin); suodin.connect(gain); gain.connect(ctx.destination);
+        osc.start(nyt); osc.stop(nyt + 1.35);
+        setTimeout(() => { try{ ctx.close(); }catch(e){} }, 1800);
+      }catch(e){ /* ääni on koriste, ei syy keskeyttää */ }
+    }
+
+    /* Odottaa että ehto toteutuu tai aika loppuu. */
+    function dragonOdota(ehto, maxMs){
+      return new Promise(resolve => {
+        const alku = Date.now();
+        (function kysy(){
+          if(ehto()) return resolve(true);
+          if(Date.now() - alku > maxMs) return resolve(false);
+          setTimeout(kysy, 400);
+        })();
+      });
+    }
+
+    async function releaseTheDragon(){
+      const nappi = document.getElementById('dragonBtn');
+      if(nappi) nappi.disabled = true;
+      dragonAani();
+
+      try {
+        // 1. TUORE DATA
+        dragonSano('Haetaan tuoretta säädataa…');
+        try { fetchOpenMeteo(); } catch(e){}
+        try { fetchSykeData(); } catch(e){}
+        const saatiin = await dragonOdota(
+          () => (typeof omLatest === 'object' && omLatest && omLatest.cloud != null), 25000);
+        if(!saatiin) dragonSano('Säädata ei ehtinyt — jatketaan olemassa olevalla.', 'var(--amber)');
+
+        // 2. ANALYYSI
+        dragonSano('Analysoidaan ottipisteet…');
+        analyze();
+        await new Promise(r => setTimeout(r, 600));
+
+        // 3. VIEHEVALINTA JA PAKETTI
+        dragonSano('Valitaan vieheet ja rakennetaan paketti…');
+        let paketti;
+        try {
+          if(typeof piirraViehevalinta === 'function') piirraViehevalinta();
+          paketti = vvRakennaPaketti();
+        } catch(e){
+          dragonSano('Viehevalinta kaatui: ' + (e && e.message ? e.message : 'tuntematon syy')
+            + '. Ei siirrytty TrollingProhon.', 'var(--hard-red)');
+          if(nappi) nappi.disabled = false;
+          return;
+        }
+        const lajeja = paketti && paketti.lajit ? Object.keys(paketti.lajit).length : 0;
+        const tunteja = paketti && paketti.lajit && paketti.lajit.taimen
+          ? paketti.lajit.taimen.tunnit.length : 0;
+        if(!lajeja || !tunteja){
+          dragonSano('Paketti jäi tyhjäksi — ei syvyyksiä tälle päivälle. '
+            + 'Ei siirrytty TrollingProhon.', 'var(--hard-red)');
+          if(nappi) nappi.disabled = false;
+          return;
+        }
+
+        // 4. LÄHETYS
+        try {
+          localStorage.setItem(TP_PAKETTI_AVAIN, JSON.stringify(paketti));
+        } catch(e){
+          dragonSano('Paketin tallennus epäonnistui (' + (e && e.message ? e.message : 'muisti täynnä?')
+            + '). Ei siirrytty TrollingProhon.', 'var(--hard-red)');
+          if(nappi) nappi.disabled = false;
+          return;
+        }
+
+        // 5. SIIRTYMÄ
+        dragonSano(`Paketti lähetetty: ${lajeja} lajia, ${tunteja} tuntia. Avataan TrollingPro…`, 'var(--cyan)');
+        setTimeout(() => { window.location.href = '/trollingpro/'; }, 900);
+
+      } catch(e){
+        dragonSano('Ketju katkesi: ' + (e && e.message ? e.message : 'tuntematon syy')
+          + '. Ei siirrytty TrollingProhon.', 'var(--hard-red)');
+        if(nappi) nappi.disabled = false;
+      }
     }
 
     function analyze() {
@@ -8464,7 +8703,20 @@
       if (a.temp !== undefined && a.temp <= 8) reasonsJarvilohi.push('KORJATTU AIEMMASTA: kylmässä vedessä järvilohi EI painu syvemmälle. Aiempi malli väitti loppusyksyn suunnan kääntyvän 5–15 metriin, mutta telemetria osoittaa kalan pysyvän pintakerroksessa ja siirtyvän vaakasuunnassa ulapalle. Loppusyksyn syvemmät otit selittyvät saaliskalan vetäytymisellä, eivät lämpöhakuisuudella.');
 
       reasonsTaimen.push(`Selkävesillä ja syvänteiden yllä taimenen optimi-iskusyvyys on tällä hetkellä n. ${dTaimen.toFixed(1)} m.`);
-      reasonsTaimen.push(`POIKKEUS (MATALA VESI): Jos uistelet rantamatalikkoa tai penkkaa (1.5–3.0 m käyrä), ohita matemaattinen syvyyslaskelma. Uistele kalat 12 vavan pintaharavalla aivan kalvosta (0.1–0.7 m) ilman lisäpainoja.`);
+      // POIKKEUSSÄÄNNÖN RAJA LAAJENNETTU 0,5-8 METRIIN — 10.9.2026.
+      // Aiemmin poikkeus koski vain 1,5-3,0 metrin käyrää. Käyttäjän oma
+      // käytäntö on laajempi: kun pohjaa on 0,5-8 m, vieheet menevät liki
+      // pintaan riippumatta siitä mitä valo- ja syöttikalamalli laskee.
+      //
+      // TÄMÄ ON KÄYTTÄJÄN KOKEMUS, EI MALLIN TULOS. Se on kirjattu tänne
+      // sellaisena, ja se on tarkoituksella mallin YLI menevä sääntö. Kun
+      // saalislokiin kertyy dataa, se voidaan testata — siihen asti se on
+      // voimassa siksi että se toimii.
+      //
+      // Huomaa että sääntö on POHJANSYVYYDEN sääntö, ei lämpötilan. Malli
+      // laskee syvyyden valosta ja syöttikalasta; tämä ohittaa sen maaston
+      // perusteella. Ne ovat eri akseleita eivätkä ole ristiriidassa.
+      reasonsTaimen.push(`POIKKEUS (MATALA VESI): Kun pohjaa on 0,5–8 m — rantavyöhyke, matalikko tai penkan päällys — ohita matemaattinen syvyyslaskelma. Uistele kalat pintaharavalla aivan kalvosta (0,1–0,7 m) ilman lisäpainoja. Tämä on omaa kokemusperäistä käytäntöä, ei mallin laskema tulos.`);
 
       if (a.windside === 'windward') {
         reasonsTaimen.push('Maatuuli (Tyyni ranta): Kylmän veden kumpuaminen (upwelling) vetää taimenet matalaan. Smyygaus: Pinnan ollessa tyyni veneen varjot ja äänet säikyttävät kalan. Käytä erittäin pitkiä kelkkojen vapautuspituuksia (10–15 m).');
