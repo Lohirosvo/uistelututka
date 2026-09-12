@@ -5293,7 +5293,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v66';
+    const APP_VERSIO = 'v67';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -7043,7 +7043,24 @@
       spring:      { 6: 2.5, 9: 3,   12: 3.5, 15: 3.5, 18: 2.5, 21: 1.5 },
       earlysummer: { 6: 3.5, 9: 5,   12: 5.5, 15: 5.5, 18: 3.5, 21: 2   },
       midsummer:   { 6: 4.5, 9: 7,   12: 8,   15: 8,   18: 4.5, 21: 2.5 },
-      autumn:      { 6: 3,   9: 4.5, 12: 5,   15: 5,   18: 3,   21: 2   },
+      // SYKSY PÄIVITETTY 11.9.2026 KENTTÄHAVAINNON PERUSTEELLA.
+      // Vanhat arvot: 6:3, 9:4.5, 12:5, 15:5, 18:3, 21:2.
+      //
+      // Havainto: Lappajärvi, syyskuu, USEITA 35 cm:n ahvenia KAHDESSA metrissä.
+      // Kalastaja kuvaa tätä tyypilliseksi, ei poikkeukseksi. Samalla ajolla kuha
+      // oli 9 m:ssä ja syvemmällä, joten kyse ei ole siitä että koko kalasto
+      // olisi ollut matalalla.
+      //
+      // Miksi havainto voittaa: vanhat luvut eivät olleet lähteellisiä. Ne olivat
+      // yleinen arvio, ja tämä on mitattu tästä järvestä. Isot ahvenet ovat
+      // rantavyöhykkeen kaloja syksyllä, ja se on sopusoinnussa myös sen kanssa
+      // mitä koodissa jo lukee: ahvenen syvyys tulee valosta ja vuorokaudenajasta,
+      // ei saaliskalan syvyydestä.
+      //
+      // Kaaren MUOTO on säilytetty — keskipäivällä syvin, hämärässä matalin —
+      // koska havainto ei kerro vuorokausivaihtelusta, vain tasosta. Jos pidät
+      // ahvenet matalalla myös keskipäivällä, kerro niin tasataan käyrä.
+      autumn:      { 6: 2,   9: 2.5, 12: 3,   15: 3,   18: 2,   21: 1.5 },
     };
 
     const jarvilohiSeasonHourBase = {
