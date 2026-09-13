@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pyyhkäisymatkan laskenta</title>
+<style>
+:root{--muste:#16211f;--harmaa:#5d6a68;--raja:#d6dbda}
+*{box-sizing:border-box}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+     margin:0;padding:16px;background:#f7f8f8;color:var(--muste);line-height:1.5}
+main{max-width:620px;margin:0 auto}
+h1{font-size:1.15rem;font-weight:650;margin:0 0 4px}
+.johdanto{font-size:.83rem;color:var(--harmaa);margin:0 0 18px}
+fieldset{border:1px solid var(--raja);border-radius:9px;padding:13px;margin:0 0 14px;
+         background:#fff}
+legend{font-size:.78rem;color:var(--harmaa);padding:0 5px}
+label{display:block;font-size:.75rem;color:#4a5654;margin-bottom:3px}
+input,select,textarea{width:100%;padding:9px 8px;font-size:.95rem;font-family:inherit;
+      border:1px solid #c4ccca;border-radius:6px;background:#fff}
+textarea{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.76rem;min-height:90px}
+.rivi{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+button{width:100%;padding:11px;font-size:.92rem;font-weight:600;font-family:inherit;
+   border:1px solid var(--muste);background:var(--muste);color:#fff;border-radius:7px;
+   -webkit-appearance:none;appearance:none;cursor:pointer}
+button.toissij{background:#fff;color:var(--muste)}
+button:disabled{opacity:.45;cursor:default}
+.tila{font-size:.8rem;color:var(--harmaa);margin-top:9px;min-height:1.3em}
+.tila.virhe{color:#8f1414}
+canvas{width:100%;border:1px solid var(--raja);border-radius:7px;background:#fff;
+       margin-top:12px;display:block}
+.ruusu{display:grid;grid-template-columns:repeat(4,1fr);gap:4px 10px;margin-top:12px;
+       font-size:.74rem;font-variant-numeric:tabular-nums}
+.ruusu span{color:var(--harmaa)}
+.ruusu b{font-weight:600}
+.piilo{display:none}
+.vihje{font-size:.73rem;color:var(--harmaa);margin-top:8px}
+</style>
+</head>
+<body>
+<main>
+<h1>Pyyhkäisymatkan laskenta</h1>
+<p class="johdanto">Laskee järven pisimmän avoveden matkan jokaisesta tuulensuunnasta.
+   Tulos on JSON, joka liitetään aaltoennusteeseen. Aja tämä kerran per järvi.</p>
+
+<fieldset>
+  <legend>1 — Rantaviiva</legend>
+  <label for="nimi">Järven nimi OpenStreetMapissa</label>
+  <input id="nimi" value="Lappajärvi">
+  <div class="rivi" style="margin-top:10px">
+    <div><label for="etela">Eteläraja (lat)</label><input id="etela" type="number" step="0.01" value="62.95"></div>
+    <div><label for="pohjoinen">Pohjoisraja (lat)</label><input id="pohjoinen" type="number" step="0.01" value="63.35"></div>
+    <div><label for="lansi">Länsiraja (lon)</label><input id="lansi" type="number" step="0.01" value="23.40"></div>
+    <div><label for="ita">Itäraja (lon)</label><input id="ita" type="number" step="0.01" value="23.95"></div>
+  </div>
+  <button id="hae" class="toissij" type="button">Hae rantaviiva</button>
+  <p class="tila" id="haunTila"></p>
+  <div id="geoAlue" class="piilo">
+    <label for="geo" style="margin-top:6px">Tai liitä GeoJSON-monikulmio suoraan</label>
+    <textarea id="geo" placeholder='{"type":"Polygon","coordinates":[[[23.6,63.1],...]]}'></textarea>
+  </div>
+  <p class="vihje">Jos haku ei löydä järveä, avaa geojson.io, piirrä järven ääriviiva
+     ja liitä tulos yllä olevaan kenttään. Saaret tulevat monikulmion reikinä.</p>
+</fieldset>
+
+<fieldset>
+  <legend>2 — Ruudukko</legend>
+  <div class="rivi">
+    <div><label for="ruutu">Ruudun koko</label>
+      <select id="ruutu">
+        <option value="25">25 m — tarkin</option>
+        <option value="50" selected>50 m — suositus</option>
+        <option value="100">100 m — nopea</option>
+      </select></div>
+    <div><label for="suunnat">Suuntien määrä</label>
+      <select id="suunnat">
+        <option value="16">16 (22,5°)</option>
+        <option value="36" selected>36 (10°)</option>
+        <option value="72">72 (5°)</option>
+      </select></div>
+  </div>
+  <button id="laske" type="button" disabled>Laske pyyhkäisymatkat</button>
+  <p class="tila" id="laskunTila"></p>
+</fieldset>
+
+<canvas id="kartta" class="piilo" width="600" height="400"></canvas>
+<div class="ruusu piilo" id="ruusu"></div>
+
+<fieldset id="tulosAlue" class="piilo">
+  <legend>3 — Tulos</legend>
+  <textarea id="tulos" readonly></textarea>
+  <button id="kopioi" class="toissij" type="button" style="margin-top:9px">Kopioi leikepöydälle</button>
+  <p class="tila" id="kopioTila"></p>
+</fieldset>
+</main>
+
+<script>
+(function(){
+"use strict";
+var $ = function(id){ return document.getElementById(id); };
+var polys = null;     // [[ [lon,lat], ... ], ...]  ulkoreuna + saaret
+var meta  = null;
+
+// ---------- 1. Rantaviivan haku ----------------------------------------
+function overpassKysely(nimi, s, n, w, e){
+  return '[out:json][timeout:90];('
+    + 'relation["natural"="water"]["name"="' + nimi + '"](' + s + ',' + w + ',' + n + ',' + e + ');'
+    + 'way["natural"="water"]["name"="' + nimi + '"](' + s + ',' + w + ',' + n + ',' + e + ');'
+    + ');out geom;';
+}
+
+// Yhdistää relaation irralliset way-pätkät renkaiksi
+function kokoaRenkaat(jasenet){
+  var palat = jasenet.filter(function(m){ return m.geometry && m.geometry.length > 1; })
+                     .map(function(m){ return m.geometry.map(function(p){ return [p.lon, p.lat]; }); });
+  var renkaat = [], avoin = palat.slice();
+  var sama = function(a,b){ return Math.abs(a[0]-b[0]) < 1e-7 && Math.abs(a[1]-b[1]) < 1e-7; };
+
+  while (avoin.length){
+    var rengas = avoin.shift(), muuttui = true;
+    while (muuttui && !sama(rengas[0], rengas[rengas.length-1])){
+      muuttui = false;
+      for (var i = 0; i < avoin.length; i++){
+        var p = avoin[i], hanta = rengas[rengas.length-1];
+        if (sama(hanta, p[0]))                      { rengas = rengas.concat(p.slice(1)); }
+        else if (sama(hanta, p[p.length-1]))        { rengas = rengas.concat(p.slice(0,-1).reverse()); }
+        else if (sama(rengas[0], p[p.length-1]))    { rengas = p.slice(0,-1).concat(rengas); }
+        else if (sama(rengas[0], p[0]))             { rengas = p.slice(1).reverse().concat(rengas); }
+        else continue;
+        avoin.splice(i,1); muuttui = true; break;
+      }
+    }
+    if (rengas.length > 3) renkaat.push(rengas);
+  }
+  return renkaat;
+}
+
+function pintaAla(rengas){            // suhteellinen, vain kokojärjestystä varten
+  var a = 0;
+  for (var i = 0, j = rengas.length-1; i < rengas.length; j = i++){
+    a += (rengas[j][0]*rengas[i][1]) - (rengas[i][0]*rengas[j][1]);
+  }
+  return Math.abs(a/2);
+}
+
+$("hae").addEventListener("click", function(){
+  var tila = $("haunTila");
+  tila.className = "tila"; tila.textContent = "Haetaan OpenStreetMapista…";
+  this.disabled = true;
+  var q = overpassKysely($("nimi").value.trim(), +$("etela").value, +$("pohjoinen").value,
+                         +$("lansi").value, +$("ita").value);
+  var self = this;
+
+  fetch("https://overpass-api.de/api/interpreter",
+        {method:"POST", body:"data=" + encodeURIComponent(q),
+         headers:{"Content-Type":"application/x-www-form-urlencoded"}})
+    .then(function(r){ return r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status)); })
+    .then(function(d){
+      var alkiot = d.elements || [];
+      if (!alkiot.length) throw new Error("Järveä ei löytynyt tuolla nimellä ja rajauksella");
+      var renkaat = [];
+      alkiot.forEach(function(el){
+        if (el.type === "way" && el.geometry){
+          renkaat.push(el.geometry.map(function(p){ return [p.lon, p.lat]; }));
+        } else if (el.type === "relation" && el.members){
+          renkaat = renkaat.concat(kokoaRenkaat(el.members));
+        }
+      });
+      if (!renkaat.length) throw new Error("Rantaviivaa ei saatu koottua");
+      renkaat.sort(function(a,b){ return pintaAla(b) - pintaAla(a); });
+      polys = renkaat;
+      tila.textContent = "Rantaviiva haettu: " + renkaat.length
+        + (renkaat.length === 1 ? " rengas" : " rengasta (ulkoreuna + saaret)") + ".";
+      $("laske").disabled = false;
+    })
+    .catch(function(e){
+      tila.className = "tila virhe";
+      tila.textContent = "Haku ei onnistunut: " + e.message + ". Käytä GeoJSON-kenttää.";
+      $("geoAlue").classList.remove("piilo");
+    })
+    .then(function(){ self.disabled = false; });
+});
+
+$("geo").addEventListener("input", function(){
+  try {
+    var g = JSON.parse(this.value);
+    var c = g.type === "Feature" ? g.geometry.coordinates : g.coordinates;
+    if (g.type === "MultiPolygon" || (g.geometry && g.geometry.type === "MultiPolygon")) c = c[0];
+    polys = c;
+    $("laske").disabled = false;
+    $("haunTila").className = "tila";
+    $("haunTila").textContent = "GeoJSON luettu: " + c.length + " rengasta.";
+  } catch(e){ $("laske").disabled = true; }
+});
+
+// ---------- 2. Rasterointi ---------------------------------------------
+function rasteroi(renkaat, ruutu){
+  var minLon=1e9,maxLon=-1e9,minLat=1e9,maxLat=-1e9;
+  renkaat.forEach(function(r){ r.forEach(function(p){
+    if(p[0]<minLon)minLon=p[0]; if(p[0]>maxLon)maxLon=p[0];
+    if(p[1]<minLat)minLat=p[1]; if(p[1]>maxLat)maxLat=p[1];
+  });});
+
+  var keskiLat = (minLat+maxLat)/2;
+  var mPerLat = 111320, mPerLon = 111320*Math.cos(keskiLat*Math.PI/180);
+  var leveysM = (maxLon-minLon)*mPerLon, korkeusM = (maxLat-minLat)*mPerLat;
+  var W = Math.ceil(leveysM/ruutu), H = Math.ceil(korkeusM/ruutu);
+  if (W*H > 12e6) throw new Error("Ruudukko liian suuri (" + W + "×" + H + "). Kasvata ruudun kokoa.");
+
+  // solun keskipiste -> lon/lat
+  var X = function(i){ return minLon + (i+0.5)*ruutu/mPerLon; };
+  var Y = function(j){ return maxLat - (j+0.5)*ruutu/mPerLat; };
+
+  var mask = new Uint8Array(W*H);   // 1 = vesi
+  // scanline: lasketaan jokaiselle riville leikkaukset kaikkien renkaiden kanssa
+  for (var j = 0; j < H; j++){
+    var y = Y(j), leikkaukset = [];
+    renkaat.forEach(function(r){
+      for (var k = 0, m = r.length-1; k < r.length; m = k++){
+        var y1 = r[m][1], y2 = r[k][1];
+        if ((y1 > y) === (y2 > y)) continue;
+        leikkaukset.push(r[m][0] + (y-y1)/(y2-y1)*(r[k][0]-r[m][0]));
+      }
+    });
+    leikkaukset.sort(function(a,b){ return a-b; });
+    for (var p = 0; p+1 < leikkaukset.length; p += 2){
+      var i0 = Math.ceil((leikkaukset[p]-minLon)*mPerLon/ruutu - 0.5);
+      var i1 = Math.floor((leikkaukset[p+1]-minLon)*mPerLon/ruutu - 0.5);
+      if (i0 < 0) i0 = 0; if (i1 >= W) i1 = W-1;
+      for (var i = i0; i <= i1; i++) mask[j*W+i] = 1;
+    }
+  }
+  return {mask:mask, W:W, H:H, ruutu:ruutu, minLon:minLon, maxLat:maxLat,
+          mPerLon:mPerLon, mPerLat:mPerLat, X:X, Y:Y};
+}
+
+// ---------- 3. Pyyhkäisypyyhkäisy --------------------------------------
+// Yksi läpikäynti per suunta: yhdensuuntaiset viivat, pisin yhtenäinen vesijakso.
+function pyyhkaise(r, suuntaAste){
+  // suunta = mistä tuuli puhaltaa. Aalto kulkee vastakkaiseen suuntaan.
+  var rad = (suuntaAste + 180) * Math.PI/180;
+  var ux = Math.sin(rad), uy = -Math.cos(rad);   // ruudukossa y kasvaa etelään
+  var px = -uy, py = ux;
+  var W = r.W, H = r.H, mask = r.mask, ruutu = r.ruutu;
+  var halkaisija = Math.ceil(Math.sqrt(W*W + H*H));
+  var cx = W/2, cy = H/2;
+
+  var paras = 0, parasI = -1, parasJ = -1;
+
+  for (var n = -halkaisija; n <= halkaisija; n++){
+    var sx = cx + px*n - ux*halkaisija/2;
+    var sy = cy + py*n - uy*halkaisija/2;
+    var jakso = 0;
+    for (var s = 0; s < halkaisija; s++){
+      var i = Math.round(sx + ux*s), j = Math.round(sy + uy*s);
+      if (i < 0 || i >= W || j < 0 || j >= H){ jakso = 0; continue; }
+      if (mask[j*W+i]){
+        jakso++;
+        if (jakso > paras){ paras = jakso; parasI = i; parasJ = j; }
+      } else jakso = 0;
+    }
+  }
+  return {matka: paras*ruutu, i:parasI, j:parasJ};
+}
+
+// ---------- 4. Piirto ja ajo -------------------------------------------
+function piirra(r, pisteet){
+  var c = $("kartta"), ctx = c.getContext("2d");
+  var skaala = Math.min(600/r.W, 400/r.H);
+  c.width = Math.round(r.W*skaala); c.height = Math.round(r.H*skaala);
+  var kuva = ctx.createImageData(c.width, c.height);
+  for (var y = 0; y < c.height; y++){
+    for (var x = 0; x < c.width; x++){
+      var i = Math.floor(x/skaala), j = Math.floor(y/skaala);
+      var vesi = r.mask[j*r.W+i], o = (y*c.width+x)*4;
+      kuva.data[o]   = vesi ? 197 : 244;
+      kuva.data[o+1] = vesi ? 219 : 243;
+      kuva.data[o+2] = vesi ? 228 : 238;
+      kuva.data[o+3] = 255;
+    }
+  }
+  ctx.putImageData(kuva, 0, 0);
+  ctx.fillStyle = "#c8452c";
+  pisteet.forEach(function(p){
+    if (p.i < 0) return;
+    ctx.fillRect(p.i*skaala-1.5, p.j*skaala-1.5, 3, 3);
+  });
+}
+
+$("laske").addEventListener("click", function(){
+  var tila = $("laskunTila");
+  tila.className = "tila"; tila.textContent = "Rasteroidaan…";
+  var self = this; self.disabled = true;
+
+  setTimeout(function(){
+    try {
+      var ruutu = +$("ruutu").value, nSuuntia = +$("suunnat").value;
+      var r = rasteroi(polys, ruutu);
+      var vesisoluja = 0;
+      for (var k = 0; k < r.mask.length; k++) vesisoluja += r.mask[k];
+      var alaKm2 = vesisoluja*ruutu*ruutu/1e6;
+
+      tila.textContent = "Pyyhkäistään " + nSuuntia + " suuntaa…";
+
+      var matkat = [], pisteet = [], askel = 360/nSuuntia;
+      for (var d = 0; d < nSuuntia; d++){
+        var tulos = pyyhkaise(r, d*askel);
+        matkat.push(Math.round(tulos.matka));
+        pisteet.push(tulos);
+      }
+
+      piirra(r, pisteet);
+      $("kartta").classList.remove("piilo");
+
+      // suuntaruusu
+      var nimet = ["P","PPI","PI","IPI","I","IKA","KA","EKA","E","EL","LO","LLO","L","LLU","LU","PLU"];
+      var html = "";
+      for (var q = 0; q < nSuuntia; q++){
+        var aste = q*askel;
+        var nimi = (nSuuntia === 16) ? nimet[q] : Math.round(aste) + "°";
+        html += "<div><span>" + nimi + "</span> <b>" + (matkat[q]/1000).toFixed(1) + " km</b></div>";
+      }
+      $("ruusu").innerHTML = html;
+      $("ruusu").classList.remove("piilo");
+
+      var ulos = {
+        nimi: $("nimi").value.trim(),
+        keskipiste: [ +((r.Y(r.H/2)).toFixed(4)), +((r.X(r.W/2)).toFixed(4)) ],
+        ruutu: ruutu,
+        suuntia: nSuuntia,
+        pintaAlaKm2: +alaKm2.toFixed(1),
+        pyyhkaisyM: matkat,
+        pahimmatPisteet: pisteet.map(function(p){
+          return p.i < 0 ? null : [ +r.Y(p.j).toFixed(4), +r.X(p.i).toFixed(4) ];
+        })
+      };
+      $("tulos").value = JSON.stringify(ulos, null, 1);
+      $("tulosAlue").classList.remove("piilo");
+
+      tila.textContent = "Valmis. Ruudukko " + r.W + "×" + r.H
+        + ", vesipinta-ala " + alaKm2.toFixed(1) + " km², pisin pyyhkäisymatka "
+        + (Math.max.apply(null, matkat)/1000).toFixed(1) + " km.";
+    } catch(e){
+      tila.className = "tila virhe";
+      tila.textContent = "Laskenta epäonnistui: " + e.message;
+    }
+    self.disabled = false;
+  }, 30);
+});
+
+$("kopioi").addEventListener("click", function(){
+  var t = $("tulos");
+  t.select(); t.setSelectionRange(0, 99999);
+  var ok = false;
+  try { ok = document.execCommand("copy"); } catch(e){}
+  if (navigator.clipboard) navigator.clipboard.writeText(t.value).catch(function(){});
+  $("kopioTila").textContent = ok || navigator.clipboard
+    ? "Kopioitu." : "Kopiointi ei onnistunut — valitse teksti käsin.";
+});
+})();
+</script>
+</body>
+</html>
