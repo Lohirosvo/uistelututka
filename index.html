@@ -959,6 +959,19 @@
         🎣 VIEHEVALINTA — HK Varma
       </button>
 
+      <!-- WINDY — tuulikartta. Lisätty 11.9.2026.
+           Kartta ladataan vasta kun laatikko avataan: upotus on raskas eikä
+           sitä kannata hakea joka käynnistyksellä, varsinkaan mobiiliverkossa.
+           Koordinaatit tulevat valitusta paikasta, eivät kiinteinä. -->
+      <details id="windyBox" style="margin-top:8px; border:1px solid var(--muted); border-radius:12px; padding:10px 14px;">
+        <summary style="font-family:'Barlow Condensed',sans-serif; font-size:20px; font-weight:700; letter-spacing:.02em; color:var(--muted); cursor:pointer; list-style:none;">
+          🌬 WINDY — tuulikartta
+        </summary>
+        <div id="windySlot" style="margin-top:10px;"></div>
+        <a id="windyKokoNaytto" href="https://www.windy.com/" target="_blank" rel="noopener"
+           style="display:inline-block; margin-top:8px; font-size:14px; color:var(--cyan);">Avaa Windy koko näytölle</a>
+      </details>
+
       <button onclick="avaaKarttaSovellus()" style="width:100%; margin-top:8px; background:transparent; color:var(--olive); border:1px solid var(--olive); border-radius:12px; font-family:'Barlow Condensed',sans-serif; font-size:20px; font-weight:700; letter-spacing:.02em; padding:14px; cursor:pointer;">
         🗺 AVAA KARTTASOVELLUKSESSA
       </button>
@@ -3296,6 +3309,46 @@
       return `https://www.sataako.fi/?lng=${lon.toFixed(4)}&lat=${lat.toFixed(4)}&zoom=8&collapsed=true`;
     }
 
+    /* WINDY-UPOTUS. Ladataan laiskasti: iframe luodaan vasta ensimmäisellä
+       avauksella, ja sen jälkeen se jää muistiin. Koordinaatit otetaan
+       valitusta paikasta, jotta kartta seuraa paikanvalintaa eikä jää
+       Lappajärvelle jos ajat muualla.
+
+       ecmwf ja surface-taso ovat tarkoituksella: ecmwf on tuulelle luotettavin
+       ilmainen malli, ja pintataso on se joka tekee aallokon. Zoom 9 näyttää
+       järven ja sen ympäristön — tarkempi kadottaisi sen mistä tuuli tulee. */
+    function windyKoordinaatit(){
+      const la = (currentLocation && currentLocation.lat != null) ? currentLocation.lat : 63.130;
+      const lo = (currentLocation && currentLocation.lon != null) ? currentLocation.lon : 23.670;
+      return { la: la.toFixed(3), lo: lo.toFixed(3) };
+    }
+
+    function windyAlusta(){
+      const box = document.getElementById('windyBox');
+      if(!box) return;
+      const linkki = document.getElementById('windyKokoNaytto');
+      const k = windyKoordinaatit();
+      if(linkki) linkki.href = `https://www.windy.com/?${k.la},${k.lo},10`;
+
+      box.addEventListener('toggle', function(){
+        const slot = document.getElementById('windySlot');
+        if(!this.open || !slot || slot.firstChild) return;
+        const p = windyKoordinaatit();
+        const f = document.createElement('iframe');
+        f.src = 'https://embed.windy.com/embed2.html?lat=' + p.la + '&lon=' + p.lo
+              + '&zoom=9&level=surface&overlay=wind&product=ecmwf'
+              + '&menu=&message=&marker=true&type=map&location=coordinates'
+              + '&detailLat=' + p.la + '&detailLon=' + p.lo + '&detail=true'
+              + '&metricWind=m%2Fs&metricTemp=%C2%B0C&radarRange=-1';
+        f.width = '100%'; f.height = '450'; f.frameBorder = '0';
+        f.loading = 'lazy';
+        f.style.border = '0';
+        f.style.borderRadius = '8px';
+        slot.appendChild(f);
+      });
+    }
+    window.addEventListener('load', windyAlusta);
+
     function avaaSadetutka() {
       const ov = document.getElementById('sadetutkaOverlay');
       const fr = document.getElementById('sadetutkaFrame');
@@ -5293,7 +5346,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v67';
+    const APP_VERSIO = 'v68';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
