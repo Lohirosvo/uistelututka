@@ -811,6 +811,49 @@
 .sr-err{font-size:.82rem;color:var(--hard-red);line-height:1.5}
 @media (prefers-reduced-motion:reduce){.sr-bar{transition:none}}
 
+
+/* ===== AALTOKARTTA — liitetty 11.9.2026, sovitettu tummaan teemaan ===== */
+.ak{--muste:var(--text);--harmaa:var(--muted);--raja:var(--line)}
+
+.ak{max-width:100%;margin:0;background:rgba(255,255,255,.04);border:1px solid var(--raja);
+    border-radius:10px;padding:14px;overflow-x:hidden}
+.ak h2{margin:0 0 10px;font-size:1.05rem;font-weight:650}
+.ak-valinta{width:100%;padding:9px 8px;font-size:.95rem;font-family:inherit;
+    border:1px solid #c4ccca;border-radius:6px;background:rgba(255,255,255,.04);margin-bottom:12px;
+    -webkit-appearance:none;appearance:none}
+
+.ak-kartta{position:relative;background:#eef1f0;border-radius:8px;overflow:hidden}
+.ak-kartta canvas{width:100%;display:block;image-rendering:auto}
+.ak-leima{position:absolute;top:8px;right:8px;background:rgba(255,255,255,.92);
+    border-radius:6px;padding:5px 9px;font-size:.8rem;font-weight:650;
+    font-variant-numeric:tabular-nums;text-align:center;line-height:1.25}
+.ak-leima small{display:block;font-weight:400;font-size:.68rem;color:var(--harmaa)}
+.ak-tuuli{position:absolute;left:8px;bottom:8px;background:rgba(255,255,255,.92);
+    border-radius:6px;padding:5px 9px;font-size:.75rem;font-variant-numeric:tabular-nums}
+
+.ak-asteikko{display:flex;margin-top:8px;border-radius:3px;overflow:hidden;
+    font-size:.62rem;font-variant-numeric:tabular-nums}
+.ak-asteikko div{flex:1;text-align:center;padding:3px 0;color:#fff;
+    text-shadow:0 0 2px rgba(0,0,0,.45)}
+.ak-alarivi{display:flex;justify-content:space-between;align-items:center;
+    margin-top:4px;gap:10px}
+.ak-kytkin{font-size:.72rem;color:#4a5654;display:flex;align-items:center;gap:5px;
+    cursor:pointer;user-select:none}
+.ak-kytkin input{accent-color:#16211f;width:15px;height:15px;margin:0}
+.ak-yksikko{font-size:.66rem;color:var(--harmaa)}
+
+input[type=range]{width:100%;margin:12px 0 2px;accent-color:#16211f}
+.ak-aika{display:flex;justify-content:space-between;font-size:.72rem;
+    color:var(--harmaa);font-variant-numeric:tabular-nums}
+
+.ak-taulu{font-size:.8rem;line-height:1.6;background:rgba(255,255,255,.06);border-radius:6px;
+    padding:10px 12px;margin-top:11px}
+.ak-taulu div{display:flex;justify-content:space-between;gap:12px}
+.ak-taulu span{color:var(--harmaa);flex:none}
+.ak-taulu b{text-align:right;font-variant-numeric:tabular-nums}
+.ak-huom{margin-top:11px;font-size:.72rem;color:var(--harmaa);line-height:1.5}
+.ak-virhe{font-size:.83rem;color:#8f1414}
+
 </style>
 
   <!-- PWA: aloitusnäyttökuvake, koko ruutu ja offline-tuki -->
@@ -1034,6 +1077,43 @@
   <p class="sr-note">Metrilukema on mallin arvo. Oma laskenta tuottaa riskitason,
      ei mitattua näkyvyyttä. Järvisumu syntyy usein mallin ruutua pienemmällä
      alueella — jos taso on 3 tai yli, varaudu vaikka taivas näyttäisi kirkkaalta.</p>
+</section>
+        </div>
+      </details>
+
+      <!-- AALTOKARTTA — liitetty 11.9.2026. Laiska lataus kuten Windyssä ja
+           sumuriskissä: FMI-haku ja maskin purku lähtevät vasta avattaessa.
+           Järvivalinta on moduulin omassa JARVET-taulukossa (Lappajärvi ja
+           Hirvijärven tekojärvi), joten se ei käytä currentLocationia. -->
+      <details id="aaltokarttaBox" style="margin-top:8px; border:1px solid var(--muted); border-radius:12px; padding:10px 14px;">
+        <summary style="font-family:'Barlow Condensed',sans-serif; font-size:20px; font-weight:700; letter-spacing:.02em; color:var(--muted); cursor:pointer; list-style:none;">
+          🌊 AALLONKORKEUS
+        </summary>
+        <div style="margin-top:10px;">
+<section class="ak" id="aaltokartta">
+  <h2>Aallonkorkeus</h2>
+  <select class="ak-valinta" id="akJarvi"></select>
+
+  <div class="ak-kartta">
+    <canvas id="akKuva" width="300" height="300"></canvas>
+    <div class="ak-leima" id="akLeima">–<small>haetaan</small></div>
+    <div class="ak-tuuli" id="akTuuli"></div>
+  </div>
+
+  <div class="ak-asteikko" id="akAsteikko"></div>
+  <div class="ak-alarivi">
+    <label class="ak-kytkin"><input type="checkbox" id="akKorosta"> Korosta erot</label>
+    <span class="ak-yksikko">merkitsevä aallonkorkeus, m</span>
+  </div>
+
+  <input type="range" id="akLiuku" min="0" max="0" value="0" aria-label="Tunti">
+  <div class="ak-aika"><span id="akAlku"></span><span id="akLoppu"></span></div>
+
+  <div class="ak-taulu" id="akTaulu"></div>
+
+  <p class="ak-huom">Väri on kunkin kohdan oma aallonkorkeus sen hetkiselle tuulelle.
+     Suojaisa ranta pysyy vihreänä samalla kun vastaranta on punainen — siitä näkee
+     mihin kannattaa siirtyä. Nuolet osoittavat mihin suuntaan aalto kulkee.</p>
 </section>
         </div>
       </details>
@@ -3652,6 +3732,382 @@ function sumuriskiAlusta(){
       });
     })();
 
+function aaltokarttaAlusta(){
+"use strict";
+var $ = function(id){ return document.getElementById(id); };
+var g = 9.81;
+
+// ================== JÄRVET ==================
+// Liitä laskennan JSON tähän kokonaisuudessaan.
+var JARVET = {
+  lappajarvi: {
+    nimi: "Lappajärvi",
+    lat: 63.1561, lon: 23.6704,
+    syvyys: 7.4,
+    kartta: {
+      ruutu: 100, W: 127, H: 241,
+      pohjoisLat: 63.26435, lansiLon: 23.54408,
+      maski: "AAAAAAAAAAAAAAAAAAAAAAAAAAADAAAAAAAAAAAAAAAAAAAAA4AAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAAAAAAABIAAAAAAAAAAAAAAAAAAAB0AAAAAAAAAAAAAAAAAAAA7AAAAAAAAAAAAAAAAAAAAJAAAAAAAAAAAAAAAAAAAAH2AAAAAAAAAAAAAAAAAAAA/gAAAAAAAAAAAAAAAAAABP4AAAAAAAAAAAAAAAAAAAf8AAAAAAAAAAAAAAAAAAAM+AAAAAAAAAAAAAAAAAAAMH4AAAAAAAAAAAAAAAAAADD+AAAAAAAAAAAAAAAAAABg/gAAAAAAAAAAAAAAAAAA4f4AAAAAAAAAAAAAAAAAAcP8AAAAAAAAAAAAAAAAAAPH+AAAAAAAAAAAAAAAAAADn+AAAAAAAAAAAAAAAAAABz+AAAAAAAAAAAAAAAAAAAZ/AAAAAAAAAAAAAAAAAAAM/wAAAAAAAAAAAAAAAAAAEf4AAAAAAAAAAAAAAAAAAAP+AAAAAAAAAAAAAAAAAAAH/gAAAAAAAAAAAAAAAAAAD/wAAAAAAAAAAAAAAAAAAL/8AAAAAAAAAAAAAAAAAAO//AAAAAAAAAAAAAAAAAAD//gAAAAAAAAAAAAAAAAAB//+AAAAAAAAAAAAAAAAAA///wAAAAAAAAAAAAAAAAAP//4AAAAAAAAAAAAAAAAAH5/8AAAAAAAAAAAAAAAAAD+f/AAAAAAAAAAAAAAAAAB/H/gAAAAAAAAAAAAAAAAA/h/4AAAAAAAAAAAAAAAAAfw//4AAAAAAAAAAAAAAAAP8f/8AAAAAAAAAAAAAAAAD+P//AAAAAAAAAAAAAAAAB/H//+AAAAAAAAAAAAAAAA/h///gAAAAAAAAAAAAAAA/9///4AAAAAAAAAAAAAAA/+////AAAAAAAAAAAAAAA//////gAAAAAAAAAAAAAAf/////wAAAAAAAAAAAAAAP/////4AAAAAAAAAAAAAAHf/////8AAAAAAAAAAAAAD3////7/AAAAAAAAAAAAABt//////4AAAAAAAAAAAAA///////+AAAAAAAAAAAAAf///////AAAAAAAAAAAAAH///////gAAAAAAAAAAAAB//8f///wAAAAAAAAAAAAAf/+P///4AAAAAAAADAAAAH//H///8AAAAAAAAF4AAAI//jv//+AAAAAAAAC+AAAAH/x5///AAAAAAAAAfgAAAD///f//YAAAAAAAAPwAAAD//////tAAAAAAAAD8AAAH//////nwAAAAAAAB+AAAD////////gAAAAAAA/AAAD//////+/+AAAAAAAYAAAB/////////AAAAAAAMAAAAf////////gAAAAAAHBAAC/////////wAAAAAADxwAA/////////8AAAAAGA/4AAf///////+/gAAAAHgD8AA////////9/4AAAADwB8AAP/////////8AAAAB4B8ADD//////////gAAAB8A8AJA//v///////8AAAA+AfAHAG/3///////+AAAAfgfIPAA////v/////AAAAPwf+PAAPv//n/////gAAAH4f//gADz//7/////4AAAD+P//wAB5////////+AAAA/n+f4AAIf///////8AAAB///n8AAAf////////AAAA///wMAAAP////////AAAA///8AAAAf///P////wAAAf///AAAAP///n////gAAAP///AAAAD///7////wAAAH///gAAAB////////4AAAB///gAAAA////////8AAAA///gAAAAff//////8AAAAP//AAAAAP/vf////8AAAAD//AAAAA3/wP////+AAAAD//AAAAAf/8H/////AAAAB/8AAAAAf/+D/////wAAAA//AAAAAH//g/////8AAAA//gAAAAB//w//////AAAA//4AAAAAf/+//////wAAH//+AAAAAH////////4AAD///gAAAAH////////+AAB///wAAAAH/////////AAA///8AAAAD/////////gAAf///gAAAD/////////gAAf///4AAAB/////////gAA////8AAAA/////////wAA////8AAAAf////////wAAf////AAAAO////////wAAP////gAAAHP///////wAAH////4AAAD3+//////wAAD////8AAAA////////4AAB////+AAAAfz//////8AAAf////gAAAP5//////+AAAP////8AAAH////////AAAH////+AAAD////////wAAD/////wAAB////////8AAB/////+AAH/////////gAA//////gAD/////////4AA//////wAD/////////8AAf/////8ABf+///////+AAP//////AA//P///////AAH//////gAf/v///////gAB//////4AP/////////wAA//////8AD/////////4AAf//////AB/////////4AAP//////gA/H///////+AAH//////wAfD////////AAD//////4AHz////////gAD//////8AAH////////+AD///////ADn/////////AB///////gB3/////////4Af//////4A//////////+AP//////8Af/////////8AP//////+AP/////////4AH//////+GH/////////8AD///////DD/////////+AD///////xx//////////gB///////94//////////wAf///////+f/////////wAH////////v/////////4AD//////////////////QAB//////////////////gAA//////////////////gAAf/////////////////4AAP/////////////////8AAH//////////////////gAD//////////////////wAB//////////////////4AAf/////////////////8AAf/////////////////+AAH/////////////////+AAB//////////////////AAA//////////////////wAAf/////////////////8OAP//////////////////3AH///////////////////gB///////////////////4AP//////////////////8AD//////////////////+gB///////////////////YAf//////////////////8AP//////////////////+AD///////////////////AA///////////////////AAP//////////////////AAD//////////////////gAB//////////////////wAB//////////////////8AA//////////////////8AAP//////////////////gAD//////////////////wAA//////////////////wAAf/////////////////8AAP/////////////////8AAD//////8//////////+AAA/////////////////6AAAf////////////////4AAAA////////////////8AAAAP///////////////+AAAAH/////////////v/+AAAAAP//////////////+AAAAAH////////v+/////AAAAAD////////z+/////gAAAAB////////5+f////AAAAAAf///////+/H////gAAAAAP/////////n////4AAAAAH/////////j//3/8AAAAAD/////////x//5/8AAAAAB////////////4/+AAAAAAP///////////8P/AAAAAAH///////////8D/gAAAAAH///////////wA/gAAAAAB///////////4APAAAAAAAP//////////8AAAAAAAAAH//////////+AAAAAAAAABf/////////+AAAAAAAAAAH////P////+AAAAAAAAAAD////n////OAAAAAAAAAAB///////f/gAAAAAAAAAAA///////P4gAAAAAAAAAAAf/////+DwAAAAAAAAAAAAP//////hgAAAAAAAAAAAAD//////wAAAAAAAAAAAAAAf/////wAAAAAAAAAAAAAAP/////4AAAAAAAAAAAAAAH/////+AAAAAAAAAAAAAAH/////+AAAAAAAAAAAAAAB/////AAAAAAAAAAAAAAAA////xgAAAAAAAAAAAAAAAf///4AAAAAAAAAAAAAAAAP///4AAAAAAAAAAAAAAAAH///8AAAAAAAAAAAAAAAAD///+AAAAAAAAAAAAAAAAB////gAAAAAAAAAAAAAAAA////wAAAAAAAAAAAAAAAAf///8AAAAAAAAAAAAAAAAf///wAAAAAAAAAAAAAAAAH///8AAAAAAAAAAAAAAAAD///+AAAAAAAAAAAAAAAAB///7AAAAAAAAAAAAAAAAA///8gAAAAAAAAAAAAAAAAf//+AAAAAAAAAAAAAAAAAH///AAAAAAAAAAAAAAAAAH///wAAAAAAAAAAAAAAAAB///4AAAAAAAAAAAAAAAAB//+wAAAAAAAAAAAAAAAAA///IAAAAAAAAAAAAAAAAAf//4AAAAAAAAAAAAAAAAAP///AAAAAAAAAAAAAAAAAH//+gAAAAAAAAAAAAAAAAB///gAAAAAAAAAAAAAAAAAf//4AAAAAAAAAAAAAAAAAf//+AAAAAAAAAAAAAAAAAP//+AAAAAAAAAAAAAAAAAD///AAAAAAAAAAAAAAAAAB///AAAAAAAAAAAAAAAAAA///gAAAAAAAAAAAAAAAAAf//wAAAAAAAAAAAAAAAAAP//4AAAAAAAAAAAAAAAAAH//+AAAAAAAAAAAAAAAAAB//8AAAAAAAAAAAAAAAAAA//8AAAAAAAAAAAAAAAAAAf/+AAAAAAAAAAAAAAAAAAP/+AAAAAAAAAAAAAAAAAAD/+AAAAAAAAAAAAAAAAAAA/IgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    }
+  },
+
+  hirvijarvi: {
+    nimi: "Hirvijärven tekojärvi",
+    lat: 62.8049, lon: 23.0947,
+    syvyys: 3.5,
+    kartta: {
+      ruutu: 100, W: 50, H: 78,
+      pohjoisLat: 62.84012, lansiLon: 23.04512,
+      maski: "AAAAAAEAAAAAAABgAAAAAAA4AAAAAAAfMAAAAAAf/4AAAAAH/8AAAAAH//AAAAAP//4AAAAP//6AAAAf///AAAB////QAAB////4AAAP///8AAADn//jgAAA5//wwAAADf/4AAAAA3//AAAAAN//wAAAAJ//8AAAAOf//wAAAD3//4AAAB///+AAAA////4AAAD5//+AAAA8///gAAAPf//4AAAD3//4AAAAf///AAAAH///wAAAA///+AAAAP///AB+AB///wB/g///+AAf/////AAH////8AAD////+AAAf////gAAD////8AAA/////AAAH////wAAA////8AAAH////AAAB////wAAAH///8AAAA////AAAAH///wAAAA///8AAAAH///AAAAA///4AAAAH///AAAAA///4AAAAH//7gAAAB///gAAAAP//4AAAAB//+AAAAAP//AAAAAB//gAAAAAf/8AAAAAD/8AAAAAA/4AAAAAAP8AAAAAAD+AAAAAAAfgAAAAAAH8AAAAAAB/AAAAAAAfwAAAAAAH+AAAAAAA/wAAAAAAP8AAAAAAD7AAAAAAA4QAAAAAAOAAAAAAADgAAAAAAA8AAAAAAAPAAAAAAADwAAAAAAA+AAAAAAACAAAAA="
+    }
+  }
+};
+// ============================================
+
+// ---- Väriasteikko, Forecan tyyliin -------------------------------------
+// Järvimitoitus: painopiste 0,1-0,8 m, jossa järven aallot oikeasti ovat.
+var RAJAT = [0, .05, .10, .15, .20, .30, .40, .50, .65, .80, 1.00, 1.30];
+var VARIT = ["#cfe0e6","#7fc6a0","#3faa62","#8cc63f","#c8d422","#f2c200",
+             "#f79800","#ee6f1e","#dc4426","#bd2430","#8f1414","#5c0b0b"];
+
+// Korostustilassa asteikko venytetään tunnin omaan huippuun, jolloin
+// erot näkyvät myös tyynenä päivänä.
+var korosta = false, venytys = 1;
+
+function vari(h){
+  var x = h*venytys;
+  for (var i = RAJAT.length-1; i >= 0; i--) if (x >= RAJAT[i]) return VARIT[i];
+  return VARIT[0];
+}
+
+// ---- Fysiikka ----------------------------------------------------------
+function jonswapHs(F, U){ return 0.0016*Math.sqrt(g*F/(U*U))*U*U/g; }
+function jonswapTp(F, U){ return 0.286*Math.cbrt(g*F/(U*U))*U/g; }
+function syvyysKatto(d, U){ return 0.283*(U*U/g)*Math.tanh(0.53*Math.pow(g*d/(U*U),0.75)); }
+function kestonPyyhkaisy(t, U){ return Math.pow(t*Math.pow(U,0.34)*Math.pow(g,0.33)/77.23, 1/0.67); }
+
+function kompassi(dir){
+  var n = ["pohjoisesta","koillisesta","idästä","kaakosta","etelästä",
+           "lounaasta","lännestä","luoteesta"];
+  return n[Math.round(((dir%360)+360)%360/45)%8];
+}
+
+// ---- Maskin purku ------------------------------------------------------
+function puraMaski(k){
+  var raaka = atob(k.maski), mask = new Uint8Array(k.W*k.H);
+  for (var i = 0; i < mask.length; i++){
+    mask[i] = (raaka.charCodeAt(i>>3) >> (7-(i&7))) & 1;
+  }
+  return mask;
+}
+
+// ---- Pyyhkäisy: pyyhkäisymatka JOKAISELLE ruudulle ---------------------
+// Sama yhdensuuntainen pyyhkäisy kuin laskennassa, mutta juokseva
+// vesijakson pituus tallennetaan matkan varrella eikä vain maksimia.
+function pyyhkaisyKentta(mask, W, H, ruutu, suunta){
+  var rad = (suunta + 180)*Math.PI/180;
+  var ux = Math.sin(rad), uy = -Math.cos(rad), px = -uy, py = ux;
+  var kentta = new Float32Array(W*H);
+  var dia = Math.ceil(Math.sqrt(W*W + H*H)), cx = W/2, cy = H/2;
+
+  for (var n = -dia; n <= dia; n++){
+    var sx = cx + px*n - ux*dia/2, sy = cy + py*n - uy*dia/2, jakso = 0;
+    for (var s = 0; s < dia; s++){
+      var i = Math.round(sx + ux*s), j = Math.round(sy + uy*s);
+      if (i < 0 || i >= W || j < 0 || j >= H){ jakso = 0; continue; }
+      var k = j*W + i;
+      if (mask[k]){
+        jakso++;
+        var m = jakso*ruutu;
+        if (m > kentta[k]) kentta[k] = m;   // sama ruutu voi osua monelle viivalle
+      } else jakso = 0;
+    }
+  }
+
+  // viivapyyhkäisy ohittaa pyöristyksen takia satunnaisen ruudun.
+  // Paikataan tyhjät vesiruudut naapurien suurimmalla arvolla.
+  for (var j2 = 0; j2 < H; j2++){
+    for (var i2 = 0; i2 < W; i2++){
+      var k2 = j2*W + i2;
+      if (!mask[k2] || kentta[k2] > 0) continue;
+      var paras = 0;
+      for (var dy = -1; dy <= 1; dy++){
+        for (var dx = -1; dx <= 1; dx++){
+          var jj = j2+dy, ii = i2+dx;
+          if (jj < 0 || jj >= H || ii < 0 || ii >= W) continue;
+          var n2 = jj*W + ii;
+          if (mask[n2] && kentta[n2] > paras) paras = kentta[n2];
+        }
+      }
+      kentta[k2] = paras || ruutu;
+    }
+  }
+  return kentta;
+}
+
+// ---- Piirto ------------------------------------------------------------
+var data = [], valittu = 0, jarvi = null, mask = null, kentta = null, viimeSuunta = null;
+
+function piirra(){
+  var d = data[valittu], k = jarvi.kartta;
+  if (!d || !k) return;
+
+  // pyyhkäisykenttä lasketaan vain kun suunta vaihtuu
+  var suunta = Math.round(d.dir/5)*5;
+  if (suunta !== viimeSuunta){
+    kentta = pyyhkaisyKentta(mask, k.W, k.H, k.ruutu, suunta);
+    viimeSuunta = suunta;
+  }
+
+  var U = Math.max(0.5, d.U);
+  var Fkesto = kestonPyyhkaisy(d.tunteja*3600, U);
+  var katto = syvyysKatto(jarvi.syvyys, U);
+
+  // Korostustilassa etsitään ensin tunnin korkein arvo ja venytetään
+  // asteikko siihen, muuten käytetään kiinteää järviasteikkoa.
+  // Aallonkorkeus jokaiselle ruudulle
+  var hs = new Float32Array(mask.length), korkein = 0;
+  for (var q = 0; q < mask.length; q++){
+    if (!mask[q]) continue;
+    var Fq = Math.min(kentta[q], Fkesto);
+    hs[q] = Math.min(jonswapHs(Math.max(Fq, 50), U), katto);
+    if (hs[q] > korkein) korkein = hs[q];
+  }
+
+  venytys = 1;
+  if (korosta && korkein > 0.02) venytys = RAJAT[RAJAT.length-1]/(korkein*1.02);
+  piirraAsteikko();
+
+  // Piirretään moninkertaisella tarkkuudella ja pehmennetään aallonkorkeus
+  // ruutujen välillä. Näin ranta pysyy terävänä mutta pinta ei ole porrasteinen.
+  var S = Math.min(8, Math.max(2, Math.round(380/k.W)));
+  var LW = k.W*S, LH = k.H*S;
+  var c = $("akKuva");
+  c.width = LW; c.height = LH;
+  var ctx = c.getContext("2d"), kuva = ctx.createImageData(LW, LH);
+  var talteen = {};
+
+  function rgb(v){
+    var avain = Math.round(v*400);
+    if (talteen[avain]) return talteen[avain];
+    var h = vari(v);
+    var t = [parseInt(h.substr(1,2),16), parseInt(h.substr(3,2),16), parseInt(h.substr(5,2),16)];
+    talteen[avain] = t;
+    return t;
+  }
+
+  for (var y = 0; y < LH; y++){
+    var v0 = y/S - 0.5, j0 = Math.floor(v0), fy = v0 - j0;
+    for (var x = 0; x < LW; x++){
+      var o = (y*LW + x)*4;
+      // Ranta ratkaistaan lähimmästä ruudusta, jotta reuna ei leviä.
+      var ni = Math.min(k.W-1, Math.max(0, Math.round(v0*0 + x/S - 0.5)));
+      var nj = Math.min(k.H-1, Math.max(0, Math.round(v0)));
+      if (!mask[nj*k.W + ni]){
+        kuva.data[o] = 232; kuva.data[o+1] = 236; kuva.data[o+2] = 231; kuva.data[o+3] = 255;
+        continue;
+      }
+      var u0 = x/S - 0.5, i0 = Math.floor(u0), fx = u0 - i0;
+      var summa = 0, paino = 0;
+      for (var dy = 0; dy < 2; dy++){
+        for (var dx = 0; dx < 2; dx++){
+          var ii = i0+dx, jj = j0+dy;
+          if (ii < 0 || ii >= k.W || jj < 0 || jj >= k.H) continue;
+          var kk = jj*k.W + ii;
+          if (!mask[kk]) continue;            // maa ei osallistu pehmennykseen
+          var p = (dx ? fx : 1-fx) * (dy ? fy : 1-fy);
+          summa += hs[kk]*p; paino += p;
+        }
+      }
+      var t = rgb(paino > 0 ? summa/paino : hs[nj*k.W + ni]);
+      kuva.data[o] = t[0]; kuva.data[o+1] = t[1]; kuva.data[o+2] = t[2]; kuva.data[o+3] = 255;
+    }
+  }
+  ctx.putImageData(kuva, 0, 0);
+
+  // Nuolet: mihin aalto kulkee
+  var rad = (d.dir + 180)*Math.PI/180;
+  var ax = Math.sin(rad), ay = -Math.cos(rad);
+  var vali = Math.max(6, Math.round(k.W/13))*S, pit = vali*0.40;
+  ctx.strokeStyle = "rgba(16,24,22,.55)";
+  ctx.lineWidth = Math.max(1.1, LW/300);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  for (var jy = vali; jy < LH; jy += vali){
+    for (var jx = vali; jx < LW; jx += vali){
+      var mi = Math.min(k.W-1, Math.floor(jx/S)), mj = Math.min(k.H-1, Math.floor(jy/S));
+      if (!mask[mj*k.W + mi]) continue;
+      var x1 = jx - ax*pit, y1 = jy - ay*pit, x2 = jx + ax*pit, y2 = jy + ay*pit;
+      ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+      ctx.moveTo(x2, y2); ctx.lineTo(x2 - ax*pit*0.45 - ay*pit*0.28, y2 - ay*pit*0.45 + ax*pit*0.28);
+      ctx.moveTo(x2, y2); ctx.lineTo(x2 - ax*pit*0.45 + ay*pit*0.28, y2 - ay*pit*0.45 - ax*pit*0.28);
+    }
+  }
+  ctx.stroke();
+
+  d.korkein = korkein;
+  d.Tp = jonswapTp(Math.min(d.Fpahin, Fkesto), U);
+  naytaTiedot(d);
+}
+
+function naytaTiedot(d){
+  var pad = function(n){ return ("0"+n).slice(-2); };
+  var pv = ["su","ma","ti","ke","to","pe","la"];
+
+  $("akLeima").innerHTML = d.korkein.toFixed(2) + " m<small>"
+    + pv[d.aika.getDay()] + " klo " + pad(d.aika.getHours()) + "</small>";
+  $("akTuuli").textContent = d.U.toFixed(0) + " m/s " + kompassi(d.dir);
+
+  $("akTaulu").innerHTML =
+      '<div><span>Korkein järvellä</span><b>' + d.korkein.toFixed(2) + ' m</b></div>'
+    + '<div><span>Suurin yksittäinen</span><b>' + (1.86*d.korkein).toFixed(2) + ' m</b></div>'
+    + '<div><span>Jakso</span><b>' + d.Tp.toFixed(1) + ' s</b></div>'
+    + '<div><span>Tuuli</span><b>' + d.U.toFixed(1) + ' m/s, '
+        + Math.round(d.dir) + '°</b></div>'
+    + '<div><span>Tuullut</span><b>' + d.tunteja + ' h samasta suunnasta</b></div>';
+}
+
+$("akLiuku").addEventListener("input", function(){
+  valittu = +this.value;
+  piirra();
+});
+
+// ---- FMI ---------------------------------------------------------------
+function fmiUrl(lat, lon){
+  var a = new Date(); a.setUTCMinutes(0,0,0);
+  var z = new Date(a.getTime() + 84*3600*1000);
+  return "https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature"
+    + "&storedquery_id=fmi::forecast::edited::weather::scandinavia::point::timevaluepair"
+    + "&latlon=" + lat + "," + lon
+    + "&parameters=WindSpeedMS,WindDirection&timestep=60"
+    + "&starttime=" + a.toISOString().slice(0,19) + "Z"
+    + "&endtime="   + z.toISOString().slice(0,19) + "Z";
+}
+
+function parsi(txt){
+  var doc = new DOMParser().parseFromString(txt, "text/xml");
+  if (doc.querySelector("parsererror")) throw new Error("vastausta ei voitu lukea");
+  var kaikki = doc.getElementsByTagName("*"), ulos = {};
+  for (var i = 0; i < kaikki.length; i++){
+    if (kaikki[i].localName !== "MeasurementTimeseries") continue;
+    var id = kaikki[i].getAttribute("gml:id") || kaikki[i].getAttribute("id") || "";
+    var nimi = id.toLowerCase().split("-").pop(), sarja = [];
+    var tvp = kaikki[i].getElementsByTagName("*");
+    for (var j = 0; j < tvp.length; j++){
+      if (tvp[j].localName !== "MeasurementTVP") continue;
+      var aika = null, arvo = null, c = tvp[j].children;
+      for (var q = 0; q < c.length; q++){
+        if (c[q].localName === "time")  aika = c[q].textContent.trim();
+        if (c[q].localName === "value") arvo = parseFloat(c[q].textContent);
+      }
+      sarja.push({aika:new Date(aika), arvo:isNaN(arvo) ? null : arvo});
+    }
+    ulos[nimi] = sarja;
+  }
+  return ulos;
+}
+
+function lataa(avain){
+  jarvi = JARVET[avain];
+  viimeSuunta = null;
+
+  if (!jarvi.kartta || !jarvi.kartta.maski){
+    $("akLeima").innerHTML = '<small>karttadata puuttuu</small>';
+    $("akTaulu").innerHTML = '<div class="ak-virhe">Tälle järvelle ei ole vielä '
+      + 'karttamaskia. Aja pyyhkäisylaskenta ja liitä sen JSON JARVET-osioon.</div>';
+    return;
+  }
+  mask = puraMaski(jarvi.kartta);
+  $("akLeima").innerHTML = '<small>haetaan…</small>';
+
+  fetch(fmiUrl(jarvi.lat, jarvi.lon))
+    .then(function(r){ return r.ok ? r.text() : Promise.reject(new Error("palvelin " + r.status)); })
+    .then(function(txt){
+      var s = parsi(txt);
+      var nop = s.windspeedms, suu = s.winddirection;
+      if (!nop || !nop.length) throw new Error("tuulitietoja ei saatu");
+
+      var sarja = nop.map(function(p, i){
+        return {aika:p.aika, U:p.arvo, dir: suu && suu[i] ? suu[i].arvo : null};
+      }).filter(function(p){ return p.U != null && p.dir != null; });
+      if (!sarja.length) throw new Error("ennusteessa ei ollut arvoja");
+
+      // kuinka kauan tuuli on puhaltanut samasta suunnasta
+      data = sarja.map(function(p, i){
+        var t = 1;
+        for (var k = i-1; k >= 0; k--){
+          var ero = Math.abs(((sarja[k].dir - p.dir + 540) % 360) - 180);
+          if (ero > 45 || sarja[k].U < 0.55*Math.max(p.U,0.5)) break;
+          t++;
+        }
+        return {aika:p.aika, U:p.U, dir:p.dir, tunteja:t, Fpahin:20000, korkein:0, Tp:0};
+      });
+
+      valittu = 0;
+      $("akLiuku").max = data.length - 1;
+      $("akLiuku").value = 0;
+      var pv = ["su","ma","ti","ke","to","pe","la"];
+      var pad = function(n){ return ("0"+n).slice(-2); };
+      $("akAlku").textContent  = pv[data[0].aika.getDay()] + " " + pad(data[0].aika.getHours()) + ":00";
+      var v = data[data.length-1].aika;
+      $("akLoppu").textContent = pv[v.getDay()] + " " + pad(v.getHours()) + ":00";
+      piirra();
+    })
+    .catch(function(e){
+      $("akLeima").innerHTML = '<small>ei ennustetta</small>';
+      $("akTaulu").innerHTML = '<div class="ak-virhe">Ennustetta ei saatu: '
+        + e.message + '.</div>';
+    });
+}
+
+// ---- Käynnistys --------------------------------------------------------
+function piirraAsteikko(){
+  $("akAsteikko").innerHTML = RAJAT.map(function(raja, i){
+    var n = raja/venytys;
+    return '<div style="background:' + VARIT[i] + '">'
+         + (n >= 1 ? n.toFixed(1) : n.toFixed(2).replace(/^0/,"")) + '</div>';
+  }).join("");
+}
+piirraAsteikko();
+
+$("akKorosta").addEventListener("change", function(){
+  korosta = this.checked;
+  piirra();
+});
+
+var val = $("akJarvi");
+Object.keys(JARVET).forEach(function(k){
+  var o = document.createElement("option");
+  o.value = k; o.textContent = JARVET[k].nimi;
+  val.appendChild(o);
+});
+val.addEventListener("change", function(){ lataa(this.value); });
+var eka = Object.keys(JARVET).filter(function(k){
+  return JARVET[k].kartta && JARVET[k].kartta.maski;
+})[0] || Object.keys(JARVET)[0];
+val.value = eka;
+lataa(eka);
+}
+
+    /* Aaltokartta avattaessa, kerran. Maskin purku ja pyyhkäisykentän laskenta
+       ovat raskaita, eikä niitä kannata ajaa jos laatikkoa ei avata. */
+    (function(){
+      var akAjettu = false;
+      window.addEventListener('load', function(){
+        var box = document.getElementById('aaltokarttaBox');
+        if(!box) return;
+        box.addEventListener('toggle', function(){
+          if(!this.open || akAjettu) return;
+          akAjettu = true;
+          try { aaltokarttaAlusta(); }
+          catch(e){
+            var l = document.getElementById('akLeima');
+            if(l) l.textContent = 'Virhe: ' + e.message;
+          }
+        });
+      });
+    })();
+
     function avaaSadetutka() {
       const ov = document.getElementById('sadetutkaOverlay');
       const fr = document.getElementById('sadetutkaFrame');
@@ -5649,7 +6105,7 @@ function sumuriskiAlusta(){
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v69';
+    const APP_VERSIO = 'v70';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
