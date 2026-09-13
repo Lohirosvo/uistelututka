@@ -768,7 +768,50 @@
     details.reasons[open] > summary .arrow { transform: rotate(90deg); }
     details.reasons > summary .arrow { display: inline-block; transition: transform .15s; }
     details.reasons > summary:hover { color: var(--cyan); }
-  </style>
+  
+/* ===== SUMURISKI — liitetty 11.9.2026, sovitettu tummaan teemaan ===== */
+
+.sr,.sr *{box-sizing:border-box}
+.sr{max-width:100%;margin:0;background:rgba(255,255,255,.04);border:1px solid var(--line);
+    border-radius:10px;padding:14px 14px 18px;overflow-x:hidden}
+.sr h2{margin:0 0 2px;font-size:1.05rem;font-weight:650;letter-spacing:.01em}
+.sr-sub{margin:0 0 14px;font-size:.8rem;color:var(--muted);line-height:1.45}
+.sr-verdict{font-size:.95rem;line-height:1.5;margin:0 0 14px;padding:10px 12px;
+    border-left:4px solid var(--muted);background:rgba(255,255,255,.06);border-radius:0 6px 6px 0}
+.sr-verdict b{font-weight:650}
+
+.sr-chart{display:flex;align-items:flex-end;gap:2px;height:132px;
+    border-bottom:1px solid var(--line);padding-bottom:2px}
+.sr-bar{flex:1 1 0;min-width:0;padding:0;border:0;margin:0;
+    -webkit-appearance:none;appearance:none;font:inherit;
+    border-radius:2px 2px 0 0;cursor:pointer;
+    position:relative;transition:opacity .12s}
+.sr-bar:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
+.sr-bar[aria-pressed="true"]{outline:2px solid var(--cyan);outline-offset:1px}
+.sr-bar span{position:absolute;top:2px;left:0;right:0;text-align:center;
+    font-size:.6rem;color:#fff;font-weight:700;pointer-events:none}
+
+.sr-hours{display:flex;gap:2px;margin-top:5px}
+.sr-hours div{flex:1 1 0;min-width:0;text-align:center;font-size:.58rem;
+    color:var(--muted);font-variant-numeric:tabular-nums}
+
+.sr-detail{margin-top:12px;font-size:.82rem;line-height:1.6;
+    background:rgba(255,255,255,.06);border-radius:6px;padding:10px 12px;min-height:2.4em}
+.sr-detail .sr-row{display:flex;justify-content:space-between;gap:10px}
+.sr-detail .sr-row span:first-child{color:var(--muted);flex:none}
+.sr-detail .sr-row b{text-align:right;min-width:0}
+.sr-detail b{font-variant-numeric:tabular-nums}
+.sr-disagree{margin-top:6px;font-size:.76rem;color:var(--amber)}
+
+.sr-legend{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:14px;
+    font-size:.7rem;color:var(--muted)}
+.sr-legend i{display:inline-block;width:11px;height:11px;border-radius:2px;
+    margin-right:5px;vertical-align:-1px}
+.sr-note{margin-top:12px;font-size:.72rem;color:var(--muted);line-height:1.5}
+.sr-err{font-size:.82rem;color:var(--hard-red);line-height:1.5}
+@media (prefers-reduced-motion:reduce){.sr-bar{transition:none}}
+
+</style>
 
   <!-- PWA: aloitusnäyttökuvake, koko ruutu ja offline-tuki -->
   <link rel="manifest" href="manifest.json">
@@ -970,6 +1013,29 @@
         <div id="windySlot" style="margin-top:10px;"></div>
         <a id="windyKokoNaytto" href="https://www.windy.com/" target="_blank" rel="noopener"
            style="display:inline-block; margin-top:8px; font-size:14px; color:var(--cyan);">Avaa Windy koko näytölle</a>
+      </details>
+
+      <!-- SUMURISKI — liitetty 11.9.2026. Ladataan laiskasti kuten Windy:
+           FMI-haku lähtee vasta kun laatikko avataan. -->
+      <details id="sumuriskiBox" style="margin-top:8px; border:1px solid var(--muted); border-radius:12px; padding:10px 14px;">
+        <summary style="font-family:'Barlow Condensed',sans-serif; font-size:20px; font-weight:700; letter-spacing:.02em; color:var(--muted); cursor:pointer; list-style:none;">
+          🌫 SUMURISKI — 24 h
+        </summary>
+        <div style="margin-top:10px;">
+<section class="sr" id="sumuriski">
+  <h2>Sumuriski seuraavat 24 h</h2>
+  <p class="sr-sub">Kaksi arviota rinnakkain: Ilmatieteen laitoksen Harmonie-mallin
+     näkyvyys ja järvikohtainen oma laskenta. Näytetään aina huonompi.</p>
+  <p class="sr-verdict" id="srVerdict">Haetaan ennustetta…</p>
+  <div class="sr-chart" id="srChart"></div>
+  <div class="sr-hours" id="srHours"></div>
+  <div class="sr-detail" id="srDetail">Napauta pylvästä nähdäksesi tunnin tiedot.</div>
+  <div class="sr-legend" id="srLegend"></div>
+  <p class="sr-note">Metrilukema on mallin arvo. Oma laskenta tuottaa riskitason,
+     ei mitattua näkyvyyttä. Järvisumu syntyy usein mallin ruutua pienemmällä
+     alueella — jos taso on 3 tai yli, varaudu vaikka taivas näyttäisi kirkkaalta.</p>
+</section>
+        </div>
       </details>
 
       <button onclick="avaaKarttaSovellus()" style="width:100%; margin-top:8px; background:transparent; color:var(--olive); border:1px solid var(--olive); border-radius:12px; font-family:'Barlow Condensed',sans-serif; font-size:20px; font-weight:700; letter-spacing:.02em; padding:14px; cursor:pointer;">
@@ -3349,6 +3415,243 @@
     }
     window.addEventListener('load', windyAlusta);
 
+function sumuriskiAlusta(){
+  "use strict";
+
+  // --- Asetukset ---------------------------------------------------------
+  // Koordinaatit valitusta paikasta, ei kiinteinä — sama periaate kuin Windyssä.
+  var LAT = (window.currentLocation && currentLocation.lat != null) ? currentLocation.lat : 63.130;
+  var LON = (window.currentLocation && currentLocation.lon != null) ? currentLocation.lon : 23.670;
+  var HOURS = 24;
+
+  // Veden lämpötila: kytke tähän uistelututkan SYKE-arvo.
+  function veden_lampotila(){
+    // KYTKETTY 11.9.2026: alkuperäinen etsi window.uistelututka.olosuhteet.vesiLampo,
+    // jota ei ole olemassa. Pintaveden lämpötila elää answers.temp-arvossa, johon
+    // se tulee SYKEltä, DepthRider-profiilista tai kyselystä.
+    try { if (typeof answers === "object" && typeof answers.temp === "number") return answers.temp; }
+    catch(e){}
+    return null;
+  }
+
+  var TASOT = [
+    {n:1, vari:"#1f7a4d", nimi:"Normaali",           kuvaus:"Näkyvyys yli 4 km."},
+    {n:2, vari:"#c4a000", nimi:"Utua",               kuvaus:"1–4 km. Kaukainen ranta häviää."},
+    {n:3, vari:"#e07b00", nimi:"Varovaisuutta",      kuvaus:"0,5–1 km. Pidä ranta näkyvissä."},
+    {n:4, vari:"#c8452c", nimi:"Vain tuttu jälki",   kuvaus:"n. 100–500 m. Hidas vauhti."},
+    {n:5, vari:"#8f1414", nimi:"Veneily mahdotonta", kuvaus:"alle 100 m."}
+  ];
+
+  var pad = function(n){ return ("0" + n).slice(-2); };
+
+  function tasoNakyvyydesta(m){
+    if (m == null) return null;
+    return m < 100 ? 5 : m < 500 ? 4 : m < 1000 ? 3 : m < 4000 ? 2 : 1;
+  }
+
+  // Sama fysiikka kuin TrollingProssa
+  function omaTaso(T, Td, tuuli, pilvi, vesi, yo){
+    if (T == null || Td == null || tuuli == null) return null;
+    var p = 0, ero = T - Td, syyt = [];
+
+    if (ero <= 2){ p += (2-ero)*2; if (ero <= 1) syyt.push("kastepiste lähellä lämpötilaa"); }
+    if (yo && pilvi != null && pilvi < 40){ p += 1; syyt.push("selkeä yö"); }
+
+    if (vesi != null){
+      var d = vesi - T;
+      if (d >= 9){ p += 2.5; syyt.push("vesi paljon ilmaa lämpimämpi"); }
+      else if (d >= 7){ p += 1.5; syyt.push("vesi ilmaa lämpimämpi"); }
+      else if (d >= 5){ p += 0.7; }
+    }
+
+    if (tuuli < 1){ p += 2; syyt.push("tyyntä"); }
+    else if (tuuli < 2){ p += 1.5; syyt.push("heikko tuuli"); }
+    else if (tuuli < 3){ p += 0.8; }
+    else if (tuuli < 4){ p += 0.2; }
+    else { p *= 0.2; syyt = ["tuuli hajottaa sumun"]; }
+
+    return {taso: p >= 5.0 ? 5 : p >= 3.8 ? 4 : p >= 2.6 ? 3 : p >= 1.5 ? 2 : 1, syyt: syyt};
+  }
+
+  // --- FMI-haku ----------------------------------------------------------
+  function fmiUrl(){
+    var a = new Date(Date.now() + 30*60*1000); a.setUTCMinutes(0,0,0);
+    var z = new Date(a.getTime() + (HOURS-1)*3600*1000);
+    return "https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature"
+      + "&storedquery_id=fmi::forecast::harmonie::surface::point::timevaluepair"
+      + "&latlon=" + LAT + "," + LON
+      + "&parameters=Temperature,DewPoint,WindSpeedMS,TotalCloudCover,Visibility"
+      + "&timestep=60"
+      + "&starttime=" + a.toISOString().slice(0,19) + "Z"
+      + "&endtime="   + z.toISOString().slice(0,19) + "Z";
+  }
+
+  function parsi(txt){
+    var doc = new DOMParser().parseFromString(txt, "text/xml");
+    if (doc.querySelector("parsererror")) throw new Error("XML-jäsennys epäonnistui");
+    var kaikki = doc.getElementsByTagName("*"), ulos = {};
+    for (var i = 0; i < kaikki.length; i++){
+      if (kaikki[i].localName !== "MeasurementTimeseries") continue;
+      var id = kaikki[i].getAttribute("gml:id") || kaikki[i].getAttribute("id") || "";
+      var nimi = id.toLowerCase().split("-").pop(), sarja = [];
+      var tvp = kaikki[i].getElementsByTagName("*");
+      for (var j = 0; j < tvp.length; j++){
+        if (tvp[j].localName !== "MeasurementTVP") continue;
+        var aika = null, arvo = null, c = tvp[j].children;
+        for (var k = 0; k < c.length; k++){
+          if (c[k].localName === "time")  aika = c[k].textContent.trim();
+          if (c[k].localName === "value") arvo = parseFloat(c[k].textContent);
+        }
+        sarja.push({aika: new Date(aika), arvo: isNaN(arvo) ? null : arvo});
+      }
+      ulos[nimi] = sarja;
+    }
+    return ulos;
+  }
+
+  function yhdista(s){
+    var pohja = s.temperature || s.visibility;
+    if (!pohja || !pohja.length) throw new Error("Ennusteessa ei ollut arvoja");
+    var vesi = veden_lampotila(), rivit = [];
+    for (var i = 0; i < pohja.length && i < HOURS; i++){
+      var g = function(n){ return s[n] && s[n][i] ? s[n][i].arvo : null; };
+      var aika = pohja[i].aika, h = aika.getHours();
+      var T = g("temperature"), Td = g("dewpoint"), w = g("windspeedms"),
+          pilvi = g("totalcloudcover"), nak = g("visibility");
+      var tFmi = tasoNakyvyydesta(nak);
+      var oma  = omaTaso(T, Td, w, pilvi, vesi, (h >= 21 || h <= 8));
+      rivit.push({
+        aika:aika, T:T, Td:Td, tuuli:w, pilvi:pilvi, vesi:vesi, nakyvyys:nak,
+        tasoFmi:tFmi, tasoOma:oma ? oma.taso : null, syyt:oma ? oma.syyt : [],
+        taso: Math.max(tFmi || 1, (oma && oma.taso) || 1)
+      });
+    }
+    return rivit;
+  }
+
+  // --- Piirto ------------------------------------------------------------
+  var chart = document.getElementById("srChart"),
+      hours = document.getElementById("srHours"),
+      detail = document.getElementById("srDetail"),
+      verdict = document.getElementById("srVerdict");
+
+  var des = function(x, y){ return x == null ? "–" : x.toFixed(1) + y; };
+
+  function nayta(r){
+    var t = TASOT[r.taso - 1];
+    var eriavat = (r.tasoFmi != null && r.tasoOma != null &&
+                   Math.abs(r.tasoFmi - r.tasoOma) >= 2);
+    var html =
+      '<div class="sr-row"><span>Klo ' + pad(r.aika.getHours()) + '</span><b style="color:'
+        + t.vari + '">' + t.nimi + ' (' + t.n + ')</b></div>'
+      + '<div class="sr-row"><span>Harmonie, näkyvyys</span><b>'
+        + (r.nakyvyys == null ? "–" : Math.round(r.nakyvyys) + " m")
+        + (r.tasoFmi ? " · taso " + r.tasoFmi : "") + '</b></div>'
+      + '<div class="sr-row"><span>Oma laskenta</span><b>'
+        + (r.tasoOma ? "taso " + r.tasoOma : "–") + '</b></div>'
+      + '<div class="sr-row"><span>Lämpö / kastepiste</span><b>'
+        + des(r.T,"°") + " / " + des(r.Td,"°") + " (ero "
+        + (r.T != null && r.Td != null ? (r.T - r.Td).toFixed(1) : "–") + "°)" + '</b></div>'
+      + '<div class="sr-row"><span>Tuuli</span><b>' + des(r.tuuli," m/s") + '</b></div>'
+      + '<div class="sr-row"><span>Vesi</span><b>'
+        + (r.vesi == null ? "ei tiedossa" : des(r.vesi,"°")) + '</b></div>';
+    if (r.syyt && r.syyt.length){
+      html += '<div class="sr-row"><span>Peruste</span><b>' + r.syyt.join(", ") + '</b></div>';
+    }
+    if (eriavat){
+      html += '<div class="sr-disagree">Arviot eriävät selvästi. Näytössä on huonompi.</div>';
+    }
+    detail.innerHTML = html;
+  }
+
+  function yhteenveto(rivit){
+    var max = rivit.reduce(function(a,r){ return Math.max(a, r.taso); }, 1);
+    if (max <= 1){
+      verdict.textContent = "Ei sumuriskiä seuraavan 24 tunnin aikana.";
+      verdict.style.borderLeftColor = TASOT[0].vari;
+      return;
+    }
+    var jaksot = [], nyk = null;
+    rivit.forEach(function(r){
+      if (r.taso === max){ if (nyk) nyk.push(r); else { nyk = [r]; jaksot.push(nyk); } }
+      else nyk = null;
+    });
+    var j = jaksot[0];
+    var a = pad(j[0].aika.getHours()), z = pad(j[j.length-1].aika.getHours());
+    verdict.innerHTML = "Korkein riski <b>klo " + (a === z ? a : a + "–" + z) + "</b>"
+      + (jaksot.length > 1 ? " (ja myöhemmin uudelleen)" : "") + ": "
+      + TASOT[max-1].nimi.toLowerCase() + ". " + TASOT[max-1].kuvaus;
+    verdict.style.borderLeftColor = TASOT[max-1].vari;
+  }
+
+  function piirra(rivit){
+    chart.innerHTML = ""; hours.innerHTML = "";
+    var napit = [];
+    rivit.forEach(function(r, i){
+      var t = TASOT[r.taso - 1];
+      var b = document.createElement("button");
+      b.className = "sr-bar";
+      b.type = "button";
+      b.style.background = t.vari;
+      b.style.height = (18 + (r.taso - 1) * 26) + "px";
+      b.setAttribute("aria-pressed", "false");
+      b.setAttribute("aria-label", "Klo " + pad(r.aika.getHours())
+        + ", taso " + r.taso + ", " + t.nimi);
+      b.innerHTML = "<span>" + r.taso + "</span>";
+      b.addEventListener("click", function(){
+        napit.forEach(function(x){ x.setAttribute("aria-pressed","false"); });
+        b.setAttribute("aria-pressed","true");
+        nayta(r);
+      });
+      chart.appendChild(b); napit.push(b);
+
+      var h = document.createElement("div");
+      h.textContent = (i % 3 === 0) ? pad(r.aika.getHours()) : "";
+      hours.appendChild(h);
+    });
+
+    yhteenveto(rivit);
+    nayta(rivit[0]);
+    napit[0].setAttribute("aria-pressed","true");
+  }
+
+  // --- Käynnistys --------------------------------------------------------
+  document.getElementById("srLegend").innerHTML = TASOT.map(function(t){
+    return '<span><i style="background:' + t.vari + '"></i>' + t.n + " " + t.nimi + '</span>';
+  }).join("");
+
+  fetch(fmiUrl())
+    .then(function(r){
+      if (!r.ok) throw new Error("Ilmatieteen laitos vastasi virheellä " + r.status);
+      return r.text();
+    })
+    .then(function(txt){ piirra(yhdista(parsi(txt))); })
+    .catch(function(e){
+      verdict.className = "sr-err";
+      verdict.textContent = "Ennustetta ei saatu: " + e.message
+        + ". Tarkista verkkoyhteys ja yritä uudelleen.";
+    });
+}
+
+    /* Sumuriski ladataan vasta kun laatikko avataan: FMI-haku on turha jos
+       laatikkoa ei avata, ja järvellä verkko on hidas. Ajetaan kerran. */
+    (function(){
+      var srAjettu = false;
+      window.addEventListener('load', function(){
+        var box = document.getElementById('sumuriskiBox');
+        if(!box) return;
+        box.addEventListener('toggle', function(){
+          if(!this.open || srAjettu) return;
+          srAjettu = true;
+          try { sumuriskiAlusta(); }
+          catch(e){
+            var v = document.getElementById('srVerdict');
+            if(v){ v.className = 'sr-err'; v.textContent = 'Sumuriskin käynnistys epäonnistui: ' + e.message; }
+          }
+        });
+      });
+    })();
+
     function avaaSadetutka() {
       const ov = document.getElementById('sadetutkaOverlay');
       const fr = document.getElementById('sadetutkaFrame');
@@ -5346,7 +5649,7 @@
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v68';
+    const APP_VERSIO = 'v69';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
