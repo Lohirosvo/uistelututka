@@ -3014,10 +3014,7 @@ input[type=range]{width:100%;margin:12px 0 2px;accent-color:#16211f}
       try {
         if (kala === 'taimen')    return estimateTaimenDepth(tunti, a.light, a.wind, syotti);
         if (kala === 'jarvilohi') return estimateJarvilohiDepth(tunti, a.light, a.wind, syotti);
-        if (kala === 'kuha') {
-          const kuore = estimateKuoreDepth(tunti, a.light, a.wind, a.temp, thermoVal, a.season);
-          return estimateKuhaDepth(tunti, a.light, a.wind, kuore);
-        }
+        if (kala === 'kuha')      return estimateKuhaDepth(tunti, a.light, a.wind, syotti);
         if (kala === 'kirjolohi') return estimateKirjolohiDepth(tunti, a.light, a.wind);
       } catch (e) { return null; }
       return null;
@@ -3030,9 +3027,25 @@ input[type=range]{width:100%;margin:12px 0 2px;accent-color:#16211f}
     // 75 jalkaan — levitys on ilmaista niin kauan kuin siimabudjetti kestää.
     function vvEsitystapa(syvyys, kmh) {
       if (!(syvyys > 0)) return null;
+      // PLAANARIN KATTO NOSTETTU 1,5 -> 3,5 m — korjattu 11.9.2026.
+      // VIKA: VV_TAVAT antoi plaanarille ulottuvuudeksi 0-1,5 m, mikä pitää
+      // paikkansa vain ILMAN lyijypainoa. Siitä seurasi, että päivän suunnitelma
+      // suositteli Dipsyä jokaiselle tunnille heti kun syvyys ylitti 1,5 m —
+      // taimenen tyypillisellä 2,9-4,3 metrillä koko päivä oli pelkkää Dipsyä.
+      //
+      // TrollingPron fysiikka näyttää, ettei se pidä paikkaansa: 20 g ja 55 ft
+      // vie plaanarivieheen 2,7 metriin, 40 g ja 30 ft 2,6 metriin. Kolme ja
+      // puoli metriä on saavutettavissa arkisilla painoilla.
+      //
+      // Painon grammoja ei ehdoteta täällä — tässä sovelluksessa ei ole painon
+      // ja vedenvastuksen mallia. TrollingPro laskee sen.
       if (syvyys <= 1.5) {
         return { tapa: 'Plaanari tai veneen takaa', mekanismi: 'vieheen oma uinti',
-                 ft: null, huom: 'Syvyys tulee vieheen uinnista ja siimamäärästä.' };
+                 ft: null, huom: 'Syvyys tulee vieheen uinnista ja siimamäärästä, ei painosta.' };
+      }
+      if (syvyys <= 3.5) {
+        return { tapa: 'Plaanari + lyijypaino', mekanismi: 'painon suuruus',
+                 ft: null, huom: 'Dipsy ei ole pakollinen tällä syvyydellä. TrollingPro laskee painon ja siiman.' };
       }
       if (syvyys <= 12 && typeof sdComputeRatio === 'function') {
         const diaEl = document.getElementById('sdLineDia');
@@ -3088,6 +3101,143 @@ input[type=range]{width:100%;margin:12px 0 2px;accent-color:#16211f}
       return ulos;
     }
 
+    // ============================================================
+    // SANALLINEN OLOSUHDESELOSTUS — lisätty 11.9.2026
+    // ============================================================
+    // Taulukko kertoo mihin syvyyteen mennään. Se ei kerro MIKSI, eikä sitä
+    // mitä veneilijän pitää tietää. Tämä osio tekee sen kolmesta aiheesta:
+    // valo pinnan alla, aallokon kehitys ja merkitys, sekä kumpuaminen.
+    //
+    // Kaikki luvut lasketaan samoista funktioista kuin muukin sovellus —
+    // pintaLux, laskeKd, saaNyt. Mitään ei arvata erikseen tähän.
+
+    /* Valon määrä ja LAATU tavoitesyvyydellä. Laatu tarkoittaa sitä, mitkä
+       aallonpituudet ovat jäljellä: humusvesi päästää läpi pitkät aallonpituudet
+       (keltainen-punainen) ja syö siniset ensin, kirkas vesi päinvastoin.
+       Tämä on se fysiikka joka tekee kultaväreistä toimivia ruskeassa vedessä. */
+    function vvValoSelostus(syvyys, secchi) {
+      const nyt = new Date();
+      const doy = Math.floor((nyt - new Date(nyt.getFullYear(), 0, 0)) / 86400000);
+      const tz = -nyt.getTimezoneOffset() / 60;
+      const saa = saaNyt();
+      const h = auringonKorkeus(nyt.getHours() + nyt.getMinutes() / 60, doy,
+                                currentLocation.lat, currentLocation.lon, tz);
+      const pinta = pintaLux(h, saa.pilvi != null ? saa.pilvi : 40, saa.sade || 0);
+      const kd = laskeKd(secchi);
+      const syva = pinta * Math.exp(-kd * syvyys);
+      const osuus = pinta > 0 ? (syva / pinta) * 100 : 0;
+      const eufoottinen = 4.6 / kd;   // 1 % pinnan valosta
+
+      let maara;
+      if (syva > 1000)      maara = 'runsaasti valoa — näkösaalistus toimii täysillä';
+      else if (syva > 100)  maara = 'hyvin valoa — kontrasti erottuu selvästi';
+      else if (syva > 10)   maara = 'kohtalaisesti valoa — muoto näkyy, värit haalistuvat';
+      else if (syva > 1)    maara = 'vähän valoa — siluetti ratkaisee enemmän kuin väri';
+      else if (syva > 0.05) maara = 'hämärää — lähes pelkkä siluetti';
+      else                  maara = 'käytännössä pimeää näkösaalistukselle';
+
+      const kerroin = kdKerroin();
+      let laatu;
+      if (kerroin >= 2.5) {
+        laatu = 'Vesi on humuspitoista: sininen ja vihreä imeytyvät ensin, ja syvimmälle '
+              + 'tunkeutuu keltainen–punainen alue (noin 580–700 nm). Kulta, kupari ja '
+              + 'oranssi säilyttävät kontrastinsa pisimpään; hopea ja sininen katoavat ensin.';
+      } else if (kerroin >= 2.0) {
+        laatu = 'Vesi on lievästi humuspitoista: läpäisyn painopiste on vihreässä ja '
+              + 'keltaisessa (noin 530–620 nm). Sekä kulta että hopea toimivat, sininen ei.';
+      } else {
+        laatu = 'Vesi on kirkasta: syvimmälle tunkeutuu vihreä ja sininen. Hopea ja '
+              + 'sinivihreä säilyttävät kontrastinsa, punainen katoaa jo muutamassa metrissä.';
+      }
+
+      return `<p class="hint" style="margin-top:10px;"><strong>Valo ${vvNro(syvyys)} metrissä.</strong> `
+        + `Pinnalla ${Math.round(pinta)} lx, ${vvNro(syvyys)} metrissä noin `
+        + `${syva >= 1 ? Math.round(syva) : syva.toFixed(2)} lx eli `
+        + `${osuus >= 1 ? Math.round(osuus) + ' %' : osuus.toFixed(2) + ' %'} pinnan valosta — ${maara}. `
+        + `Yksi prosentti pinnan valosta on jäljellä ${vvNro(eufoottinen)} metrissä. `
+        + laatu + `</p>`;
+    }
+
+    /* Aallokon kehitys tuulesta ja mitä se tarkoittaa. Kaksi eri asiaa:
+       veneily (turvallisuus, ajomukavuus) ja kalastus (valo, kalan aktiivisuus).
+       Hs arvioidaan pyyhkäisyrajoitetulla approksimaatiolla — aaltokartassa on
+       tarkempi laskenta maskin kanssa, tämä on karkea suuruusluokka. */
+    function vvAaltoSelostus() {
+      const saa = saaNyt();
+      const U = saa.tuuli;
+      if (U === null || U === undefined)
+        return '<p class="hint" style="margin-top:8px;"><strong>Aallokko.</strong> Tuulitietoa ei saatu.</p>';
+
+      // Karkea pyyhkäisyrajoitettu arvio 5 km matkalle: Hs ≈ 0,0016·U·sqrt(F/g)
+      const F = 5000;
+      const Hs = 0.0016 * U * Math.sqrt(F / 9.81);
+      const Ts = 0.286 * U;
+
+      let tila, veneily, kalastus;
+      if (U < 2) {
+        tila = 'peilityyni tai lähes';
+        veneily = 'Ajaminen on helppoa, mutta pinta on peili: vene ja siimat näkyvät kalalle pitkälle.';
+        kalastus = 'Pitkät siimat ja levittäjät ovat tarpeen. Vieheet kannattaa viedä kauas vanasta.';
+      } else if (U < 4) {
+        tila = 'kevyt väre, ei vaahtopäitä';
+        veneily = 'Ihanteellinen ajokeli. Aallokko ei haittaa suunnan pitämistä eikä vapojen luentaa.';
+        kalastus = 'Pinta rikkoutuu juuri sen verran että se hajottaa siluetit. Tätä useimmat pitävät parhaana uistelukelinä.';
+      } else if (U < 7) {
+        tila = 'selviä aaltoja, ensimmäiset vaahtopäät';
+        veneily = 'Ajettavaa mutta vaativampaa. Sivutuulessa vene sortuu ja ajolinja karkaa — GPS-jälki kannattaa tarkistaa useammin.';
+        kalastus = 'Aallokko liikuttaa vieheitä pystysuunnassa ja usein parantaa ottia. Vapojen luenta vaikeutuu.';
+      } else if (U < 11) {
+        tila = 'vaahtopäitä yleisesti';
+        veneily = 'Pienellä veneellä epämukavaa ja avoimella selällä varottavaa. Paluumatka vastatuuleen on hitaampi kuin menomatka myötäiseen — laske se aikatauluun.';
+        kalastus = 'Kalastus on mahdollista mutta työlästä. Vieheiden pitäminen halutussa syvyydessä kärsii aallokon nostosta.';
+      } else {
+        tila = 'kova tuuli';
+        veneily = 'Avoimelle selälle ei ole asiaa pienellä veneellä. Suojaisat rannat ja lyhyet siirtymät.';
+        kalastus = 'Kalastus on toissijaista. Turvallisuus ensin.';
+      }
+
+      return `<p class="hint" style="margin-top:8px;"><strong>Aallokko.</strong> Tuuli ${vvNro(U)} m/s (${saa.tuuliLahde || 'lähde tuntematon'}) — ${tila}. `
+        + `Karkea arvio viiden kilometrin pyyhkäisyllä: merkitsevä aallonkorkeus noin ${Hs.toFixed(2)} m, jakso ${Ts.toFixed(1)} s. `
+        + `Tarkempi luku on aallonkorkeusosiossa, joka tuntee järven muodon. `
+        + `<em>Veneily:</em> ${veneily} <em>Kalastus:</em> ${kalastus}</p>`;
+    }
+
+    /* Kumpuaminen. Tämä on se kohta jossa vanha sovellus valehteli: se väitti
+       kylmän alusveden kumpuavan riippumatta siitä, oliko vesi kerrostunutta
+       tai tuuliko lainkaan. Kumpuaminen vaatii KOLME asiaa yhtä aikaa:
+       kerrostuneisuuden (kylmää vettä alla), riittävän tuulen ja SUUNNAN
+       (maatuuli työntää pintaveden ulos, kylmä nousee tilalle). */
+    function vvKumpuaminenSelostus() {
+      const saa = saaNyt();
+      const U = saa.tuuli;
+      let kerrostunut = null;
+      try {
+        if (drProfiili) kerrostunut = !drProfiili.tasalampoinen;
+        else {
+          const t = parseFloat((document.getElementById('thermoDepth') || {}).value);
+          if (!isNaN(t) && t > 0) kerrostunut = true;
+        }
+      } catch (e) { /* jää epävarmaksi */ }
+
+      let txt = '<p class="hint" style="margin-top:8px;"><strong>Kumpuaminen.</strong> ';
+      if (kerrostunut === false) {
+        txt += 'Vesipatsas on mitattu tasalämpöiseksi, joten kylmää alusvettä ei ole nousemassa. '
+             + 'Kumpuaminen ei ole tekijä tänään riippumatta tuulesta.';
+      } else if (kerrostunut === null) {
+        txt += 'Kerrostuneisuutta ei ole mitattu, joten kumpuamisesta ei voi sanoa mitään. '
+             + 'Syötä lämpötilaprofiili, niin tämä kohta osaa vastata.';
+      } else if (U !== null && U >= 5) {
+        txt += `Vesi on kerrostunutta ja tuulee ${vvNro(U)} m/s. Jos tuuli on puhaltanut samasta `
+             + 'suunnasta vuorokauden tai pidempään, maatuulen puoleisella rannalla pintavesi on '
+             + 'työntynyt ulos ja kylmää vettä on noussut tilalle. Se tuo syöttikalan lähemmäs '
+             + 'rantaa ja matalampaan kuin malli muuten arvaisi. Tuulen kesto ratkaisee, ei hetkellinen nopeus.';
+      } else {
+        txt += 'Vesi on kerrostunutta, mutta tuuli on liian heikko työntämään pintavettä sivuun. '
+             + 'Kumpuaminen vaatii useamman tunnin yhtäjaksoista tuulta, tyypillisesti yli 5 m/s.';
+      }
+      return txt + '</p>';
+    }
+
     function vvPaivanSuunnitelma(kala, secchi) {
       const tunnit = vvPaivanTunnit();
       if (!tunnit.length) return '<p class="hint">Aurinko ei nouse siviilihämärän yläpuolelle tänään.</p>';
@@ -3125,6 +3275,9 @@ input[type=range]{width:100%;margin:12px 0 2px;accent-color:#16211f}
           </tr></thead>
           <tbody>${rivit}</tbody>
         </table>
+        ${dNyt !== null ? vvValoSelostus(dNyt, secchi) : ''}
+        ${vvAaltoSelostus()}
+        ${vvKumpuaminenSelostus()}
         <p class="hint" style="margin-top:8px;"><strong>Kattaus nyt:</strong> ${dNyt !== null ? vvKattausPaino(dNyt) : '—'}</p>
         <p class="hint" style="margin-top:4px;">Nopeus ${vvNro(haarukka[0])}–${vvNro(haarukka[1])} km/h, siimapituudet laskettu ${vvNro(kmh)} km/h:lla.
         Siimakatto ${VV_MAX_FT} ft, tavoite alle ${VV_TAVOITE_FT} ft. Keltainen jalkaluku ylittää tavoitteen.</p>
@@ -6151,7 +6304,7 @@ lataa(eka);
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v72';
+    const APP_VERSIO = 'v75';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -6861,6 +7014,7 @@ lataa(eka);
           chip.onclick = () => {
             answers[q.id] = o.v;
             if (q.id === 'wind') tuuliLuokkaKasin = true;
+            if (q.id === 'season') kausiKasin = true;
             tallennaVastaukset();
             renderPika();
             renderQuestions();   // pidetään alempi lista synkassa
@@ -9490,10 +9644,24 @@ lataa(eka);
       // Havainto Lappajärveltä 11.9.2026 tukee tätä: samalla ajolla kuha oli
       // 9 m:ssä ja syvemmällä, isot ahvenet 2 m:ssä. Yksi syöttikalaluku ei voi
       // tuottaa seitsemän metrin eroa kahden lajin välille.
-      const dKuha = estimateKuhaDepth(targetHour, a.light, a.wind, dKuore);
+      // PERUTTU 11.9.2026: eilen syötin tähän kuoreen syvyyden, koska rivin 9472
+      // kommentti sanoi kuhan seuraavan kuoretta. Se oli väärä korjaus.
+      //
+      // estimateKuhaDepth KÄSITTELEE KUOREEN JO ITSE, ja sen oma kommentti varoittaa
+      // tästä nimenomaisesta virheestä: kuoretta ei saa käyttää kovana lattiana, koska
+      // se veisi kuhan epärealistisen syvälle ja ohittaisi optisen lattian. Funktio
+      // vetää kuhaa kuoreen suuntaan 25 %:n painolla, mikä on oikea tapa.
+      //
+      // Minun muutokseni teki kuoresta sekä kovan lattian (baitDepth + 1) ETTÄ jätti
+      // 25 %:n vedon päälle — sama tekijä kahdesti. Kuha painui 5,4 metristä 11,2:een.
+      // Lattiana käytetään siis taas muikkua, kuten ennenkin.
+      const dKuha = estimateKuhaDepth(targetHour, a.light, a.wind, activeBaitDepth);
       const dHauki = estimateHaukiDepth(targetHour, a.light, a.wind, activeBaitDepth);
       const dTaimen = estimateTaimenDepth(targetHour, a.light, a.wind, activeBaitDepth);
-      const dAhven = estimateAhvenDepth(targetHour, a.light, a.wind, dKuore);
+      // Ahvenelle parametri on merkityksetön — estimateAhvenDepth ei käytä
+      // saaliin syvyyttä lainkaan, ja sen kommentti kertoo miksi (Nakayama ym. 2018,
+      // Westrelin ym. 2022). Palautettu entiselleen, ettei koodi valehtele lukijalle.
+      const dAhven = estimateAhvenDepth(targetHour, a.light, a.wind, activeBaitDepth);
       const dJarvilohi = estimateJarvilohiDepth(targetHour, a.light, a.wind, activeBaitDepth);
       const dKirjolohi = estimateKirjolohiDepth(targetHour, a.light, a.wind);
 
@@ -9568,7 +9736,7 @@ lataa(eka);
       const lowJL = Math.max(1.5, dJarvilohi - havaintoYlos), highJL = dJarvilohi + 0.5;
 
       const isDayHour = onkoValoisa(targetHour);
-      reasonsAhven.push(`Ahven on päiväaktiivinen näkösaalistaja — käänteinen kuvio muihin lajeihin nähden. ${isDayHour ? `Päivällä se nousee patteille/termokliiniin, n. ${dAhven.toFixed(1)} m.` : `Hämärässä/illalla se painuu pohjaa kohti nukkumaan, n. ${dAhven.toFixed(1)} m.`}`);
+      reasonsAhven.push(`Ahven on päiväaktiivinen näkösaalistaja — käänteinen kuvio muihin lajeihin nähden. ${isDayHour ? `Päivällä se on aktiivisimmillaan sublittoraalilla ja matalikoiden reunoilla, n. ${dAhven.toFixed(1)} m.` : `Hämärässä/illalla se painuu pohjaa kohti nukkumaan, n. ${dAhven.toFixed(1)} m.`}`);
       if (a.wind === 'hard') reasonsAhven.push('Kova tuuli työntää ahventa hieman syvemmälle suojaan.');
 
       reasonsJarvilohi.push(`Järvilohi on Salmo salar — sama laji kuin merilohi, sisävesimuoto. Siksi Atlantin lohen fysiologia pätee suoraan: kasvuoptimi n. 13 °C, ei 9–12 °C. Se EI ole kylmän veden erikoistuja siinä mielessä kuin nieriä, eikä mitattua näyttöä löydy siitä että se olisi taimenta syvemmällä tai kylmähakuisempi.`);
@@ -10600,8 +10768,18 @@ lataa(eka);
       if (typeof renderQuestions === 'function') { try { renderQuestions(); } catch (e) {} }
     }
 
+    // KAUSI SEURAA PÄIVÄMÄÄRÄÄ — korjattu 11.9.2026.
+    // VIKA: funktio palasi heti jos kausi oli jo tallessa. Tallennettu vastaus
+    // säilyy istunnosta toiseen, joten kesäkuussa valittu "keskikesä" jäi voimaan
+    // syyskuussakin. Ahvenen keskipäivä antoi silloin 8,0 m (keskikesän taulukko)
+    // vaikka syksyn taulukko antaa 3,0 m — ja teksti väitti kalan olevan
+    // matalikoilla samalla kun luku sanoi kahdeksaa metriä.
+    //
+    // Nyt kausi päivittyy päivämäärän mukaan. Käsin valittu kausi ei ylikirjoitu
+    // saman istunnon aikana, koska paikan päällä voi olla syytä poiketa.
+    let kausiKasin = false;
     function autoFillSeason() {
-      if (answers.season !== undefined) return;
+      if (kausiKasin) return;
       const dateStr = document.getElementById('tripDate').value;
       if (!dateStr) return;
       const seasonVal = suggestSeasonForDate(dateStr);
