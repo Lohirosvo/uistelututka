@@ -68,8 +68,15 @@ body{
    (translateX). Leikkausalue kulkee elementin mukana: kun rata siirtyi
    -100 %, myös ikkuna jonka läpi katsotaan siirtyi saman verran, joten
    ruutu 2 jäi sen ulkopuolelle ja näkyviin jäi pelkkä tausta. Leikkaus
-   kuuluu paikallaan pysyvälle .lehti-elementille, rata vain liikkuu. */
-.ruudut{flex:1;display:flex;will-change:transform}
+   kuuluu paikallaan pysyvälle .lehti-elementille, rata vain liikkuu.
+
+   min-height:0 EI OLE KORISTE. Poistettu overflow:hidden teki kahta asiaa,
+   joista vain toinen oli tarkoitettu: se myös nollasi flex-itemin
+   min-height:auto-oletuksen. Ilman nollausta .ruudut ei voi kutistua
+   sisältöään pienemmäksi, venyy korkeimman ruudun mittaiseksi ja työntää
+   navipalkin .lehti:n alareunan ohi — eli näkymättömiin. min-width:0 on
+   sama asia vaakasuunnassa. Älä poista kumpaakaan. */
+.ruudut{flex:1;min-height:0;min-width:0;display:flex;will-change:transform}
 .ruutu{flex:0 0 100%;height:100%;overflow-y:auto;overflow-x:hidden;
   padding:14px 14px 24px;scrollbar-width:none}
 .ruutu::-webkit-scrollbar{display:none}
