@@ -50,7 +50,7 @@ body{
     linear-gradient(90deg,rgba(94,200,229,.035) 1px,transparent 1px);
   background-size:96px 96px,96px 96px,24px 24px,24px 24px;
 }
-.lehti{position:fixed;inset:0;display:flex;flex-direction:column}
+.lehti{position:fixed;inset:0;display:flex;flex-direction:column;overflow:hidden}
 .otsikkopalkki{
   flex:none;padding:10px 14px 8px;border-bottom:1px solid var(--viiva-vahva);
   background:linear-gradient(180deg,rgba(6,16,24,.97),rgba(6,16,24,.82));
@@ -63,7 +63,13 @@ body{
 .koordinaatti{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--himmea);
   text-align:right;line-height:1.5;white-space:nowrap}
 
-.ruudut{flex:1;display:flex;overflow:hidden;will-change:transform}
+/* KORJATTU 15.9.2026 — kaikki muut ikkunat kuin 48 h olivat tyhjiä.
+   .ruudut sekä LEIKKASI ylivuodon (overflow:hidden) että LIIKKUI
+   (translateX). Leikkausalue kulkee elementin mukana: kun rata siirtyi
+   -100 %, myös ikkuna jonka läpi katsotaan siirtyi saman verran, joten
+   ruutu 2 jäi sen ulkopuolelle ja näkyviin jäi pelkkä tausta. Leikkaus
+   kuuluu paikallaan pysyvälle .lehti-elementille, rata vain liikkuu. */
+.ruudut{flex:1;display:flex;will-change:transform}
 .ruutu{flex:0 0 100%;height:100%;overflow-y:auto;overflow-x:hidden;
   padding:14px 14px 24px;scrollbar-width:none}
 .ruutu::-webkit-scrollbar{display:none}
