@@ -10,12 +10,15 @@
 // Muut tiedostot (kuvakkeet, manifest) haetaan välimuistista ensin — ne eivät muutu.
 //
 // VERSIO: kasvata tätä aina kun julkaiset uuden version. Vanha välimuisti siivotaan.
-const VERSIO = 'uistelututka-v79';
+const VERSIO = 'uistelututka-v80';
 const SIVU = './';
 
+// KAKSI SOVELLUSSIVUA 13.9.2026 alkaen: vanha index.html ja uusi index2.html.
+// Molemmat välimuistissa omalla avaimellaan — ks. fetch-käsittelijän korjaus.
 const ESILADATTAVAT = [
   './',
   './index.html',
+  './index2.html',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
@@ -58,18 +61,29 @@ self.addEventListener('fetch', (e) => {
 
   const onSivu = req.mode === 'navigate' ||
                  url.pathname.endsWith('/') ||
-                 url.pathname.endsWith('index.html');
+                 url.pathname.endsWith('.html');
 
   if (onSivu) {
-    // Network-first: tuore versio jos verkko toimii, muuten välimuisti.
+    // KORJATTU 13.9.2026. Aiemmin jokaisen navigoinnin vastaus tallennettiin
+    // KIINTEÄLLÄ avaimella './'. Kahden sovellussivun kanssa se rikkoo molemmat:
+    // index2.html:n avaaminen olisi korvannut juuren sisällön, ja offline-tilassa
+    // sovellus olisi avannut väärän sivun. Nyt jokainen sivu tallentuu omalla
+    // osoitteellaan, ja juuri './' päivitetään vain kun juurta itseään pyydetään.
+    const juuri = url.pathname.endsWith('/') || url.pathname.endsWith('index.html');
     e.respondWith(
       fetch(req)
         .then(vast => {
           const kopio = vast.clone();
-          caches.open(VERSIO).then(c => c.put(SIVU, kopio));
+          caches.open(VERSIO).then(c => {
+            c.put(req, kopio.clone());
+            if (juuri) c.put(SIVU, kopio);
+          });
           return vast;
         })
-        .catch(() => caches.match(SIVU).then(v => v || caches.match('./index.html')))
+        // Offline: ensin tämä sama sivu, vasta sitten juuri varalle.
+        .catch(() => caches.match(req)
+          .then(v => v || (juuri ? caches.match(SIVU) : null))
+          .then(v => v || caches.match('./index.html')))
     );
   } else {
     // Cache-first muille: kuvakkeet ja manifest eivät muutu.

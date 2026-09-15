@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#061018">
+<title>Uistelututka</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   UISTELUTUTKA — UUSI RUNKO. Vaihe 1, 13.9.2026
+   ============================================================
+   ERILLINEN TIEDOSTO TARKOITUKSELLA. Vanha index.html jää pystyyn ja
+   toimivaksi koko siirron ajan. Kalastuskausi on kesken; rikkinäinen
+   sovellus vesillä on pahempi ongelma kuin kaksi tiedostoa hetken aikaa.
+
+   PERIAATE: yksi ikkuna = yksi päätös.
+     48 h        lähdenkö          VALMIS
+     12-6 h      minne ja millä    siirretään päivän suunnitelmasta
+     lähtöhetki  onko muuttunut    vaatii eilisen ennusteen talteen
+     vesillä     mitä nyt          karsitaan nykyisestä
+     muut        loput             siirretään sellaisenaan
+
+   SIIRTOJÄRJESTYS JA MITÄ KUKIN VAATII on kirjattu jokaisen tyhjän
+   ikkunan sisään, jotta seuraava vaihe ei ala arvailusta.
+
+   AVAUTUMINEN: GPS ratkaisee. Liikkuva vene -> Vesillä, muuten 48 h.
+   Kellonajasta ei voi päätellä oletko lähdössä; arvaus joka avaa väärän
+   ikkunan on ärsyttävämpi kuin kiinteä oletus.
+   ============================================================ */
+
+:root{
+  --meri-900:#061018; --meri-800:#0a1a24; --meri-700:#0f2836;
+  --ruudukko:rgba(94,200,229,.07);
+  --viiva:rgba(122,170,190,.28); --viiva-vahva:rgba(122,170,190,.55);
+  --teksti:#e8f2f6; --himmea:#7c95a3; --paperi:#c8d8e0;
+  --syvan:#5ec8e5; --merkki:#ffc247; --vaara:#ff6b5e; --ok:#5fd6a4;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden}
+body{
+  background:var(--meri-900);color:var(--teksti);
+  font-family:'Barlow Condensed',system-ui,sans-serif;font-size:17px;
+  background-image:
+    linear-gradient(var(--ruudukko) 1px,transparent 1px),
+    linear-gradient(90deg,var(--ruudukko) 1px,transparent 1px),
+    linear-gradient(rgba(94,200,229,.035) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(94,200,229,.035) 1px,transparent 1px);
+  background-size:96px 96px,96px 96px,24px 24px,24px 24px;
+}
+.lehti{position:fixed;inset:0;display:flex;flex-direction:column}
+.otsikkopalkki{
+  flex:none;padding:10px 14px 8px;border-bottom:1px solid var(--viiva-vahva);
+  background:linear-gradient(180deg,rgba(6,16,24,.97),rgba(6,16,24,.82));
+  display:flex;align-items:flex-end;justify-content:space-between;gap:10px;
+}
+.lehtinro{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;
+  color:var(--himmea);text-transform:uppercase}
+.lehtinimi{font-size:23px;font-weight:700;letter-spacing:.04em;line-height:1}
+.lehtinimi em{font-style:normal;color:var(--syvan)}
+.koordinaatti{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--himmea);
+  text-align:right;line-height:1.5;white-space:nowrap}
+
+.ruudut{flex:1;display:flex;overflow:hidden;will-change:transform}
+.ruutu{flex:0 0 100%;height:100%;overflow-y:auto;overflow-x:hidden;
+  padding:14px 14px 24px;scrollbar-width:none}
+.ruutu::-webkit-scrollbar{display:none}
+
+.leima{display:inline-flex;border:1.5px solid currentColor;border-radius:3px;
+  padding:3px 9px;margin-bottom:12px;font-family:'JetBrains Mono',monospace;
+  font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
+  transform:rotate(-.6deg)}
+.leima.sininen{color:var(--syvan)} .leima.keltainen{color:var(--merkki)}
+.leima.punainen{color:var(--vaara)} .leima.vihrea{color:var(--ok)}
+
+.arvo{font-family:'JetBrains Mono',monospace;font-weight:700;line-height:1.1}
+.selite{font-size:13px;color:var(--himmea);margin-top:6px;
+  text-transform:uppercase;letter-spacing:.1em}
+
+.jakso{display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+  padding:9px 0;border-bottom:1px dotted var(--viiva)}
+.jakso:last-child{border-bottom:none}
+.jakso .kello{font-family:'JetBrains Mono',monospace;font-size:19px;font-weight:700;
+  white-space:nowrap;color:var(--ok)}
+
+.mitat{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--viiva);
+  border:1px solid var(--viiva);margin:12px 0}
+.mitta{background:var(--meri-800);padding:10px 11px}
+.mitta .nimi{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;
+  color:var(--himmea);text-transform:uppercase;margin-bottom:4px}
+.mitta .luku{font-family:'JetBrains Mono',monospace;font-size:21px;font-weight:700;line-height:1}
+.mitta .luku small{font-size:11px;color:var(--himmea);font-weight:400;margin-left:3px}
+
+.este{border:1.5px solid var(--vaara);border-radius:4px;padding:11px 12px;margin:12px 0;
+  font-size:14.5px;line-height:1.45;color:var(--paperi)}
+.este b{color:var(--vaara);display:block;font-size:12px;letter-spacing:.1em;
+  text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:5px}
+
+details.peruste{border-top:1px solid var(--viiva);margin-top:9px;padding-top:8px}
+details.peruste summary{list-style:none;cursor:pointer;font-family:'JetBrains Mono',monospace;
+  font-size:10px;letter-spacing:.12em;color:var(--himmea);text-transform:uppercase;
+  display:flex;align-items:center;gap:6px}
+details.peruste summary::-webkit-details-marker{display:none}
+details.peruste summary::before{content:'▸';font-size:11px}
+details.peruste[open] summary::before{content:'▾'}
+details.peruste .sisalto{font-size:14.5px;line-height:1.5;color:var(--paperi);margin-top:8px}
+details.peruste .sisalto p{margin:0 0 8px}
+.lahde{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--himmea);letter-spacing:.06em}
+.lahde.m{color:var(--ok)} .lahde.a{color:var(--merkki)}
+
+.jana{display:flex;height:30px;margin:12px 0 4px;border:1px solid var(--viiva);
+  border-radius:3px;overflow:hidden}
+.jana i{flex:1;min-width:0}
+.janaSelite{display:flex;justify-content:space-between;
+  font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--himmea)}
+
+select{width:100%;padding:11px 10px;font-size:16px;font-family:inherit;
+  background:var(--meri-800);color:var(--teksti);border:1px solid var(--viiva-vahva);
+  border-radius:4px;-webkit-appearance:none;appearance:none;margin-bottom:4px}
+.valintaOhje{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--himmea);
+  letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px}
+
+.marginaali{font-family:'JetBrains Mono',monospace;font-size:9.5px;line-height:1.6;
+  color:var(--himmea);letter-spacing:.05em;border-top:1px solid var(--viiva);
+  margin-top:18px;padding-top:10px}
+
+/* Tyhjä ikkuna: kertoo mitä siihen tulee ja mitä se vaatii. */
+.kesken{border:1px dashed var(--viiva-vahva);border-radius:6px;padding:16px;
+  font-size:15px;line-height:1.55;color:var(--paperi)}
+.kesken h4{margin:0 0 8px;font-size:17px;font-weight:700;color:var(--teksti)}
+.kesken ul{margin:8px 0 0;padding-left:18px}
+.kesken li{margin-bottom:5px}
+.kesken .vaatii{font-family:'JetBrains Mono',monospace;font-size:10px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--merkki);
+  margin-top:12px;display:block}
+
+nav{flex:none;display:grid;grid-template-columns:repeat(5,1fr);
+  border-top:1px solid var(--viiva-vahva);background:rgba(6,16,24,.97);
+  padding-bottom:env(safe-area-inset-bottom)}
+nav button{background:none;border:none;padding:9px 2px 11px;cursor:pointer;
+  color:var(--himmea);font-family:'JetBrains Mono',monospace;font-size:9px;
+  letter-spacing:.08em;text-transform:uppercase;display:flex;flex-direction:column;
+  align-items:center;gap:4px;border-top:2px solid transparent;margin-top:-1px}
+nav button b{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:.02em}
+nav button.on{color:var(--syvan);border-top-color:var(--syvan)}
+</style>
+</head>
+<body>
+
+<div class="lehti">
+  <div class="otsikkopalkki">
+    <div>
+      <div class="lehtinro" id="lehtinro">Lehti 47.031 · Lappajärvi</div>
+      <div class="lehtinimi">Uistelu<em>tutka</em></div>
+    </div>
+    <div class="koordinaatti">63°08′N 023°32′E<br><span id="kello">–</span></div>
+  </div>
+
+  <div class="ruudut" id="ruudut">
+
+    <!-- ============ 1. 48 H ============ -->
+    <section class="ruutu">
+      <div class="leima sininen">48 h · lähdenkö</div>
+      <select id="vene" onchange="valitseVene(this.value)"></select>
+      <div class="valintaOhje">Vene · siirtyy Muut-ikkunaan</div>
+      <div id="sisalto48">
+        <div class="arvo" style="font-size:26px;color:var(--himmea)">Haetaan ennustetta…</div>
+      </div>
+    </section>
+
+    <!-- ============ 2. 12–6 H ============ -->
+    <section class="ruutu">
+      <div class="leima keltainen">12–6 h · minne ja millä</div>
+      <div class="kesken">
+        <h4>Seuraava vaihe</h4>
+        Tähän siirretään päätökset, jotka tehdään pöydän ääressä ennen lähtöä.
+        <ul>
+          <li>Lajivalinta ja tavoitesyvyys</li>
+          <li>Paikkasuositus tuulen ja pohjanmuodon perusteella</li>
+          <li>Viehevalinta ja väri pintoineen</li>
+          <li>Päivän syvyyskäyrä tunneittain</li>
+          <li>Kattauksen painopiste</li>
+          <li>Lähetä TrollingProlle</li>
+        </ul>
+        <span class="vaatii">Vaatii: valmis vanhassa, siirto sellaisenaan</span>
+      </div>
+    </section>
+
+    <!-- ============ 3. LÄHTÖHETKI ============ -->
+    <section class="ruutu">
+      <div class="leima punainen">Lähtöhetki · onko muuttunut</div>
+      <div class="kesken">
+        <h4>Näyttää vain erot</h4>
+        Ei toista eilistä analyysiä. Kertoo mikä poikkeaa siitä mitä viimeksi luki,
+        ja on muuten hiljainen.
+        <ul>
+          <li>Tuuli nyt vastaan ennuste</li>
+          <li>Sumuriski nyt</li>
+          <li>Vedenkorkeus ja veneenlasku</li>
+          <li>DepthRider-profiilin syöttö</li>
+          <li>Release the Dragon</li>
+        </ul>
+        <span class="vaatii">Vaatii: edellisen ennusteen tallennuksen vertailua varten</span>
+      </div>
+    </section>
+
+    <!-- ============ 4. VESILLÄ ============ -->
+    <section class="ruutu">
+      <div class="leima vihrea">Vesillä</div>
+      <div class="kesken">
+        <h4>Märät kädet, yksi käsi kaasulla</h4>
+        Ei tekstiä, ei kirjoittamista, isot kohteet. Kala kiinni -nappi kattaa
+        puolet ruudusta, loput on kolme lukua.
+        <ul>
+          <li>Kala kiinni · kirjaa nyt, täydennä illalla</li>
+          <li>Nopeus, tavoitesyvyys, pohja</li>
+          <li>Sataako</li>
+          <li>Vapautusohje kun syvyys on syötetty</li>
+        </ul>
+        <span class="vaatii">Vaatii: karsintaa, ei uutta logiikkaa</span>
+      </div>
+    </section>
+
+    <!-- ============ 5. MUUT ============ -->
+    <section class="ruutu">
+      <div class="leima sininen">Muut</div>
+      <div class="kesken">
+        <h4>Kaikki mitä ei tarvita päätöshetkellä</h4>
+        Siirretään sellaisenaan, omina avattavina osioinaan.
+        <ul>
+          <li>Saalisloki ja CSV-vienti</li>
+          <li>Aallonkorkeuskartta · sumuriski · Windy · sadetutka</li>
+          <li>Valovyöhyke</li>
+          <li>SYKE-syvyysanalyysi ja omat merkinnät</li>
+          <li>Viehekalibrointi ja mallin säätimet</li>
+          <li>Kyselyn vastaukset · venevalinta · paikkavalinta</li>
+        </ul>
+        <span class="vaatii">Vaatii: siirto, ei muutoksia</span>
+      </div>
+      <div class="marginaali">
+        Vaihe 1 · 13.9.2026<br>
+        Vanha index.html on yhä käytössä ja toimii.<br>
+        Datalähteet: Ilmatieteen laitos (CC BY 4.0)
+      </div>
+    </section>
+
+  </div>
+
+  <nav id="navi">
+    <button class="on" onclick="nayta(0,this)"><b>48h</b>ennakko</button>
+    <button onclick="nayta(1,this)"><b>12h</b>suunnittelu</button>
+    <button onclick="nayta(2,this)"><b>0h</b>lähtö</button>
+    <button onclick="nayta(3,this)"><b>▲</b>vesillä</button>
+    <button onclick="nayta(4,this)"><b>···</b>muut</button>
+  </nav>
+</div>
+
+<script>
+"use strict";
+
+/* ---------- PAIKAT ---------- */
+const PAIKAT = [
+  { nimi:'Lappajärvi', tunnus:'47.031', lat:63.14378, lon:23.53885, maxDepth:36, areaKm2:142 },
+  { nimi:'Hirvijärven tekoallas', tunnus:'44.092', lat:62.775, lon:23.011, maxDepth:7.5, areaKm2:16.5 },
+  { nimi:'Inarijärvi', tunnus:'71.111', lat:68.919, lon:27.733, maxDepth:92, areaKm2:1040 }
+];
+let paikka = PAIKAT[0];
+
+/* ---------- VENEET ----------
+   Raja = merkitsevä aallonkorkeus jossa uistelu lakkaa olemasta mielekästä.
+   Kalastajan omia arvioita omasta kalustostaan — parasta saatavilla olevaa
+   tietoa, mutta arvioita. Kymmenes vene on yksi rivi, myös valikkoon. */
+const VENEET = {
+  paijan470:{ nimi:'Päijän 470/471 · sähkö 55 lbs', raja:0.30,
+    syy:'Sähkömoottorin työntövoima loppuu vastatuulessa ja kevyt soutuvene sortaa hallitsemattomasti.' },
+  paijan520:{ nimi:'Päijän 520 · 10 hv', raja:0.40,
+    syy:'Kapea ja matalalaitainen runko kyntää terävää aaltoa, ja veden hörppäämisen riski kasvaa voimakkaasti.' },
+  sunbuster:{ nimi:'Sun Buster · 30 hv', raja:0.50,
+    syy:'Lyhyt, tylppä ja tasapohjainen alumiinirunko hakkaa aaltoihin rajusti ja roiskevedet kastelevat kuskin.' },
+  ph500:{ nimi:'Pilothouse 500 · 80 hv', raja:0.60,
+    syy:'Tylppä keula pamahtelee terävään aaltoon, ja korkea keulapainoinen hytti tekee ohjailusta sivutuulessa taistelua.' },
+  dorado100:{ nimi:'Silver Dorado · 100 hv', raja:0.60,
+    syy:'Etupainoisen HT-veneen keula alkaa rynkyttää plaanissa, ja kate kerää sivutuulta häiriten autopilotin työtä.' },
+  faster525:{ nimi:'Faster 525 CC', raja:0.70,
+    syy:'Keskipulpetti pitää suunnan, mutta lyhyt 5,2 metrin avorunko ei riitä ylittämään teräviä aaltoja ilman kovaa hakkautumista.' },
+  shark580:{ nimi:'Silver Shark CC 580 · 100 hv', raja:0.80,
+    syy:'Pidempi runko halkoo vettä loistavasti, mutta matalassa avoveneessä fyysinen rynkytys ja roiskevedet käyvät lopulta liian raskaaksi.' },
+  falconc7:{ nimi:'Falcon C 7 · 115 hv', raja:0.90,
+    syy:'Raskas ja pitkä runko kestää merta, mutta lähestyttäessä metriä suuren hytin tuulipinta-ala tekee veneen hallinnasta raastavaa.' },
+  beason630:{ nimi:'Beason 630 WA · 150 hv+', raja:1.20,
+    syy:'Syvä 24-asteinen V-pohja ja valtava massa sietävät jyrkkääkin keliä; raja tulee vastaan lähinnä kalastuksen fyysisessä mielekkyydessä.' }
+};
+const LS_VENE = 'uistelututka_vene';
+const HAMARA_KIRISTYS = 0.15;   // [A] valittu luku, ei mitattu
+let vene = 'ph500';
+let ennuste = [];
+
+/* ---------- AURINKO ---------- */
+const D2R = Math.PI/180;
+function auringonKorkeus(d){
+  const doy = Math.floor((d - new Date(d.getFullYear(),0,0))/86400000);
+  const h = d.getHours() + d.getMinutes()/60;
+  const tz = -d.getTimezoneOffset()/60;
+  const dec = 23.45*Math.sin(D2R*360*(284+doy)/365);
+  const B = D2R*360*(doy-81)/364;
+  const et = 9.87*Math.sin(2*B) - 7.53*Math.cos(B) - 1.5*Math.sin(B);
+  const aurAika = h + (4*(paikka.lon - 15*tz) + et)/60;
+  const tunti = D2R*15*(aurAika-12);
+  const s = Math.sin(D2R*paikka.lat)*Math.sin(D2R*dec)
+          + Math.cos(D2R*paikka.lat)*Math.cos(D2R*dec)*Math.cos(tunti);
+  return Math.asin(Math.max(-1,Math.min(1,s)))/D2R;
+}
+
+/* ---------- AALLONKORKEUS ----------
+   Sama malli kuin aallonkorkeuskartassa, mutta ilman maskia: yksi luku
+   tunnille, järven pahin. Pyyhkäisymatka ympyräekvivalenttina pinta-alasta.
+   Kartta tekee suunnatun laskennan ja kertoo missä on suojaisaa; tämä
+   kertoo milloin kannattaa lähteä. Jos kaavoja muutetaan, molemmat. */
+function hs(U, tunteja){
+  if(!(U > 0.5)) return 0;
+  const g = 9.81;
+  const L = 2*Math.sqrt(paikka.areaKm2*1e6/Math.PI);
+  const syvyys = Math.min(12, paikka.maxDepth);
+  const kesto = Math.pow(tunteja*3600*Math.pow(U,0.34)*Math.pow(g,0.33)/77.23, 1/0.67);
+  const F = Math.max(50, Math.min(L, kesto));
+  return Math.min(0.0016*Math.sqrt(g*F/(U*U))*U*U/g,
+                  0.283*(U*U/g)*Math.tanh(0.53*Math.pow(g*syvyys/(U*U),0.75)));
+}
+
+/* Raja tunnille. null = pimeä, ei lähdetä. Kiristys liukuva. */
+function raja(aika){
+  const perus = VENEET[vene].raja;
+  const k = auringonKorkeus(aika);
+  if(k < -6) return null;
+  if(k >= 10) return perus;
+  return perus - HAMARA_KIRISTYS*(1 - (k+6)/16);
+}
+
+/* Kelvolliset jaksot, ei ensimmäinen este. */
+function jaksot(){
+  const ulos = []; let auki = null;
+  ennuste.forEach((t,i) => {
+    const r = raja(t.aika);
+    const kelpaa = r !== null && t.hs <= r;
+    if(kelpaa && !auki) auki = { alku:t.aika, pahin:t.hs };
+    else if(kelpaa && auki) auki.pahin = Math.max(auki.pahin, t.hs);
+    if(!kelpaa && auki){ auki.loppu = ennuste[i-1].aika; ulos.push(auki); auki = null; }
+  });
+  if(auki){ auki.loppu = ennuste[ennuste.length-1].aika; ulos.push(auki); }
+  return ulos.filter(j => (j.loppu - j.alku)/3600000 >= 2);
+}
+
+function pieninRiittava(h){
+  const k = Object.keys(VENEET).filter(x => VENEET[x].raja >= h)
+    .sort((a,b) => VENEET[a].raja - VENEET[b].raja);
+  return k.length ? VENEET[k[0]].nimi : null;
+}
+
+const pad = n => String(n).padStart(2,'0');
+const kello = d => pad(d.getHours()) + ':00';
+function paivanNimi(d){
+  const n = new Date();
+  const e = Math.round((new Date(d.getFullYear(),d.getMonth(),d.getDate())
+          - new Date(n.getFullYear(),n.getMonth(),n.getDate()))/86400000);
+  return e===0?'Tänään':e===1?'Huomenna':e===2?'Ylihuomenna'
+       :['su','ma','ti','ke','to','pe','la'][d.getDay()];
+}
+const nro = x => x.toFixed(2).replace('.',',');
+
+/* ---------- PIIRTO ---------- */
+function piirra48(){
+  const box = document.getElementById('sisalto48');
+  const v = VENEET[vene];
+  if(!ennuste.length){
+    box.innerHTML = '<div class="arvo" style="font-size:26px;color:var(--merkki)">'
+      + 'Ennustetta ei saatu</div><div class="selite">Tarkista verkkoyhteys</div>';
+    return;
+  }
+  const js = jaksot();
+
+  let paa;
+  if(!js.length){
+    const matalin = Math.min.apply(null, ennuste.map(t => t.hs));
+    const ehdotus = pieninRiittava(matalin);
+    paa = '<div class="arvo" style="font-size:27px;color:var(--vaara)">Ei kelvollista jaksoa</div>'
+      + '<div class="selite">' + (ehdotus ? 'Vaatisi vähintään: ' + ehdotus
+        : 'Kahden vuorokauden sisällä') + '</div>';
+  } else {
+    const j = js[0];
+    paa = '<div class="arvo" style="font-size:36px;color:var(--ok)">'
+      + paivanNimi(j.alku) + ' ' + kello(j.alku) + '–' + kello(j.loppu) + '</div>'
+      + '<div class="selite">Pahin aalto jaksolla ' + nro(j.pahin) + ' m</div>';
+  }
+
+  const sumutunnit = ennuste.filter(t => t.T != null && t.Td != null
+    && (t.T - t.Td) < 1.0 && t.U < 3 && raja(t.aika) !== null);
+  const sumu = sumutunnit.length
+    ? '<div class="este"><b>Sumuriski · erillinen este</b>'
+      + sumutunnit.length + ' tuntia, joissa lämpötilan ja kastepisteen ero on alle asteen '
+      + 'ja tuuli alle 3 m/s — ensimmäinen ' + paivanNimi(sumutunnit[0].aika).toLowerCase()
+      + ' klo ' + kello(sumutunnit[0].aika) + '. Aallonkorkeus ei muutu tästä, mutta '
+      + 'ilman tutkaa rannan löytäminen muuttuu arvailuksi.</div>'
+    : '';
+
+  const lista = js.map(j => {
+    const h = Math.round((j.loppu - j.alku)/3600000) + 1;
+    return '<div class="jakso"><div>' + paivanNimi(j.alku)
+      + '<div class="selite" style="margin-top:2px;letter-spacing:.04em">' + h
+      + ' tuntia · pahin ' + nro(j.pahin) + ' m</div></div>'
+      + '<div class="kello">' + kello(j.alku) + '–' + kello(j.loppu) + '</div></div>';
+  }).join('');
+
+  const jana = '<div class="jana">' + ennuste.map(t => {
+      const r = raja(t.aika);
+      const c = r === null ? 'rgba(255,255,255,.07)'
+        : t.hs <= r*0.7 ? 'var(--ok)' : t.hs <= r ? 'var(--merkki)' : 'var(--vaara)';
+      return '<i style="background:' + c + '" title="' + kello(t.aika) + ' · ' + nro(t.hs) + ' m"></i>';
+    }).join('') + '</div><div class="janaSelite"><span>'
+    + paivanNimi(ennuste[0].aika) + ' ' + kello(ennuste[0].aika) + '</span><span>'
+    + paivanNimi(ennuste[ennuste.length-1].aika) + ' ' + kello(ennuste[ennuste.length-1].aika)
+    + '</span></div>';
+
+  const n = ennuste[0];
+  const mitat = '<div class="mitat">'
+    + '<div class="mitta"><div class="nimi">Tuuli nyt</div><div class="luku">'
+      + n.U.toFixed(0) + '<small>m/s</small></div></div>'
+    + '<div class="mitta"><div class="nimi">Aalto nyt</div><div class="luku">'
+      + nro(n.hs) + '<small>m</small></div></div>'
+    + '<div class="mitta"><div class="nimi">Veneen raja</div><div class="luku">'
+      + nro(v.raja) + '<small>m</small></div></div></div>';
+
+  const peruste =
+      '<details class="peruste"><summary>Veneen raja ja syy</summary><div class="sisalto">'
+    + '<p><strong>' + v.nimi + ' · raja ' + nro(v.raja) + ' m</strong></p><p>' + v.syy + '</p>'
+    + '<p class="lahde a">[A] Kalastajan oma arvio omasta kalustostaan</p></div></details>'
+    + '<details class="peruste"><summary>Miksi hämärä kiristää rajaa</summary><div class="sisalto">'
+    + '<p>Aallokossa ajaminen perustuu siihen että aallot näkee etukäteen. Hämärässä ennakointi '
+    + 'katoaa ensin ja pimeässä kokonaan, joten sama aallonkorkeus on eri asia eri kellonaikaan. '
+    + 'Raja kiristyy liukuvasti auringon korkeuden mukaan, ja pimeä aika rajataan pois.</p>'
+    + '<p class="lahde a">[A] Kiristys 0,15 m on valittu luku</p></div></details>'
+    + '<details class="peruste"><summary>Miten aallonkorkeus lasketaan</summary><div class="sisalto">'
+    + '<p>Tuuliennuste tunnin välein, ja aallonkorkeus pyyhkäisyrajoitetulla approksimaatiolla: '
+    + 'tuuli, matka jonka se saa vaikuttaa, ja kuinka kauan se on puhaltanut samasta suunnasta. '
+    + 'Tässä käytetään järven pahinta kohtaa — paikkakohtaiset erot näkyvät kartassa.</p>'
+    + '<p class="lahde m">[M] Tuuli: FMI HARMONIE</p>'
+    + '<p class="lahde a">[A] Aallonkorkeus: kalibroimaton arvio</p></div></details>';
+
+  box.innerHTML = paa + sumu + lista + jana + mitat + peruste
+    + '<div class="marginaali">Ennuste ' + ennuste.length + ' tuntia · haettu '
+    + kello(new Date()) + '<br>Datalähteet: Ilmatieteen laitos (CC BY 4.0)</div>';
+}
+
+/* ---------- FMI ---------- */
+function fmiUrl(){
+  return 'https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature'
+    + '&storedquery_id=fmi::forecast::harmonie::surface::point::simple'
+    + '&latlon=' + paikka.lat + ',' + paikka.lon
+    + '&parameters=Temperature,DewPoint,WindSpeedMS,WindDirection&timestep=60';
+}
+
+function hae(){
+  fetch(fmiUrl(), { cache:'no-store' })
+    .then(r => r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status)))
+    .then(txt => {
+      const xml = new DOMParser().parseFromString(txt, 'application/xml');
+      const NS = 'http://xml.fmi.fi/schema/wfs/2.0';
+      const el = xml.getElementsByTagNameNS(NS, 'BsWfsElement');
+      if(!el.length) throw new Error('ei kohteita');
+      const hetket = new Map();
+      for(let i=0;i<el.length;i++){
+        const aika = el[i].getElementsByTagNameNS(NS,'Time')[0];
+        const nimi = el[i].getElementsByTagNameNS(NS,'ParameterName')[0];
+        const arvo = el[i].getElementsByTagNameNS(NS,'ParameterValue')[0];
+        if(!aika || !nimi || !arvo) continue;
+        const a = parseFloat(arvo.textContent);
+        if(isNaN(a)) continue;
+        const t = aika.textContent;
+        if(!hetket.has(t)) hetket.set(t, { aika:new Date(t) });
+        hetket.get(t)[nimi.textContent] = a;
+      }
+      const rivit = Array.from(hetket.values())
+        .filter(r => r.WindSpeedMS != null)
+        .sort((a,b) => a.aika - b.aika).slice(0,49);
+      ennuste = rivit.map((r,i) => {
+        let t = 1;
+        for(let k=i-1;k>=0;k--){
+          const ero = Math.abs(((rivit[k].WindDirection - r.WindDirection + 540) % 360) - 180);
+          if(ero > 45 || rivit[k].WindSpeedMS < 0.55*Math.max(r.WindSpeedMS,0.5)) break;
+          t++;
+        }
+        return { aika:r.aika, U:r.WindSpeedMS, dir:r.WindDirection,
+                 T:r.Temperature, Td:r.DewPoint, hs:hs(r.WindSpeedMS, t) };
+      });
+      piirra48();
+    })
+    .catch(() => { ennuste = []; piirra48(); });
+}
+
+/* ---------- NAVIGOINTI ---------- */
+const ruudut = document.getElementById('ruudut');
+let nyt = 0;
+function nayta(i, el){
+  nyt = i;
+  ruudut.style.transition = 'transform .28s cubic-bezier(.4,0,.2,1)';
+  ruudut.style.transform = 'translateX(' + (-i*100) + '%)';
+  document.querySelectorAll('#navi button').forEach(b => b.classList.remove('on'));
+  (el || document.querySelectorAll('#navi button')[i]).classList.add('on');
+}
+let x0 = null;
+ruudut.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; }, {passive:true});
+ruudut.addEventListener('touchend', e => {
+  if(x0 === null) return;
+  const d = e.changedTouches[0].clientX - x0;
+  if(Math.abs(d) > 60) nayta(Math.max(0, Math.min(4, nyt + (d < 0 ? 1 : -1))));
+  x0 = null;
+}, {passive:true});
+
+/* AVAUTUMINEN: GPS ratkaisee. Liikkuva vene -> Vesillä, muuten 48 h.
+   Kysytään vain jos lupa on jo myönnetty — sovelluksen avaaminen ei ole
+   syy pompauttaa lupaikkunaa. */
+function avaaOikeaIkkuna(){
+  if(!navigator.permissions || !navigator.geolocation) return;
+  navigator.permissions.query({ name:'geolocation' }).then(r => {
+    if(r.state !== 'granted') return;
+    navigator.geolocation.getCurrentPosition(p => {
+      const kmh = (p.coords.speed || 0) * 3.6;
+      if(kmh > 2) nayta(3);
+    }, () => {}, { maximumAge:60000, timeout:5000 });
+  }).catch(() => {});
+}
+
+/* ---------- KÄYNNISTYS ---------- */
+function valitseVene(k){
+  vene = k;
+  try { localStorage.setItem(LS_VENE, k); } catch(e){}
+  piirra48();
+}
+(function(){
+  try { const v = localStorage.getItem(LS_VENE); if(v && VENEET[v]) vene = v; } catch(e){}
+  const sel = document.getElementById('vene');
+  Object.keys(VENEET).sort((a,b) => VENEET[a].raja - VENEET[b].raja).forEach(k => {
+    const o = document.createElement('option');
+    o.value = k;
+    o.textContent = VENEET[k].nimi + ' · ' + nro(VENEET[k].raja) + ' m';
+    sel.appendChild(o);
+  });
+  sel.value = vene;
+  document.getElementById('lehtinro').textContent = 'Lehti ' + paikka.tunnus + ' · ' + paikka.nimi;
+  hae();
+  avaaOikeaIkkuna();
+  setInterval(() => {
+    const d = new Date();
+    document.getElementById('kello').textContent =
+      d.getDate() + '.' + (d.getMonth()+1) + '. ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }, 1000);
+})();
+</script>
+</body>
+</html>
