@@ -126,8 +126,18 @@ details.peruste .sisalto p{margin:0 0 8px}
 .jana{display:flex;height:30px;margin:12px 0 4px;border:1px solid var(--viiva);
   border-radius:3px;overflow:hidden}
 .jana i{flex:1;min-width:0}
+.jana i.kohta{outline:2px solid var(--teksti);outline-offset:-2px}
 .janaSelite{display:flex;justify-content:space-between;
   font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--himmea)}
+
+/* LIUKUPALKKI 15.9.2026. Palkkeja on 49 noin 350 pikselin matkalla, eli
+   yksi palkki on 7 px: sormella ei osu. Natiivi range-syöttö antaa ison
+   vedettävän nupin ja toimii myös näppäimistöllä, eikä vaadi omaa
+   raahauskoodia joka pitäisi ylläpitää. */
+.liuku{width:100%;height:30px;margin:2px 0 0;accent-color:var(--syvan);
+  background:transparent}
+.janaLuku{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;
+  color:var(--teksti);text-align:center;min-height:17px;margin-bottom:8px}
 
 select{width:100%;padding:11px 10px;font-size:16px;font-family:inherit;
   background:var(--meri-800);color:var(--teksti);border:1px solid var(--viiva-vahva);
@@ -484,6 +494,16 @@ function parasJarvi(){
 
 /* Suomen taivutus: 1 tunti, 2 tuntia. Pieni asia, mutta "1 tuntia" pistää
    silmään joka kerta. */
+/* Tuulen suunta ilmansuuntana. FMI:n WindDirection on se MISTÄ tuulee,
+   joten "LO" tarkoittaa lounaistuulta ja suojaisa ranta on koillisessa.
+   Kahdeksan suuntaa, ei kuuttatoista: veneessä ei eroteta LLO:ta LO:sta,
+   ja tarkempi luku antaisi vaikutelman tarkkuudesta jota ennusteessa ei ole. */
+const ILMANSUUNNAT = ['P','KO','I','KA','E','LO','L','LU'];
+function suunta(d){
+  if(d == null || isNaN(d)) return '';
+  return ILMANSUUNNAT[Math.round((((d % 360) + 360) % 360) / 45) % 8];
+}
+
 function tuntia(n){ return n + (n === 1 ? ' tunti' : ' tuntia'); }
 
 function piirra48(){
@@ -522,7 +542,7 @@ function piirra48(){
       + t.paikka.nimi + '</span>'
       + '<div class="selite" style="margin-top:2px;letter-spacing:.04em">'
       + (nyt ? Math.round(jarvenEtaisyys(t.paikka)) + ' km · aalto ' + nro(nyt.hs)
-              + ' m · tuuli ' + nyt.U.toFixed(0) + ' m/s'
+              + ' m · tuuli ' + nyt.U.toFixed(0) + ' m/s ' + suunta(nyt.dir)
               + (paras2 ? ' · varaa ' + nro(VENEET[vene].raja - paras2.pahin) + ' m' : '')
           : 'ei ennustetta')
       + '</div></div><div class="kello"'
@@ -543,14 +563,35 @@ function piirra48(){
 
   /* Aikajana piirretään parhaasta järvestä, tai ensimmäisestä jos yhtään ei kelpaa. */
   const jt = paras || tila.find(t => t.ennuste.length);
-  const jana = '<div class="jana">' + jt.ennuste.map(t => {
+  /* LUVUT NAUHAN ALLE 15.9.2026. Palkeissa on title-attribuutti, mutta title
+     on kursorin ominaisuus eikä sormen: puhelimessa arvot olivat siellä
+     missä niitä ei voi lukea. Nauha kertoo nyt itse mistä väliltä on kyse. */
+  const hsArvot = jt.ennuste.map(t => t.hs).filter(x => x != null && !isNaN(x));
+  const hsVali = hsArvot.length
+    ? 'aalto ' + nro(Math.min.apply(null, hsArvot)) + '–' + nro(Math.max.apply(null, hsArvot)) + ' m'
+    : '';
+  /* Tuntikohtaiset lukemat talteen liukupalkkia varten. Teksti rakennetaan
+     tässä, missä paikka ja rajat ovat tiedossa — liukupalkki vain valitsee
+     indeksin eikä laske mitään uudestaan. */
+  janaTekstit48 = jt.ennuste.map(t => {
+    const r = raja(t.aika, jt.paikka);
+    return paivanNimi(t.aika).slice(0,2).toLowerCase() + ' ' + kello(t.aika)
+      + ' · aalto ' + nro(t.hs) + ' m'
+      + ' · tuuli ' + t.U.toFixed(0) + ' m/s ' + suunta(t.dir)
+      + (r === null ? ' · pimeä' : '');
+  });
+  const jana = '<div class="jana" id="jana48">' + jt.ennuste.map(t => {
       const r = raja(t.aika, jt.paikka);
       const c = r === null ? 'rgba(255,255,255,.07)'
         : t.hs <= r*0.7 ? 'var(--ok)' : t.hs <= r ? 'var(--merkki)' : 'var(--vaara)';
-      return '<i style="background:' + c + '" title="' + kello(t.aika) + ' · ' + nro(t.hs) + ' m"></i>';
-    }).join('') + '</div><div class="janaSelite"><span>' + jt.paikka.nimi + ' · '
+      return '<i style="background:' + c + '"></i>';
+    }).join('') + '</div><div class="janaSelite"><span>'
     + paivanNimi(jt.ennuste[0].aika) + ' ' + kello(jt.ennuste[0].aika) + '</span><span>'
-    + kello(jt.ennuste[jt.ennuste.length-1].aika) + '</span></div>';
+    + jt.paikka.nimi + ' · ' + hsVali + '</span><span>'
+    + kello(jt.ennuste[jt.ennuste.length-1].aika) + '</span></div>'
+    + '<input class="liuku" type="range" min="0" max="' + (jt.ennuste.length-1) + '"'
+    + ' value="0" oninput="lueJana48(this.value)" aria-label="Tunti aikajanalla">'
+    + '<div class="janaLuku" id="janaLuku48"></div>';
 
   /* Sumu tarkistetaan parhaasta järvestä — se on se jonne ollaan menossa. */
   const sumutunnit = jt.ennuste.filter(t => t.T != null && t.Td != null
@@ -608,7 +649,27 @@ function piirra48(){
     + (PAIKAT.length > tila.length && !naytaKaikkiJarvet
         ? ' · ' + (PAIKAT.length - tila.length) + ' rajattu pois' : '')
     + '<br>Datalähteet: Ilmatieteen laitos (CC BY 4.0)</div>';
+
+  lueJana48(0);   // lukema ei saa olla tyhjä ennen kuin liukua on koskettu
 }
+
+/* ---------- LIUKUPALKIT ----------
+   Tekstit rakennetaan piirtohetkellä ja tallennetaan tähän. Liuku vain
+   valitsee indeksin. Näin laskenta pysyy yhdessä paikassa eikä liukupalkki
+   ala toiseksi malliksi samasta asiasta. */
+let janaTekstit48 = [], janaTekstit12 = [];
+
+function lueJanaYleinen(tekstit, janaId, lukuId, i){
+  const luku = document.getElementById(lukuId);
+  const nauha = document.getElementById(janaId);
+  if(!luku || !nauha) return;
+  const k = Math.max(0, Math.min(tekstit.length - 1, parseInt(i, 10) || 0));
+  luku.textContent = tekstit[k] || '';
+  const palkit = nauha.children;
+  for(let n = 0; n < palkit.length; n++) palkit[n].classList.toggle('kohta', n === k);
+}
+function lueJana48(i){ lueJanaYleinen(janaTekstit48, 'jana48', 'janaLuku48', i); }
+function lueJana12(i){ lueJanaYleinen(janaTekstit12, 'jana12', 'janaLuku12', i); }
 
 /* ---------- FMI ----------
    Haku per järvi, rinnakkain. Kolme pientä hakua on halvempaa kuin yksi iso,
@@ -868,8 +929,12 @@ function piirra12(){
       + (p.nakosyvyysLahde || 'lähde tuntematon') + '</div></div>'
       + '<div class="kello" style="font-size:17px">' + nro(p.nakosyvyys) + ' m</div></div>';
 
-  /* Päivän käyrä: tunti ja syvyys, nykyinen korostettuna. */
-  const kayra = '<div class="jana" style="height:46px;align-items:flex-end;padding:3px">'
+  /* Päivän käyrä: tunti ja syvyys, nykyinen korostettuna.
+     Liuku alkaa nykyisestä tunnista, ei nollasta: aamuseitsemän ei ole se
+     mitä katsotaan kun sovellus avataan kello kolme. */
+  janaTekstit12 = L.tunnit.map(t => 'klo ' + pad(t.t) + ' · ' + nro(t.syvyys) + ' m');
+  const nytIdx = Math.max(0, L.tunnit.findIndex(t => t.t === rivi.t));
+  const kayra = '<div class="jana" id="jana12" style="height:46px;align-items:flex-end;padding:3px">'
     + L.tunnit.map(t => {
         const maxS = Math.max.apply(null, L.tunnit.map(x => x.syvyys)) || 1;
         const korkeus = Math.max(8, Math.round(38*t.syvyys/maxS));
@@ -878,8 +943,12 @@ function piirra12(){
           + ';margin:0 1px" title="klo ' + pad(t.t) + ' · ' + nro(t.syvyys) + ' m"></i>';
       }).join('')
     + '</div><div class="janaSelite"><span>klo ' + pad(L.tunnit[0].t) + '</span>'
-    + '<span>syvyys päivän mittaan</span>'
-    + '<span>klo ' + pad(L.tunnit[L.tunnit.length-1].t) + '</span></div>';
+    + '<span>syvyys ' + nro(Math.min.apply(null, L.tunnit.map(x => x.syvyys)))
+      + '–' + nro(Math.max.apply(null, L.tunnit.map(x => x.syvyys))) + ' m</span>'
+    + '<span>klo ' + pad(L.tunnit[L.tunnit.length-1].t) + '</span></div>'
+    + '<input class="liuku" type="range" min="0" max="' + (L.tunnit.length-1) + '"'
+    + ' value="' + nytIdx + '" oninput="lueJana12(this.value)" aria-label="Tunti">'
+    + '<div class="janaLuku" id="janaLuku12"></div>';
 
   const tuoreus = '<div class="marginaali">Paketti ' + (p.paikka || '—') + ' · ' + ikaTxt
     + (vanha ? ' <span style="color:var(--merkki)">— vanha, aja analyysi uudelleen</span>' : '')
@@ -891,6 +960,8 @@ function piirra12(){
   box.innerHTML = paa + rivit + kayra
     + '<button class="iso-nappi" onclick="location.href=\'./index.html\'">'
     + 'Avaa vanha sovellus</button>' + tuoreus;
+
+  lueJana12(nytIdx);
 }
 
 /* Suodattimen kytkin. Muutos hakee ennusteet uudelleen, koska rajatuille
