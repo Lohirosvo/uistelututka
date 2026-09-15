@@ -244,6 +244,16 @@ nav button.on{color:var(--syvan);border-top-color:var(--syvan)}
         </ul>
         <span class="vaatii">Vaatii: siirto, ei muutoksia</span>
       </div>
+      <div style="border:1px solid var(--viiva);border-radius:6px;padding:12px 14px;margin-top:14px">
+        <div class="valintaOhje" style="margin-bottom:10px">Asetukset</div>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:15px;line-height:1.4">
+          <input type="checkbox" id="kaikkiJarvet" onchange="asetaKaikkiJarvet(this.checked)"
+                 style="width:20px;height:20px;accent-color:var(--syvan);flex:none">
+          <span>Näytä kaikki järvet<div class="selite" style="margin-top:2px;letter-spacing:.04em">
+            Oletuksena vertaillaan vain alle 200 km päässä olevat</div></span>
+        </label>
+      </div>
+
       <div class="marginaali">
         Vaihe 1 · 13.9.2026<br>
         Vanha index.html on yhä käytössä ja toimii.<br>
@@ -302,6 +312,62 @@ const LS_VENE = 'uistelututka_vene';
 const HAMARA_KIRISTYS = 0.15;   // [A] valittu luku, ei mitattu
 let vene = 'ph500';
 let ennuste = [];
+
+/* ---------- ETÄISYYSSUODATIN ----------
+   Vertailussa näytetään vain järvet joihin oikeasti lähtisi. 200 km on raja,
+   jonka yli päivän reissu ei ole reissu vaan matka — ja Inari Lappajärven
+   rinnalla teki vertailusta hyödyttömän.
+
+   LÄHTÖPISTE: laitteen sijainti jos lupa on jo myönnetty, muuten viimeksi
+   tallennettu, muuten kotijärvi. Lupaa ei kysytä tämän takia.
+
+   Asetuksissa on ruksi joka avaa kaikki — suodatin on oletus, ei sääntö. */
+const ETAISYYSRAJA_KM = 200;
+const LS_KOTI = 'uistelututka_koti';
+const LS_KAIKKI_JARVET = 'uistelututka_kaikki_jarvet';
+let koti = null;
+let naytaKaikkiJarvet = false;
+
+function etaisyysKm(a, b){
+  const R = 6371, r = Math.PI/180;
+  const dLat = (b.lat - a.lat)*r, dLon = (b.lon - a.lon)*r;
+  const x = Math.sin(dLat/2)**2
+    + Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.min(1, Math.sqrt(x)));
+}
+
+function kotiPiste(){
+  if(koti) return koti;
+  try {
+    const raw = localStorage.getItem(LS_KOTI);
+    if(raw){ koti = JSON.parse(raw); return koti; }
+  } catch(e){}
+  return PAIKAT[0];   // kotijärvi varalle
+}
+
+function jarvenEtaisyys(pk){ return etaisyysKm(kotiPiste(), pk); }
+
+/* Vertailtavat järvet. Valittu järvi on aina mukana, vaikka olisi kaukana —
+   jos olet päättänyt ajaa Inarille, sen keli kuuluu näyttää. */
+function vertailtavat(){
+  if(naytaKaikkiJarvet) return PAIKAT;
+  const lahella = PAIKAT.filter(p => jarvenEtaisyys(p) <= ETAISYYSRAJA_KM);
+  if(typeof jarvi === 'object' && jarvi && lahella.indexOf(jarvi) === -1) lahella.push(jarvi);
+  return lahella.length ? lahella : PAIKAT;
+}
+
+/* Sijainti talteen jos lupa on jo myönnetty. Ei kysytä uutta lupaa. */
+function paivitaKoti(){
+  if(!navigator.permissions || !navigator.geolocation) return;
+  navigator.permissions.query({ name:'geolocation' }).then(r => {
+    if(r.state !== 'granted') return;
+    navigator.geolocation.getCurrentPosition(p => {
+      koti = { lat:p.coords.latitude, lon:p.coords.longitude };
+      try { localStorage.setItem(LS_KOTI, JSON.stringify(koti)); } catch(e){}
+      hae();
+    }, () => {}, { maximumAge:3600000, timeout:8000 });
+  }).catch(() => {});
+}
 
 /* ---------- AURINKO ---------- */
 const D2R = Math.PI/180;
@@ -387,13 +453,23 @@ let tila = [];   // [{ paikka, ennuste, jaksot }]
 function parasJarvi(){
   const kelpaavat = tila.filter(t => t.jaksot.length);
   if(!kelpaavat.length) return null;
+  /* Kolme kriteeriä järjestyksessä. Kevyellä tuulella kaikki järvet kelpaavat
+     ja rajoittava tekijä on pimeä, jolloin ensimmäiset kaksi menevät tasan —
+     silloin ratkaisee MARGINAALI eli kuinka paljon rajaan on varaa. Se on
+     oikea erotin, koska se kertoo kumpi kestää tuulen yltymisen. */
   kelpaavat.sort((a,b) => {
     const ae = a.jaksot[0].alku - b.jaksot[0].alku;
     if(Math.abs(ae) > 3600000) return ae;
-    return (b.jaksot[0].loppu - b.jaksot[0].alku) - (a.jaksot[0].loppu - a.jaksot[0].alku);
+    const pituus = (b.jaksot[0].loppu - b.jaksot[0].alku) - (a.jaksot[0].loppu - a.jaksot[0].alku);
+    if(Math.abs(pituus) > 3600000) return pituus;
+    return a.jaksot[0].pahin - b.jaksot[0].pahin;
   });
   return kelpaavat[0];
 }
+
+/* Suomen taivutus: 1 tunti, 2 tuntia. Pieni asia, mutta "1 tuntia" pistää
+   silmään joka kerta. */
+function tuntia(n){ return n + (n === 1 ? ' tunti' : ' tuntia'); }
 
 function piirra48(){
   const box = document.getElementById('sisalto48');
@@ -430,11 +506,23 @@ function piirra48(){
       + '><div><span style="font-size:16px' + (korosta ? ';color:var(--ok);font-weight:700' : '') + '">'
       + t.paikka.nimi + '</span>'
       + '<div class="selite" style="margin-top:2px;letter-spacing:.04em">'
-      + (nyt ? 'aalto nyt ' + nro(nyt.hs) + ' m · tuuli ' + nyt.U.toFixed(0) + ' m/s' : 'ei ennustetta')
+      + (nyt ? Math.round(jarvenEtaisyys(t.paikka)) + ' km · aalto ' + nro(nyt.hs)
+              + ' m · tuuli ' + nyt.U.toFixed(0) + ' m/s'
+              + (paras2 ? ' · varaa ' + nro(VENEET[vene].raja - paras2.pahin) + ' m' : '')
+          : 'ei ennustetta')
       + '</div></div><div class="kello"'
       + (paras2 ? '' : ' style="color:var(--vaara);font-size:14px"') + '>'
-      + (paras2 ? paivanNimi(paras2.alku).slice(0,2).toLowerCase() + ' '
-                  + kello(paras2.alku) + '–' + kello(paras2.loppu) : 'ei ikkunaa')
+      + (paras2
+          /* Kaksi ensimmäistä jaksoa, ei vain yhtä. Kevyellä tuulella tämän
+             hetken ikkuna on kaikilla järvillä sama (pimeä rajoittaa), ja
+             ero syntyy vasta huomenna. Se ero on juuri se mitä ollaan
+             valitsemassa, joten se ei saa jäädä piiloon. */
+          ? t.jaksot.slice(0,2).map(j =>
+              '<div style="font-size:' + (j === paras2 ? '17' : '14') + 'px'
+              + (j === paras2 ? '' : ';color:var(--himmea);font-weight:400') + '">'
+              + paivanNimi(j.alku).slice(0,2).toLowerCase() + ' '
+              + kello(j.alku) + '–' + kello(j.loppu) + '</div>').join('')
+          : 'ei ikkunaa')
       + '</div></div>';
   }).join('');
 
@@ -452,14 +540,26 @@ function piirra48(){
   /* Sumu tarkistetaan parhaasta järvestä — se on se jonne ollaan menossa. */
   const sumutunnit = jt.ennuste.filter(t => t.T != null && t.Td != null
     && (t.T - t.Td) < 1.0 && t.U < 3 && raja(t.aika, jt.paikka) !== null);
-  const sumu = sumutunnit.length
-    ? '<div class="este"><b>Sumuriski · erillinen este</b>'
-      + sumutunnit.length + ' tuntia ' + jt.paikka.nimi + '-ennusteessa, joissa lämpötilan ja '
+  /* SUMU: KYNNYS NOSTETTU KAHTEEN TUNTIIN 15.9.2026.
+     Yksi tunti pimeän rajalla ei ole este vaan tilastollinen sattuma, ja iso
+     punainen laatikko siitä syö uskottavuuden koko varoitukselta. Kahden
+     tunnin kynnys erottaa oikean riskin kohinasta.
+
+     Lisäksi erotellaan MILLOIN: jos sumu osuu vasta jakson loppuun, se on
+     paluumatkan ongelma eikä lähtöeste. Ne vaativat eri toimenpiteen. */
+  const jaksonLoppu = paras ? paras.jaksot[0].loppu : null;
+  const sumuAlussa = sumutunnit.filter(t => !jaksonLoppu || t.aika < jaksonLoppu - 7200000);
+  const sumu = sumutunnit.length < 2 ? ''
+    : '<div class="este"' + (sumuAlussa.length ? '' : ' style="border-color:var(--merkki)"')
+      + '><b' + (sumuAlussa.length ? '' : ' style="color:var(--merkki)"') + '>Sumuriski · '
+      + (sumuAlussa.length ? 'erillinen este' : 'paluumatkalla') + '</b>'
+      + tuntia(sumutunnit.length) + ' ' + jt.paikka.nimi + '-ennusteessa, joissa lämpötilan ja '
       + 'kastepisteen ero on alle asteen ja tuuli alle 3 m/s — ensimmäinen '
-      + paivanNimi(sumutunnit[0].aika).toLowerCase() + ' klo ' + kello(sumutunnit[0].aika)
-      + '. Aallonkorkeus ei muutu tästä, mutta ilman tutkaa rannan löytäminen '
-      + 'muuttuu arvailuksi.</div>'
-    : '';
+      + paivanNimi(sumutunnit[0].aika).toLowerCase() + ' klo ' + kello(sumutunnit[0].aika) + '. '
+      + (sumuAlussa.length
+          ? 'Aallonkorkeus ei muutu tästä, mutta ilman tutkaa rannan löytäminen muuttuu arvailuksi.'
+          : 'Osuu jakson loppuun, joten se on paluumatkan asia: aja rantaan ennen sitä tai pysy tutulla rantaviivalla.')
+      + '</div>';
 
   const mitat = '<div class="mitat">'
     + '<div class="mitta"><div class="nimi">Veneen raja</div><div class="luku">'
@@ -488,7 +588,11 @@ function piirra48(){
 
   box.innerHTML = paa + sumu + vertailu + jana + mitat + peruste
     + '<div class="marginaali">Haettu ' + kello(new Date()) + ' · ' + tila.length
-    + ' järveä<br>Datalähteet: Ilmatieteen laitos (CC BY 4.0)</div>';
+    + ' järveä' + (naytaKaikkiJarvet ? ' · suodatin pois'
+        : ' · alle ' + ETAISYYSRAJA_KM + ' km')
+    + (PAIKAT.length > tila.length && !naytaKaikkiJarvet
+        ? ' · ' + (PAIKAT.length - tila.length) + ' rajattu pois' : '')
+    + '<br>Datalähteet: Ilmatieteen laitos (CC BY 4.0)</div>';
 }
 
 /* ---------- FMI ----------
@@ -540,7 +644,7 @@ function haeJarvi(pk){
 }
 
 function hae(){
-  Promise.all(PAIKAT.map(pk => haeJarvi(pk).then(e => ({
+  Promise.all(vertailtavat().map(pk => haeJarvi(pk).then(e => ({
     paikka: pk, ennuste: e, jaksot: e.length ? jaksot(e, pk) : []
   })))).then(tulos => { tila = tulos; piirra48(); });
 }
@@ -683,6 +787,14 @@ function piirra12(){
     + 'Avaa vanha sovellus</button>' + tuoreus;
 }
 
+/* Suodattimen kytkin. Muutos hakee ennusteet uudelleen, koska rajatuille
+   järville ei ole haettu mitään — turha haku on turhempi kuin turha odotus. */
+function asetaKaikkiJarvet(paalla){
+  naytaKaikkiJarvet = !!paalla;
+  try { localStorage.setItem(LS_KAIKKI_JARVET, paalla ? '1' : '0'); } catch(e){}
+  hae();
+}
+
 /* ---------- NAVIGOINTI ---------- */
 const ruudut = document.getElementById('ruudut');
 let nyt = 0;
@@ -793,6 +905,10 @@ function valitseVene(k){
   sel.value = vene;
   piirraVenePillit();
 
+  try { naytaKaikkiJarvet = localStorage.getItem(LS_KAIKKI_JARVET) === '1'; } catch(e){}
+  const ruksi = document.getElementById('kaikkiJarvet');
+  if(ruksi) ruksi.checked = naytaKaikkiJarvet;
+
   try { const j = localStorage.getItem(LS_JARVI);
         const l = PAIKAT.find(p => p.tunnus === j); if(l) jarvi = l; } catch(e){}
   const jsel = document.getElementById('jarvi');
@@ -806,6 +922,7 @@ function valitseVene(k){
   document.getElementById('lehtinro').textContent =
     'Lehdet ' + PAIKAT.map(p => p.tunnus).join(' · ');
   hae();
+  paivitaKoti();
   avaaOikeaIkkuna();
   setInterval(() => {
     const d = new Date();
