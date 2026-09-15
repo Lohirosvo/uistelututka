@@ -410,20 +410,177 @@ function auringonKorkeus(d, pk){
   return Math.asin(Math.max(-1,Math.min(1,s)))/D2R;
 }
 
-/* ---------- AALLONKORKEUS ----------
-   Sama malli kuin aallonkorkeuskartassa, mutta ilman maskia: yksi luku
-   tunnille, järven pahin. Pyyhkäisymatka ympyräekvivalenttina pinta-alasta.
-   Kartta tekee suunnatun laskennan ja kertoo missä on suojaisaa; tämä
-   kertoo milloin kannattaa lähteä. Jos kaavoja muutetaan, molemmat. */
-function hs(U, tunteja, pk){
+/* ---------- AALLONKORKEUS · SUUNNATTU ----------
+   MUUTETTU 15.9.2026, JA TÄMÄ ON IKKUNAN TÄRKEIN MUUTOS.
+
+   Aiemmin järvelle laskettiin YKSI aallonkorkeus: pyyhkäisymatkana käytettiin
+   pinta-alan ympyräekvivalenttia, eli keskiarvoa koko järvestä. Se laskutapa
+   ei voi vastata muuta kuin kyllä tai ei — ja koska keskiarvo sisältää myös
+   järven tuulisimman pään, vastaus on useimmiten ei. Juuri siitä syntyi se
+   vaikutelma että sovellus etsii vain esteitä: isolla järvellä on lähes aina
+   ranta jossa voi ajaa, mutta yksi luku per järvi hävittää sen tiedon.
+
+   Nyt pyyhkäisy lasketaan suunnattuna karttamaskista, ruutu kerrallaan, samalla
+   tavalla kuin vanhan sovelluksen aallonkorkeuskartassa. Tulos ei ole luku vaan
+   jakauma: kuinka suuri osa järvestä on veneen rajan alla, ja missä päin se osa
+   on. Kysymys muuttuu muodosta "lähdenkö" muotoon "minne".
+
+   HUOM KAHDESTA MALLISTA: tämä on nyt index2:n AINOA aallonkorkeusmalli, ja se
+   on sama suunnattu malli kuin kartassa. Ympyräekvivalentti jää käyttöön vain
+   järville joilta puuttuu karttamaski (ks. alla) — silloin se sanotaan ääneen
+   eikä esitetä suunnattuna tietona.
+
+   Maskit ovat vanhasta sovelluksesta sellaisenaan: 100 m ruutu, 1 = vesi. */
+const g = 9.81;
+const AJETTAVA_MIN = 0.20;   // jakso aukeaa kun viidennes järvestä on rajan alla
+
+/* PUUSKA 15.9.2026. Aallonkorkeus vastaa tasaiseen tuuleen, ei puuskaan: kymmenen
+   minuutin puuska ei ehdi kasvattaa aaltoa, mutta se vie vavan kädestä, kaataa
+   plaanarilinjan ja tekee käännöksestä työn. Siksi puuska EI mene aaltomalliin
+   vaan on oma ehtonsa, joka voi sulkea tunnin vaikka aallokko olisi kunnossa.
+   FMI:n WindGust on tunnin suurin puuska.
+   Molemmat luvut ovat arvioita ja odottavat kalibrointia vesillä. */
+const PUUSKA_RAJA = 12;   // m/s — tämän yli ei uistella, oli aallokko mikä hyvänsä
+const PUUSKA_ERO  = 5;    // m/s — näin paljon keskituulta kovempi puuska on purskeinen keli
+const HS_BIN = 0.02, HS_BINEJA = 101;   // histogrammi 0–2,00 m
+
+const KARTAT = {
+  '47.031': { ruutu:100, W:127, H:241, syvyys:7.4,
+    maski:'AAAAAAAAAAAAAAAAAAAAAAAAAAADAAAAAAAAAAAAAAAAAAAAA4AAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAAAAAAABIAAAAAAAAAAAAAAAAAAAB0AAAAAAAAAAAAAAAAAAAA7AAAAAAAAAAAAAAAAAAAAJAAAAAAAAAAAAAAAAAAAAH2AAAAAAAAAAAAAAAAAAAA/gAAAAAAAAAAAAAAAAAABP4AAAAAAAAAAAAAAAAAAAf8AAAAAAAAAAAAAAAAAAAM+AAAAAAAAAAAAAAAAAAAMH4AAAAAAAAAAAAAAAAAADD+AAAAAAAAAAAAAAAAAABg/gAAAAAAAAAAAAAAAAAA4f4AAAAAAAAAAAAAAAAAAcP8AAAAAAAAAAAAAAAAAAPH+AAAAAAAAAAAAAAAAAADn+AAAAAAAAAAAAAAAAAABz+AAAAAAAAAAAAAAAAAAAZ/AAAAAAAAAAAAAAAAAAAM/wAAAAAAAAAAAAAAAAAAEf4AAAAAAAAAAAAAAAAAAAP+AAAAAAAAAAAAAAAAAAAH/gAAAAAAAAAAAAAAAAAAD/wAAAAAAAAAAAAAAAAAAL/8AAAAAAAAAAAAAAAAAAO//AAAAAAAAAAAAAAAAAAD//gAAAAAAAAAAAAAAAAAB//+AAAAAAAAAAAAAAAAAA///wAAAAAAAAAAAAAAAAAP//4AAAAAAAAAAAAAAAAAH5/8AAAAAAAAAAAAAAAAAD+f/AAAAAAAAAAAAAAAAAB/H/gAAAAAAAAAAAAAAAAA/h/4AAAAAAAAAAAAAAAAAfw//4AAAAAAAAAAAAAAAAP8f/8AAAAAAAAAAAAAAAAD+P//AAAAAAAAAAAAAAAAB/H//+AAAAAAAAAAAAAAAA/h///gAAAAAAAAAAAAAAA/9///4AAAAAAAAAAAAAAA/+////AAAAAAAAAAAAAAA//////gAAAAAAAAAAAAAAf/////wAAAAAAAAAAAAAAP/////4AAAAAAAAAAAAAAHf/////8AAAAAAAAAAAAAD3////7/AAAAAAAAAAAAABt//////4AAAAAAAAAAAAA///////+AAAAAAAAAAAAAf///////AAAAAAAAAAAAAH///////gAAAAAAAAAAAAB//8f///wAAAAAAAAAAAAAf/+P///4AAAAAAAADAAAAH//H///8AAAAAAAAF4AAAI//jv//+AAAAAAAAC+AAAAH/x5///AAAAAAAAAfgAAAD///f//YAAAAAAAAPwAAAD//////tAAAAAAAAD8AAAH//////nwAAAAAAAB+AAAD////////gAAAAAAA/AAAD//////+/+AAAAAAAYAAAB/////////AAAAAAAMAAAAf////////gAAAAAAHBAAC/////////wAAAAAADxwAA/////////8AAAAAGA/4AAf///////+/gAAAAHgD8AA////////9/4AAAADwB8AAP/////////8AAAAB4B8ADD//////////gAAAB8A8AJA//v///////8AAAA+AfAHAG/3///////+AAAAfgfIPAA////v/////AAAAPwf+PAAPv//n/////gAAAH4f//gADz//7/////4AAAD+P//wAB5////////+AAAA/n+f4AAIf///////8AAAB///n8AAAf////////AAAA///wMAAAP////////AAAA///8AAAAf///P////wAAAf///AAAAP///n////gAAAP///AAAAD///7////wAAAH///gAAAB////////4AAAB///gAAAA////////8AAAA///gAAAAff//////8AAAAP//AAAAAP/vf////8AAAAD//AAAAA3/wP////+AAAAD//AAAAAf/8H/////AAAAB/8AAAAAf/+D/////wAAAA//AAAAAH//g/////8AAAA//gAAAAB//w//////AAAA//4AAAAAf/+//////wAAH//+AAAAAH////////4AAD///gAAAAH////////+AAB///wAAAAH/////////AAA///8AAAAD/////////gAAf///gAAAD/////////gAAf///4AAAB/////////gAA////8AAAA/////////wAA////8AAAAf////////wAAf////AAAAO////////wAAP////gAAAHP///////wAAH////4AAAD3+//////wAAD////8AAAA////////4AAB////+AAAAfz//////8AAAf////gAAAP5//////+AAAP////8AAAH////////AAAH////+AAAD////////wAAD/////wAAB////////8AAB/////+AAH/////////gAA//////gAD/////////4AA//////wAD/////////8AAf/////8ABf+///////+AAP//////AA//P///////AAH//////gAf/v///////gAB//////4AP/////////wAA//////8AD/////////4AAf//////AB/////////4AAP//////gA/H///////+AAH//////wAfD////////AAD//////4AHz////////gAD//////8AAH////////+AD///////ADn/////////AB///////gB3/////////4Af//////4A//////////+AP//////8Af/////////8AP//////+AP/////////4AH//////+GH/////////8AD///////DD/////////+AD///////xx//////////gB///////94//////////wAf///////+f/////////wAH////////v/////////4AD//////////////////QAB//////////////////gAA//////////////////gAAf/////////////////4AAP/////////////////8AAH//////////////////gAD//////////////////wAB//////////////////4AAf/////////////////8AAf/////////////////+AAH/////////////////+AAB//////////////////AAA//////////////////wAAf/////////////////8OAP//////////////////3AH///////////////////gB///////////////////4AP//////////////////8AD//////////////////+gB///////////////////YAf//////////////////8AP//////////////////+AD///////////////////AA///////////////////AAP//////////////////AAD//////////////////gAB//////////////////wAB//////////////////8AA//////////////////8AAP//////////////////gAD//////////////////wAA//////////////////wAAf/////////////////8AAP/////////////////8AAD//////8//////////+AAA/////////////////6AAAf////////////////4AAAA////////////////8AAAAP///////////////+AAAAH/////////////v/+AAAAAP//////////////+AAAAAH////////v+/////AAAAAD////////z+/////gAAAAB////////5+f////AAAAAAf///////+/H////gAAAAAP/////////n////4AAAAAH/////////j//3/8AAAAAD/////////x//5/8AAAAAB////////////4/+AAAAAAP///////////8P/AAAAAAH///////////8D/gAAAAAH///////////wA/gAAAAAB///////////4APAAAAAAAP//////////8AAAAAAAAAH//////////+AAAAAAAAABf/////////+AAAAAAAAAAH////P////+AAAAAAAAAAD////n////OAAAAAAAAAAB///////f/gAAAAAAAAAAA///////P4gAAAAAAAAAAAf/////+DwAAAAAAAAAAAAP//////hgAAAAAAAAAAAAD//////wAAAAAAAAAAAAAAf/////wAAAAAAAAAAAAAAP/////4AAAAAAAAAAAAAAH/////+AAAAAAAAAAAAAAH/////+AAAAAAAAAAAAAAB/////AAAAAAAAAAAAAAAA////xgAAAAAAAAAAAAAAAf///4AAAAAAAAAAAAAAAAP///4AAAAAAAAAAAAAAAAH///8AAAAAAAAAAAAAAAAD///+AAAAAAAAAAAAAAAAB////gAAAAAAAAAAAAAAAA////wAAAAAAAAAAAAAAAAf///8AAAAAAAAAAAAAAAAf///wAAAAAAAAAAAAAAAAH///8AAAAAAAAAAAAAAAAD///+AAAAAAAAAAAAAAAAB///7AAAAAAAAAAAAAAAAA///8gAAAAAAAAAAAAAAAAf//+AAAAAAAAAAAAAAAAAH///AAAAAAAAAAAAAAAAAH///wAAAAAAAAAAAAAAAAB///4AAAAAAAAAAAAAAAAB//+wAAAAAAAAAAAAAAAAA///IAAAAAAAAAAAAAAAAAf//4AAAAAAAAAAAAAAAAAP///AAAAAAAAAAAAAAAAAH//+gAAAAAAAAAAAAAAAAB///gAAAAAAAAAAAAAAAAAf//4AAAAAAAAAAAAAAAAAf//+AAAAAAAAAAAAAAAAAP//+AAAAAAAAAAAAAAAAAD///AAAAAAAAAAAAAAAAAB///AAAAAAAAAAAAAAAAAA///gAAAAAAAAAAAAAAAAAf//wAAAAAAAAAAAAAAAAAP//4AAAAAAAAAAAAAAAAAH//+AAAAAAAAAAAAAAAAAB//8AAAAAAAAAAAAAAAAAA//8AAAAAAAAAAAAAAAAAAf/+AAAAAAAAAAAAAAAAAAP/+AAAAAAAAAAAAAAAAAAD/+AAAAAAAAAAAAAAAAAAA/IgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+  '44.092': { ruutu:100, W:50, H:78, syvyys:3.5,
+    maski:'AAAAAAEAAAAAAABgAAAAAAA4AAAAAAAfMAAAAAAf/4AAAAAH/8AAAAAH//AAAAAP//4AAAAP//6AAAAf///AAAB////QAAB////4AAAP///8AAADn//jgAAA5//wwAAADf/4AAAAA3//AAAAAN//wAAAAJ//8AAAAOf//wAAAD3//4AAAB///+AAAA////4AAAD5//+AAAA8///gAAAPf//4AAAD3//4AAAAf///AAAAH///wAAAA///+AAAAP///AB+AB///wB/g///+AAf/////AAH////8AAD////+AAAf////gAAD////8AAA/////AAAH////wAAA////8AAAH////AAAB////wAAAH///8AAAA////AAAAH///wAAAA///8AAAAH///AAAAA///4AAAAH///AAAAA///4AAAAH//7gAAAB///gAAAAP//4AAAAB//+AAAAAP//AAAAAB//gAAAAAf/8AAAAAD/8AAAAAA/4AAAAAAP8AAAAAAD+AAAAAAAfgAAAAAAH8AAAAAAB/AAAAAAAfwAAAAAAH+AAAAAAA/wAAAAAAP8AAAAAAD7AAAAAAA4QAAAAAAOAAAAAAADgAAAAAAA8AAAAAAAPAAAAAAADwAAAAAAA+AAAAAAACAAAAA=' }
+};
+
+const jonswapHs = (F, U) => 0.0016*Math.sqrt(g*F/(U*U))*U*U/g;
+const syvyysKatto = (d, U) => 0.283*(U*U/g)*Math.tanh(0.53*Math.pow(g*d/(U*U),0.75));
+const kestonPyyhkaisy = (t, U) => Math.pow(t*Math.pow(U,0.34)*Math.pow(g,0.33)/77.23, 1/0.67);
+
+function puraMaski(k){
+  const raaka = atob(k.maski), m = new Uint8Array(k.W*k.H);
+  for(let i=0;i<m.length;i++) m[i] = (raaka.charCodeAt(i>>3) >> (7-(i&7))) & 1;
+  return m;
+}
+
+/* Pyyhkäisymatka jokaiselle vesiruudulle annetusta tuulen suunnasta.
+   Suoraan vanhasta sovelluksesta — sama laskenta, ei uutta mallia. */
+function pyyhkaisyKentta(mask, W, H, ruutu, suunta){
+  const rad = (suunta + 180)*Math.PI/180;
+  const ux = Math.sin(rad), uy = -Math.cos(rad), px = -uy, py = ux;
+  const kentta = new Float32Array(W*H);
+  const dia = Math.ceil(Math.sqrt(W*W + H*H)), cx = W/2, cy = H/2;
+  for(let n=-dia;n<=dia;n++){
+    let sx = cx + px*n - ux*dia/2, sy = cy + py*n - uy*dia/2, jakso = 0;
+    for(let s=0;s<dia;s++){
+      const i = Math.round(sx + ux*s), j = Math.round(sy + uy*s);
+      if(i<0||i>=W||j<0||j>=H){ jakso = 0; continue; }
+      const q = j*W + i;
+      if(mask[q]){ jakso++; const m = jakso*ruutu; if(m > kentta[q]) kentta[q] = m; }
+      else jakso = 0;
+    }
+  }
+  /* Viivapyyhkäisy ohittaa pyöristyksen takia satunnaisen ruudun. */
+  for(let j=0;j<H;j++) for(let i=0;i<W;i++){
+    const q = j*W+i; if(!mask[q] || kentta[q] > 0) continue;
+    let paras = 0;
+    for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
+      const jj=j+dy, ii=i+dx; if(jj<0||jj>=H||ii<0||ii>=W) continue;
+      const n2 = jj*W+ii; if(mask[n2] && kentta[n2] > paras) paras = kentta[n2];
+    }
+    kentta[q] = paras || ruutu;
+  }
+  return kentta;
+}
+
+/* Järven maski, sektorijako ja pyyhkäisykenttien välimuisti. Rakennetaan
+   kerran ja vasta tarvittaessa: kolmen järven maskien purku käynnistyksessä
+   olisi turhaa työtä jos vain yhtä katsotaan. */
+const kartat = {};
+function kartta(pk){
+  const K = KARTAT[pk.tunnus];
+  if(!K) return null;
+  if(kartat[pk.tunnus]) return kartat[pk.tunnus];
+  const mask = puraMaski(K);
+  let ic=0, jc=0, n=0;
+  for(let j=0;j<K.H;j++) for(let i=0;i<K.W;i++) if(mask[j*K.W+i]){ ic+=i; jc+=j; n++; }
+  if(!n) return null;
+  ic/=n; jc/=n;
+  /* Jokainen vesiruutu omaan ilmansuuntaansa järven keskipisteestä katsoen.
+     Näin voidaan sanoa MISSÄ suojaisa vesi on eikä vain että sitä on. */
+  const sekt = new Int8Array(K.W*K.H).fill(-1);
+  for(let j=0;j<K.H;j++) for(let i=0;i<K.W;i++){
+    const q = j*K.W+i; if(!mask[q]) continue;
+    let b = Math.atan2(i-ic, -(j-jc))*180/Math.PI; if(b<0) b += 360;
+    sekt[q] = Math.round(b/45) % 8;
+  }
+  return (kartat[pk.tunnus] = { K, mask, sekt, vesi:n, kentat:{} });
+}
+
+/* Yhden tunnin aallokko koko järvellä.
+   Palauttaa histogrammin (osuudet rajan alla) ja sektorikeskiarvot. */
+function aallot(pk, U, tunteja, dir){
+  const c = kartta(pk);
+  if(!c || !(U > 0.5) || dir == null){
+    /* Ei maskia tai tyyntä: vanha ympyräekvivalentti, yksi luku koko järvelle.
+       Merkitään suunnaton, jotta käyttöliittymä ei väitä tietävänsä missä. */
+    const h = ympyraHs(U, tunteja, pk);
+    const hist = new Uint16Array(HS_BINEJA);
+    hist[Math.min(HS_BINEJA-1, Math.round(h/HS_BIN))] = 1000;
+    return { hist, kaikki:1000, sektorit:null, suunnaton:true };
+  }
+  const d5 = ((Math.round(dir/5)*5) % 360 + 360) % 360;
+  if(!c.kentat[d5]) c.kentat[d5] = pyyhkaisyKentta(c.mask, c.K.W, c.K.H, c.K.ruutu, d5);
+  const kentta = c.kentat[d5];
+  const Fk = kestonPyyhkaisy(tunteja*3600, U), katto = syvyysKatto(c.K.syvyys, U);
+  const hist = new Uint16Array(HS_BINEJA);
+  const summa = new Float64Array(8), lkm = new Int32Array(8);
+  for(let q=0;q<c.mask.length;q++){
+    if(!c.mask[q]) continue;
+    const F = Math.min(kentta[q], Fk);
+    const h = Math.min(jonswapHs(Math.max(F,50), U), katto);
+    hist[Math.min(HS_BINEJA-1, Math.round(h/HS_BIN))]++;
+    summa[c.sekt[q]] += h; lkm[c.sekt[q]]++;
+  }
+  const sektorit = [];
+  for(let s=0;s<8;s++) sektorit.push(lkm[s] ? summa[s]/lkm[s] : null);
+  return { hist, kaikki:c.vesi, sektorit, suunnaton:false };
+}
+
+/* Vanha ympyräekvivalentti. Jää käyttöön vain maskittomille järville. */
+function ympyraHs(U, tunteja, pk){
   if(!(U > 0.5)) return 0;
-  const g = 9.81;
   const L = 2*Math.sqrt(pk.areaKm2*1e6/Math.PI);
   const syvyys = Math.min(12, pk.maxDepth);
-  const kesto = Math.pow(tunteja*3600*Math.pow(U,0.34)*Math.pow(g,0.33)/77.23, 1/0.67);
+  const kesto = kestonPyyhkaisy(tunteja*3600, U);
   const F = Math.max(50, Math.min(L, kesto));
-  return Math.min(0.0016*Math.sqrt(g*F/(U*U))*U*U/g,
-                  0.283*(U*U/g)*Math.tanh(0.53*Math.pow(g*syvyys/(U*U),0.75)));
+  return Math.min(jonswapHs(F, U), syvyysKatto(syvyys, U));
+}
+
+/* Onko tunti puuskainen. null-puuska = tietoa ei ole, ei este. */
+function puuskainen(t){
+  if(t.puuska == null || isNaN(t.puuska)) return false;
+  return t.puuska >= PUUSKA_RAJA || (t.puuska - t.U) >= PUUSKA_ERO;
+}
+
+/* Kuinka suuri osa järvestä on rajan alla. 0–1. */
+function ajettavaOsuus(a, r){
+  if(r === null || !a) return 0;
+  const n = Math.min(HS_BINEJA-1, Math.floor(r/HS_BIN));
+  let s = 0; for(let i=0;i<=n;i++) s += a.hist[i];
+  return s / a.kaikki;
+}
+/* Prosenttipisteen aallonkorkeus, esim. p=0.1 = rauhallisin kymmenys. */
+function hsPersentiili(a, p){
+  if(!a) return 0;
+  const raja = a.kaikki*p; let s = 0;
+  for(let i=0;i<HS_BINEJA;i++){ s += a.hist[i]; if(s >= raja) return i*HS_BIN; }
+  return (HS_BINEJA-1)*HS_BIN;
+}
+/* Suojaisin ilmansuunta, tai null jos maskia ei ole. */
+function suojaSektori(a){
+  if(!a || !a.sektorit) return null;
+  let paras = null, arvo = Infinity;
+  a.sektorit.forEach((x, i) => { if(x !== null && x < arvo){ arvo = x; paras = i; } });
+  return paras === null ? null : ILMANSUUNNAT[paras];
 }
 
 /* Raja tunnille. null = pimeä, ei lähdetä. Kiristys liukuva. */
@@ -440,9 +597,17 @@ function jaksot(ennuste, pk){
   const ulos = []; let auki = null;
   ennuste.forEach((t,i) => {
     const r = raja(t.aika, pk);
-    const kelpaa = r !== null && t.hs <= r;
-    if(kelpaa && !auki) auki = { alku:t.aika, pahin:t.hs };
-    else if(kelpaa && auki) auki.pahin = Math.max(auki.pahin, t.hs);
+    /* MUUTETTU 15.9.2026: ehto ei ole enää "koko järvi on rajan alla" vaan
+       "järvestä on rajan alla ainakin AJETTAVA_MIN". Iso järvi tarjoaa lähes
+       aina suojaisan rannan, ja se ranta on vastaus — ei este. */
+    const osuus = ajettavaOsuus(t.a, r);
+    const kelpaa = r !== null && osuus >= AJETTAVA_MIN && !puuskainen(t);
+    if(kelpaa && !auki) auki = { alku:t.aika, pahin:t.hs, osuus, suoja:t.suoja, puuska:t.puuska };
+    else if(kelpaa && auki){
+      auki.pahin = Math.max(auki.pahin, t.hs);
+      if(t.puuska != null && (auki.puuska == null || t.puuska > auki.puuska)) auki.puuska = t.puuska;
+      if(osuus > auki.osuus){ auki.osuus = osuus; auki.suoja = t.suoja; }
+    }
     if(!kelpaa && auki){ auki.loppu = ennuste[i-1].aika; ulos.push(auki); auki = null; }
   });
   if(auki){ auki.loppu = ennuste[ennuste.length-1].aika; ulos.push(auki); }
@@ -499,6 +664,8 @@ function parasJarvi(){
    Kahdeksan suuntaa, ei kuuttatoista: veneessä ei eroteta LLO:ta LO:sta,
    ja tarkempi luku antaisi vaikutelman tarkkuudesta jota ennusteessa ei ole. */
 const ILMANSUUNNAT = ['P','KO','I','KA','E','LO','L','LU'];
+const ILMANSUUNTA_PITKA = ['pohjoispäässä','koillisrannalla','itärannalla',
+  'kaakkoispäässä','eteläpäässä','lounaisrannalla','länsirannalla','luoteispäässä'];
 function suunta(d){
   if(d == null || isNaN(d)) return '';
   return ILMANSUUNNAT[Math.round((((d % 360) + 360) % 360) / 45) % 8];
@@ -518,17 +685,39 @@ function piirra48(){
   const paras = parasJarvi();
   let paa;
   if(!paras){
+    /* Kun mikään ei kelpaa, kerrotaan PARAS OLEMASSA OLEVA eikä pelkkää ei:tä.
+       Suojaisin ranta ja sen osuus kertovat kuinka kaukana ollaan. */
+    let pb = null;
+    tila.forEach(t => t.ennuste.forEach(x => {
+      const r = raja(x.aika, t.paikka); if(r === null) return;
+      const o = ajettavaOsuus(x.a, r);
+      if(!pb || o > pb.osuus) pb = { osuus:o, aika:x.aika, paikka:t.paikka, suoja:x.suoja, hs:x.hs };
+    }));
     const matalin = Math.min.apply(null, tila.flatMap(t => t.ennuste.map(x => x.hs)));
     const ehdotus = pieninRiittava(matalin);
-    paa = '<div class="arvo" style="font-size:27px;color:var(--vaara)">Ei kelvollista jaksoa</div>'
-      + '<div class="selite">Millään järvellä · '
-      + (ehdotus ? 'vaatisi vähintään ' + ehdotus : 'kahden vuorokauden sisällä') + '</div>';
+    paa = '<div class="arvo" style="font-size:27px;color:var(--vaara)">Ei riittävää suojaa</div>'
+      + '<div class="selite">'
+      + (pb && pb.osuus > 0
+          ? 'Paras on ' + pb.paikka.nimi + (pb.suoja ? ' · ' + pb.suoja : '') + ' '
+            + paivanNimi(pb.aika).toLowerCase() + ' klo ' + kello(pb.aika)
+            + ', mutta ajettavaa vain ' + Math.round(pb.osuus*100) + ' % — liian vähän '
+            + 'jotta siitä kannattaisi lähteä.'
+          : 'Kahden vuorokauden sisällä ei ole yhtään tuntia jossa järvestä olisi '
+            + 'ajettavaa osaa.')
+      + (ehdotus ? ' Vaatisi vähintään ' + ehdotus + '.' : '') + '</div>';
   } else {
     const j = paras.jaksot[0];
-    paa = '<div class="arvo" style="font-size:30px;color:var(--ok)">' + paras.paikka.nimi + '</div>'
+    /* VASTAUS ON PAIKKA. Järven nimi, suojaisa ranta ja kellonaika samassa
+       lauseessa — siinä järjestyksessä kuin lähtöä mietitään. */
+    paa = '<div class="arvo" style="font-size:30px;color:var(--ok)">' + paras.paikka.nimi
+      + (j.suoja ? ' · ' + j.suoja : '') + '</div>'
       + '<div class="arvo" style="font-size:26px;color:var(--ok);margin-top:2px">'
       + paivanNimi(j.alku) + ' ' + kello(j.alku) + '–' + kello(j.loppu) + '</div>'
-      + '<div class="selite">Pahin aalto jaksolla ' + nro(j.pahin) + ' m</div>';
+      + '<div class="selite">'
+      + (j.suoja ? 'Suojassa ' + ILMANSUUNTA_PITKA[ILMANSUUNNAT.indexOf(j.suoja)] + ' · ' : '')
+      + 'ajettavaa ' + Math.round(j.osuus*100) + ' % järvestä · '
+      + 'aallokko siellä ' + nro(j.pahin) + ' m'
+      + (j.puuska != null ? ' · puuskat ' + j.puuska.toFixed(0) + ' m/s' : '') + '</div>';
   }
 
   /* Järvivertailu: jokaiselta ensimmäinen jakso ja tuuli nyt. Tämä on ikkunan
@@ -541,8 +730,11 @@ function piirra48(){
       + '><div><span style="font-size:16px' + (korosta ? ';color:var(--ok);font-weight:700' : '') + '">'
       + t.paikka.nimi + '</span>'
       + '<div class="selite" style="margin-top:2px;letter-spacing:.04em">'
-      + (nyt ? Math.round(jarvenEtaisyys(t.paikka)) + ' km · aalto ' + nro(nyt.hs)
-              + ' m · tuuli ' + nyt.U.toFixed(0) + ' m/s ' + suunta(nyt.dir)
+      + (nyt ? Math.round(jarvenEtaisyys(t.paikka)) + ' km · tuuli '
+              + nyt.U.toFixed(0) + (nyt.puuska != null ? '/' + nyt.puuska.toFixed(0) : '')
+              + ' m/s ' + suunta(nyt.dir)
+              + ' · ajettavaa ' + Math.round(ajettavaOsuus(nyt.a, raja(nyt.aika, t.paikka))*100) + ' %'
+              + (nyt.suoja ? ' · suoja ' + nyt.suoja : ' · suunnaton arvio')
               + (paras2 ? ' · varaa ' + nro(VENEET[vene].raja - paras2.pahin) + ' m' : '')
           : 'ei ennustetta')
       + '</div></div><div class="kello"'
@@ -566,24 +758,30 @@ function piirra48(){
   /* LUVUT NAUHAN ALLE 15.9.2026. Palkeissa on title-attribuutti, mutta title
      on kursorin ominaisuus eikä sormen: puhelimessa arvot olivat siellä
      missä niitä ei voi lukea. Nauha kertoo nyt itse mistä väliltä on kyse. */
-  const hsArvot = jt.ennuste.map(t => t.hs).filter(x => x != null && !isNaN(x));
-  const hsVali = hsArvot.length
-    ? 'aalto ' + nro(Math.min.apply(null, hsArvot)) + '–' + nro(Math.max.apply(null, hsArvot)) + ' m'
-    : '';
+  const osuudet = jt.ennuste.map(t => ajettavaOsuus(t.a, raja(t.aika, jt.paikka)));
+  const hsVali = 'ajettavaa ' + Math.round(Math.min.apply(null, osuudet)*100)
+    + '–' + Math.round(Math.max.apply(null, osuudet)*100) + ' %';
   /* Tuntikohtaiset lukemat talteen liukupalkkia varten. Teksti rakennetaan
      tässä, missä paikka ja rajat ovat tiedossa — liukupalkki vain valitsee
      indeksin eikä laske mitään uudestaan. */
   janaTekstit48 = jt.ennuste.map(t => {
     const r = raja(t.aika, jt.paikka);
     return paivanNimi(t.aika).slice(0,2).toLowerCase() + ' ' + kello(t.aika)
-      + ' · aalto ' + nro(t.hs) + ' m'
-      + ' · tuuli ' + t.U.toFixed(0) + ' m/s ' + suunta(t.dir)
-      + (r === null ? ' · pimeä' : '');
+      + (r === null ? ' · pimeä'
+         : ' · ajettavaa ' + Math.round(ajettavaOsuus(t.a, r)*100) + ' %'
+           + (t.suoja ? ' ' + t.suoja : ''))
+      + ' · tuuli ' + t.U.toFixed(0)
+      + (t.puuska != null ? '/' + t.puuska.toFixed(0) : '') + ' m/s ' + suunta(t.dir)
+      + (puuskainen(t) ? ' · PUUSKAINEN' : '');
   });
+  /* Väri kertoo nyt kuinka suuri osa järvestä on ajettavissa, ei sitä onko
+     järven pahin kohta rajan alla. Sama muutos kuin otsikossa. */
   const jana = '<div class="jana" id="jana48">' + jt.ennuste.map(t => {
       const r = raja(t.aika, jt.paikka);
+      const o = ajettavaOsuus(t.a, r);
       const c = r === null ? 'rgba(255,255,255,.07)'
-        : t.hs <= r*0.7 ? 'var(--ok)' : t.hs <= r ? 'var(--merkki)' : 'var(--vaara)';
+        : puuskainen(t) ? 'var(--vaara)'
+        : o >= 0.5 ? 'var(--ok)' : o >= AJETTAVA_MIN ? 'var(--merkki)' : 'var(--vaara)';
       return '<i style="background:' + c + '"></i>';
     }).join('') + '</div><div class="janaSelite"><span>'
     + paivanNimi(jt.ennuste[0].aika) + ' ' + kello(jt.ennuste[0].aika) + '</span><span>'
@@ -679,7 +877,7 @@ function fmiUrl(pk){
   return 'https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature'
     + '&storedquery_id=fmi::forecast::harmonie::surface::point::simple'
     + '&latlon=' + pk.lat + ',' + pk.lon
-    + '&parameters=Temperature,DewPoint,WindSpeedMS,WindDirection&timestep=60';
+    + '&parameters=Temperature,DewPoint,WindSpeedMS,WindDirection,WindGust&timestep=60';
 }
 
 function haeJarvi(pk){
@@ -712,8 +910,14 @@ function haeJarvi(pk){
           if(ero > 45 || rivit[k].WindSpeedMS < 0.55*Math.max(r.WindSpeedMS,0.5)) break;
           t++;
         }
+        const a = aallot(pk, r.WindSpeedMS, t, r.WindDirection);
         return { aika:r.aika, U:r.WindSpeedMS, dir:r.WindDirection,
-                 T:r.Temperature, Td:r.DewPoint, hs:hs(r.WindSpeedMS, t, pk) };
+                 T:r.Temperature, Td:r.DewPoint, puuska:r.WindGust, a,
+                 /* hs = rauhallisin kymmenys, ei järven pahin. Se on se vesi
+                    jossa oikeasti ajetaan, ja siksi se on vertailuluku. */
+                 hs: hsPersentiili(a, 0.10),
+                 pahin: hsPersentiili(a, 1.0),
+                 suoja: suojaSektori(a) };
       });
     })
     .catch(() => []);
@@ -786,6 +990,7 @@ function tallennaHistoria(tulos){
       paikat[t.paikka.tunnus] = t.ennuste.map(r => ({
         t: r.aika.toISOString().slice(0,16),
         U: Math.round(r.U * 10) / 10,
+        P: r.puuska == null ? null : Math.round(r.puuska * 10) / 10,
         d: Math.round(r.dir),
         T: r.T == null ? null : Math.round(r.T * 10) / 10,
         Td: r.Td == null ? null : Math.round(r.Td * 10) / 10
