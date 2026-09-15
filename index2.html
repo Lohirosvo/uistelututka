@@ -136,6 +136,16 @@ select{width:100%;padding:11px 10px;font-size:16px;font-family:inherit;
   letter-spacing:.1em;text-transform:uppercase;color:var(--merkki);
   margin-top:12px;display:block}
 
+.pillit{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.pillit button{background:var(--meri-800);border:1px solid var(--viiva-vahva);
+  border-radius:999px;padding:7px 13px;color:var(--himmea);font-family:inherit;
+  font-size:15px;cursor:pointer}
+.pillit button.on{background:var(--merkki);border-color:var(--merkki);
+  color:#10202c;font-weight:700}
+.iso-nappi{display:block;width:100%;margin-top:14px;padding:16px;background:transparent;
+  border:1.5px solid var(--merkki);border-radius:4px;color:var(--merkki);
+  font-family:inherit;font-size:19px;font-weight:700;letter-spacing:.08em;
+  text-transform:uppercase;cursor:pointer}
 nav{flex:none;display:grid;grid-template-columns:repeat(5,1fr);
   border-top:1px solid var(--viiva-vahva);background:rgba(6,16,24,.97);
   padding-bottom:env(safe-area-inset-bottom)}
@@ -173,19 +183,10 @@ nav button.on{color:var(--syvan);border-top-color:var(--syvan)}
     <!-- ============ 2. 12–6 H ============ -->
     <section class="ruutu">
       <div class="leima keltainen">12–6 h · minne ja millä</div>
-      <div class="kesken">
-        <h4>Seuraava vaihe</h4>
-        Tähän siirretään päätökset, jotka tehdään pöydän ääressä ennen lähtöä.
-        <ul>
-          <li>Lajivalinta ja tavoitesyvyys</li>
-          <li>Paikkasuositus tuulen ja pohjanmuodon perusteella</li>
-          <li>Viehevalinta ja väri pintoineen</li>
-          <li>Päivän syvyyskäyrä tunneittain</li>
-          <li>Kattauksen painopiste</li>
-          <li>Lähetä TrollingProlle</li>
-        </ul>
-        <span class="vaatii">Vaatii: valmis vanhassa, siirto sellaisenaan</span>
-      </div>
+      <select id="jarvi" onchange="valitseJarvi(this.value)"></select>
+      <div class="valintaOhje">Järvi · valinta muistetaan</div>
+      <div id="lajit" class="pillit"></div>
+      <div id="sisalto12"></div>
     </section>
 
     <!-- ============ 3. LÄHTÖHETKI ============ -->
@@ -546,6 +547,138 @@ function laskeJaksotUudelleen(){
                           jaksot: t.ennuste.length ? jaksot(t.ennuste, t.paikka) : [] }));
 }
 
+/* ============================================================
+   12–6 H · MINNE JA MILLÄ
+   ============================================================
+   VAIHE 2 LUKEE VANHAN SOVELLUKSEN TUOTTAMAN PAKETIN, ei laske syvyyksiä
+   itse. Paketti on sama jonka "Lähetä TrollingProlle" kirjoittaa: kaikkien
+   lajien tavoitesyvyydet tunneittain, värit pintoineen ja näkösyvyys.
+
+   MIKSI NÄIN: syvyysmallit ovat vanhassa tiedostossa satoja rivejä
+   taulukoita ja lähdeviitteitä. Niiden kopioiminen tähän tekisi kaksi
+   mallia samasta asiasta — se on juuri se virhe jota olemme purkaneet koko
+   projektin ajan. Yksi laskee, toinen näyttää.
+
+   TÄMÄ ON VÄLIAIKAINEN: kun siirto etenee, mallit muuttavat tänne ja vanha
+   jää pois. Siihen asti index2 kertoo suoraan jos pakettia ei ole, eikä
+   arvaa mitään sen puolesta.
+
+   localStorage on jaettu, koska molemmat sivut ovat samassa originissa.
+   ============================================================ */
+const TP_PAKETTI = 'tp2_uistelututka_paketti';
+const LS_JARVI = 'uistelututka_jarvi';
+let jarvi = PAIKAT[0];
+let laji = 'taimen';
+
+function luePaketti(){
+  try {
+    const raw = localStorage.getItem(TP_PAKETTI);
+    if(!raw) return null;
+    const p = JSON.parse(raw);
+    return (p && p.lajit) ? p : null;
+  } catch(e){ return null; }
+}
+
+function valitseJarvi(t){
+  jarvi = PAIKAT.find(p => p.tunnus === t) || PAIKAT[0];
+  try { localStorage.setItem(LS_JARVI, jarvi.tunnus); } catch(e){}
+  piirra12();
+}
+function valitseLaji(k){ laji = k; piirra12(); }
+
+function piirra12(){
+  const box = document.getElementById('sisalto12');
+  const pillit = document.getElementById('lajit');
+  if(!box) return;
+
+  const p = luePaketti();
+  if(!p){
+    pillit.innerHTML = '';
+    box.innerHTML = '<div class="kesken"><h4>Suunnitelmaa ei ole</h4>'
+      + 'Tämä ikkuna lukee vanhan sovelluksen laskeman paketin: kaikkien lajien '
+      + 'tavoitesyvyydet tunneittain ja värit. Aja vanhassa sovelluksessa '
+      + '<strong>Lähetä TrollingProlle</strong> tai <strong>Release the Dragon</strong>, '
+      + 'niin paketti syntyy ja tämä ikkuna täyttyy.'
+      + '<span class="vaatii">Väliaikainen · mallit siirtyvät tänne myöhemmin</span></div>';
+    return;
+  }
+
+  const lajit = Object.keys(p.lajit);
+  if(lajit.indexOf(laji) === -1) laji = lajit[0];
+  pillit.innerHTML = lajit.map(k =>
+    '<button class="' + (k === laji ? 'on' : '') + '" onclick="valitseLaji(\'' + k + '\')">'
+    + p.lajit[k].nimi + '</button>').join('');
+
+  const L = p.lajit[laji];
+  const h = new Date().getHours();
+  const rivi = L.tunnit.length
+    ? L.tunnit.reduce((a,b) => Math.abs(b.t - h) < Math.abs(a.t - h) ? b : a)
+    : null;
+
+  if(!rivi){
+    box.innerHTML = '<div class="kesken">Paketissa ei ole tunteja tälle lajille.</div>';
+    return;
+  }
+
+  const ika = Math.round((Date.now() - new Date(p.luotu))/60000);
+  const ikaTxt = ika < 60 ? ika + ' min sitten' : Math.round(ika/60) + ' h sitten';
+  const vanha = ika > 240;
+
+  const paa = '<div class="arvo" style="font-size:44px;color:var(--merkki)">'
+    + nro(rivi.syvyys) + '<span style="font-size:22px;color:var(--himmea)"> m</span></div>'
+    + '<div class="selite">' + L.nimi + ' · tavoitesyvyys klo ' + pad(rivi.t) + '</div>';
+
+  const varit = (rivi.varit && rivi.varit.length)
+    ? '<div class="jakso"><div>Väri<div class="selite" style="margin-top:2px;letter-spacing:.04em">'
+      + rivi.varit.slice(0,3).map(v => v[1]).join(' · ') + '</div></div>'
+      + '<div class="kello" style="color:var(--merkki);font-size:16px">'
+      + rivi.varit[0][0] + '</div></div>'
+    : '';
+
+  /* Tapa seuraa syvyyttä samalla logiikalla kuin TrollingProssa: plaanari
+     lyijyllä 3,5 metriin, Dipsy 12:een, sen alle takila. */
+  const tapa = rivi.syvyys <= 1.5 ? 'Plaanari tai veneen takaa'
+    : rivi.syvyys <= 3.5 ? 'Plaanari + lyijypaino'
+    : rivi.syvyys <= 12 ? 'Dipsy' : 'Takila';
+  const kattaus = rivi.syvyys <= 1.5 ? 'Painopiste plaanareilla'
+    : rivi.syvyys <= 5 ? 'Dipsyt kärkeen, plaanarit ulommas'
+    : rivi.syvyys <= 12 ? 'Dipsyt matalilla asetuksilla, takila syvimmälle'
+    : 'Takilat kärkeen';
+
+  const rivit = '<div class="jakso"><div>Tapa<div class="selite" style="margin-top:2px;letter-spacing:.04em">'
+      + kattaus + '</div></div><div class="kello" style="font-size:16px">' + tapa + '</div></div>'
+    + varit
+    + '<div class="jakso"><div>Nopeus</div><div class="kello" style="font-size:17px">'
+      + nro(L.nopeus[0]) + '–' + nro(L.nopeus[1]) + ' km/h</div></div>'
+    + '<div class="jakso"><div>Näkösyvyys<div class="selite" style="margin-top:2px;letter-spacing:.04em">'
+      + (p.nakosyvyysLahde || 'lähde tuntematon') + '</div></div>'
+      + '<div class="kello" style="font-size:17px">' + nro(p.nakosyvyys) + ' m</div></div>';
+
+  /* Päivän käyrä: tunti ja syvyys, nykyinen korostettuna. */
+  const kayra = '<div class="jana" style="height:46px;align-items:flex-end;padding:3px">'
+    + L.tunnit.map(t => {
+        const maxS = Math.max.apply(null, L.tunnit.map(x => x.syvyys)) || 1;
+        const korkeus = Math.max(8, Math.round(38*t.syvyys/maxS));
+        const c = t.t === rivi.t ? 'var(--merkki)' : 'rgba(94,200,229,.4)';
+        return '<i style="align-self:flex-end;height:' + korkeus + 'px;background:' + c
+          + ';margin:0 1px" title="klo ' + pad(t.t) + ' · ' + nro(t.syvyys) + ' m"></i>';
+      }).join('')
+    + '</div><div class="janaSelite"><span>klo ' + pad(L.tunnit[0].t) + '</span>'
+    + '<span>syvyys päivän mittaan</span>'
+    + '<span>klo ' + pad(L.tunnit[L.tunnit.length-1].t) + '</span></div>';
+
+  const tuoreus = '<div class="marginaali">Paketti ' + (p.paikka || '—') + ' · ' + ikaTxt
+    + (vanha ? ' <span style="color:var(--merkki)">— vanha, aja analyysi uudelleen</span>' : '')
+    + '<br>Valittu järvi: ' + jarvi.nimi
+    + (p.paikka && p.paikka.indexOf(jarvi.nimi.split(' ')[0]) === -1
+       ? ' <span style="color:var(--vaara)">— paketti on eri järveltä</span>' : '')
+    + '</div>';
+
+  box.innerHTML = paa + rivit + kayra
+    + '<button class="iso-nappi" onclick="location.href=\'./index.html\'">'
+    + 'Avaa vanha sovellus</button>' + tuoreus;
+}
+
 /* ---------- NAVIGOINTI ---------- */
 const ruudut = document.getElementById('ruudut');
 let nyt = 0;
@@ -596,6 +729,17 @@ function valitseVene(k){
     sel.appendChild(o);
   });
   sel.value = vene;
+
+  try { const j = localStorage.getItem(LS_JARVI);
+        const l = PAIKAT.find(p => p.tunnus === j); if(l) jarvi = l; } catch(e){}
+  const jsel = document.getElementById('jarvi');
+  PAIKAT.forEach(p => {
+    const o = document.createElement('option');
+    o.value = p.tunnus; o.textContent = p.nimi;
+    jsel.appendChild(o);
+  });
+  jsel.value = jarvi.tunnus;
+  piirra12();
   document.getElementById('lehtinro').textContent =
     'Lehdet ' + PAIKAT.map(p => p.tunnus).join(' · ');
   hae();
