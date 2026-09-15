@@ -965,9 +965,11 @@ input[type=range]{width:100%;margin:12px 0 2px;accent-color:#16211f}
             </div>
             <div>
               <label style="display:block;color:var(--muted);font-size:13px;">Pyyntisyvyys (m)</label>
-              <input type="number" step="0.1" id="kalaSyvyys" style="width:90px;">
+              <input type="number" step="0.1" id="kalaSyvyys" style="width:90px;"
+                     oninput="paivitaVapautusOhje()">
             </div>
           </div>
+          <div id="vapautusOhje" style="font-size:13px; line-height:1.4; margin-top:10px;"></div>
 
           <!-- VIEHE JA VÄRI ERIKSEEN — lisätty 5.9.2026.
                Erikseen siksi, että väri on ainoa asia jota ei voi todentaa mitenkään
@@ -3207,9 +3209,75 @@ input[type=range]{width:100%;margin:12px 0 2px;accent-color:#16211f}
        tai tuuliko lainkaan. Kumpuaminen vaatii KOLME asiaa yhtä aikaa:
        kerrostuneisuuden (kylmää vettä alla), riittävän tuulen ja SUUNNAN
        (maatuuli työntää pintaveden ulos, kylmä nousee tilalle). */
+    /* ============================================================
+       KUMPUAMINEN — laskettuna, ei arvattuna. Uusittu 11.9.2026
+       ============================================================
+       Aiempi versio oli minun kirjoittamani nyrkkisääntö: "yli 5 m/s useamman
+       tunnin". Kirjallisuushaku osoitti, että tämä on mallin PARHAITEN
+       fysikaalisesti laskettavissa oleva osa, eikä sitä tarvitse arvata.
+
+       Wedderburn-luku W vertaa kerrostuneisuuden vakauttavaa voimaa tuulen
+       aiheuttamaan kitkaan:
+           W = g' · h1² / (u*² · L)
+       missä g' on redusoitu painovoima (tiheysero), h1 päällysveden paksuus,
+       u* kitkanopeus ja L pyyhkäisymatka tuulen suunnassa.
+
+       W ≤ 1  → kumpuaminen todennäköistä
+       1 < W ≤ 3 → osittainen, harppauskerros kallistuu muttei nouse pintaan
+       W > 3  → ei kumpuamista
+
+       Tuulen pitää myös KESTÄÄ vähintään neljäsosa sisäisen seichen jaksosta
+       (Stevens & Imberger 1996). Lappajärven kokoluokassa se on tunteja, ei
+       minuutteja — juuri siksi hetkellinen tuulennopeus ei riitä vastaukseksi.
+
+       Lähteet: Monismith 1986 (J. Fluid Mech. 171:407), Stevens & Imberger 1996
+       (J. Fluid Mech. 312:39), Pöschke ym. 2015 (WRR 51:9612), Imberger &
+       Patterson 1990. Veden tiheys: Martin & McCutcheon 1999.
+
+       MITÄ SOVELLUS EI TIEDÄ: tuulen KESTOA. Se tietää vain nykyhetken. Siksi
+       vastaus kertoo kynnyksen ja jättää keston sinun arvioitavaksesi — se on
+       rehellisempää kuin arvata historia jota ei ole haettu. */
+    function vedenTiheys(T) {
+      return 1000 * (1 - (T + 288.9414) * Math.pow(T - 3.9863, 2)
+                    / (508929.2 * (T + 68.12963)));
+    }
+
+    /* Palauttaa Wedderburn-analyysin tai null jos lähtötietoja puuttuu. */
+    function kumpuamisAnalyysi() {
+      const saa = saaNyt();
+      if (saa.tuuli === null || !drProfiili || drProfiili.tasalampoinen) return null;
+
+      const T_epi = drProfiili.pinta;
+      const T_hypo = drProfiili.pohja;
+      if (!(T_epi > T_hypo)) return null;
+
+      const h1 = drProfiili.termokliini || 4;                 // päällysveden paksuus
+      const h2 = Math.max(1, (currentLocation.maxDepth || 20) - h1);
+      // Pyyhkäisymatka: ympyräekvivalentti järven pinta-alasta jos tiedossa,
+      // muuten 10 km. Tämä on tarkkuuden kannalta tärkein parametri ja riippuu
+      // tuulen suunnasta — ympyräekvivalentti on keskiarvo, ei suunnattu matka.
+      const A = currentLocation.areaKm2 || 142;
+      const L = 2 * Math.sqrt(A * 1e6 / Math.PI);
+
+      const rhoEpi = vedenTiheys(T_epi), rhoHypo = vedenTiheys(T_hypo);
+      const gp = 9.81 * (rhoHypo - rhoEpi) / rhoHypo;
+      const Cd = saa.tuuli >= 5 ? 0.0015 : 0.001;             // Hicks 1972
+      const tau = Cd * 1.225 * saa.tuuli * saa.tuuli;
+      const uStar = Math.sqrt(tau / rhoEpi);
+      const W = gp * h1 * h1 / (uStar * uStar * L);
+      const ci = Math.sqrt(gp * (h1 * h2) / (h1 + h2));
+      const Ti = 2 * L / ci;                                   // sisäinen seiche, s
+
+      // Kriittinen tuulennopeus: asetetaan W = 1 ja ratkaistaan U10
+      const uStarKrit = h1 * Math.sqrt(gp / L);
+      const Ukrit = uStarKrit / Math.sqrt(Cd * 1.225 / rhoEpi);
+
+      return { W: W, Ti: Ti, kestoH: Ti / 4 / 3600, Ukrit: Ukrit,
+               tuuli: saa.tuuli, lahde: saa.tuuliLahde, h1: h1, L: L };
+    }
+
     function vvKumpuaminenSelostus() {
       const saa = saaNyt();
-      const U = saa.tuuli;
       let kerrostunut = null;
       try {
         if (drProfiili) kerrostunut = !drProfiili.tasalampoinen;
@@ -3223,18 +3291,37 @@ input[type=range]{width:100%;margin:12px 0 2px;accent-color:#16211f}
       if (kerrostunut === false) {
         txt += 'Vesipatsas on mitattu tasalämpöiseksi, joten kylmää alusvettä ei ole nousemassa. '
              + 'Kumpuaminen ei ole tekijä tänään riippumatta tuulesta.';
-      } else if (kerrostunut === null) {
-        txt += 'Kerrostuneisuutta ei ole mitattu, joten kumpuamisesta ei voi sanoa mitään. '
-             + 'Syötä lämpötilaprofiili, niin tämä kohta osaa vastata.';
-      } else if (U !== null && U >= 5) {
-        txt += `Vesi on kerrostunutta ja tuulee ${vvNro(U)} m/s. Jos tuuli on puhaltanut samasta `
-             + 'suunnasta vuorokauden tai pidempään, maatuulen puoleisella rannalla pintavesi on '
-             + 'työntynyt ulos ja kylmää vettä on noussut tilalle. Se tuo syöttikalan lähemmäs '
-             + 'rantaa ja matalampaan kuin malli muuten arvaisi. Tuulen kesto ratkaisee, ei hetkellinen nopeus.';
-      } else {
-        txt += 'Vesi on kerrostunutta, mutta tuuli on liian heikko työntämään pintavettä sivuun. '
-             + 'Kumpuaminen vaatii useamman tunnin yhtäjaksoista tuulta, tyypillisesti yli 5 m/s.';
+        return txt + '</p>';
       }
+      if (kerrostunut === null) {
+        txt += 'Kerrostuneisuutta ei ole mitattu, joten kumpuamisesta ei voi sanoa mitään. '
+             + 'Syötä lämpötilaprofiili, niin tämä kohta laskee Wedderburn-luvun.';
+        return txt + '</p>';
+      }
+
+      const k = kumpuamisAnalyysi();
+      if (!k) {
+        txt += 'Lähtötietoja puuttuu (tuuli tai lämpötilaprofiili), joten lukua ei voi laskea.';
+        return txt + '</p>';
+      }
+
+      let tila;
+      if (k.W <= 1) {
+        tila = `<strong>Wedderburn-luku ${k.W.toFixed(2)} — kumpuaminen on mahdollista.</strong> `
+             + 'Tuuli riittää kallistamaan harppauskerroksen pintaan asti tuulen vastaisella rannalla.';
+      } else if (k.W <= 3) {
+        tila = `<strong>Wedderburn-luku ${k.W.toFixed(1)} — osittainen kallistuma.</strong> `
+             + 'Harppauskerros kallistuu mutta ei todennäköisesti nouse pintaan.';
+      } else {
+        tila = `<strong>Wedderburn-luku ${k.W.toFixed(0)} — ei kumpuamista.</strong> `
+             + `Kerrostuneisuus on liian vahva tälle tuulelle; kynnys ylittyisi noin ${k.Ukrit.toFixed(1)} m/s:ssä.`;
+      }
+
+      txt += tila + ` Tuuli ${vvNro(k.tuuli)} m/s (${k.lahde || 'lähde tuntematon'}), `
+          + `päällysvesi ${vvNro(k.h1)} m, pyyhkäisymatka ${(k.L / 1000).toFixed(0)} km. `
+          + `<br><em>Kesto ratkaisee:</em> tuulen pitää puhaltaa samasta suunnasta vähintään `
+          + `${k.kestoH.toFixed(0)} tuntia (neljäsosa sisäisen seichen ${(k.Ti / 3600).toFixed(0)} tunnin jaksosta). `
+          + 'Sovellus tietää vain nykyhetken tuulen, ei sen kestoa — sen arvio jää sinulle.';
       return txt + '</p>';
     }
 
@@ -4550,6 +4637,85 @@ lataa(eka);
     // jolloin mallin osumatarkkuutta voi myöhemmin arvioida.
     const LS_SAALIS = 'nopeusnaytto_pro1_saaliit';
     let keskenerainenSaalis = null;
+    // ============================================================
+    // VAPAUTUSOHJE — lisätty 11.9.2026
+    // ============================================================
+    // Tämä on ainoa kohta sovelluksessa, jossa neuvo vaikuttaa kalaan eikä
+    // saaliiseen. Siksi se on kirjoitettu näytön mukaan eikä tunnelman.
+    //
+    // MITÄ ON MITATTU JA MILLÄ LAJILLA — tämä erottelu on koko pointti:
+    //
+    //   [M, KUHALLA MITATTU] Ilma-altistus on merkittävin yksittäinen
+    //   kuolleisuustekijä alamittaiselle kuhalle: kuolleisuus vaihteli 8-47 %
+    //   pelkän altistusajan mukaan, nolla-altistus selvisi parhaiten
+    //   (Arlinghaus-ryhmä). Tämä on kuhalla mitattu, ei analogiaa.
+    //
+    //   [M-ANALOGIA, HILSEAHVENELTA] Syvyyskuolleisuus: alle 9 m noin 1,5 %,
+    //   yli 9 m hyppää noin 15 %:iin (South Dakota GFP). Nämä on mitattu
+    //   hilseahvenella (Sander vitreus), EI kuhalla. Kuhan omaa syvyys-
+    //   barotraumakoetta ei ole julkaistu.
+    //
+    // JÄRJESTYS SEURAA NÄYTÖN VAHVUUTTA. Ilma-altistus mainitaan ensin ja aina,
+    // koska se on mitattu ja koska se on ainoa asia jonka kalastaja voi vielä
+    // tehdä toisin. Syvyys mainitaan toisena ja merkittynä analogiaksi.
+    //
+    // ANATOMIA ON FAKTA, EI ARVAUS: kuha ja ahven ovat fysoklistejä (uimarakko
+    // suljettu, kaasu poistuu hitaasti verenkierron kautta) ja siksi alttiita
+    // barotraumalle. Hauki, taimen ja järvilohi ovat fysostomeja — uimarakko on
+    // yhteydessä ruokatorveen ja ne voivat päästää kaasun ulos. Niillä syvyys on
+    // toissijainen ja käsittely ratkaisee.
+    const FYSOKLISTIT = ['kuha', 'ahven'];
+
+    function paivitaVapautusOhje() {
+      const el = document.getElementById('vapautusOhje');
+      if (!el) return;
+      const d = parseFloat((document.getElementById('kalaSyvyys') || {}).value);
+      const laji = kalaLaji;
+      const fyso = FYSOKLISTIT.indexOf(laji) !== -1;
+      const vesi = (typeof answers === 'object' && typeof answers.temp === 'number') ? answers.temp : null;
+
+      const rivit = [];
+
+      // 1. ILMA-ALTISTUS — mitattu, koskee kaikkia, mainitaan aina ensin.
+      rivit.push('<div><strong>Pidä kala vedessä.</strong> Ilma-altistus on ainoa '
+        + 'kuolleisuustekijä joka on kuhalla suoraan mitattu: altistusajan mukaan '
+        + 'kuolleisuus vaihteli 8–47 %. Irrota koukku haavissa tai vedessä, '
+        + 'kuvaus vasta sitten ja nopeasti.</div>');
+
+      // 2. SYVYYS — analogiaa, vain fysoklisteille, vain jos syvyys on annettu.
+      if (fyso && !isNaN(d)) {
+        if (d < 6) {
+          rivit.push('<div style="margin-top:6px;color:var(--cyan)">Pyyntisyvyys '
+            + d.toFixed(1) + ' m — vapautus onnistuu hyvin. Uimarakko ehtii tasaantua.</div>');
+        } else if (d < 9) {
+          rivit.push('<div style="margin-top:6px;color:var(--amber)">Pyyntisyvyys '
+            + d.toFixed(1) + ' m — barotrauman merkkejä alkaa esiintyä tällä syvyydellä. '
+            + 'Vapauta nopeasti ja katso ettei kala jää pyörimään pintaan.</div>');
+        } else {
+          rivit.push('<div style="margin-top:6px;color:var(--hard-red)"><strong>Pyyntisyvyys '
+            + d.toFixed(1) + ' m — vapautus ei todennäköisesti onnistu.</strong> '
+            + 'Yli yhdeksän metrin syvyydessä kuolleisuus hyppää noin 15 %:iin ja kasvaa '
+            + 'syvemmälle mentäessä. Päätä otat vai vapautat ENNEN väsyttämistä — '
+            + 'vapautettu kala joka ei selviä on huonompi lopputulos kuin otettu. '
+            + '<em>(Luvut mitattu hilseahvenella, ei kuhalla — suuruusluokka, ei tarkka arvo.)</em></div>');
+        }
+      } else if (!fyso && !isNaN(d)) {
+        rivit.push('<div style="margin-top:6px;color:var(--muted)">' + laji
+          + ' on fysostomi: uimarakko on yhteydessä ruokatorveen ja kaasu pääsee ulos, '
+          + 'joten syvyys ei ole ratkaiseva. Käsittelyaika ja koukun sijainti ovat.</div>');
+      }
+
+      // 3. LÄMPÖTILA — lisääntynyt kuolleisuus kaikilla lajeilla.
+      if (vesi !== null && vesi > 18) {
+        rivit.push('<div style="margin-top:6px;color:var(--amber)">Vesi ' + vesi.toFixed(1)
+          + ' °C — lämmin vesi lisää vapautuskuolleisuutta kaikilla lajeilla. '
+          + 'Lohikaloilla 18–20 °C on se raja jonka yli vapauttaminen alkaa olla '
+          + 'kyseenalaista.</div>');
+      }
+
+      el.innerHTML = rivit.join('');
+    }
+
     let kalaLaji = 'taimen';
 
     function lataaSaaliit() {
@@ -4650,6 +4816,7 @@ lataa(eka);
         chip.textContent = o.l;
         chip.onclick = () => {
           kalaLaji = o.v;
+          paivitaVapautusOhje();
           el.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
           chip.classList.add('selected');
         };
@@ -6304,7 +6471,7 @@ lataa(eka);
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v75';
+    const APP_VERSIO = 'v78';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -7301,11 +7468,57 @@ lataa(eka);
     // sijainti vesipatsaassa säilyy.
     const DEPTH_MODEL_REFERENCE = 25; // metriä — syvyys jolle taulukot on kalibroitu
 
+    /* ============================================================
+       VUOROKAUSIVAELLUKSEN SKAALAUS VALOLLA — lisätty 11.9.2026
+       ============================================================
+       Kirjallisuushaku paljasti mallin suurimman datapuutteen: lajikohtaiset
+       syvyystaulukot ovat peräisin KIRKKAISTA järvistä ja tekojärvistä
+       (Tšekki, Saksa, Ranska) sekä Pohjois-Amerikan suurjärvistä. Mitattuja
+       DVM-amplitudeja on 11–13 m. Humusjärvessä, jossa valo vaimenee monta
+       kertaa nopeammin, ne ovat lähes varmasti yliarvioita.
+
+       FYSIKAALINEN PERUSTE: valo-ohjattu vuorokausivaellus seuraa isolumia eli
+       vakiovalotasoa. Isolumin syvyys on kääntäen verrannollinen vaimennus-
+       kertoimeen: z ∝ 1/Kd. Kirkkaassa vedessä sama valotaso on syvemmällä,
+       humusvedessä matalammalla.
+
+       ANSA JOTA VARON — tein saman virheen eilen kuoreen kanssa: taulukot on
+       osin viritetty Lappajärvelle (kalastajan omat havainnot, syksyn
+       ahvenkäyrä), ja kuhalla on jo oma optinen lattia opticalFloorLux-
+       funktiossa. Jos skaalaisin taulukot päälle, sama korjaus tehtäisiin
+       kahdesti.
+       Siksi VERTAILUKOHTA ON LAPPAJÄRVI: kerroin on tasan 1,00 siellä missä
+       taulukot on kalibroitu, ja poikkeaa vain siirryttäessä muuhun veteen.
+       Sama ratkaisu kuin Kd-kertoimessa, ja samasta syystä.
+
+       RAJAT 0,5–2,5: isolumiskaalaus on oikea suunta muttei koko totuus —
+       lämpötila, happi ja pohjan syvyys rajaavat kalaa myös. Raja estää
+       absurdit tulokset erittäin kirkkaassa vedessä. Rajat ovat valittuja.
+
+       LISÄKSI HAPPIRAJOITE: raportti muistuttaa, että Lappajärven syvänteissä
+       on kesällä happiongelmia, joten petokalat eivät käytä hypolimnionin
+       pohjaosia loppukesällä. Skaalaus ei siis saa viedä kalaa mielivaltaisen
+       syvälle silloinkaan kun valo sen sallisi. */
+    const DVM_VERTAILU_KD = 1.5;   // Lappajärvi: kerroin 2,7 / näkösyvyys 1,8 m
+
+    function dvmSkaala() {
+      let secchi = 1.8;
+      try {
+        const ns = kaytettavaNakosyvyys();
+        if (ns && ns.m > 0) secchi = ns.m;
+      } catch (e) { /* oletus */ }
+      const kd = laskeKd(secchi);
+      if (!(kd > 0)) return 1;
+      return Math.max(0.5, Math.min(2.5, DVM_VERTAILU_KD / kd));
+    }
+
     function scaleForLake(depth) {
+      // Kaksi erillistä skaalausta: järven syvyys (matala järvi ei voi tarjota
+      // syviä kerroksia) ja valo (isolumi on eri syvyydessä eri vedessä).
+      let d = depth * dvmSkaala();
       const maxD = currentLocation.maxDepth;
-      if (!maxD || maxD >= DEPTH_MODEL_REFERENCE) return depth;
-      const scale = maxD / DEPTH_MODEL_REFERENCE;
-      return depth * scale;
+      if (maxD && maxD < DEPTH_MODEL_REFERENCE) d = d * (maxD / DEPTH_MODEL_REFERENCE);
+      return d;
     }
 
     // ===== NÄKÖSYVYYSTAULUKKO =====
@@ -7688,10 +7901,27 @@ lataa(eka);
       else if (c.wind === 'calm') { score -= 5; parts.push({ t: 'Tyyni — vaatii takilat, levittäjät ja pitkät siimat', v: -5, src: 'heikko' }); }
       else if (c.wind === 'hard') { score -= 10; parts.push({ t: 'Kova aallokko — pyynti kärsii (vieheiden hallinta)', v: -10, src: 'heikko' }); }
 
-      // Ilmanpaine: EI vertaisarvioitua näyttöä lohikaloilla; kontrolloitu koe negatiivinen.
-      // Paino pudotettu 15 -> 5, koska muuten tämä dominoisi tutkimuspohjaisia tekijöitä.
-      if (c.pressure === 'falling') { score -= 5; parts.push({ t: 'Laskeva paine', v: -5, src: 'kokemus' }); }
-      else if (c.pressure === 'rising') { score += 3; parts.push({ t: 'Nouseva paine', v: +3, src: 'kokemus' }); }
+      // ===== ILMANPAINE POISTETTU PISTEYTYKSESTÄ 11.9.2026 =====
+      // Kirjallisuushaku ei löytänyt yhtään vertaisarvioitua kontrolloitua koetta,
+      // joka osoittaisi ilmanpaineen ITSENÄISEN vaikutuksen makean veden
+      // petokalojen syöntiin. Ainoa suora koe (kelta-ahven) oli nollatulos.
+      //
+      // Fysiologia puhuu vastaan: kalat aistivat paineen MUUTOSNOPEUDEN
+      // uimarakon tilavuuden kautta, mutta eivät absoluuttista painetta
+      // (Holbrook & Taylor 2011). Tyypillinen 10-30 hPa vaihtelu vastaa 10-30 cm
+      // syvyysmuutosta — kala ohittaa sen uimalla desimetrin pystysuunnassa.
+      // Muutosnopeus 30 hPa vuorokaudessa on mitättömän hidas verrattuna uintiin.
+      //
+      // Ilmanpaine on siis korkeintaan sään korrelaatti: rintamat tuovat mukanaan
+      // tuulen, pilvet ja valon muutoksen, ja NE ovat mallissa jo omina tekijöinään.
+      // Paineen pisteyttäminen laski samaa asiaa kahdesti.
+      //
+      // Kuvaaja ja saaliskirjauksen kenttä jäävät — havainto on havainto, ja jos
+      // omasta saalisdatasta joskus löytyy yhteys, se voidaan palauttaa. Pisteytystä
+      // se ei ohjaa ennen sitä.
+      //
+      // PALAUTUSKYNNYS: vertaisarvioitu makean veden koe tai monimuuttuja-CPUE-malli,
+      // joka erottaa paineen tuulesta ja valosta ja näyttää itsenäisen efektin.
 
       // Tuulen suunta: ei suoraa näyttöä taimenelle; muilla lajeilla efektikoko hyvin pieni.
       const dir = c.windDir;

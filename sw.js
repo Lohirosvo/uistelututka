@@ -10,7 +10,7 @@
 // Muut tiedostot (kuvakkeet, manifest) haetaan välimuistista ensin — ne eivät muutu.
 //
 // VERSIO: kasvata tätä aina kun julkaiset uuden version. Vanha välimuisti siivotaan.
-const VERSIO = 'uistelututka-v75';
+const VERSIO = 'uistelututka-v78';
 const SIVU = './';
 
 const ESILADATTAVAT = [
