@@ -19,7 +19,7 @@
    PERIAATE: yksi ikkuna = yksi päätös.
      48 h        lähdenkö          VALMIS
      12-6 h      minne ja millä    siirretään päivän suunnitelmasta
-     lähtöhetki  onko muuttunut    vaatii eilisen ennusteen talteen
+     lähtöhetki  onko muuttunut    tallennus tehty 15.9. — ikkuna kesken
      vesillä     mitä nyt          karsitaan nykyisestä
      muut        loput             siirretään sellaisenaan
 
@@ -204,7 +204,9 @@ nav button.on{color:var(--syvan);border-top-color:var(--syvan)}
           <li>DepthRider-profiilin syöttö</li>
           <li>Release the Dragon</li>
         </ul>
-        <span class="vaatii">Vaatii: edellisen ennusteen tallennuksen vertailua varten</span>
+        <span class="vaatii">Tallennus valmis 15.9. · historiaEnnen(h) antaa vanhan ennusteen.
+        Puuttuu: vertailu ja sen esitys. Vedenkorkeus, DepthRider ja vapautusohje
+        siirretään vanhasta.</span>
       </div>
     </section>
 
@@ -643,10 +645,101 @@ function haeJarvi(pk){
     .catch(() => []);
 }
 
+/* ============================================================
+   ENNUSTEHISTORIA · 7 vrk · ei näy vielä missään
+   ============================================================
+   MIKSI TÄMÄ ON OLEMASSA: lähtöhetki-ikkuna ei toista eilistä analyysiä.
+   Se kertoo mikä on TOISIN kuin viimeksi. "Toisin kuin mitä" vaatii että
+   jossain on tallessa se mitä viimeksi luki. Mikään ei tallentanut sitä.
+
+   MIKSI NYT VAIKKA MITÄÄN EI VIELÄ NÄYTETÄ: historiaa ei voi hakea
+   jälkikäteen. Jos tallennus kytketään vasta silloin kun lähtöhetki-ikkuna
+   kirjoitetaan, ensimmäinen vertailu on mahdollinen vasta vuorokautta
+   myöhemmin. Tallennus alkaa siis ennen käyttäjäänsä.
+
+   MITÄ TALLENNETAAN: vain se mitä FMI antoi — tuuli, suunta, lämpötila,
+   kastepiste tunneittain. EI aallonkorkeutta eikä jaksoja. Ne ovat
+   johdettuja: hs() ja jaksot() laskevat ne noista luvuista. Jos kaavaa
+   joskus muutetaan, talteen jäänyt vanha hs olisi vertailussa eri mallin
+   tuotos kuin tämänpäiväinen — kaksi mallia samasta asiasta, eli juuri se
+   virhe jota olemme purkaneet. Johdetut lasketaan uudestaan luettaessa.
+
+   KOLME RAJAA, jokainen omasta syystään:
+     väli 3 h     — viisi latausta samana aamuna ei saa tehdä "eilisestä"
+                    kahden tunnin takaista
+     ikä 7 vrk    — sitä vanhempi ei kerro lähdöstä mitään
+     määrä 60 kpl — localStorage on jaettu vanhan sovelluksen kanssa, eikä
+                    tämä saa syödä sen tilaa; kiintiövirheessä pudotetaan
+                    vanhin puolisko ja yritetään kerran uudestaan
+
+   RAJOJEN ON SOVITTAVA YHTEEN. Tunnin välillä 60 tallennusta täyttyy 2,5
+   vuorokaudessa, jolloin katto pudottaisi vanhimmat pois ja "7 vrk" olisi
+   lupaus jota koodi ei pidä. Kolmen tunnin välillä seitsemään vuorokauteen
+   mahtuu 56 tallennusta, eli ikäraja ehtii ensin — niin kuin pitää.
+   Jos väliä muutetaan, katto on muutettava samassa: vrk*24/väli <= katto.
+   ============================================================ */
+const LS_HISTORIA = 'uistelututka_ennustehistoria';
+const HISTORIA_VRK = 7, HISTORIA_VALI_MIN = 180, HISTORIA_MAX = 60;
+
+function lueHistoria(){
+  try{
+    const raw = localStorage.getItem(LS_HISTORIA);
+    if(!raw) return [];
+    const h = JSON.parse(raw);
+    return Array.isArray(h) ? h : [];
+  }catch(e){ return []; }
+}
+
+/* Lähtöhetki lukee tätä. minIkaH on pakollinen eikä sillä ole oletusta:
+   ilman ikärajaa vertailu osuisi omaan hakuunsa muutama minuutti sitten
+   eikä näyttäisi koskaan eroa. */
+function historiaEnnen(minIkaH){
+  const raja = Date.now() - minIkaH * 3600000;
+  const h = lueHistoria();
+  for(let i = h.length - 1; i >= 0; i--) if(h[i].ts <= raja) return h[i];
+  return null;
+}
+
+function tallennaHistoria(tulos){
+  try{
+    const nyt = Date.now();
+    let h = lueHistoria();
+    if(h.length && nyt - h[h.length-1].ts < HISTORIA_VALI_MIN * 60000) return;
+
+    const paikat = {};
+    tulos.forEach(t => {
+      if(!t.ennuste || !t.ennuste.length) return;
+      paikat[t.paikka.tunnus] = t.ennuste.map(r => ({
+        t: r.aika.toISOString().slice(0,16),
+        U: Math.round(r.U * 10) / 10,
+        d: Math.round(r.dir),
+        T: r.T == null ? null : Math.round(r.T * 10) / 10,
+        Td: r.Td == null ? null : Math.round(r.Td * 10) / 10
+      }));
+    });
+    // Pelkkiä epäonnistuneita hakuja ei tallenneta: tyhjä tallennus näyttäisi
+    // lähtöhetkessä siltä että ennuste on muuttunut tyhjäksi.
+    if(!Object.keys(paikat).length) return;
+
+    h.push({ ts: nyt, paikat });
+    h = h.filter(s => s.ts >= nyt - HISTORIA_VRK * 86400000).slice(-HISTORIA_MAX);
+
+    try{ localStorage.setItem(LS_HISTORIA, JSON.stringify(h)); }
+    catch(e){
+      h = h.slice(Math.ceil(h.length / 2));
+      try{ localStorage.setItem(LS_HISTORIA, JSON.stringify(h)); }catch(e2){}
+    }
+  }catch(e){}   // historia ei saa koskaan kaataa 48 h -ikkunaa
+}
+
 function hae(){
   Promise.all(vertailtavat().map(pk => haeJarvi(pk).then(e => ({
     paikka: pk, ennuste: e, jaksot: e.length ? jaksot(e, pk) : []
-  })))).then(tulos => { tila = tulos; piirra48(); });
+  })))).then(tulos => {
+    tila = tulos;
+    piirra48();
+    tallennaHistoria(tulos);   // piirron jälkeen: näyttö ei odota tallennusta
+  });
 }
 
 /* Venevalinnan muutos ei vaadi uutta hakua — vain jaksot lasketaan uudestaan. */
