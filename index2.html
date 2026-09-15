@@ -173,8 +173,9 @@ nav button.on{color:var(--syvan);border-top-color:var(--syvan)}
     <!-- ============ 1. 48 H ============ -->
     <section class="ruutu">
       <div class="leima sininen">48 h · lähdenkö ja minne</div>
-      <select id="vene" onchange="valitseVene(this.value)"></select>
-      <div class="valintaOhje">Vene · siirtyy Muut-ikkunaan</div>
+      <div id="venePillit" class="pillit"></div>
+      <select id="vene" onchange="valitseVene(this.value)" style="display:none"></select>
+      <div class="valintaOhje" id="veneOhje">Vene · viimeksi käytetyt</div>
       <div id="sisalto48">
         <div class="arvo" style="font-size:26px;color:var(--himmea)">Haetaan ennustetta…</div>
       </div>
@@ -230,13 +231,16 @@ nav button.on{color:var(--syvan);border-top-color:var(--syvan)}
       <div class="kesken">
         <h4>Kaikki mitä ei tarvita päätöshetkellä</h4>
         Siirretään sellaisenaan, omina avattavina osioinaan.
+        <br><br>Vene ja järvi EIVÄT ole täällä: vene vaihtuu trailerin ja
+        kaverien veneiden mukana, ja järvi on vapaa valinta. Molemmat ovat
+        päätöksiä eivätkä asetuksia, joten ne asuvat päätösikkunoissa.
         <ul>
           <li>Saalisloki ja CSV-vienti</li>
           <li>Aallonkorkeuskartta · sumuriski · Windy · sadetutka</li>
           <li>Valovyöhyke</li>
           <li>SYKE-syvyysanalyysi ja omat merkinnät</li>
           <li>Viehekalibrointi ja mallin säätimet</li>
-          <li>Kyselyn vastaukset · venevalinta · paikkavalinta</li>
+          <li>Kyselyn vastaukset · mallin lähtöarvot</li>
         </ul>
         <span class="vaatii">Vaatii: siirto, ei muutoksia</span>
       </div>
@@ -713,9 +717,67 @@ function avaaOikeaIkkuna(){
 }
 
 /* ---------- KÄYNNISTYS ---------- */
+/* VENEVALINTA PILLEREINÄ — muutettu 13.9.2026.
+   Vene vaihtuu useammin kuin järvi: trailerilla mennään minne huvittaa, ja
+   kaverin vene tai oma soutuvene tarkoittaa täysin eri rajaa. Ero soutuveneen
+   0,30 ja Beasonin 1,20 metrin välillä on nelinkertainen, eli venevalinta
+   muuttaa koko vastauksen.
+
+   Siksi se ei ole asetus vaan päätös, ja siksi se on pillereinä eikä
+   pudotusvalikossa: laiturilla kaverin veneen vieressä yhdeksän rivin
+   valikko on hidas. Kolme viimeksi käytettyä näkyy suoraan, loput valikon
+   takana. Historia tallennetaan, joten lista muotoutuu käytön mukaan. */
+const LS_VENEET_VIIMEKSI = 'uistelututka_veneet_viimeksi';
+
+function veneHistoria(){
+  try {
+    const raw = localStorage.getItem(LS_VENEET_VIIMEKSI);
+    const lista = raw ? JSON.parse(raw) : [];
+    return lista.filter(k => VENEET[k]);
+  } catch(e){ return []; }
+}
+
+function merkitseKaytetyksi(k){
+  let h = veneHistoria().filter(x => x !== k);
+  h.unshift(k);
+  h = h.slice(0, 4);
+  try { localStorage.setItem(LS_VENEET_VIIMEKSI, JSON.stringify(h)); } catch(e){}
+}
+
+function piirraVenePillit(){
+  const box = document.getElementById('venePillit');
+  if(!box) return;
+  // Viimeksi käytetyt ensin, täydennetään pienimmillä jos historiaa ei ole
+  let nakyvat = veneHistoria();
+  if(nakyvat.indexOf(vene) === -1) nakyvat.unshift(vene);
+  const loput = Object.keys(VENEET)
+    .sort((a,b) => VENEET[a].raja - VENEET[b].raja)
+    .filter(k => nakyvat.indexOf(k) === -1);
+  nakyvat = nakyvat.slice(0,3);
+
+  const lyhyt = k => VENEET[k].nimi.split(' · ')[0];
+  box.innerHTML = nakyvat.map(k =>
+      '<button class="' + (k === vene ? 'on' : '') + '" onclick="valitseVene(\'' + k + '\')">'
+      + lyhyt(k) + ' <span style="opacity:.65">' + nro(VENEET[k].raja) + '</span></button>').join('')
+    + (loput.length ? '<button onclick="naytaKaikkiVeneet()">Muu vene ▾</button>' : '');
+
+  document.getElementById('veneOhje').textContent =
+    'Vene · raja ' + nro(VENEET[vene].raja) + ' m · ' + VENEET[vene].nimi;
+}
+
+function naytaKaikkiVeneet(){
+  const sel = document.getElementById('vene');
+  sel.style.display = 'block';
+  sel.focus();
+  if(sel.showPicker) { try { sel.showPicker(); } catch(e){} }
+}
+
 function valitseVene(k){
   vene = k;
+  merkitseKaytetyksi(k);
   try { localStorage.setItem(LS_VENE, k); } catch(e){}
+  document.getElementById('vene').style.display = 'none';
+  piirraVenePillit();
   laskeJaksotUudelleen();
   piirra48();
 }
@@ -729,6 +791,7 @@ function valitseVene(k){
     sel.appendChild(o);
   });
   sel.value = vene;
+  piirraVenePillit();
 
   try { const j = localStorage.getItem(LS_JARVI);
         const l = PAIKAT.find(p => p.tunnus === j); if(l) jarvi = l; } catch(e){}
