@@ -825,8 +825,9 @@
 .ak-kartta{position:relative;background:#eef1f0;border-radius:8px;overflow:hidden}
 .ak-kartta canvas{width:100%;display:block;image-rendering:auto}
 .ak-leima{position:absolute;top:8px;right:8px;background:rgba(255,255,255,.92);
-    border-radius:6px;padding:5px 9px;font-size:.8rem;font-weight:650;
-    font-variant-numeric:tabular-nums;text-align:center;line-height:1.25}
+    border-radius:6px;padding:5px 9px;font-size:1.05rem;font-weight:750;
+    font-variant-numeric:tabular-nums;text-align:center;line-height:1.2;
+    max-width:48%}
 .ak-leima small{display:block;font-weight:400;font-size:.68rem;color:var(--harmaa)}
 .ak-tuuli{position:absolute;left:8px;bottom:8px;background:rgba(255,255,255,.92);
     border-radius:6px;padding:5px 9px;font-size:.75rem;font-variant-numeric:tabular-nums}
@@ -835,6 +836,9 @@
     font-size:.62rem;font-variant-numeric:tabular-nums}
 .ak-asteikko div{flex:1;text-align:center;padding:3px 0;color:#fff;
     text-shadow:0 0 2px rgba(0,0,0,.45)}
+.ak-piste{font-family:ui-monospace,monospace;font-size:.78rem;text-align:center;
+    line-height:1.45;margin-top:8px;min-height:2.6em;color:var(--harmaa)}
+.ak-piste b{font-size:.95rem}
 .ak-raja{display:flex;align-items:center;gap:8px;margin-top:8px}
 .ak-raja select{flex:1;min-width:0;padding:5px;background:#12201c;color:#e8efe9;
   border:1px solid rgba(160,190,170,.35);border-radius:6px;font-size:12px}
@@ -1126,6 +1130,10 @@ input[type=range]{width:100%;margin:12px 0 2px;accent-color:#16211f}
        Veneen turvaraja vastaa eri kysymykseen (kestääkö runko) kuin uistelu
        (pystyykö vapoja hoitamaan). Rajan yli menevä vesi himmennetään, jolloin
        kelvollinen alue erottuu ilman että väriasteikko katoaa. -->
+  <!-- NAPAUTUS — 15.9.2026. Kalibrointia varten: kartta kertoo värin, mutta oman
+       rajan löytäminen vaatii luvun siitä kohdasta järveä jossa oikeasti oltiin. -->
+  <div class="ak-piste" id="akPiste">Napauta karttaa: kertoo sen kohdan aallon</div>
+
   <div class="ak-raja">
     <select id="akVene"></select>
     <input type="range" id="akRaja" min="0.10" max="0.60" step="0.01" value="0.20">
@@ -4298,25 +4306,66 @@ function piirra(){
   }
   ctx.stroke();
 
+  /* Talteen napautusta varten: nämä ovat piirron paikallisia, mutta napautus
+     tarvitsee ne piirron jälkeen. */
+  akViime = { hs:hs, kentta:kentta, k:k, S:S, kalaRaja:kalaRaja, turva:akVene().turva };
+  akPiirraMerkki(ctx, S);
+
   d.korkein = korkein;
   d.Tp = jonswapTp(Math.min(d.Fpahin, Fkesto), U);
   naytaTiedot(d);
+  akNaytaPiste();
+}
+
+var akViime = null, akValittu = null;
+
+function akPiirraMerkki(ctx, S){
+  if (!akValittu || !akViime) return;
+  var k = akViime.k;
+  if (akValittu.i >= k.W || akValittu.j >= k.H) return;
+  var x = (akValittu.i + 0.5)*S, y = (akValittu.j + 0.5)*S, r = Math.max(5, S*1.6);
+  ctx.strokeStyle = "rgba(20,28,26,.85)"; ctx.lineWidth = Math.max(1.6, S*0.35);
+  ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.stroke();
+  ctx.strokeStyle = "rgba(255,255,255,.95)"; ctx.lineWidth = Math.max(1, S*0.2);
+  ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.stroke();
+}
+
+function akNaytaPiste(){
+  var el = $("akPiste");
+  if (!el) return;
+  if (!akValittu || !akViime){
+    el.textContent = "Napauta karttaa: kertoo sen kohdan aallon"; return;
+  }
+  var k = akViime.k, q = akValittu.j*k.W + akValittu.i;
+  if (!mask[q]){ el.textContent = "Maata — napauta vesialuetta"; return; }
+  var h = akViime.hs[q], F = akViime.kentta[q];
+  var tila = h <= akViime.kalaRaja ? "uisteltavissa"
+           : h <= akViime.turva ? "vain kuljettavissa" : "yli turvarajan";
+  el.innerHTML = "Tässä kohdassa <b>" + h.toFixed(2).replace(".", ",") + " m</b> · " + tila
+    + "<br>avointa vettä tuulen suuntaan "
+    + (F >= 1000 ? (F/1000).toFixed(1).replace(".", ",") + " km" : Math.round(F) + " m")
+    + " · huiput noin " + (h*1.86).toFixed(2).replace(".", ",") + " m";
 }
 
 function naytaTiedot(d){
   var pad = function(n){ return ("0"+n).slice(-2); };
   var pv = ["su","ma","ti","ke","to","pe","la"];
 
-  $("akLeima").innerHTML = d.korkein.toFixed(2) + " m<small>"
-    + pv[d.aika.getDay()] + " klo " + pad(d.aika.getHours()) + "</small>";
+  /* OSUUS LEIMAAN — 15.9.2026. Prosentti oli vain taulukossa, jonne pitää
+     vierittää. Se on kuitenkin se luku joka vastaa kysymykseen lähdenkö,
+     joten se kuuluu kartan päälle. Korkein järvellä jää alle pienempänä. */
+  var pros = Math.round((d.osuus || 0)*100);
+  var vari = pros >= 25 ? '#1c7a42' : pros > 0 ? '#9a7b00' : '#9b1f28';
+  $("akLeima").innerHTML = '<span style="color:' + vari + '">' + pros + ' %</span>'
+    + '<small>uisteltavissa</small>'
+    + '<small>' + pv[d.aika.getDay()] + ' klo ' + pad(d.aika.getHours())
+    + ' · huippu ' + d.korkein.toFixed(2) + ' m</small>';
   $("akTuuli").textContent = d.U.toFixed(0) + " m/s " + kompassi(d.dir);
 
   var pros = Math.round((d.osuus || 0)*100);
   var vari = pros >= 25 ? '#3faa62' : pros > 0 ? '#f2c200' : '#bd2430';
   $("akTaulu").innerHTML =
-      '<div><span>Uisteltavissa</span><b style="color:' + vari + '">' + pros
-        + ' % järvestä</b></div>'
-    + '<div><span>Kalastusraja</span><b>' + akKalaRaja().toFixed(2) + ' m · '
+      '<div><span>Kalastusraja</span><b>' + akKalaRaja().toFixed(2) + ' m · '
         + akVene().nimi.split(' · ')[0] + '</b></div>'
     + '<div><span>Korkein järvellä</span><b>' + d.korkein.toFixed(2) + ' m</b></div>'
     + '<div><span>Suurin yksittäinen</span><b>' + (1.86*d.korkein).toFixed(2) + ' m</b></div>'
@@ -4330,6 +4379,26 @@ $("akLiuku").addEventListener("input", function(){
   valittu = +this.value;
   piirra();
 });
+
+/* Napautus. Canvasin näyttökoko ja sisäinen ruudukko ovat eri asia, joten
+   muunnos tehdään getBoundingClientRectin kautta eikä pikseleistä. */
+(function(){
+  var c = $("akKuva");
+  function osu(x, y){
+    if (!akViime) return;
+    var r = c.getBoundingClientRect(), k = akViime.k;
+    var i = Math.floor((x - r.left)/r.width*k.W);
+    var j = Math.floor((y - r.top)/r.height*k.H);
+    if (i < 0 || i >= k.W || j < 0 || j >= k.H) return;
+    akValittu = { i:i, j:j };
+    piirra();
+  }
+  c.addEventListener("click", function(e){ osu(e.clientX, e.clientY); });
+  c.addEventListener("touchstart", function(e){
+    if (!e.touches.length) return;
+    e.preventDefault(); osu(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive:false });
+})();
 
 // ---- FMI ---------------------------------------------------------------
 function fmiUrl(lat, lon){
