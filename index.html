@@ -835,9 +835,21 @@
 .ak-leima small{display:block;font-weight:400;font-size:.7rem;color:var(--harmaa)}
 .ak-leima .aika{display:block;font-weight:700;font-size:.82rem;color:#1a2b28;
     margin-top:2px}
-.ak-tuuli{position:absolute;left:8px;bottom:8px;background:rgba(255,255,255,.92);
-    border-radius:6px;padding:5px 9px;font-size:.75rem;font-variant-numeric:tabular-nums}
+/* TUULI LUETTAVAKSI 15.9.2026. Oli .75rem harmaalla pohjalla ja hädin tuskin
+   erottui kartan väreistä. Tuuli on toinen niistä kahdesta luvusta joiden takia
+   karttaa katsotaan, joten se saa saman painon kuin osuuslaatikko. */
+.ak-tuuli{position:absolute;left:8px;bottom:8px;background:rgba(255,255,255,.94);
+    border-radius:6px;padding:6px 10px;font-size:1rem;font-weight:750;color:#10201c;
+    font-variant-numeric:tabular-nums;line-height:1.15;max-width:44%;
+    box-shadow:0 1px 4px rgba(0,0,0,.28)}
+.ak-tuuli small{display:block;font-weight:500;font-size:.72rem;color:var(--harmaa);
+    margin-top:1px}
+.ak-leima{box-shadow:0 1px 4px rgba(0,0,0,.28)}
 
+.ak-jana{display:flex;height:16px;margin:2px 0 0;border-radius:3px;overflow:hidden;
+    border:1px solid rgba(160,190,170,.35);cursor:pointer}
+.ak-jana i{flex:1;min-width:0}
+.ak-jana i.nyt{outline:2px solid #10201c;outline-offset:-2px}
 .ak-asteikko{display:flex;margin-top:8px;border-radius:3px;overflow:hidden;
     font-size:.62rem;font-variant-numeric:tabular-nums}
 .ak-asteikko div{flex:1;text-align:center;padding:3px 0;color:#fff;
@@ -1147,6 +1159,11 @@ input[type=range]{width:100%;margin:12px 0 2px;accent-color:#16211f}
   </div>
 
   <input type="range" id="akLiuku" min="0" max="0" value="0" aria-label="Tunti">
+  <!-- 48 H JANA — 15.9.2026. Liuku näyttää yhden tunnin kerrallaan, mutta
+       lähtöpäätös tehdään koko jaksosta. Jana kertoo jokaisen tunnin
+       uisteltavan osuuden yhtenä nauhana: vihreä yli neljännes, keltainen
+       vähän, punainen ei mitään. Palkkia napauttamalla hyppää siihen tuntiin. -->
+  <div class="ak-jana" id="akJana"></div>
   <div class="ak-aika"><span id="akAlku"></span><span id="akLoppu"></span></div>
 
   <div class="ak-taulu" id="akTaulu"></div>
@@ -4200,6 +4217,18 @@ function pyyhkaisyKentta(mask, W, H, ruutu, suunta){
 // ---- Piirto ------------------------------------------------------------
 var data = [], valittu = 0, jarvi = null, mask = null, kentta = null, viimeSuunta = null;
 
+/* Pyyhkäisykenttien välimuisti suunnittain. Jana tarvitsee kentän jokaiselle
+   tunnille, ja ilman välimuistia sama suunta laskettaisiin uudestaan joka
+   kerta. Tyhjennetään järven vaihdossa. */
+var akKentat = {};
+function akKentta(suunta){
+  if (!akKentat[suunta]){
+    akKentat[suunta] = pyyhkaisyKentta(mask, jarvi.kartta.W, jarvi.kartta.H,
+                                       jarvi.kartta.ruutu, suunta);
+  }
+  return akKentat[suunta];
+}
+
 function piirra(){
   var d = data[valittu], k = jarvi.kartta;
   if (!d || !k) return;
@@ -4207,7 +4236,7 @@ function piirra(){
   // pyyhkäisykenttä lasketaan vain kun suunta vaihtuu
   var suunta = Math.round(d.dir/5)*5;
   if (suunta !== viimeSuunta){
-    kentta = pyyhkaisyKentta(mask, k.W, k.H, k.ruutu, suunta);
+    kentta = akKentta(suunta);
     viimeSuunta = suunta;
   }
 
@@ -4325,6 +4354,40 @@ function piirra(){
 
 var akViime = null, akValittu = null;
 
+/* Yhden tunnin uisteltava osuus. Sama laskenta kuin kartassa, mutta ilman
+   piirtoa: vain osuus rajan alla. */
+function akOsuus(d, kalaRaja){
+  var k = jarvi.kartta, ke = akKentta(Math.round(d.dir/5)*5);
+  var U = Math.max(0.5, d.U);
+  var Fkesto = kestonPyyhkaisy(d.tunteja*3600, U), katto = syvyysKatto(jarvi.syvyys, U);
+  var n = 0, vesi = 0;
+  for (var q = 0; q < mask.length; q++){
+    if (!mask[q]) continue;
+    vesi++;
+    if (Math.min(jonswapHs(Math.max(Math.min(ke[q], Fkesto), 50), U), katto) <= kalaRaja) n++;
+  }
+  return vesi ? n/vesi : 0;
+}
+
+function akPiirraJana(){
+  var el = $("akJana");
+  if (!el || !data.length || !mask) return;
+  var raja = akKalaRaja();
+  el.innerHTML = data.map(function(d, i){
+    var o = akOsuus(d, raja);
+    var v = o >= 0.25 ? "#3faa62" : o > 0.05 ? "#f2c200" : "#bd2430";
+    return '<i data-i="' + i + '" style="background:' + v + '"></i>';
+  }).join("");
+  akKorostaJana();
+}
+function akKorostaJana(){
+  var el = $("akJana");
+  if (!el) return;
+  for (var i = 0; i < el.children.length; i++){
+    el.children[i].className = (i === valittu) ? "nyt" : "";
+  }
+}
+
 function akPiirraMerkki(ctx, S){
   if (!akValittu || !akViime) return;
   var k = akViime.k;
@@ -4366,7 +4429,10 @@ function naytaTiedot(d){
     + '<small>uisteltavissa</small>'
     + '<span class="aika">' + pv[d.aika.getDay()] + ' klo ' + pad(d.aika.getHours()) + '</span>'
     + '<small>huippu ' + d.korkein.toFixed(2).replace('.', ',') + ' m</small>';
-  $("akTuuli").textContent = d.U.toFixed(0) + " m/s " + kompassi(d.dir);
+  /* Nopeus isolla, suunta omalle riville: "8 m/s" ja alle "lounaasta".
+     Yhtenä rivinä se katkesi kapealla ruudulla kesken sanan. */
+  $("akTuuli").innerHTML = d.U.toFixed(0) + " m/s"
+    + "<small>" + kompassi(d.dir) + "</small>";
 
   var pros = Math.round((d.osuus || 0)*100);
   var vari = pros >= 25 ? '#3faa62' : pros > 0 ? '#f2c200' : '#bd2430';
@@ -4383,6 +4449,16 @@ function naytaTiedot(d){
 
 $("akLiuku").addEventListener("input", function(){
   valittu = +this.value;
+  akKorostaJana();
+  piirra();
+});
+
+$("akJana").addEventListener("click", function(e){
+  var i = e.target && e.target.getAttribute && e.target.getAttribute("data-i");
+  if (i === null || i === undefined) return;
+  valittu = +i;
+  $("akLiuku").value = valittu;
+  akKorostaJana();
   piirra();
 });
 
@@ -4444,6 +4520,8 @@ function parsi(txt){
 function lataa(avain){
   jarvi = JARVET[avain];
   viimeSuunta = null;
+  akKentat = {};          // toisen järven kentät eivät kelpaa tälle
+  akValittu = null;
 
   if (!jarvi.kartta || !jarvi.kartta.maski){
     $("akLeima").innerHTML = '<small>karttadata puuttuu</small>';
@@ -4486,6 +4564,7 @@ function lataa(avain){
       var v = data[data.length-1].aika;
       $("akLoppu").textContent = pv[v.getDay()] + " " + pad(v.getHours()) + ":00";
       piirra();
+      akPiirraJana();
     })
     .catch(function(e){
       $("akLeima").innerHTML = '<small>ei ennustetta</small>';
@@ -4534,12 +4613,12 @@ $("akKorosta").addEventListener("change", function(){
 
   sel.addEventListener("change", function(){
     try { localStorage.setItem(AK_LS_VENE, akVene().id); } catch(e){}
-    naytaRaja(); piirra();
+    naytaRaja(); akPiirraJana(); piirra();
   });
   $("akRaja").addEventListener("input", function(){
     try { var r = akLueRajat(); r[akVene().id] = +this.value;
           localStorage.setItem(AK_LS_RAJAT, JSON.stringify(r)); } catch(e){}
-    naytaRaja(); piirra();
+    naytaRaja(); akPiirraJana(); piirra();
   });
 })();
 
