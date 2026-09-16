@@ -850,6 +850,12 @@
     border:1px solid rgba(160,190,170,.35);cursor:pointer}
 .ak-jana i{flex:1;min-width:0}
 .ak-jana i.nyt{outline:2px solid #10201c;outline-offset:-2px}
+.ak-paivat{position:relative;height:15px;margin-bottom:2px}
+.ak-paivat span{position:absolute;top:0;font-size:.62rem;font-weight:700;
+    color:var(--harmaa);transform:translateX(-50%);white-space:nowrap;
+    padding-top:4px}
+.ak-paivat span::before{content:"";position:absolute;top:0;left:50%;
+    width:1px;height:4px;background:rgba(80,110,95,.55)}
 .ak-asteikko{display:flex;margin-top:8px;border-radius:3px;overflow:hidden;
     font-size:.62rem;font-variant-numeric:tabular-nums}
 .ak-asteikko div{flex:1;text-align:center;padding:3px 0;color:#fff;
@@ -1164,6 +1170,10 @@ input[type=range]{width:100%;margin:12px 0 2px;accent-color:#16211f}
        uisteltavan osuuden yhtenä nauhana: vihreä yli neljännes, keltainen
        vähän, punainen ei mitään. Palkkia napauttamalla hyppää siihen tuntiin. -->
   <div class="ak-jana" id="akJana"></div>
+  <!-- PÄIVÄMERKIT — 15.9.2026. Ennuste on jopa 84 tuntia, eli lähes neljä
+       vuorokautta. Pelkät alku- ja loppuajat eivät kerro mistä kohtaa nauhaa
+       mikäkin päivä alkaa, joten jokainen aamuseitsemän merkitään. -->
+  <div class="ak-paivat" id="akPaivat"></div>
   <div class="ak-aika"><span id="akAlku"></span><span id="akLoppu"></span></div>
 
   <div class="ak-taulu" id="akTaulu"></div>
@@ -4378,8 +4388,27 @@ function akPiirraJana(){
     var v = o >= 0.25 ? "#3faa62" : o > 0.05 ? "#f2c200" : "#bd2430";
     return '<i data-i="' + i + '" style="background:' + v + '"></i>';
   }).join("");
+  akPiirraPaivat();
   akKorostaJana();
 }
+/* Päivämerkit janan alle. Sijoitetaan suhteellisesti samalle kohdalle kuin
+   vastaava palkki: palkin keskikohta on (i + 0.5)/n nauhan leveydestä. */
+function akPiirraPaivat(){
+  var el = $("akPaivat");
+  if (!el || !data.length) return;
+  var pv = ["su","ma","ti","ke","to","pe","la"], n = data.length, ulos = "";
+  for (var i = 0; i < n; i++){
+    if (data[i].aika.getHours() !== 7) continue;
+    var x = (i + 0.5)/n*100;
+    /* Reunoilla nimi valuisi ulos, joten se vedetään sisään. */
+    var siirto = x < 6 ? "translateX(-10%)" : x > 94 ? "translateX(-90%)" : null;
+    ulos += '<span style="left:' + x.toFixed(2) + '%'
+          + (siirto ? ';transform:' + siirto : '') + '">'
+          + pv[data[i].aika.getDay()] + ' 7</span>';
+  }
+  el.innerHTML = ulos;
+}
+
 function akKorostaJana(){
   var el = $("akJana");
   if (!el) return;
