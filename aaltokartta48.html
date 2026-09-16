@@ -32,6 +32,11 @@ input[type=range]{width:100%;height:28px;accent-color:var(--korostus);
 .lukema{font-family:ui-monospace,monospace;font-size:15px;font-weight:700;
   text-align:center;line-height:1.35;margin:2px 0}
 .pieni{font-size:11px;color:var(--himmea);text-align:center;line-height:1.4}
+/* NAPAUTETTU PISTE. Kalibrointia varten: kartta kertoo värin, mutta oman rajan
+   löytäminen vaatii luvun siitä kohdasta järveä jossa oikeasti oltiin.
+   Ruutu on 100 m ja kartta koko näytön levyinen, joten sormelle riittävä kohde. */
+.piste{font-family:ui-monospace,monospace;font-size:12.5px;text-align:center;
+  color:var(--korostus);line-height:1.4;min-height:18px;margin-top:2px}
 .reunat{display:flex;justify-content:space-between;font-size:10px;color:var(--himmea)}
 .selite{display:flex;flex-wrap:wrap;gap:8px;font-size:10.5px;color:var(--himmea);
   justify-content:center;margin-top:5px}
@@ -61,6 +66,7 @@ label{display:block;font-size:10.5px;letter-spacing:.06em;text-transform:upperca
     <input type="range" id="aika" min="0" max="48" step="1" value="0">
   </div>
   <div class="lukema" id="lukema">—</div>
+  <div class="piste" id="piste">Napauta karttaa: kertoo sen kohdan aallon</div>
   <div class="pieni" id="teksti"></div>
   <div class="selite">
     <span><i style="background:#2ea043"></i>uisteltavissa</span>
@@ -178,7 +184,7 @@ function kentta(suunta){
 
 const cv = document.getElementById('kartta'), ctx = cv.getContext('2d');
 const kuva = ctx.createImageData(W, H);
-let ennuste = null, kasinTila = false;
+let ennuste = null, kasinTila = false, valittu = null;
 
 const kello = d => String(d.getHours()).padStart(2,'0') + ':00';
 const pv = d => ['su','ma','ti','ke','to','pe','la'][d.getDay()];
@@ -223,6 +229,29 @@ function piirra(){
   }
   ctx.putImageData(kuva, 0, 0);
 
+  /* Merkki napautettuun kohtaan. Piirretään putImageData:n jälkeen, koska se
+     ylikirjoittaisi merkin. */
+  if(valittu){
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(valittu.i + 0.5, valittu.j + 0.5, 3.5, 0, 6.2832);
+    ctx.moveTo(valittu.i - 6.5, valittu.j + 0.5); ctx.lineTo(valittu.i - 2.5, valittu.j + 0.5);
+    ctx.moveTo(valittu.i + 3.5, valittu.j + 0.5); ctx.lineTo(valittu.i + 7.5, valittu.j + 0.5);
+    ctx.stroke();
+    const q = valittu.j*W + valittu.i;
+    const el = document.getElementById('piste');
+    if(!mask[q]) el.textContent = 'Maata — napauta vesialuetta';
+    else {
+      const hs = Math.min(jonswapHs(Math.max(ke[q],50), U), katto);
+      const F = ke[q];
+      el.innerHTML = 'Tässä kohdassa <b>' + nro(hs) + ' m</b>'
+        + (hs <= kala ? ' · uisteltavissa' : hs <= turva ? ' · vain kuljettavissa' : ' · yli turvarajan')
+        + '<br><span style="color:var(--himmea)">avointa vettä tuulen suuntaan '
+        + (F >= 1000 ? (F/1000).toFixed(1).replace('.',',') + ' km' : Math.round(F) + ' m')
+        + ' · huiput noin ' + nro(hs*1.8) + ' m</span>';
+    }
+  }
+
   let paras = null, arvo = Infinity;
   for(let s=0;s<8;s++) if(lkm[s] && summa[s]/lkm[s] < arvo){ arvo = summa[s]/lkm[s]; paras = s; }
   const pK = Math.round(kalastaa/vesi*100), pA = Math.round(kulkee/vesi*100);
@@ -237,7 +266,13 @@ function piirra(){
     + 'Kalastusraja on arvio pyytävän alueen rajasta eikä veneen kyky — säädä sitä '
     + 'kokemuksen mukaan, arvo muistetaan tälle veneelle. '
     + 'Turvaraja vastaa eri kysymykseen: kestääkö runko. '
-    + 'Kartta ei tiedä puuskia, virtauksia eikä kumpuamista. Se kertoo aallon, ei kalan.';
+    + 'Kartta ei tiedä puuskia, virtauksia eikä kumpuamista. Se kertoo aallon, ei kalan.'
+    + '<br><br><b>Rajan kalibrointi:</b> merkitse vesillä kellonaika, paikka ja arvio '
+    + '(hyvä / rajalla / ei). Kotona hae ennuste, siirrä liuku siihen tuntiin ja napauta '
+    + 'karttaa siitä kohdasta. Luku on merkitsevä aallonkorkeus Hs, eli korkeimman '
+    + 'kolmanneksen keskiarvo — yksittäiset huiput ovat noin 1,8-kertaisia, ja silmä '
+    + 'mittaa juuri niitä. Kolme tai neljä merkintää riittää: raja on siinä välissä '
+    + 'jossa hyvä muuttuu rajalla-tapauksiksi.';
 }
 
 function osuusTunnille(r, kala){
@@ -295,6 +330,23 @@ document.getElementById('hae').addEventListener('click', function(){
       document.getElementById('teksti').textContent = 'Haku ei onnistunut: ' + e.message; })
     .then(() => { nappi.disabled = false; });
 });
+
+/* Napautus kartalle. Kosketus ja hiiri samalla käsittelijällä: canvasin
+   näyttökoko ja sisäinen ruudukko ovat eri asia, joten skaalataan rectin kautta. */
+function napautus(x, y){
+  const r = cv.getBoundingClientRect();
+  const i = Math.floor((x - r.left) / r.width * W);
+  const j = Math.floor((y - r.top) / r.height * H);
+  if(i < 0 || i >= W || j < 0 || j >= H) return;
+  valittu = { i, j };
+  piirra();
+}
+cv.addEventListener('click', e => napautus(e.clientX, e.clientY));
+cv.addEventListener('touchstart', e => {
+  if(!e.touches.length) return;
+  e.preventDefault();
+  napautus(e.touches[0].clientX, e.touches[0].clientY);
+}, { passive:false });
 
 document.getElementById('kasin').addEventListener('click', () => { kasinTila = true; piirra(); });
 document.getElementById('aika').addEventListener('input', () => { kasinTila = false; piirra(); });
