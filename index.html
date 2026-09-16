@@ -824,11 +824,17 @@
 
 .ak-kartta{position:relative;background:#eef1f0;border-radius:8px;overflow:hidden}
 .ak-kartta canvas{width:100%;display:block;image-rendering:auto}
-.ak-leima{position:absolute;top:8px;right:8px;background:rgba(255,255,255,.92);
-    border-radius:6px;padding:5px 9px;font-size:1.05rem;font-weight:750;
-    font-variant-numeric:tabular-nums;text-align:center;line-height:1.2;
-    max-width:48%}
-.ak-leima small{display:block;font-weight:400;font-size:.68rem;color:var(--harmaa)}
+/* SIIRRETTY ALAS OIKEALLE 15.9.2026. Ylhäällä se peitti järven pohjoispään,
+   ja aika jäi pieneen tekstiin. Alhaalla se on samalla rivillä tuulitiedon
+   kanssa ja lähempänä liukusäädintä, jolloin molemmat näkyvät kun tuntia
+   siirretään. */
+.ak-leima{position:absolute;bottom:8px;right:8px;background:rgba(255,255,255,.94);
+    border-radius:6px;padding:6px 10px;font-size:1.15rem;font-weight:750;
+    font-variant-numeric:tabular-nums;text-align:right;line-height:1.15;
+    max-width:56%}
+.ak-leima small{display:block;font-weight:400;font-size:.7rem;color:var(--harmaa)}
+.ak-leima .aika{display:block;font-weight:700;font-size:.82rem;color:#1a2b28;
+    margin-top:2px}
 .ak-tuuli{position:absolute;left:8px;bottom:8px;background:rgba(255,255,255,.92);
     border-radius:6px;padding:5px 9px;font-size:.75rem;font-variant-numeric:tabular-nums}
 
@@ -4358,8 +4364,8 @@ function naytaTiedot(d){
   var vari = pros >= 25 ? '#1c7a42' : pros > 0 ? '#9a7b00' : '#9b1f28';
   $("akLeima").innerHTML = '<span style="color:' + vari + '">' + pros + ' %</span>'
     + '<small>uisteltavissa</small>'
-    + '<small>' + pv[d.aika.getDay()] + ' klo ' + pad(d.aika.getHours())
-    + ' · huippu ' + d.korkein.toFixed(2) + ' m</small>';
+    + '<span class="aika">' + pv[d.aika.getDay()] + ' klo ' + pad(d.aika.getHours()) + '</span>'
+    + '<small>huippu ' + d.korkein.toFixed(2).replace('.', ',') + ' m</small>';
   $("akTuuli").textContent = d.U.toFixed(0) + " m/s " + kompassi(d.dir);
 
   var pros = Math.round((d.osuus || 0)*100);
