@@ -835,6 +835,12 @@
     font-size:.62rem;font-variant-numeric:tabular-nums}
 .ak-asteikko div{flex:1;text-align:center;padding:3px 0;color:#fff;
     text-shadow:0 0 2px rgba(0,0,0,.45)}
+.ak-raja{display:flex;align-items:center;gap:8px;margin-top:8px}
+.ak-raja select{flex:1;min-width:0;padding:5px;background:#12201c;color:#e8efe9;
+  border:1px solid rgba(160,190,170,.35);border-radius:6px;font-size:12px}
+.ak-raja input[type=range]{flex:1.2;min-width:0;height:26px;accent-color:#3faa62}
+.ak-raja span{font-family:ui-monospace,monospace;font-size:12px;min-width:52px;
+  text-align:right}
 .ak-alarivi{display:flex;justify-content:space-between;align-items:center;
     margin-top:4px;gap:10px}
 .ak-kytkin{font-size:.72rem;color:#4a5654;display:flex;align-items:center;gap:5px;
@@ -1113,6 +1119,17 @@ input[type=range]{width:100%;margin:12px 0 2px;accent-color:#16211f}
   <div class="ak-alarivi">
     <label class="ak-kytkin"><input type="checkbox" id="akKorosta"> Korosta erot</label>
     <span class="ak-yksikko">merkitsevä aallonkorkeus, m</span>
+  </div>
+
+  <!-- KALASTUSRAJA — liitetty 15.9.2026.
+       Kartta kertoi aallonkorkeuden, muttei sitä mikä osa siitä on uisteltavissa.
+       Veneen turvaraja vastaa eri kysymykseen (kestääkö runko) kuin uistelu
+       (pystyykö vapoja hoitamaan). Rajan yli menevä vesi himmennetään, jolloin
+       kelvollinen alue erottuu ilman että väriasteikko katoaa. -->
+  <div class="ak-raja">
+    <select id="akVene"></select>
+    <input type="range" id="akRaja" min="0.10" max="0.60" step="0.01" value="0.20">
+    <span id="akRajaL"></span>
   </div>
 
   <input type="range" id="akLiuku" min="0" max="0" value="0" aria-label="Tunti">
@@ -4069,6 +4086,32 @@ var VARIT = ["#cfe0e6","#7fc6a0","#3faa62","#8cc63f","#c8d422","#f2c200",
 // erot näkyvät myös tyynenä päivänä.
 var korosta = false, venytys = 1;
 
+/* Veneet ja kalastusrajat. turva = kestääkö runko. kalaOletus = se aalto jossa
+   uistelu on vielä kalastusta eikä työtä; varovainen arvio pyytävän alueen
+   rajasta eikä veneen kyky, ja se muuttuu kokemuksen karttuessa. Säädetty arvo
+   muistetaan venekohtaisesti. Raja ei ole järvikohtainen: aalto on aalto, ja
+   matalan järven pienempi aalto näkyy kartassa itsestään. */
+var AK_VENEET = [
+  { id:'paijan470', nimi:'Päijän 470/471 · sähkö', turva:0.30, kalaOletus:0.15 },
+  { id:'paijan520', nimi:'Päijän 520 · 10 hv',     turva:0.40, kalaOletus:0.18 },
+  { id:'sunbuster', nimi:'Sun Buster · 30 hv',      turva:0.50, kalaOletus:0.20 },
+  { id:'ph500',     nimi:'Pilothouse 500 · 80 hv',  turva:0.60, kalaOletus:0.20 },
+  { id:'dorado100', nimi:'Silver Dorado · 100 hv',  turva:0.60, kalaOletus:0.20 }
+];
+var AK_LS_RAJAT = 'aaltokartta_kalastusrajat', AK_LS_VENE = 'aaltokartta_vene';
+function akLueRajat(){
+  try { var r = JSON.parse(localStorage.getItem(AK_LS_RAJAT));
+        return (r && typeof r === 'object') ? r : {}; } catch(e){ return {}; }
+}
+function akVene(){
+  var i = $("akVene") ? $("akVene").selectedIndex : 3;
+  return AK_VENEET[i] || AK_VENEET[3];
+}
+function akKalaRaja(){
+  var v = akVene(), r = akLueRajat();
+  return Math.min(typeof r[v.id] === 'number' ? r[v.id] : v.kalaOletus, v.turva);
+}
+
 function vari(h){
   var x = h*venytys;
   for (var i = RAJAT.length-1; i >= 0; i--) if (x >= RAJAT[i]) return VARIT[i];
@@ -4162,12 +4205,16 @@ function piirra(){
   // asteikko siihen, muuten käytetään kiinteää järviasteikkoa.
   // Aallonkorkeus jokaiselle ruudulle
   var hs = new Float32Array(mask.length), korkein = 0;
+  var kalaRaja = akKalaRaja(), kelpaa = 0, vesiruutuja = 0;
   for (var q = 0; q < mask.length; q++){
     if (!mask[q]) continue;
     var Fq = Math.min(kentta[q], Fkesto);
     hs[q] = Math.min(jonswapHs(Math.max(Fq, 50), U), katto);
     if (hs[q] > korkein) korkein = hs[q];
+    vesiruutuja++;
+    if (hs[q] <= kalaRaja) kelpaa++;
   }
+  d.osuus = vesiruutuja ? kelpaa/vesiruutuja : 0;
 
   venytys = 1;
   if (korosta && korkein > 0.02) venytys = RAJAT[RAJAT.length-1]/(korkein*1.02);
@@ -4214,8 +4261,19 @@ function piirra(){
           summa += hs[kk]*p; paino += p;
         }
       }
-      var t = rgb(paino > 0 ? summa/paino : hs[nj*k.W + ni]);
-      kuva.data[o] = t[0]; kuva.data[o+1] = t[1]; kuva.data[o+2] = t[2]; kuva.data[o+3] = 255;
+      var arvo = paino > 0 ? summa/paino : hs[nj*k.W + ni];
+      var t = rgb(arvo);
+      if (arvo > kalaRaja){
+        /* Rajan yli: himmennetään kohti tummaa. Väri jää luettavaksi mutta
+           kelvollinen alue hyppää esiin. Turvarajan yli vielä enemmän. */
+        var kerroin = arvo > akVene().turva ? 0.30 : 0.55;
+        kuva.data[o]   = Math.round(t[0]*kerroin);
+        kuva.data[o+1] = Math.round(t[1]*kerroin);
+        kuva.data[o+2] = Math.round(t[2]*kerroin);
+      } else {
+        kuva.data[o] = t[0]; kuva.data[o+1] = t[1]; kuva.data[o+2] = t[2];
+      }
+      kuva.data[o+3] = 255;
     }
   }
   ctx.putImageData(kuva, 0, 0);
@@ -4253,8 +4311,14 @@ function naytaTiedot(d){
     + pv[d.aika.getDay()] + " klo " + pad(d.aika.getHours()) + "</small>";
   $("akTuuli").textContent = d.U.toFixed(0) + " m/s " + kompassi(d.dir);
 
+  var pros = Math.round((d.osuus || 0)*100);
+  var vari = pros >= 25 ? '#3faa62' : pros > 0 ? '#f2c200' : '#bd2430';
   $("akTaulu").innerHTML =
-      '<div><span>Korkein järvellä</span><b>' + d.korkein.toFixed(2) + ' m</b></div>'
+      '<div><span>Uisteltavissa</span><b style="color:' + vari + '">' + pros
+        + ' % järvestä</b></div>'
+    + '<div><span>Kalastusraja</span><b>' + akKalaRaja().toFixed(2) + ' m · '
+        + akVene().nimi.split(' · ')[0] + '</b></div>'
+    + '<div><span>Korkein järvellä</span><b>' + d.korkein.toFixed(2) + ' m</b></div>'
     + '<div><span>Suurin yksittäinen</span><b>' + (1.86*d.korkein).toFixed(2) + ' m</b></div>'
     + '<div><span>Jakso</span><b>' + d.Tp.toFixed(1) + ' s</b></div>'
     + '<div><span>Tuuli</span><b>' + d.U.toFixed(1) + ' m/s, '
@@ -4369,6 +4433,40 @@ $("akKorosta").addEventListener("change", function(){
   korosta = this.checked;
   piirra();
 });
+
+/* Venevalinta ja kalastusraja. Raja tallentuu sille veneelle jonka kanssa sitä
+   säädetään, ja valittu vene muistetaan. */
+(function(){
+  var sel = $("akVene");
+  AK_VENEET.forEach(function(v){
+    var o = document.createElement("option");
+    o.textContent = v.nimi + " · turva " + v.turva.toFixed(2).replace(".", ",") + " m";
+    sel.appendChild(o);
+  });
+  var i = 3;
+  try { var t = localStorage.getItem(AK_LS_VENE);
+        var kk = AK_VENEET.map(function(v){ return v.id; }).indexOf(t);
+        if (kk >= 0) i = kk; } catch(e){}
+  sel.selectedIndex = i;
+
+  function naytaRaja(){
+    var r = akKalaRaja();
+    $("akRaja").max = akVene().turva;
+    $("akRaja").value = r;
+    $("akRajaL").textContent = r.toFixed(2).replace(".", ",") + " m";
+  }
+  naytaRaja();
+
+  sel.addEventListener("change", function(){
+    try { localStorage.setItem(AK_LS_VENE, akVene().id); } catch(e){}
+    naytaRaja(); piirra();
+  });
+  $("akRaja").addEventListener("input", function(){
+    try { var r = akLueRajat(); r[akVene().id] = +this.value;
+          localStorage.setItem(AK_LS_RAJAT, JSON.stringify(r)); } catch(e){}
+    naytaRaja(); piirra();
+  });
+})();
 
 var val = $("akJarvi");
 Object.keys(JARVET).forEach(function(k){
@@ -8814,7 +8912,7 @@ lataa(eka);
       }
 
       let bias = 0;
-      if (wind === 'foam') bias += 1.5;
+      if (wind === 'foam') bias += 1.5 * tuuliKerroin();
       if (wind === 'hard') bias += 1;
       if (light === 'cloudy') bias += 1.5;
       if (a.pressure === 'falling') bias += 1;
@@ -8887,7 +8985,7 @@ lataa(eka);
       }
 
       let bias = 0;
-      if (wind === 'foam') bias += 1;
+      if (wind === 'foam') bias += 1 * tuuliKerroin();
       if (wind === 'hard') bias += 0.5;
       if (light === 'cloudy') bias += 1;
       d = Math.max(0.5, d - bias * 0.4);
@@ -8950,7 +9048,7 @@ lataa(eka);
       }
 
       let bias = 0;
-      if (wind === 'foam') bias += 1.5;
+      if (wind === 'foam') bias += 1.5 * tuuliKerroin();
       if (wind === 'hard') bias += 2.5;
       if (light === 'cloudy') bias += 2;
 
@@ -9099,7 +9197,7 @@ lataa(eka);
       }
 
       let bias = 0;
-      if (wind === 'foam') bias += 1;
+      if (wind === 'foam') bias += 1 * tuuliKerroin();
       if (light === 'cloudy') bias += 1;
       d = Math.max(0.5, d - bias * 0.4);
       if (currentLocation.maxDepth) d = Math.min(d, currentLocation.maxDepth - 1.0);
@@ -9884,9 +9982,30 @@ lataa(eka);
       }
     }
 
+    /* TUULIBIAS SUHTEESSA MITATTUUN — lisätty 15.9.2026.
+       Keskimmäinen tuuliluokka kattaa 2–6 m/s. Aiemmin jokainen sen sisällä
+       oleva tuuli antoi saman biasin, eli 2,1 m/s ja 5,9 m/s siirsivät kalaa
+       yhtä paljon. Ne eivät ole sama keli: edellisessä on väreitä, jälkimmäisessä
+       vaahtolinjat, ja bias on nimenomaan pinnan rikkoutumisesta.
+       Kerroin on lineaarinen kaistan yli: 2 m/s -> 0, 6 m/s -> 1. Jos mitattua
+       tuulta ei ole (käsin valittu luokka), palautetaan 1 eli vanha käytös. */
+    let mitattuTuuliMs = null;
+    function tuuliKerroin(){
+      if (mitattuTuuliMs === null || isNaN(mitattuTuuliMs)) return 1;
+      return Math.max(0, Math.min(1, (mitattuTuuliMs - 2) / 4));
+    }
+
     function applyOpenMeteo() {
       if (!omLatest) return;
-      const windVal = omLatest.wind < 3 ? 'calm' : (omLatest.wind < 7 ? 'foam' : 'hard');
+      // KORJATTU 15.9.2026. Rajat olivat 3 ja 7 m/s, mutta painikkeiden omat
+      // tekstit sanovat "Tyyni (0–2 m/s)" ja "Kova (> 6 m/s)". Luokittelu ja
+      // painikkeen teksti olivat siis eri mieltä, ja 3,1 m/s luiskahti
+      // keskiluokkaan jonka nimi on "vaahtolinjoja näkyy". Rajat siirretään
+      // vastaamaan sitä mitä painikkeissa lukee.
+      const windVal = omLatest.wind < 2 ? 'calm' : (omLatest.wind < 6 ? 'foam' : 'hard');
+      // Mitattu tuuli talteen, jotta biasia ei tarvitse antaa koko 2–6 m/s
+      // kaistalle samansuuruisena. Ks. tuuliKerroin().
+      mitattuTuuliMs = omLatest.wind;
       const q2 = questions.find(x => x.id === 'wind');
       const wi = q2.options.findIndex(o => o.v === windVal);
       const o2 = document.getElementById('opts-wind');
