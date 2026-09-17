@@ -3310,6 +3310,8 @@ input[type=range]{width:100%;margin:12px 0 2px;accent-color:#16211f}
     }
 
     /* Palauttaa Wedderburn-analyysin tai null jos lähtötietoja puuttuu. */
+    function dirApu(d){ return ((d % 360) + 360) % 360; }
+
     function kumpuamisAnalyysi() {
       const saa = saaNyt();
       if (saa.tuuli === null || !drProfiili || drProfiili.tasalampoinen) return null;
@@ -3324,7 +3326,17 @@ input[type=range]{width:100%;margin:12px 0 2px;accent-color:#16211f}
       // muuten 10 km. Tämä on tarkkuuden kannalta tärkein parametri ja riippuu
       // tuulen suunnasta — ympyräekvivalentti on keskiarvo, ei suunnattu matka.
       const A = currentLocation.areaKm2 || 142;
-      const L = 2 * Math.sqrt(A * 1e6 / Math.PI);
+      let L = 2 * Math.sqrt(A * 1e6 / Math.PI);
+      let Llahde = 'ympyräekvivalentti';
+      /* MUUTETTU 15.9.2026: jos aallonkorkeuskartta on avattu, siltä saadaan
+         pisin yhtenäinen vesimatka juuri tämän tuulen suunnassa. Se on sama
+         suure oikein laskettuna, ei toinen malli. Ellei karttaa ole avattu,
+         käytetään ympyräekvivalenttia kuten ennen. */
+      if (saa.tuuliSuunta != null && typeof window.akSuunnattuMitta === 'function') {
+        const Ld = window.akSuunnattuMitta(saa.tuuliSuunta,
+                     currentLocation && currentLocation.name);
+        if (Ld && Ld > 200) { L = Ld; Llahde = 'suunnattu, ' + Math.round(dirApu(saa.tuuliSuunta)) + '°'; }
+      }
 
       const rhoEpi = vedenTiheys(T_epi), rhoHypo = vedenTiheys(T_hypo);
       const gp = 9.81 * (rhoHypo - rhoEpi) / rhoHypo;
@@ -3340,7 +3352,7 @@ input[type=range]{width:100%;margin:12px 0 2px;accent-color:#16211f}
       const Ukrit = uStarKrit / Math.sqrt(Cd * 1.225 / rhoEpi);
 
       return { W: W, Ti: Ti, kestoH: Ti / 4 / 3600, Ukrit: Ukrit,
-               tuuli: saa.tuuli, lahde: saa.tuuliLahde, h1: h1, L: L };
+               tuuli: saa.tuuli, lahde: saa.tuuliLahde, h1: h1, L: L, Llahde: Llahde };
     }
 
     function vvKumpuaminenSelostus() {
@@ -3375,6 +3387,7 @@ input[type=range]{width:100%;margin:12px 0 2px;accent-color:#16211f}
       let tila;
       if (k.W <= 1) {
         tila = `<strong>Wedderburn-luku ${k.W.toFixed(2)} — kumpuaminen on mahdollista.</strong> `
+             + `<span class="hint">(pyyhkäisymatka ${(k.L/1000).toFixed(1)} km, ${k.Llahde})</span> `
              + 'Tuuli riittää kallistamaan harppauskerroksen pintaan asti tuulen vastaisella rannalla.';
       } else if (k.W <= 3) {
         tila = `<strong>Wedderburn-luku ${k.W.toFixed(1)} — osittainen kallistuma.</strong> `
@@ -4386,7 +4399,13 @@ function akPiirraJana(){
   el.innerHTML = data.map(function(d, i){
     var o = akOsuus(d, raja);
     var v = o >= 0.25 ? "#3faa62" : o > 0.05 ? "#f2c200" : "#bd2430";
-    return '<i data-i="' + i + '" style="background:' + v + '"></i>';
+    /* Purskeinen tunti ei saa näyttää puhtaan vihreältä vaikka aalto olisi
+       matala: puuska ei kasvata aaltoa mutta vie vavan kädestä. */
+    var tyyli = akPuuskainen(d)
+      ? "background:repeating-linear-gradient(45deg," + v + "," + v
+        + " 3px,#10201c 3px,#10201c 5px)"
+      : "background:" + v;
+    return '<i data-i="' + i + '" style="' + tyyli + '"></i>';
   }).join("");
   akPiirraPaivat();
   akKorostaJana();
@@ -4407,6 +4426,79 @@ function akPiirraPaivat(){
           + pv[data[i].aika.getDay()] + ' 7</span>';
   }
   el.innerHTML = ulos;
+}
+
+/* SUUNNATTU JÄRVENMITTA MUILLE OSILLE — 15.9.2026.
+   Kumpuamisanalyysi käytti pyyhkäisymatkana pinta-alan ympyräekvivalenttia, ja
+   sen oma kommentti sanoo miksi se on huono: se on keskiarvo eikä suunnattu
+   matka. Sama korjaus kuin aallonkorkeudessa. Maski on jo purettu tässä
+   moduulissa, joten tarjotaan pisin yhtenäinen vesimatka tuulen suunnassa.
+   Julkaistaan globaaliin, koska kumpuamisanalyysi on toisessa lohkossa.
+   Palauttaa metrejä, tai null jos karttaa ei ole avattu tai järvi on eri. */
+window.akSuunnattuMitta = function(dir, jarvenNimi){
+  try {
+    if (!mask || !jarvi || !jarvi.kartta) return null;
+    if (jarvenNimi && jarvi.nimi && jarvi.nimi.indexOf(jarvenNimi.split(" ")[0]) < 0) return null;
+    var ke = akKentta(Math.round(dir/5)*5 % 360), pisin = 0;
+    for (var q = 0; q < ke.length; q++) if (mask[q] && ke[q] > pisin) pisin = ke[q];
+    return pisin > 0 ? pisin : null;
+  } catch (e) { return null; }
+};
+
+/* ===== HAVAINTOKORJAUS — 15.9.2026 =====
+   Malli antoi Hirvijärvelle 4 m/s samaan aikaan kun 13 km päässä Rengonharjun
+   asema mittasi 5,8. Aallonkorkeus kasvaa suunnilleen tuulen neliössä, joten
+   kolmanneksen virhe tuulessa on kaksinkertainen virhe aallossa — tämä on niitä
+   harvoja syötteitä joissa yksi luku kaataa koko vastauksen.
+
+   MIKSI EI KORVATA VAAN KORJATAAN: asema on maalla, eri paikassa ja eri
+   rosoisuudella kuin järven pinta. Suora korvaus vaihtaisi tunnetun virheen
+   tuntemattomaan. Sen sijaan otetaan ERO havainnon ja saman tunnin ennusteen
+   välillä ja siirretään sillä lähitunteja.
+
+   MIKSI VAIMENEE: poikkeama kertoo tästä hetkestä, ei huomisesta. Täysi korjaus
+   nyt, puolet kolmen tunnin päästä, nolla kuuden jälkeen. Kaukaiset tunnit
+   jäävät ennusteen varaan koska mitään parempaa niistä ei ole.
+
+   Uenn säilyttää alkuperäisen ennusteen, jotta korjaus voidaan laskea uudelleen
+   eikä se kasaudu itsensä päälle. */
+var AK_KORJAUS_H = 6;
+var akKorjaus = null;
+
+function akHavaintokorjaus(){
+  akKorjaus = null;
+  if (!data.length) return;
+  var h = (typeof window.akHavaittuTuuli === "function") ? window.akHavaittuTuuli() : null;
+  if (!h || h.ws == null || !h.aika) return;
+
+  /* Sama tunti ennusteesta kuin havainto. Jos havainto on yli kaksi tuntia
+     vanha, sitä ei käytetä: keli on voinut vaihtua. */
+  var hetki = h.aika.getTime(), paras = null, pieninEro = Infinity;
+  for (var i = 0; i < data.length; i++){
+    var ero = Math.abs(data[i].aika.getTime() - hetki);
+    if (ero < pieninEro){ pieninEro = ero; paras = i; }
+  }
+  if (paras === null || pieninEro > 2*3600*1000) return;
+
+  var erotus = h.ws - data[paras].Uenn;
+  akKorjaus = { erotus: erotus, asema: h.asema, havaittu: h.ws,
+                ennustettu: data[paras].Uenn, puuska: h.wg, i: paras };
+
+  for (var j = 0; j < data.length; j++){
+    var tunteja = Math.abs(data[j].aika.getTime() - hetki)/3600000;
+    var paino = Math.max(0, 1 - tunteja/AK_KORJAUS_H);
+    data[j].U = Math.max(0.3, data[j].Uenn + erotus*paino);
+  }
+  viimeSuunta = null;   // aalto lasketaan uusilla tuulilla
+}
+
+/* PUUSKAISUUS. Ehto oli aiemmin pelkkä erotus (puuska yli 5 m/s keskituulta
+   kovempi). Hannun havainto 5,8 / 9,6 paljasti sen vian: erotus on 3,8 eikä
+   laukea, mutta suhde on 1,66 — poikkeuksellisen purskeinen keli. Erotus toimii
+   kovilla tuulilla, suhde matalilla. Molemmat tarvitaan. */
+function akPuuskainen(d){
+  if (!d || d.puuska == null || isNaN(d.puuska) || !d.U) return false;
+  return (d.puuska - d.U) >= 5 || (d.puuska / Math.max(d.U, 0.5)) >= 1.5;
 }
 
 function akKorostaJana(){
@@ -4461,13 +4553,22 @@ function naytaTiedot(d){
   /* Nopeus isolla, suunta omalle riville: "8 m/s" ja alle "lounaasta".
      Yhtenä rivinä se katkesi kapealla ruudulla kesken sanan. */
   $("akTuuli").innerHTML = d.U.toFixed(0) + " m/s"
-    + "<small>" + kompassi(d.dir) + "</small>";
+    + (d.puuska != null ? '<small>puuskat ' + d.puuska.toFixed(0) + ' m/s</small>' : "")
+    + "<small>" + kompassi(d.dir) + "</small>"
+    + (akKorjaus && Math.abs(akKorjaus.erotus) >= 0.5
+        ? '<small style="color:#8a5a00">korjattu havainnolla '
+          + (akKorjaus.erotus > 0 ? "+" : "") + akKorjaus.erotus.toFixed(1) + " m/s</small>"
+        : "");
 
   var pros = Math.round((d.osuus || 0)*100);
   var vari = pros >= 25 ? '#3faa62' : pros > 0 ? '#f2c200' : '#bd2430';
   $("akTaulu").innerHTML =
       '<div><span>Kalastusraja</span><b>' + akKalaRaja().toFixed(2) + ' m · '
         + akVene().nimi.split(' · ')[0] + '</b></div>'
+    + (akKorjaus && Math.abs(akKorjaus.erotus) >= 0.5
+        ? '<div><span>Havaintokorjaus</span><b>' + akKorjaus.havaittu.toFixed(1)
+          + ' mitattu vs ' + akKorjaus.ennustettu.toFixed(1) + ' ennuste · '
+          + akKorjaus.asema + '</b></div>' : '')
     + '<div><span>Korkein järvellä</span><b>' + d.korkein.toFixed(2) + ' m</b></div>'
     + '<div><span>Suurin yksittäinen</span><b>' + (1.86*d.korkein).toFixed(2) + ' m</b></div>'
     + '<div><span>Jakso</span><b>' + d.Tp.toFixed(1) + ' s</b></div>'
@@ -4518,7 +4619,7 @@ function fmiUrl(lat, lon){
   return "https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature"
     + "&storedquery_id=fmi::forecast::edited::weather::scandinavia::point::timevaluepair"
     + "&latlon=" + lat + "," + lon
-    + "&parameters=WindSpeedMS,WindDirection&timestep=60"
+    + "&parameters=WindSpeedMS,WindDirection,WindGust&timestep=60"
     + "&starttime=" + a.toISOString().slice(0,19) + "Z"
     + "&endtime="   + z.toISOString().slice(0,19) + "Z";
 }
@@ -4565,11 +4666,12 @@ function lataa(avain){
     .then(function(r){ return r.ok ? r.text() : Promise.reject(new Error("palvelin " + r.status)); })
     .then(function(txt){
       var s = parsi(txt);
-      var nop = s.windspeedms, suu = s.winddirection;
+      var nop = s.windspeedms, suu = s.winddirection, puu = s.windgust;
       if (!nop || !nop.length) throw new Error("tuulitietoja ei saatu");
 
       var sarja = nop.map(function(p, i){
-        return {aika:p.aika, U:p.arvo, dir: suu && suu[i] ? suu[i].arvo : null};
+        return {aika:p.aika, U:p.arvo, dir: suu && suu[i] ? suu[i].arvo : null,
+                puuska: (puu && puu[i]) ? puu[i].arvo : null};
       }).filter(function(p){ return p.U != null && p.dir != null; });
       if (!sarja.length) throw new Error("ennusteessa ei ollut arvoja");
 
@@ -4581,8 +4683,10 @@ function lataa(avain){
           if (ero > 45 || sarja[k].U < 0.55*Math.max(p.U,0.5)) break;
           t++;
         }
-        return {aika:p.aika, U:p.U, dir:p.dir, tunteja:t, Fpahin:20000, korkein:0, Tp:0};
+        return {aika:p.aika, U:p.U, Uenn:p.U, dir:p.dir, puuska:p.puuska,
+                tunteja:t, Fpahin:20000, korkein:0, Tp:0};
       });
+      akHavaintokorjaus();
 
       valittu = 0;
       $("akLiuku").max = data.length - 1;
@@ -6857,6 +6961,12 @@ lataa(eka);
           asemia: kelvot.length
         };
         fmiVirhe = null;
+        /* Kartalle: mitattu tuuli havaintokorjausta varten. Kartta on eri
+           lohkossa, joten tieto välitetään globaalin kautta. */
+        window.akHavaittuTuuli = function(){
+          return fmiTuuli ? { ws:fmiTuuli.ws, wg:fmiTuuli.wg, wd:fmiTuuli.wd,
+                              aika:fmiTuuli.aika, asema:fmiTuuli.asema } : null;
+        };
         return fmiTuuli;
       } catch (e) {
         // Virhe näkyviin, jotta syy voidaan päätellä. "Failed to fetch" samaan aikaan
@@ -8226,8 +8336,15 @@ lataa(eka);
     //   sade   — FMI HARMONIE (Precipitation1h); Open-Meteolta ei haeta sadetta
     // Havainto voittaa ennusteen, ja tuorein voittaa vanhemman.
     function saaNyt() {
-      const ulos = { tuuli: null, tuuliLahde: null, pilvi: null, pilviLahde: null,
-                     sade: null, sadeLahde: null };
+      const ulos = { tuuli: null, tuuliLahde: null, tuuliSuunta: null,
+                     pilvi: null, pilviLahde: null, sade: null, sadeLahde: null };
+      /* Suunta lisätty 15.9.2026 kumpuamisen suunnattua pyyhkäisymatkaa varten.
+         Sama lähdejärjestys kuin nopeudella. */
+      if (typeof fmiTuuli === 'object' && fmiTuuli && fmiTuuli.wd != null) {
+        ulos.tuuliSuunta = fmiTuuli.wd;
+      } else if (omLatest && omLatest.windDir != null) {
+        ulos.tuuliSuunta = omLatest.windDir;
+      }
       if (typeof fmiTuuli === 'object' && fmiTuuli && fmiTuuli.ws != null) {
         ulos.tuuli = fmiTuuli.ws; ulos.tuuliLahde = 'FMI havainto';
       } else if (omLatest && omLatest.wind != null) {
