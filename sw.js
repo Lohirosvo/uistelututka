@@ -12,7 +12,7 @@
 // VERSIO: kasvata tätä aina kun julkaiset uuden version. Vanha välimuisti siivotaan.
 // Versionumeron kasvatus on se mekanismi joka SIIVOAA vanhan välimuistin,
 // index2.html mukaan lukien. Ilman tätä poisto ei näkyisi puhelimissa.
-const VERSIO = 'uistelututka-v82';
+const VERSIO = 'uistelututka-v83';
 const SIVU = './';
 
 // MUUTETTU 18.9.2026. index2.html oli keskeneräinen uusi käyttöliittymä, ja se
@@ -59,6 +59,17 @@ self.addEventListener('activate', (e) => {
       ))
       .then(() => self.clients.claim())
   );
+});
+
+/* VERSION KERTOMINEN SIVULLE — lisätty 18.9.2026.
+   Sivulla oli käsin kirjoitettu APP_VERSIO, jota verrattiin sw.js:n versioon.
+   Kahta käsin ylläpidettävää lukua ei voi pitää synkassa: sw.js kasvoi v82:een
+   ja sivun luku jäi v80:een, jolloin sovellus väitti ikuisesti olevansa
+   vanhentunut vaikka se oli ajan tasalla.
+   Nyt AKTIIVINEN service worker kertoo oman versionsa, ja sivu vertaa sitä
+   palvelimella olevaan sw.js:ään. Kumpaakaan ei tarvitse kirjoittaa käsin. */
+self.addEventListener('message', (e) => {
+  if (e.data === 'versio' && e.source) e.source.postMessage({ swVersio: VERSIO });
 });
 
 self.addEventListener('fetch', (e) => {

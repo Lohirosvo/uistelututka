@@ -7503,20 +7503,52 @@ lataa(eka);
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    const APP_VERSIO = 'v80';
+    /* KORJATTU 18.9.2026. Tässä oli käsin kirjoitettu APP_VERSIO, jota verrattiin
+       sw.js:n versioon. Kaksi käsin ylläpidettävää lukua ei pysy synkassa: sw.js
+       kasvoi v82:een ja tämä jäi v80:een, jolloin sovellus väitti ikuisesti
+       olevansa vanhentunut vaikka se oli ajan tasalla. Se on pahempi kuin ei
+       tarkistusta lainkaan, koska se opettaa ohittamaan varoituksen.
+
+       Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
+       AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
+       sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
+    const APP_VERSIO = 'v83';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
-      if (el()) el().textContent = APP_VERSIO;
-      if (!('serviceWorker' in navigator)) { if (st()) st().textContent = 'ei service workeria'; return; }
+      if (!('serviceWorker' in navigator)) {
+        if (el()) el().textContent = APP_VERSIO;
+        if (st()) st().textContent = 'ei service workeria'; return;
+      }
+      /* Aktiivisen service workerin versio. Jos se ei vastaa sekunnissa
+         (vanha versio ilman viestikäsittelijää), käytetään sivun omaa lukua. */
+      const kaytossa = await new Promise(res => {
+        const sw = navigator.serviceWorker.controller;
+        if (!sw) return res(null);
+        const kanava = ev => {
+          if (ev.data && ev.data.swVersio) {
+            navigator.serviceWorker.removeEventListener('message', kanava);
+            res(String(ev.data.swVersio).replace('uistelututka-', ''));
+          }
+        };
+        navigator.serviceWorker.addEventListener('message', kanava);
+        sw.postMessage('versio');
+        setTimeout(() => res(null), 1000);
+      });
+      if (el()) el().textContent = kaytossa || APP_VERSIO;
       try {
         const r = await fetch('sw.js', { cache: 'no-store' });
         const t = await r.text();
         const m = t.match(/uistelututka-(v\d+)/);
+        const palvelimella = m ? m[1] : null;
         if (st()) {
-          st().innerHTML = (m && m[1] === APP_VERSIO)
-            ? '<span style="color:var(--cyan);">ajan tasalla</span>'
-            : `<span style="color:var(--amber);">palvelimella ${m ? m[1] : '?'} — sulje sovellus ja avaa uudelleen</span>`;
+          if (!palvelimella) st().textContent = 'version tarkistus ei onnistunut';
+          else if (!kaytossa) st().innerHTML =
+            `<span style="color:var(--muted);">palvelimella ${palvelimella} — käytössä oleva versio ei kerro omaansa (vanha service worker)</span>`;
+          else if (kaytossa === palvelimella) st().innerHTML =
+            '<span style="color:var(--cyan);">ajan tasalla</span>';
+          else st().innerHTML =
+            `<span style="color:var(--amber);">käytössä ${kaytossa}, palvelimella ${palvelimella} — sulje sovellus kokonaan ja avaa uudelleen</span>`;
         }
       } catch (e) { if (st()) st().textContent = 'version tarkistus ei onnistunut'; }
     })();
