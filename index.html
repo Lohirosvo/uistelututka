@@ -8961,12 +8961,49 @@ lataa(eka);
               best = { score: r.score, label: r.label, hour, parts: r.parts, ws, cc };
             }
           }
-          if (best) days.push({ dateStr, date: new Date(dateStr + 'T12:00'), hourly, sunRise, sunSet, ...best });
+          /* KOKO PÄIVÄN LUKU — lisätty 18.9.2026.
+             Päivän luku oli sen PARAS TUNTI, ja se ei erottele päiviä: paras tunti
+             osuu lähes aina hämärään ja saa korkean pisteen melkein joka päivä.
+             Uistelussa mennään koko päiväksi, joten mittarin pitää kertoa mitä
+             päivä kokonaisuutena tarjoaa.
+
+             MITTARI: paras yhtenäinen 6 tunnin jakso valoisana aikana, sen
+             keskiarvo. Kuusi tuntia on tyypillinen vetopäivä (myös kisan mitta).
+             Yhtenäinen siksi, että hajallaan olevat hyvät tunnit eivät ole sama
+             asia kuin peräkkäiset — venettä ei siirretä kolmesti päivässä.
+             Rinnalle lasketaan hyvien tuntien määrä, joka kertoo pelivaran. */
+          const valoisatTunnit = [];
+          for (let h2 = 0; h2 < 24; h2++) {
+            const e = hourly[h2];
+            if (e && e.valoisa) valoisatTunnit.push({ h: h2, s: e.score });
+          }
+          let paivaLuku = null, paivaAlku = null, hyviaTunteja = 0;
+          if (valoisatTunnit.length) {
+            hyviaTunteja = valoisatTunnit.filter(function(x){ return x.s >= 60; }).length;
+            const W = Math.min(6, valoisatTunnit.length);
+            for (let a = 0; a + W <= valoisatTunnit.length; a++) {
+              /* Vain peräkkäiset kellotunnit kelpaavat jaksoksi. */
+              if (valoisatTunnit[a + W - 1].h - valoisatTunnit[a].h !== W - 1) continue;
+              let sum = 0;
+              for (let b = a; b < a + W; b++) sum += valoisatTunnit[b].s;
+              const ka = sum / W;
+              if (paivaLuku === null || ka > paivaLuku) { paivaLuku = ka; paivaAlku = valoisatTunnit[a].h; }
+            }
+            if (paivaLuku === null) {   // ei yhtenäistä jaksoa: koko valoisan ajan keskiarvo
+              paivaLuku = valoisatTunnit.reduce(function(a2,x){ return a2 + x.s; }, 0) / valoisatTunnit.length;
+              paivaAlku = valoisatTunnit[0].h;
+            }
+            paivaLuku = Math.round(paivaLuku);
+          }
+          if (best) days.push({ dateStr, date: new Date(dateStr + 'T12:00'), hourly, sunRise, sunSet,
+                                paivaLuku, paivaAlku, hyviaTunteja, W: Math.min(6, valoisatTunnit.length), ...best });
         }
 
         if (days.length === 0) { el.innerHTML = '<p class="hint">Ennustetta ei saatu.</p>'; return; }
 
-        const bestDay = days.reduce((a, b) => b.score > a.score ? b : a);
+        /* Paras päivä valitaan nyt päiväluvulla eikä huipputunnilla. */
+        const bestDay = days.reduce((a, b) =>
+          ((b.paivaLuku != null ? b.paivaLuku : b.score) > (a.paivaLuku != null ? a.paivaLuku : a.score)) ? b : a);
         const nimet = ['Tänään', 'Huomenna', 'Ylihuomenna'];
         const col = (s) => s >= 75 ? 'var(--cyan)' : s >= 60 ? '#7ED957' : s >= 45 ? 'var(--amber)' : s >= 30 ? '#FF9040' : 'var(--hard-red)';
 
@@ -9001,21 +9038,23 @@ lataa(eka);
               <div style="flex:1; background:${d === bestDay ? 'rgba(69,211,232,0.10)' : 'var(--panel-alt)'}; border:1px solid ${d === bestDay ? 'var(--cyan)' : 'var(--line)'}; border-radius:8px; padding:12px 8px; text-align:center;">
                 <div style="font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em;">${nimet[i]}</div>
                 <div style="font-size:11px; color:var(--muted); font-family:'JetBrains Mono',monospace;">${d.date.toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' })}</div>
-                <div style="font-family:'JetBrains Mono',monospace; font-size:30px; font-weight:700; color:${col(d.score)}; line-height:1.15;">${d.score}%</div>
-                <div style="font-size:13px; color:${col(d.score)}; font-weight:600;">${d.label}</div>
-                <div style="font-size:12px; color:var(--text); margin-top:6px; font-family:'JetBrains Mono',monospace;">paras klo ${String(d.hour).padStart(2, '0')}</div>
+                <div style="font-family:'JetBrains Mono',monospace; font-size:30px; font-weight:700; color:${col(d.paivaLuku != null ? d.paivaLuku : d.score)}; line-height:1.15;">${d.paivaLuku != null ? d.paivaLuku : d.score}%</div>
+                <div style="font-size:11px; color:var(--muted); letter-spacing:.05em; text-transform:uppercase;">koko päivä</div>
+                <div style="font-size:12px; color:var(--text); margin-top:6px; font-family:'JetBrains Mono',monospace;">${d.paivaAlku != null ? 'paras jakso ' + String(d.paivaAlku).padStart(2,'0') + '–' + String(d.paivaAlku + d.W).padStart(2,'0') : ''}</div>
+                <div style="font-size:11px; color:var(--muted); margin-top:2px;">${d.hyviaTunteja} hyvää tuntia · huippu klo ${String(d.hour).padStart(2, '0')} (${d.score}%)</div>
                 <div style="font-size:11px; color:var(--muted); margin-top:2px;">${d.ws.toFixed(1)} m/s · ${d.cc.toFixed(0)}% pilviä</div>
               </div>`).join('')}
           </div>
           <div style="background:var(--panel-alt); border:1px solid var(--cyan); border-radius:8px; padding:12px;">
             <div style="font-size:13px; color:var(--cyan); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">Paras päivä</div>
-            <div style="font-size:17px; font-weight:600; margin-bottom:8px;">${nimet[days.indexOf(bestDay)]} ${bestDay.date.toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' })} klo ${String(bestDay.hour).padStart(2, '0')} — ${bestDay.score}% (${bestDay.label})</div>
+            <div style="font-size:17px; font-weight:600; margin-bottom:8px;">${nimet[days.indexOf(bestDay)]} ${bestDay.date.toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' })} — koko päivä ${bestDay.paivaLuku != null ? bestDay.paivaLuku : bestDay.score}%, paras jakso klo ${String(bestDay.paivaAlku).padStart(2,'0')}–${String(bestDay.paivaAlku + bestDay.W).padStart(2,'0')}</div>
+            <div style="font-size:13px; color:var(--muted); margin-bottom:8px;">Huipputunti klo ${String(bestDay.hour).padStart(2, '0')} on ${bestDay.score}% (${bestDay.label}). Erittely alla koskee sitä tuntia.</div>
             ${bestDay.parts.map(p => `<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px solid rgba(30,51,80,0.5);font-size:13px;">
               <span style="color:#BAC9DB;">${p.t}</span>
               <span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${p.v > 0 ? 'var(--cyan)' : 'var(--hard-red)'};white-space:nowrap;">${p.v > 0 ? '+' : ''}${p.v}</span>
             </div>`).join('')}
           </div>
-          <p class="hint" style="margin-top:10px;">Kunkin päivän luku on sen päivän <strong>paras tunti</strong> valoisana aikana. Veden lämpötila oletetaan samaksi koko jaksolle. Sääennusteen epävarmuus kasvaa selvästi kolmatta päivää kohti.</p>`;
+          <p class="hint" style="margin-top:10px;">Iso luku on <strong>koko päivän mittari</strong>: parhaan yhtenäisen kuuden tunnin jakson keskiarvo valoisana aikana. Se erottaa päivän jossa on yksi hyvä hetki päivästä joka kantaa koko reissun. Huipputunti näkyy erikseen — se on useimmiten hämärässä ja korkea lähes joka päivä, joten se ei yksin kerro paljon. Veden lämpötila oletetaan samaksi koko jaksolle, ja sääennusteen epävarmuus kasvaa selvästi kolmatta päivää kohti.</p>`;
       } catch (err) {
         console.error('Taimenkeli-ennuste epäonnistui:', err);
         el.innerHTML = '<p class="hint" style="color:var(--hard-red);">Ennusteen haku epäonnistui.</p>';
