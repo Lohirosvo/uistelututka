@@ -918,7 +918,7 @@ body{padding-bottom:66px}
    joka avauksella, myös silloin kun sovellus avataan märillä käsillä
    katsomaan pelkkää nopeutta. Napautus ohittaa, ja intro näytetään vain
    kylmästä käynnistyksestä — ei välilehteä vaihtaessa eikä taustalta
-   palatessa (sessionStorage). */
+   palatessa (sessionStorage). Kesto 1,0 s (aluksi 0,7 s, ei ehtinyt nähdä). */
 #intro{position:fixed;inset:0;z-index:99999;background:var(--bg,#080e14);
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:18px;padding:24px;text-align:center;transition:opacity .35s ease}
@@ -12091,7 +12091,7 @@ lataa(eka);
   }
   el.addEventListener('click', pois);
   el.addEventListener('touchstart', pois, {passive:true});
-  setTimeout(pois, 700);
+  setTimeout(pois, 1000);   // 700 ms oli liian nopea: ei ehtinyt nähdä
 })();
 
 /* ===== VESILLÄ-PANEELIN SISÄLTÖ =====
