@@ -888,6 +888,28 @@ input[type=range]{width:100%;margin:12px 0 2px;accent-color:#16211f}
 .ak-huom{margin-top:11px;font-size:.72rem;color:var(--harmaa);line-height:1.5}
 .ak-virhe{font-size:.83rem;color:#8f1414}
 
+
+/* ===== KOLME RUUTUA — lisätty 17.9.2026 =====
+   Sovellus oli yksi pitkä sivu, jolta vastaus piti etsiä. Sisältö jaetaan
+   kolmeen ruutuun sen mukaan MILLOIN sitä tarvitaan: vesillä, suunnitellessa,
+   jälkeenpäin. Mitään ei poisteta eikä siirretä merkkauksessa — samat
+   elementit vain siirretään DOM:issa kolmen säiliön alle, jolloin kaikki
+   kuuntelijat, id:t ja logiikka säilyvät koskemattomina. */
+#ruutuNavi{position:fixed;left:0;right:0;bottom:0;z-index:9000;display:flex;
+  background:rgba(8,14,20,.97);border-top:1px solid var(--line);
+  padding-bottom:env(safe-area-inset-bottom,0)}
+#ruutuNavi button{flex:1;background:none;border:none;color:var(--muted);
+  padding:9px 4px 11px;font-family:'Barlow Condensed',sans-serif;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:1px;font-size:12px;
+  letter-spacing:.09em;text-transform:uppercase}
+#ruutuNavi button b{font-size:18px;font-weight:700;letter-spacing:.02em}
+#ruutuNavi button.on{color:var(--cyan)}
+#ruutuNavi button.on b{color:var(--cyan)}
+body{padding-bottom:66px}
+.ruutuOtsake{font-family:'Barlow Condensed',sans-serif;font-size:13px;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  border:1px solid var(--line);border-radius:20px;padding:4px 14px;
+  display:inline-block;margin:2px 0 12px}
 </style>
 
   <!-- PWA: aloitusnäyttökuvake, koko ruutu ja offline-tuki -->
@@ -11754,7 +11776,78 @@ lataa(eka);
         if (tuuliLuokkaMitatusta()) { autoFillTuuli(); clearInterval(tuuliAjastin); }
       }, 2000);
     })();
-  </script>
+  
+/* ===== KOLME RUUTUA — jako ajonaikaisesti =====
+   Kortit tunnistetaan id:llä. Tuntemattomat menevät suunnitteluun, jotta
+   myöhemmin lisätty osio ei katoa näkyvistä. */
+(function(){
+  var wrap = document.querySelector('.wrap');
+  if(!wrap || document.getElementById('ruutuNavi')) return;
+
+  var JAKO = {
+    vesilla:   ['speedMonitorSection'],
+    raportit:  ['result']
+    /* loput -> suunnittelu */
+  };
+  var RUUDUT = [
+    { id:'vesilla',     merkki:'▲',   nimi:'Vesillä',     otsake:'Vesillä · märät kädet' },
+    { id:'suunnittelu', merkki:'48h', nimi:'Suunnittelu', otsake:'Suunnittelu · oma harkinta' },
+    { id:'raportit',    merkki:'···', nimi:'Raportit',    otsake:'Raportit · mitä malli sanoi' }
+  ];
+
+  /* header ja footer jäävät paikoilleen kaikkien ruutujen ylä- ja alapuolelle */
+  var header = wrap.querySelector(':scope > header');
+  var footer = wrap.querySelector(':scope > footer');
+  var lapset = Array.prototype.slice.call(wrap.children)
+                 .filter(function(e){ return e !== header && e !== footer; });
+
+  var sailio = {};
+  RUUDUT.forEach(function(r){
+    var d = document.createElement('div');
+    d.id = 'ruutu-' + r.id; d.style.display = 'none';
+    d.innerHTML = '<div class="ruutuOtsake">' + r.otsake + '</div>';
+    sailio[r.id] = d;
+    if(footer) wrap.insertBefore(d, footer); else wrap.appendChild(d);
+  });
+
+  lapset.forEach(function(e){
+    var kohde = 'suunnittelu';
+    for(var k in JAKO) if(JAKO[k].indexOf(e.id) >= 0) kohde = k;
+    sailio[kohde].appendChild(e);
+  });
+  /* Analysoi- ja Dragon-napit ovat .wrap:n ulkopuolella mutta kuuluvat
+     suunnitteluun, samoin omien merkintöjen paneeli. */
+  ['ctaBar'].forEach(function(id){
+    var e = document.getElementById(id); if(e) sailio.suunnittelu.appendChild(e);
+  });
+  var merkinnat = document.querySelector('body > details.q');
+  if(merkinnat) sailio.suunnittelu.appendChild(merkinnat);
+
+  var navi = document.createElement('nav'); navi.id = 'ruutuNavi';
+  RUUDUT.forEach(function(r){
+    var b = document.createElement('button');
+    b.innerHTML = '<b>' + r.merkki + '</b>' + r.nimi;
+    b.onclick = function(){ nayta(r.id); };
+    b.setAttribute('data-ruutu', r.id);
+    navi.appendChild(b);
+  });
+  document.body.appendChild(navi);
+
+  function nayta(id){
+    RUUDUT.forEach(function(r){ sailio[r.id].style.display = (r.id===id) ? '' : 'none'; });
+    Array.prototype.forEach.call(navi.children, function(b){
+      b.classList.toggle('on', b.getAttribute('data-ruutu') === id);
+    });
+    try{ localStorage.setItem('uistelututka_ruutu', id); }catch(e){}
+    window.scrollTo(0,0);
+  }
+  var alku = 'suunnittelu';
+  try{ var t = localStorage.getItem('uistelututka_ruutu');
+       if(t && sailio[t]) alku = t; }catch(e){}
+  nayta(alku);
+  window.naytaRuutu = nayta;
+})();
+</script>
 
 
   <!-- OTTIPISTEHÄLYTYS: käyttäjän oma ääniraita, upotettu tiedostoon jotta toimii
