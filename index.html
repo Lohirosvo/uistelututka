@@ -7176,6 +7176,15 @@ lataa(eka);
     let fmiPaineTrendi = null;     // { hpa, muutos3h, tunnit, luokka }
     let fmiVirhe = null;   // viimeisin syy, näytetään käyttäjälle
 
+    /* KORJATTU 18.9.2026. Parametriluetteloon päätyi p_sea kahdesti, ja FMI
+       hylkäsi koko kyselyn virheellä HTTP 400 — jolloin myös tuulihavainto
+       katosi, eli yhden lisäyksen virhe kaatoi toimivan osan.
+       Kaksi suojaa: luettelo on nyt yksi muuttuja (ei voi tuplaantua), ja jos
+       kysely silti hylätään, se toistetaan ilman painetta. Paine on lisä;
+       tuulihavainto on se jota ilman malli huononee. */
+    const FMI_HAVAINTO_PERUS = 'ws_10min,wg_10min,wd_10min,vis,rh,t2m';
+    let FMI_HAVAINTO_PARAMS = FMI_HAVAINTO_PERUS + ',p_sea';
+
     async function haeFmiTuuli(lat, lon) {
       try {
         // KORJATTU 29.8.2026: käytin aiemmin latlon-parametria, jota EI ole dokumentoitu
@@ -7197,9 +7206,16 @@ lataa(eka);
         const url = 'https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature'
           + '&storedquery_id=fmi::observations::weather::simple'
           + `&bbox=${bbox}`
-          + '&parameters=ws_10min,wg_10min,wd_10min,vis,rh,t2m,p_sea,p_sea'
+          + '&parameters=' + FMI_HAVAINTO_PARAMS
           + `&starttime=${alku}`;
-        const r = await fetch(url, { cache: 'no-store' });
+        let r = await fetch(url, { cache: 'no-store' });
+        if (r.status === 400 && FMI_HAVAINTO_PARAMS !== FMI_HAVAINTO_PERUS) {
+          /* Paine ei kelvannut tälle kyselylle: pudotetaan se pysyvästi ja
+             haetaan uudelleen, jotta tuuli saadaan silti. */
+          FMI_HAVAINTO_PARAMS = FMI_HAVAINTO_PERUS;
+          r = await fetch(url.replace(/&parameters=[^&]*/,
+                '&parameters=' + FMI_HAVAINTO_PERUS), { cache: 'no-store' });
+        }
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const xml = new DOMParser().parseFromString(await r.text(), 'text/xml');
         const el = xml.getElementsByTagNameNS('*', 'BsWfsElement');
