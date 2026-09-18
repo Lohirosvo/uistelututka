@@ -6655,6 +6655,15 @@ lataa(eka);
         // Kalenteri antaa lähtöoletuksen. Rajat ovat Etelä-Pohjanmaan tyypillisiä,
         // eivät tutkimustulos — siksi kysymys on yhä muutettavissa.
         get defaultVal() {
+          /* MUUTETTU 18.9.2026: mitattu pintaveden lämpötila ja sen suunta
+             voittavat kalenterin. Kalenteri ei tunne järveä — Lappajärvi on
+             36 m kraatterijärvi ja kääntyy myöhemmin kuin matala naapuri, ja
+             sama päivämäärä oli väärä ainakin toiselle. Kalenteri jää
+             varalähteeksi kun mittausta ei ole. */
+          try {
+            const m = kausiMitatusta();
+            if (m) return m;
+          } catch (e) { /* mittausta ei ole, jatketaan kalenterilla */ }
           const kk = new Date().getMonth() + 1, pv = new Date().getDate();
           if (kk <= 3 || kk === 12) return 'spring';        // jääkausi, lähtöoletus kevät
           if (kk === 4 || (kk === 5 && pv <= 20)) return 'spring';
@@ -7131,6 +7140,8 @@ lataa(eka);
     // (CORS). Jos ei salli, haku epäonnistuu hiljaisesti ja malli käyttää Open-Meteoa
     // kuten ennenkin — mitään ei rikkoudu.
     let fmiTuuli = null;   // { ws, wg, wd, aika, asema }
+    let fmiPaineSarja = [];        // { t, p } lähimmän aseman p_sea-lukemat
+    let fmiPaineTrendi = null;     // { hpa, muutos3h, tunnit, luokka }
     let fmiVirhe = null;   // viimeisin syy, näytetään käyttäjälle
 
     async function haeFmiTuuli(lat, lon) {
@@ -7154,7 +7165,7 @@ lataa(eka);
         const url = 'https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature'
           + '&storedquery_id=fmi::observations::weather::simple'
           + `&bbox=${bbox}`
-          + '&parameters=ws_10min,wg_10min,wd_10min,vis,rh,t2m'
+          + '&parameters=ws_10min,wg_10min,wd_10min,vis,rh,t2m,p_sea,p_sea'
           + `&starttime=${alku}`;
         const r = await fetch(url, { cache: 'no-store' });
         if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -7184,6 +7195,15 @@ lataa(eka);
             });
           }
           const a = asemat.get(avain);
+          /* MITATTU ILMANPAINE — 18.9.2026. Paineen trendi oli mallin biaseissa
+             mukana, mutta se tuli Open-Meteon ENNUSTEESTA. Asemat mittaavat
+             painetta, ja mittaus voittaa mallin samasta hetkestä. p_sea on
+             merenpinnan tasoon redusoitu, joten asemien korkeusero ei sotke.
+             Paine talteen SARJANA: trendi tarvitsee kaksi hetkeä. */
+          if (nimi === 'p_sea' && aikaT) {
+            if (!a.paine) a.paine = [];
+            a.paine.push({ t: new Date(aikaT).getTime(), p: arvo });
+          }
           // Uudempi havainto korvaa vanhemman samalta asemalta.
           if (!a.aika || (aikaT && aikaT >= a.aika)) { a.arvot[nimi] = arvo; a.aika = aikaT; }
           else if (a.arvot[nimi] === undefined) a.arvot[nimi] = arvo;
@@ -7195,6 +7215,20 @@ lataa(eka);
         if (kelvot.length === 0) throw new Error('ei tuulihavaintoja lähialueella');
 
         const valittu = kelvot[0];
+        fmiPaineSarja = valittu.paine || [];
+        fmiPaineTrendi = null;
+        if (fmiPaineSarja.length >= 2) {
+          fmiPaineSarja.sort(function(a,b){ return a.t - b.t; });
+          const eka = fmiPaineSarja[0], vika = fmiPaineSarja[fmiPaineSarja.length-1];
+          const tunnit = (vika.t - eka.t) / 3600000;
+          if (tunnit >= 1) {
+            const muutos3h = (vika.p - eka.p) / tunnit * 3;
+            /* Sama kynnys kuin Open-Meteon versiossa (1,5 hPa / 3 h), jotta
+               mittaus ja malli eivät anna eri vastausta samasta säästä. */
+            fmiPaineTrendi = { hpa: vika.p, muutos3h: muutos3h, tunnit: Math.round(tunnit),
+              luokka: muutos3h <= -1.5 ? 'falling' : (muutos3h >= 1.5 ? 'rising' : 'stable') };
+          }
+        }
         fmiTuuli = {
           ws: valittu.arvot.ws_10min,
           wg: valittu.arvot.wg_10min,
@@ -7209,6 +7243,29 @@ lataa(eka);
         fmiVirhe = null;
         /* Kartalle: mitattu tuuli havaintokorjausta varten. Kartta on eri
            lohkossa, joten tieto välitetään globaalin kautta. */
+        /* MITATTU ILMANPAINE — lisätty 18.9.2026.
+           Paineen trendi oli mallin biaseissa mukana, mutta se tuli Open-Meteon
+           ENNUSTEESTA. Asemat mittaavat painetta, ja mittaus on aina parempi kuin
+           malli samasta hetkestä. p_sea on merenpinnan tasoon redusoitu paine,
+           eli asemien korkeuserot eivät sotke vertailua.
+           Trendi lasketaan hakuikkunan yli: vanhin ja tuorein lukema. */
+        try {
+          if (Array.isArray(fmiPaineSarja) && fmiPaineSarja.length >= 2) {
+            fmiPaineSarja.sort(function(a,b){ return a.t - b.t; });
+            const eka = fmiPaineSarja[0], vika = fmiPaineSarja[fmiPaineSarja.length-1];
+            const tunnit = (vika.t - eka.t) / 3600000;
+            if (tunnit >= 1) {
+              const muutos3h = (vika.p - eka.p) / tunnit * 3;   // hPa / 3 h
+              fmiPaineTrendi = {
+                hpa: vika.p, muutos3h: muutos3h, tunnit: Math.round(tunnit),
+                /* Sama kynnys kuin Open-Meteon versiossa (1,5 hPa / 3 h),
+                   jotta mittaus ja malli eivät anna eri vastausta samasta säästä. */
+                luokka: muutos3h <= -1.5 ? 'falling' : (muutos3h >= 1.5 ? 'rising' : 'stable')
+              };
+            }
+          }
+        } catch(e) { fmiPaineTrendi = null; }
+
         window.akHavaittuTuuli = function(){
           return fmiTuuli ? { ws:fmiTuuli.ws, wg:fmiTuuli.wg, wd:fmiTuuli.wd,
                               aika:fmiTuuli.aika, asema:fmiTuuli.asema } : null;
@@ -7310,6 +7367,9 @@ lataa(eka);
         }
         if (fmiTuuli.rh !== undefined && !isNaN(fmiTuuli.rh)) lisat.push(`kosteus ${fmiTuuli.rh.toFixed(0)} %`);
         if (fmiTuuli.t2m !== undefined && !isNaN(fmiTuuli.t2m)) lisat.push(`ilma ${fmiTuuli.t2m.toFixed(1)} °C`);
+        if (fmiPaineTrendi) lisat.push(`paine ${fmiPaineTrendi.hpa.toFixed(0)} hPa `
+          + (fmiPaineTrendi.muutos3h > 0 ? '+' : '') + fmiPaineTrendi.muutos3h.toFixed(1)
+          + '/3 h (mitattu)');
       }
       const lisarivi = lisat.length
         ? `<br><span style="color:var(--muted);">${lisat.join(' · ')}</span>` : '';
@@ -10190,7 +10250,14 @@ lataa(eka);
         const tempUrl = new URL(`${baseUrl}/LampoPintavesi`);
         tempUrl.searchParams.set('$filter', `Paikka_Id eq ${station.Paikka_Id}`);
         tempUrl.searchParams.set('$orderby', 'Aika desc');
-        tempUrl.searchParams.set('$top', '1');
+        /* AIKASARJA, ei vain viimeisin — muutettu 18.9.2026.
+           Yksi lukema kertoo missä ollaan, sarja kertoo minne mennään. Sama
+           rajapinta, sama kysely, vain $top vaihtuu. Trendi ratkaisee kaksi
+           asiaa joita kalenteri ei osaa: onko järvi viilenemässä (kausi) ja
+           onko pinta pudonnut äkillisesti (kumpuaminen).
+           40 mittausta riittää: asemat mittaavat tyypillisesti kerran päivässä
+           tai harvemmin, joten se kattaa noin kuukauden. */
+        tempUrl.searchParams.set('$top', '40');
         const tempRes = await fetch(tempUrl, { cache: 'no-store' });
         if (!tempRes.ok) throw new Error('Network error (LampoPintavesi)');
         const tempData = await tempRes.json();
@@ -10203,6 +10270,19 @@ lataa(eka);
           tempTime = dateObj.toLocaleDateString('fi-FI') + ' klo ' + dateObj.toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' });
         }
 
+        /* TRENDI. Lasketaan pienimmän neliösumman kulmakerroin viimeisen 10
+           vuorokauden mittauksista, ja erikseen äkillinen pudotus viimeisen
+           kahden vuorokauden sisällä. */
+        sykeLampoSarja = [];
+        if (tempData.value && tempData.value.length) {
+          tempData.value.forEach(function (r) {
+            const a = Number(r.Arvo), t = new Date(r.Aika).getTime();
+            if (!isNaN(a) && !isNaN(t)) sykeLampoSarja.push({ t: t, c: a });
+          });
+          sykeLampoSarja.sort(function (a, b) { return a.t - b.t; });
+        }
+        sykeLampoTrendi = laskeLampoTrendi(sykeLampoSarja);
+
         if (tempVal !== null) {
           // MITTAUKSEN IKÄ — uusi 2.9.2026. Aiemmin viimeisin lukema näytettiin
           // sellaisenaan riippumatta siitä oliko se eilinen vai vuosien takainen.
@@ -10211,6 +10291,16 @@ lataa(eka);
           latestSykeTemp = (ikaVrk <= 14) ? tempVal : null;
 
           let huom = '';
+          /* Trendi näkyviin: yksi lukema ei kerro onko järvi kääntymässä. */
+          if (sykeLampoTrendi) {
+            const T = sykeLampoTrendi;
+            const merkki = T.kulma > 0 ? '+' : '';
+            huom += ` <span style="color:var(--cyan);">${T.suunta} ${merkki}${T.kulma.toFixed(2)} °C/vrk`
+                 +  ` (${T.mittauksia} mittausta / ${T.vrk} vrk)</span>`;
+            if (T.pudotus2vrk !== null && T.pudotus2vrk <= -1.5) {
+              huom += ` <span style="color:var(--amber);">— pinta pudonnut ${Math.abs(T.pudotus2vrk).toFixed(1)} °C kahdessa vuorokaudessa, mahdollinen kumpuaminen</span>`;
+            }
+          }
           huom += ` <span style="color:var(--muted);">${station.Nimi}`;
           if (kaytettyTermi !== hakuTermit[0]) huom += ` (haettu sanalla "${kaytettyTermi}")`;
           huom += '</span>';
@@ -10588,6 +10678,8 @@ lataa(eka);
       // keskiluokkaan jonka nimi on "vaahtolinjoja näkyy". Rajat siirretään
       // vastaamaan sitä mitä painikkeissa lukee.
       const windVal = omLatest.wind < 2 ? 'calm' : (omLatest.wind < 6 ? 'foam' : 'hard');
+      /* Paine: mitattu voittaa mallin, kuten tuulessakin. */
+      if (fmiPaineTrendi) omLatest.trend = fmiPaineTrendi.luokka;
       // Mitattu tuuli talteen, jotta biasia ei tarvitse antaa koko 2–6 m/s
       // kaistalle samansuuruisena. Ks. tuuliKerroin().
       mitattuTuuliMs = omLatest.wind;
@@ -11936,6 +12028,59 @@ lataa(eka);
         }
       }
       return pts[0].c;
+    }
+
+    /* Pintaveden lämpötilasarja ja siitä johdettu trendi. Sarja on aikajärjestyksessä
+       vanhimmasta uusimpaan. */
+    let sykeLampoSarja = [];
+    let sykeLampoTrendi = null;
+
+    function laskeLampoTrendi(sarja) {
+      if (!sarja || sarja.length < 3) return null;
+      const nyt = Date.now();
+      const ikkuna = sarja.filter(function (r) { return nyt - r.t <= 10 * 86400000; });
+      if (ikkuna.length < 3) return null;
+      /* Kulmakerroin °C/vrk pienimmän neliösumman suoralta. */
+      const x = ikkuna.map(function (r) { return (r.t - ikkuna[0].t) / 86400000; });
+      const y = ikkuna.map(function (r) { return r.c; });
+      const n = x.length;
+      const mx = x.reduce(function (a, b) { return a + b; }, 0) / n;
+      const my = y.reduce(function (a, b) { return a + b; }, 0) / n;
+      let num = 0, den = 0;
+      for (let i = 0; i < n; i++) { num += (x[i] - mx) * (y[i] - my); den += (x[i] - mx) * (x[i] - mx); }
+      if (den === 0) return null;
+      const kulma = num / den;
+
+      /* Äkillinen pudotus: viimeisin verrattuna kahden vuorokauden takaiseen.
+         Kumpuaminen näkyy nimenomaan tässä, ei kausitrendissä. */
+      const viim = ikkuna[ikkuna.length - 1];
+      let pudotus = null;
+      for (let i = ikkuna.length - 2; i >= 0; i--) {
+        if (viim.t - ikkuna[i].t >= 1.5 * 86400000) { pudotus = viim.c - ikkuna[i].c; break; }
+      }
+      return {
+        kulma: kulma,                       // °C vuorokaudessa
+        vrk: Math.round((ikkuna[ikkuna.length-1].t - ikkuna[0].t) / 86400000),
+        mittauksia: n,
+        viimeisin: viim.c,
+        pudotus2vrk: pudotus,
+        suunta: kulma <= -0.15 ? 'viilenee' : (kulma >= 0.15 ? 'lämpenee' : 'tasainen')
+      };
+    }
+
+    /* Kausi mitatusta lämpötilasta ja sen suunnasta. Kalenteri kertoo kumpaa
+       puolta vuotta ollaan (lämpenevä vai viilenevä), mittaus kertoo missä
+       vaiheessa. Pelkkä lämpötila ei riitä: 14 °C on toukokuussa alkukesää ja
+       syyskuussa syksyä. Palauttaa null jos mittausta ei ole. */
+    function kausiMitatusta() {
+      if (!sykeLampoTrendi || latestSykeTemp === null || latestSykeTemp === undefined) return null;
+      const t = latestSykeTemp;
+      const kk = new Date().getMonth() + 1;
+      const viilenee = sykeLampoTrendi.kulma < 0;
+      if (t < 8)  return kk <= 7 ? 'spring' : 'autumn';
+      if (t < 13) return (kk <= 7 && !viilenee) ? 'earlysummer' : 'autumn';
+      if (t < 17) return (kk <= 7 && !viilenee) ? 'earlysummer' : 'midsummer';
+      return 'midsummer';
     }
 
     function autoFillTemp() {
