@@ -942,25 +942,23 @@ body{padding-bottom:66px}
    EI UUTTA LASKENTAA: luvut tulevat vvRakennaPaketti():sta, samasta lähteestä
    jonka TrollingPro ja 12 h -ikkuna lukevat. Jos malli muuttuu, tämä muuttuu
    mukana eikä kahta totuutta synny. */
-#vesillaPaneeli{border:1px solid var(--line);border-radius:14px;padding:16px 14px;
-  margin-bottom:14px;background:linear-gradient(180deg,rgba(12,26,36,.92),rgba(8,16,24,.92))}
+#vesillaPaneeli{border:1px solid var(--line);border-radius:12px;padding:10px 12px;
+  margin-bottom:10px;background:linear-gradient(180deg,rgba(12,26,36,.92),rgba(8,16,24,.92))}
 #vesillaPaneeli .laji{display:flex;align-items:center;justify-content:space-between;gap:10px}
-#vesillaPaneeli .lajinimi{font-family:'Barlow Condensed',sans-serif;font-size:22px;
+#vesillaPaneeli .lajinimi{font-family:'Barlow Condensed',sans-serif;font-size:18px;
   font-weight:700;letter-spacing:.03em;color:var(--cyan)}
 #vesillaPaneeli .vaihda{background:none;border:1px solid var(--line);color:var(--muted);
   border-radius:20px;padding:6px 14px;font-size:12px;letter-spacing:.08em;
   text-transform:uppercase;cursor:pointer}
-#vesillaSyvyys{font-family:'JetBrains Mono',monospace;font-size:46px;font-weight:800;
-  line-height:1;color:var(--amber);margin:10px 0 2px}
+#vesillaSyvyys{font-family:'JetBrains Mono',monospace;font-size:44px;font-weight:800;
+  line-height:1;color:var(--amber);margin:4px 0 1px}
 #vesillaSyvyys small{font-size:22px;color:var(--muted);font-weight:600}
-#vesillaSelite{font-size:13px;color:var(--muted);line-height:1.5}
-#vesillaRivit{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
-#vesillaRivit div{flex:1;min-width:120px;border:1px solid var(--line);border-radius:10px;
-  padding:9px 11px}
-#vesillaRivit b{display:block;font-family:'JetBrains Mono',monospace;font-size:19px;
-  color:var(--text);font-weight:700}
-#vesillaRivit span{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
-  color:var(--muted)}
+#vesillaSelite{font-size:12px;color:var(--muted);line-height:1.4}
+#vesillaRivit{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;
+  font-family:'JetBrains Mono',monospace;font-size:13px}
+#vesillaRivit span{border:1px solid var(--line);border-radius:14px;padding:3px 9px;
+  color:var(--text);white-space:nowrap}
+#salamaRivi{margin-top:8px;font-size:12.5px;line-height:1.4}
 /* Sivulta avautuva valitsin: ei vie tilaa ruudulta eikä vaadi vierittämistä. */
 #lajiLaatikko{position:fixed;inset:0;z-index:9500;display:none}
 #lajiLaatikko.auki{display:block}
@@ -1007,31 +1005,19 @@ body{padding-bottom:66px}
   </div>
   <div id="vesillaSyvyys">– <small>m</small></div>
   <div id="vesillaSelite">Aja Analysoi kerran, niin syvyys ilmestyy tähän.</div>
-  <!-- SALAMAT — lisätty 18.9.2026. Ainoa turvallisuuteen liittyvä lähde jota
-       sovellus ei käyttänyt. Iso avovesi, kymmenen vapaa, hiilikuitua kädessä. -->
-  <div id="salamaRivi" style="margin-top:10px; font-size:13px; color:var(--muted);
-       border-top:1px solid var(--line); padding-top:8px;">
-    <button class="chip" onclick="haeSalamat()" style="font-size:12px; padding:5px 10px;">Tarkista salamat</button>
-    <span id="salamaTila" style="margin-left:8px;">100 km säteellä, viimeiset 60 min</span>
-  </div>
+  <!-- TIIVISTETTY 18.9.2026. Kolme laatikkoa vei kolme riviä pystysuunnassa, ja
+       vesillä ruudun korkeus on niukin resurssi. Yksi rivi riittää: luvut ovat
+       lyhyitä eikä niitä lueta erikseen vaan vilkaisulla. -->
   <div id="vesillaRivit">
-    <div><span>Nopeus</span><b id="vesillaNopeus">–</b></div>
-    <div><span>Väri</span><b id="vesillaVari" style="font-size:15px">–</b></div>
-    <div><span>Valo</span><b id="vesillaValo" style="font-size:15px">–</b></div>
+    <span id="vesillaNopeus">–</span>
+    <span id="vesillaVari">–</span>
+    <span id="vesillaValo">–</span>
   </div>
+  <!-- Salamarivi näkyy VAIN kun on jotain kerrottavaa: nappi vei tilaa ja vaati
+       painalluksen, ja tyhjä rivi kertoo tyhjää. Haku tapahtuu itsestään. -->
+  <div id="salamaRivi" style="display:none;"></div>
 </div>
 
-
-<!-- MALLIN OSUVUUS — lisätty 18.9.2026. Loki tallentaa jokaiselle kalalle sekä
-     toteutuneen syvyyden että mallin ennusteen, mutta niitä ei ole koskaan
-     verrattu kuin rivi kerrallaan. Yksi rivi on kohinaa; kymmenen riviä kertoo
-     onko malli systemaattisesti pielessä. Tämä on ainoa Lappajärvi-kohtainen
-     aineisto mitä on olemassa, ja se on omassa puhelimessa. -->
-<div class="card" id="malliOsuvuus">
-  <h2>Mallin osuvuus</h2>
-  <p class="hint" id="osuvuusTila">Lasketaan saalislokista.</p>
-  <div id="osuvuusTaulu"></div>
-</div>
 <div id="lajiLaatikko" aria-hidden="true">
   <div class="tausta" onclick="suljeLajiLaatikko()"></div>
   <div class="paneeli">
@@ -12579,6 +12565,11 @@ function suljeLajiLaatikko(){
   var k = document.getElementById('lajiLaatikko'); if(k) k.classList.remove('auki');
 }
 setInterval(paivitaVesilla, 60000);
+/* Salamat itsestään: heti käynnistyksessä ja sen jälkeen viiden minuutin
+   välein. Haku itse rajoittaa tiheyden, joten tiheämpi ajastus ei aiheuta
+   ylimääräisiä kutsuja. */
+setTimeout(function(){ if(typeof haeSalamat === 'function') haeSalamat(); }, 4000);
+setInterval(function(){ if(typeof haeSalamat === 'function') haeSalamat(); }, 5*60*1000);
 
 /* ===== SALAMAHAVAINNOT =====
    FMI:n salamadata on erillinen tallennettu kysely. Se palauttaa iskut
@@ -12593,12 +12584,14 @@ setInterval(paivitaVesilla, 60000);
    on yhä se joka pätee veneessä. */
 let salamaHaettu = 0;
 async function haeSalamat(){
-  const el = document.getElementById('salamaTila');
+  const el = document.getElementById('salamaRivi');
   if(!el) return;
   const nyt = Date.now();
-  if(nyt - salamaHaettu < 60000){ return; }   // ei jauheta kerran minuutissa
+  /* AUTOMAATTINEN 18.9.2026. Nappi oli turha: salamatilanne kiinnostaa aina,
+     ei silloin kun sitä muistaa painaa. Viisi minuuttia on tiheämpi kuin
+     ukkosrintaman liike vaatii ja riittävän harva ettei se kuormita. */
+  if(nyt - salamaHaettu < 5*60*1000){ return; }
   salamaHaettu = nyt;
-  el.textContent = 'Haetaan…';
 
   const lat = (currentLocation && currentLocation.lat) || 63.14378;
   const lon = (currentLocation && currentLocation.lon) || 23.53885;
@@ -12614,8 +12607,7 @@ async function haeSalamat(){
     if(!r.ok) throw new Error('HTTP ' + r.status);
     const txt = await r.text();
     if(/ExceptionReport|ExceptionText/i.test(txt)){
-      el.textContent = 'Salamahaku ei ole käytettävissä (rajapinta hylkäsi kyselyn).';
-      return;
+      el.style.display = 'none'; return;
     }
     const xml = new DOMParser().parseFromString(txt, 'application/xml');
     const el2 = xml.getElementsByTagNameNS('*','BsWfsElement');
@@ -12637,8 +12629,8 @@ async function haeSalamat(){
         uniikit.push(x);
     });
     if(!uniikit.length){
-      el.textContent = 'Ei salamahavaintoja 100 km säteellä viimeisen tunnin aikana.';
-      return;
+      /* Ei salamoita = ei riviä. Tyhjä rivi vie tilaa kertomatta mitään. */
+      el.style.display = 'none'; return;
     }
     const lahin = Math.min.apply(null, uniikit.map(function(x){ return x.km; }));
     const vanha = uniikit.filter(function(x){ return nyt-x.t > 30*60*1000; });
@@ -12651,11 +12643,13 @@ async function haeSalamat(){
       else if(lahinTuore > lahinVanha + 5) suunta = ' — loittonee';
     }
     const vari = lahin < 15 ? 'var(--hard-red)' : (lahin < 40 ? 'var(--amber)' : 'var(--muted)');
-    el.innerHTML = '<span style="color:' + vari + '; font-weight:700;">'
+    el.style.display = '';
+    el.innerHTML = '<span style="color:' + vari + '; font-weight:700;">⚡ '
       + uniikit.length + ' salamaa tunnin sisällä, lähin ' + lahin.toFixed(0) + ' km' + suunta + '</span>'
       + (lahin < 15 ? '<br><span style="color:var(--hard-red);">Maihin. 30/30-sääntö: alle 30 s salaman ja jyrinän välillä tarkoittaa että ollaan iskualueella.</span>' : '');
   } catch(e){
-    el.textContent = 'Salamahaku ei onnistunut: ' + e.message;
+    /* Verkkokatkos ei ole uutinen veneessä — rivi pysyy piilossa. */
+    el.style.display = 'none';
   }
 }
 
