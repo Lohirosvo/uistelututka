@@ -1,8 +1,8 @@
 // Service worker — Nopeusnäyttö pro1
 //
 // Tehtävä: sovellus aukeaa ilman verkkoa ja ilman että Acoden palvelinta tarvitsee
-// käynnistää. Sivu on yksi iso HTML-tiedosto (n. 1,2 MB, sisältää ottipisteäänen),
-// joten välimuistiin riittää käytännössä se ja kuvakkeet.
+// käynnistää. Sivu on yksi iso HTML-tiedosto (n. 1,6 MB, josta ottipisteääni on
+// noin 0,9 MB), joten välimuistiin riittää käytännössä se, jaetut sivut ja kuvakkeet.
 //
 // STRATEGIA: sovellussivu haetaan verkosta ensin ja tallennetaan välimuistiin
 // (network-first). Jos verkkoa ei ole, tarjotaan välimuistista. Näin päivitetty
@@ -10,15 +10,26 @@
 // Muut tiedostot (kuvakkeet, manifest) haetaan välimuistista ensin — ne eivät muutu.
 //
 // VERSIO: kasvata tätä aina kun julkaiset uuden version. Vanha välimuisti siivotaan.
-const VERSIO = 'uistelututka-v80';
+// Versionumeron kasvatus on se mekanismi joka SIIVOAA vanhan välimuistin,
+// index2.html mukaan lukien. Ilman tätä poisto ei näkyisi puhelimissa.
+const VERSIO = 'uistelututka-v81';
 const SIVU = './';
 
-// KAKSI SOVELLUSSIVUA 13.9.2026 alkaen: vanha index.html ja uusi index2.html.
-// Molemmat välimuistissa omalla avaimellaan — ks. fetch-käsittelijän korjaus.
+// MUUTETTU 18.9.2026. index2.html oli keskeneräinen uusi käyttöliittymä, ja se
+// poistettiin: sen aaltomalli (suunnattu pyyhkäisy, puuska, kalastusraja) on
+// siirretty index.html:n aallonkorkeuskarttaan, joten kahta mallia samasta
+// asiasta ei enää ole. Välimuistista poistaminen on tässä olennaista: ilman
+// sitä vanha kopio jäisi puhelimiin elämään omaa elämäänsä.
+//
+// Lisätty aaltokartta.html ja pyyhkaisy-laskenta.html, jotka ovat jaettuja
+// sivuja ja joita käytetään nimenomaan vesillä — siis juuri silloin kun
+// verkkoa ei välttämättä ole. Ne puuttuivat listalta kokonaan.
 const ESILADATTAVAT = [
   './',
   './index.html',
-  './index2.html',
+  './aaltokartta.html',
+  './pyyhkaisy-laskenta.html',
+  './kisa_maksimi.html',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
@@ -65,10 +76,11 @@ self.addEventListener('fetch', (e) => {
 
   if (onSivu) {
     // KORJATTU 13.9.2026. Aiemmin jokaisen navigoinnin vastaus tallennettiin
-    // KIINTEÄLLÄ avaimella './'. Kahden sovellussivun kanssa se rikkoo molemmat:
-    // index2.html:n avaaminen olisi korvannut juuren sisällön, ja offline-tilassa
+    // KIINTEÄLLÄ avaimella './'. Usean sivun kanssa se rikkoo kaikki: toisen
+    // sivun avaaminen olisi korvannut juuren sisällön, ja offline-tilassa
     // sovellus olisi avannut väärän sivun. Nyt jokainen sivu tallentuu omalla
     // osoitteellaan, ja juuri './' päivitetään vain kun juurta itseään pyydetään.
+    // Tämä koskee yhä aaltokarttaa ja kisasivua, jotka ovat omia sivujaan.
     const juuri = url.pathname.endsWith('/') || url.pathname.endsWith('index.html');
     e.respondWith(
       fetch(req)
