@@ -12,7 +12,7 @@
 // VERSIO: kasvata tätä aina kun julkaiset uuden version. Vanha välimuisti siivotaan.
 // Versionumeron kasvatus on se mekanismi joka SIIVOAA vanhan välimuistin,
 // index2.html mukaan lukien. Ilman tätä poisto ei näkyisi puhelimissa.
-const VERSIO = 'uistelututka-v81';
+const VERSIO = 'uistelututka-v82';
 const SIVU = './';
 
 // MUUTETTU 18.9.2026. index2.html oli keskeneräinen uusi käyttöliittymä, ja se
@@ -82,8 +82,14 @@ self.addEventListener('fetch', (e) => {
     // osoitteellaan, ja juuri './' päivitetään vain kun juurta itseään pyydetään.
     // Tämä koskee yhä aaltokarttaa ja kisasivua, jotka ovat omia sivujaan.
     const juuri = url.pathname.endsWith('/') || url.pathname.endsWith('index.html');
+    /* KORJATTU 18.9.2026. fetch(req) sai vastauksen SELAIMEN omasta
+       välimuistista: GitHub Pages pyytää säilyttämään tiedostot noin kymmenen
+       minuuttia, joten uusi versio ei näkynyt vaikka se oli jo palvelimella ja
+       vaikka strategia on verkko-ensin. cache:'reload' ohittaa selaimen
+       välimuistin ja hakee aina palvelimelta.
+       Offline-varasto ei muutu: jos verkkoa ei ole, mennään yhä catch-haaraan. */
     e.respondWith(
-      fetch(req)
+      fetch(new Request(req.url, { cache: 'reload', credentials: 'same-origin' }))
         .then(vast => {
           const kopio = vast.clone();
           caches.open(VERSIO).then(c => {
