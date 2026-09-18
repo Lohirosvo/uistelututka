@@ -1007,6 +1007,13 @@ body{padding-bottom:66px}
   </div>
   <div id="vesillaSyvyys">– <small>m</small></div>
   <div id="vesillaSelite">Aja Analysoi kerran, niin syvyys ilmestyy tähän.</div>
+  <!-- SALAMAT — lisätty 18.9.2026. Ainoa turvallisuuteen liittyvä lähde jota
+       sovellus ei käyttänyt. Iso avovesi, kymmenen vapaa, hiilikuitua kädessä. -->
+  <div id="salamaRivi" style="margin-top:10px; font-size:13px; color:var(--muted);
+       border-top:1px solid var(--line); padding-top:8px;">
+    <button class="chip" onclick="haeSalamat()" style="font-size:12px; padding:5px 10px;">Tarkista salamat</button>
+    <span id="salamaTila" style="margin-left:8px;">100 km säteellä, viimeiset 60 min</span>
+  </div>
   <div id="vesillaRivit">
     <div><span>Nopeus</span><b id="vesillaNopeus">–</b></div>
     <div><span>Väri</span><b id="vesillaVari" style="font-size:15px">–</b></div>
@@ -4567,6 +4574,31 @@ function akPiirraPaivat(){
    moduulissa, joten tarjotaan pisin yhtenäinen vesimatka tuulen suunnassa.
    Julkaistaan globaaliin, koska kumpuamisanalyysi on toisessa lohkossa.
    Palauttaa metrejä, tai null jos karttaa ei ole avattu tai järvi on eri. */
+/* JÄRVEN KESKIPISTE MASKISTA — 18.9.2026.
+   Kumpuamisen tulkinta tarvitsee suuntiman järven keskeltä mittausasemalle.
+   Aiemmin vertailupisteenä oli currentLocation, joka on kotiranta tai
+   kalastusalue — Lappajärvellä noin 6 km järven todellisesta keskipisteestä
+   lounaaseen. Siitä laskettu suuntima olisi ollut systemaattisesti vinossa.
+   Vesiruutujen painopiste maskista on oikea keskipiste, ja se on jo laskettu
+   tässä moduulissa muuta varten. */
+window.akJarvenKeskipiste = function(){
+  try {
+    if (!mask || !jarvi || !jarvi.kartta) return null;
+    const k = jarvi.kartta;
+    let si = 0, sj = 0, n = 0;
+    for (let j = 0; j < k.H; j++) for (let i = 0; i < k.W; i++) {
+      if (mask[j*k.W + i]) { si += i; sj += j; n++; }
+    }
+    if (!n) return null;
+    const ic = si/n, jc = sj/n;
+    /* Ruutu on k.ruutu metriä. Pohjoiskoordinaatti pienenee etelään päin,
+       itäkoordinaatti kasvaa itään. */
+    const lat = k.pohjoisLat - (jc * k.ruutu) / 111320;
+    const lon = k.lansiLon + (ic * k.ruutu) / (111320 * Math.cos(lat * Math.PI/180));
+    return { lat: lat, lon: lon, nimi: jarvi.nimi };
+  } catch (e) { return null; }
+};
+
 window.akSuunnattuMitta = function(dir, jarvenNimi){
   try {
     if (!mask || !jarvi || !jarvi.kartta) return null;
@@ -10247,6 +10279,21 @@ lataa(eka);
           });
           if (paras) { station = paras; asemaEtaisyys = lyhin / 1000; }
         }
+        /* ASEMAN SIJAINTI TALTEEN — 18.9.2026.
+           Yksi mittauspiste ei kerro koko järvestä. Tuuli kallistaa
+           harppauskerrosta: TUULEN PUOLEISELLA rannalla kylmä nousee, ja
+           VASTARANNALLA lämmin päällysvesi kasautuu paksummaksi. Sama tuuli voi
+           siis laskea lämpötilaa toisella rannalla ja nostaa sitä toisella.
+           Ilman aseman sijaintia lämpötilan muutosta ei voi tulkita oikein. */
+        sykeAsema = null;
+        try {
+          const E = station.KoordErTmIta ?? station.KoordItaEtrs ?? station.Ita ?? null;
+          const N = station.KoordErTmPohj ?? station.KoordPohjEtrs ?? station.Pohjoinen ?? null;
+          if (E !== null && N !== null) {
+            const k = TM35.inv(E, N);
+            sykeAsema = { nimi: station.Nimi, lat: k.lat, lon: k.lon };
+          }
+        } catch (e) { sykeAsema = null; }
         const tempUrl = new URL(`${baseUrl}/LampoPintavesi`);
         tempUrl.searchParams.set('$filter', `Paikka_Id eq ${station.Paikka_Id}`);
         tempUrl.searchParams.set('$orderby', 'Aika desc');
@@ -10541,7 +10588,12 @@ lataa(eka);
     async function fetchRecentWindHistory(lat, lon) {
       const el = document.getElementById('windHistoryStatus');
       try {
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=wind_speed_10m,wind_direction_10m&past_days=3&forecast_days=1&wind_speed_unit=ms&timezone=auto`;
+        /* MUUTETTU 18.9.2026: 3 vrk -> 7 vrk. Kerrostuneisuus ei synny eikä hajoa
+           kolmessa vuorokaudessa: syvällä järvellä se on viikkojen asia, ja
+           yksittäinen tyyni jakso kolmen vuorokauden lopussa antoi harhaanjohtavan
+           kuvan. Rajapinta sallii jopa 92 vrk, joten tämä oli vain valittu luku.
+           Seitsemän on kompromissi: kattaa yhden sääjakson, pysyy silti tuoreena. */
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=wind_speed_10m,wind_direction_10m&past_days=7&forecast_days=1&wind_speed_unit=ms&timezone=auto`;
         const res = await fetch(url);
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
@@ -10551,7 +10603,7 @@ lataa(eka);
         const speeds = [];
         for (let i = 0; i < data.hourly.time.length; i++) {
           const t = new Date(data.hourly.time[i]);
-          if (t <= now && t >= new Date(now.getTime() - 3 * 86400000)) {
+          if (t <= now && t >= new Date(now.getTime() - 7 * 86400000)) {
             const v = data.hourly.wind_speed_10m[i];
             if (v !== null && v !== undefined) speeds.push(v);
           }
@@ -10559,11 +10611,70 @@ lataa(eka);
         if (speeds.length === 0) return;
         const maxWind = Math.max(...speeds);
         const avgWind = speeds.reduce((a, b) => a + b, 0) / speeds.length;
+        /* Kaksi vuorokautta erikseen: sekoittuminen on tuore ilmiö, ja viikon
+           takainen myrsky ei kerro tästä hetkestä samaa kuin eilinen. */
+        const tuoreet = [];
+        for (let i = 0; i < data.hourly.time.length; i++) {
+          const t2 = new Date(data.hourly.time[i]);
+          if (t2 <= now && t2 >= new Date(now.getTime() - 2 * 86400000)) {
+            const v2 = data.hourly.wind_speed_10m[i];
+            if (v2 !== null && v2 !== undefined) tuoreet.push(v2);
+          }
+        }
+        const maxTuore = tuoreet.length ? Math.max(...tuoreet) : maxWind;
 
         let mixText;
-        if (maxWind >= 8) mixText = "Viimeisen 3 vrk aikana kova tuuli — vesi todennäköisesti hyvin sekoittunut, harppauskerros voi olla heikko/hajonnut.";
-        else if (maxWind >= 5) mixText = "Viimeisen 3 vrk aikana kohtalaista tuulta — jonkin verran sekoittumista.";
-        else mixText = "Viimeiset 3 vrk melko tyyniä — kerrostuneisuus on päässyt vahvistumaan.";
+        if (maxTuore >= 8) mixText = "Viimeisen 2 vrk aikana kova tuuli (" + maxTuore.toFixed(0) + " m/s) — vesi todennäköisesti sekoittunut, harppauskerros voi olla heikko tai hajonnut.";
+        else if (maxTuore >= 5) mixText = "Viimeisen 2 vrk aikana kohtalaista tuulta (" + maxTuore.toFixed(0) + " m/s) — jonkin verran sekoittumista.";
+        else if (maxWind >= 8) mixText = "Viimeiset 2 vrk tyyniä, mutta viikon sisällä kova tuuli (" + maxWind.toFixed(0) + " m/s) — kerrostuneisuus rakentuu uudelleen.";
+        else mixText = "Viikko melko tyyntä (huippu " + maxWind.toFixed(0) + " m/s, keskiarvo " + avgWind.toFixed(1) + " m/s) — kerrostuneisuus on päässyt vahvistumaan.";
+
+        /* Mitattu pintaveden trendi kertoo saman asian toisesta suunnasta:
+           tuuli on syy, lämpötilan käyttäytyminen on seuraus. Kun molemmat
+           sanovat samaa, arvio on vahvempi kuin kumpikaan yksin. */
+        try {
+          if (typeof sykeLampoTrendi !== 'undefined' && sykeLampoTrendi) {
+            const T = sykeLampoTrendi;
+            /* MITTAUSPISTEEN SIJAINTI RATKAISEE TULKINNAN — 18.9.2026.
+               Aiempi versio luki pudotuksen suoraan kumpuamiseksi. Se on oikein
+               vain jos asema sattuu olemaan tuulen puoleisella rannalla. Tuuli
+               kallistaa harppauskerrosta: yläpuolella kylmä nousee, alapuolella
+               lämmin kasautuu. Siksi
+                 - pudotus YLÄTUULEN asemalla  = kumpuaminen siinä kohdassa
+                 - pudotus ALATUULEN asemalla  = koko järvi viilenee tai sekoittuu
+                 - EI pudotusta alatuulen asemalla EI tarkoita ettei kumpua:
+                   se voi kummuta vastarannalla jota asema ei näe.
+               Tuulen suunta otetaan mitatusta havainnosta, ei ennusteesta. */
+            const tuuliSuunta = (typeof fmiTuuli === 'object' && fmiTuuli && fmiTuuli.wd != null)
+              ? fmiTuuli.wd : (omLatest ? omLatest.windDir : null);
+            const puoli = (typeof asemanPuoli === 'function') ? asemanPuoli(tuuliSuunta) : null;
+            const asemaNimi = (typeof sykeAsema === 'object' && sykeAsema) ? sykeAsema.nimi : 'mittauspiste';
+
+            if (T.pudotus2vrk !== null && T.pudotus2vrk <= -1.5) {
+              mixText += " Pintavesi on pudonnut " + Math.abs(T.pudotus2vrk).toFixed(1)
+                + " °C kahdessa vuorokaudessa (" + asemaNimi + ")";
+              if (puoli === 'ylatuuli') {
+                mixText += " — asema on tuulen puoleisella rannalla, eli tämä on juuri se kohta"
+                        +  " jossa kumpuaminen näkyy. Vahva merkki.";
+              } else if (puoli === 'alatuuli') {
+                mixText += " — asema on alatuulen rannalla, jossa lämmin vesi pikemminkin kasautuu."
+                        +  " Pudotus siellä viittaa koko järven viilenemiseen tai sekoittumiseen,"
+                        +  " ei paikalliseen kumpuamiseen.";
+              } else {
+                mixText += " — viittaa kumpuamiseen tai sekoittumiseen.";
+              }
+            } else if (puoli === 'alatuuli' && maxTuore >= 5) {
+              /* Tämä on se tapaus jonka yksi mittari piilottaa kokonaan. */
+              mixText += " HUOM: " + asemaNimi + " on alatuulen rannalla, jossa lämmin päällysvesi"
+                      +  " kasautuu. Tasainen tai nouseva lämpötila siellä EI sulje pois kumpuamista"
+                      +  " vastarannalla — päinvastoin, kallistuva harppauskerros tuottaa molemmat"
+                      +  " yhtä aikaa.";
+            } else if (T.suunta === 'viilenee' && maxTuore < 5) {
+              mixText += " Pintavesi viilenee tasaisesti (" + T.kulma.toFixed(2)
+                + " °C/vrk) ilman kovaa tuulta — normaalia syyskiertoa.";
+            }
+          }
+        } catch (e) { /* lämpötilatrendiä ei ole, tuuliteksti riittää */ }
 
         recentWindSummary = mixText;
         laskeTuuliKertyma(data, now);
@@ -12034,6 +12145,46 @@ lataa(eka);
        vanhimmasta uusimpaan. */
     let sykeLampoSarja = [];
     let sykeLampoTrendi = null;
+    let sykeAsema = null;          // { nimi, lat, lon } — mittauspisteen sijainti
+
+    /* Mittauspisteen asema tuuleen nähden. Palauttaa 'ylatuuli' (asema on sillä
+       rannalla mistä tuulee — siellä kylmä nousee), 'alatuuli' (asema on sillä
+       rannalla johon tuuli puhaltaa — siellä lämmin kasautuu) tai 'sivussa'.
+       Vertailu tehdään järven keskipisteestä katsoen. */
+    function asemanPuoli(tuuliSuunta) {
+      if (!sykeAsema || tuuliSuunta == null || isNaN(tuuliSuunta)) return null;
+      /* Keskipiste karttamaskista jos aallonkorkeuskartta on avattu — se on
+         järven todellinen painopiste. Muuten currentLocation, joka voi olla
+         kilometrejä sivussa; silloin tulos on suuntaa-antava ja se sanotaan. */
+      let kesk = null, keskLahde = 'kotiranta';
+      if (typeof window.akJarvenKeskipiste === 'function') {
+        const km = window.akJarvenKeskipiste();
+        if (km) { kesk = km; keskLahde = 'kartta'; }
+      }
+      if (!kesk && currentLocation) {
+        kesk = { lat: currentLocation.sykeLat ?? currentLocation.lat,
+                 lon: currentLocation.sykeLon ?? currentLocation.lon };
+      }
+      if (!kesk) return null;
+      /* Suuntima keskipisteestä asemalle. */
+      const la1 = kesk.lat * Math.PI/180, la2 = sykeAsema.lat * Math.PI/180;
+      const dlo = (sykeAsema.lon - kesk.lon) * Math.PI/180;
+      const y = Math.sin(dlo) * Math.cos(la2);
+      const x = Math.cos(la1)*Math.sin(la2) - Math.sin(la1)*Math.cos(la2)*Math.cos(dlo);
+      let suuntima = (Math.atan2(y, x) * 180/Math.PI + 360) % 360;
+      /* Tuulen suunta on se MISTÄ tuulee, eli yläpuoli on samassa suunnassa. */
+      let ero = Math.abs(((suuntima - tuuliSuunta + 540) % 360) - 180);
+      /* Aseman etäisyys keskipisteestä: jos asema on käytännössä keskellä,
+         puolta ei voi määrittää eikä pidäkään. */
+      const km = Math.hypot((sykeAsema.lat - kesk.lat)*111.3, (sykeAsema.lon - kesk.lon)*50.4);
+      if (km < 1.5) return 'keskella';
+      /* Jos keskipiste on arvattu kotirannasta, raja pidetään tiukempana:
+         väärä keskipiste kääntää suuntiman helposti 20–30 astetta. */
+      const raja = (keskLahde === 'kartta') ? 60 : 45;
+      if (ero <= raja) return 'ylatuuli';
+      if (ero >= 180 - raja) return 'alatuuli';
+      return 'sivussa';
+    }
 
     function laskeLampoTrendi(sarja) {
       if (!sarja || sarja.length < 3) return null;
@@ -12336,6 +12487,85 @@ function suljeLajiLaatikko(){
   var k = document.getElementById('lajiLaatikko'); if(k) k.classList.remove('auki');
 }
 setInterval(paivitaVesilla, 60000);
+
+/* ===== SALAMAHAVAINNOT =====
+   FMI:n salamadata on erillinen tallennettu kysely. Se palauttaa iskut
+   koordinaatteineen ja aikoineen; sovellus laskee niistä lähimmän etäisyyden
+   ja sen onko rintama lähestymässä (vertailu 30 min puoliskoissa).
+
+   VAROVAINEN TOTEUTUS: en ole voinut varmistaa kyselyn tarkkaa nimeä tästä
+   ympäristöstä käsin. Jos nimi on väärä, FMI palauttaa virhe-XML:n — se
+   käsitellään ja kerrotaan käyttäjälle sen sijaan että sivu hajoaisi.
+   Tämä ei myöskään korvaa silmiä eikä ukkosen kuuloa: 30/30-sääntö (salaman
+   ja jyrinän väli alle 30 s = suojaan, ja 30 min viimeisen jyrinän jälkeen)
+   on yhä se joka pätee veneessä. */
+let salamaHaettu = 0;
+async function haeSalamat(){
+  const el = document.getElementById('salamaTila');
+  if(!el) return;
+  const nyt = Date.now();
+  if(nyt - salamaHaettu < 60000){ return; }   // ei jauheta kerran minuutissa
+  salamaHaettu = nyt;
+  el.textContent = 'Haetaan…';
+
+  const lat = (currentLocation && currentLocation.lat) || 63.14378;
+  const lon = (currentLocation && currentLocation.lon) || 23.53885;
+  const d = 1.0, dl = 2.0;   // noin 110 km pohjois-etelä, 100 km itä-länsi
+  const alku = new Date(nyt - 60*60*1000).toISOString().slice(0,19) + 'Z';
+  const url = 'https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature'
+    + '&storedquery_id=fmi::observations::lightning::simple'
+    + '&bbox=' + (lon-dl).toFixed(2) + ',' + (lat-d).toFixed(2) + ','
+               + (lon+dl).toFixed(2) + ',' + (lat+d).toFixed(2)
+    + '&starttime=' + alku;
+  try {
+    const r = await fetch(url, { cache:'no-store' });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const txt = await r.text();
+    if(/ExceptionReport|ExceptionText/i.test(txt)){
+      el.textContent = 'Salamahaku ei ole käytettävissä (rajapinta hylkäsi kyselyn).';
+      return;
+    }
+    const xml = new DOMParser().parseFromString(txt, 'application/xml');
+    const el2 = xml.getElementsByTagNameNS('*','BsWfsElement');
+    const iskut = [];
+    for(let i=0;i<el2.length;i++){
+      const pos = el2[i].getElementsByTagNameNS('*','pos')[0];
+      const aika = el2[i].getElementsByTagNameNS('*','Time')[0];
+      if(!pos) continue;
+      const o = pos.textContent.trim().split(/\s+/).map(Number);
+      if(isNaN(o[0])||isNaN(o[1])) continue;
+      const km = Math.hypot((o[0]-lat)*111.3, (o[1]-lon)*111.3*Math.cos(lat*Math.PI/180));
+      iskut.push({ km: km, t: aika ? new Date(aika.textContent).getTime() : nyt });
+    }
+    /* Sama isku tulee useana rivinä (eri parametrit), joten karsitaan
+       lähes samat aika-paikka-parit. */
+    const uniikit = [];
+    iskut.forEach(function(x){
+      if(!uniikit.some(function(y){ return Math.abs(y.t-x.t)<1000 && Math.abs(y.km-x.km)<0.3; }))
+        uniikit.push(x);
+    });
+    if(!uniikit.length){
+      el.textContent = 'Ei salamahavaintoja 100 km säteellä viimeisen tunnin aikana.';
+      return;
+    }
+    const lahin = Math.min.apply(null, uniikit.map(function(x){ return x.km; }));
+    const vanha = uniikit.filter(function(x){ return nyt-x.t > 30*60*1000; });
+    const tuore = uniikit.filter(function(x){ return nyt-x.t <= 30*60*1000; });
+    const lahinVanha = vanha.length ? Math.min.apply(null, vanha.map(function(x){ return x.km; })) : null;
+    const lahinTuore = tuore.length ? Math.min.apply(null, tuore.map(function(x){ return x.km; })) : null;
+    let suunta = '';
+    if(lahinVanha !== null && lahinTuore !== null){
+      if(lahinTuore < lahinVanha - 5) suunta = ' — lähestyy';
+      else if(lahinTuore > lahinVanha + 5) suunta = ' — loittonee';
+    }
+    const vari = lahin < 15 ? 'var(--hard-red)' : (lahin < 40 ? 'var(--amber)' : 'var(--muted)');
+    el.innerHTML = '<span style="color:' + vari + '; font-weight:700;">'
+      + uniikit.length + ' salamaa tunnin sisällä, lähin ' + lahin.toFixed(0) + ' km' + suunta + '</span>'
+      + (lahin < 15 ? '<br><span style="color:var(--hard-red);">Maihin. 30/30-sääntö: alle 30 s salaman ja jyrinän välillä tarkoittaa että ollaan iskualueella.</span>' : '');
+  } catch(e){
+    el.textContent = 'Salamahaku ei onnistunut: ' + e.message;
+  }
+}
 </script>
 
 
