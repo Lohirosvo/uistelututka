@@ -950,7 +950,7 @@ body{padding-bottom:66px}
 #vesillaPaneeli .vaihda{background:none;border:1px solid var(--line);color:var(--muted);
   border-radius:20px;padding:6px 14px;font-size:12px;letter-spacing:.08em;
   text-transform:uppercase;cursor:pointer}
-#vesillaSyvyys{font-family:'JetBrains Mono',monospace;font-size:62px;font-weight:800;
+#vesillaSyvyys{font-family:'JetBrains Mono',monospace;font-size:46px;font-weight:800;
   line-height:1;color:var(--amber);margin:10px 0 2px}
 #vesillaSyvyys small{font-size:22px;color:var(--muted);font-weight:600}
 #vesillaSelite{font-size:13px;color:var(--muted);line-height:1.5}
@@ -1021,6 +1021,17 @@ body{padding-bottom:66px}
   </div>
 </div>
 
+
+<!-- MALLIN OSUVUUS — lisätty 18.9.2026. Loki tallentaa jokaiselle kalalle sekä
+     toteutuneen syvyyden että mallin ennusteen, mutta niitä ei ole koskaan
+     verrattu kuin rivi kerrallaan. Yksi rivi on kohinaa; kymmenen riviä kertoo
+     onko malli systemaattisesti pielessä. Tämä on ainoa Lappajärvi-kohtainen
+     aineisto mitä on olemassa, ja se on omassa puhelimessa. -->
+<div class="card" id="malliOsuvuus">
+  <h2>Mallin osuvuus</h2>
+  <p class="hint" id="osuvuusTila">Lasketaan saalislokista.</p>
+  <div id="osuvuusTaulu"></div>
+</div>
 <div id="lajiLaatikko" aria-hidden="true">
   <div class="tausta" onclick="suljeLajiLaatikko()"></div>
   <div class="paneeli">
@@ -9636,10 +9647,12 @@ lataa(eka);
         if (!isNaN(val)) d = Math.min(d, val);
       }
 
-      let bias = 0;
-      if (wind === 'foam') bias += 1.5 * tuuliKerroin();
-      if (wind === 'hard') bias += 1;
-      if (light === 'cloudy') bias += 1.5;
+      /* Valoperäiset erikseen: niistä otetaan suurin, ei summa. */
+      let bias = valoBias([
+        wind === 'foam' ? 1.5 * tuuliKerroin() : 0,
+        wind === 'hard' ? 1 : 0,
+        light === 'cloudy' ? 1.5 : 0
+      ]);
       if (a.pressure === 'falling') bias += 1;
       if (a.pressure === 'stable') d += 1;
       if (a.windside === 'windward') d -= 1.5;
@@ -9709,10 +9722,11 @@ lataa(eka);
         if (!isNaN(val) && t !== undefined && t >= 16) d = Math.min(d, val);
       }
 
-      let bias = 0;
-      if (wind === 'foam') bias += 1 * tuuliKerroin();
-      if (wind === 'hard') bias += 0.5;
-      if (light === 'cloudy') bias += 1;
+      let bias = valoBias([
+        wind === 'foam' ? 1 * tuuliKerroin() : 0,
+        wind === 'hard' ? 0.5 : 0,
+        light === 'cloudy' ? 1 : 0
+      ]);
       d = Math.max(0.5, d - bias * 0.4);
       if (currentLocation.maxDepth) d = Math.min(d, currentLocation.maxDepth - 0.5);
       return d;
@@ -9772,14 +9786,16 @@ lataa(eka);
         d = activeBaitDepth + 2;
       }
 
-      let bias = 0;
-      if (wind === 'foam') bias += 1.5 * tuuliKerroin();
-      if (wind === 'hard') bias += 2.5;
-      if (light === 'cloudy') bias += 2;
-
-      if (Math.abs(hour - cachedSunData.rise) <= 1.5 || Math.abs(hour - cachedSunData.set) <= 1.5) {
-        bias += 1.5;
-      }
+      /* Hämärä on nimenomaan valoa, joten se kuuluu samaan ryhmään eikä
+         lisäykseksi sen päälle. */
+      const hamara = (Math.abs(hour - cachedSunData.rise) <= 1.5
+                   || Math.abs(hour - cachedSunData.set) <= 1.5) ? 1.5 : 0;
+      let bias = valoBias([
+        wind === 'foam' ? 1.5 * tuuliKerroin() : 0,
+        wind === 'hard' ? 2.5 : 0,
+        light === 'cloudy' ? 2 : 0,
+        hamara
+      ]);
 
       if (a.clarity !== undefined) {
         if (a.clarity <= 2) bias += 1.5;
@@ -12282,6 +12298,24 @@ lataa(eka);
       return 'midsummer';
     }
 
+    /* VALOBIASIEN KASAUTUMINEN — korjattu 18.9.2026.
+       Biasit laskettiin yhteen: aallokko + pilvisyys + hämärä. Ne kaikki
+       kuvaavat SAMAA asiaa, veden valomäärää, joten summaaminen laskee saman
+       vaikutuksen kahdesti tai kolmesti. Hannun tapauksessa kolme
+       samansuuntaista säätä siirsi kuhaa 1,6 metriä, ja kaksi niistä oli valoa.
+
+       Nyt valoperäisistä otetaan SUURIN, ei summa. Se on sama periaate jolla
+       aallonkorkeudessa käytetään rajoittavaa tekijää: pimein tekijä määrää,
+       eikä pimeys kasaudu lisäämällä pimeitä asioita päällekkäin.
+       Paine on eri mekanismi ja pysyy erillisenä lisäyksenä.
+
+       Kerroin 0,4 jätetään ennalleen: sille ei ole lähdettä, mutta sen
+       muuttaminen samalla kertaa tekisi vaikutuksen mahdottomaksi erottaa. */
+    function valoBias(osat){
+      const v = osat.filter(function(x){ return typeof x === 'number' && x > 0; });
+      return v.length ? Math.max.apply(null, v) : 0;
+    }
+
     function autoFillTemp() {
       if (answers.temp !== undefined) return;
       const dateStr = document.getElementById('tripDate').value;
@@ -12393,7 +12427,7 @@ lataa(eka);
 
   var JAKO = {
     vesilla:   ['vesillaPaneeli','speedMonitorSection'],
-    raportit:  ['result']
+    raportit:  ['result','malliOsuvuus']
     /* loput -> suunnittelu */
   };
   var RUUDUT = [
@@ -12447,6 +12481,7 @@ lataa(eka);
     });
     try{ localStorage.setItem('uistelututka_ruutu', id); }catch(e){}
     if(id === 'vesilla' && typeof paivitaVesilla === 'function') paivitaVesilla();
+    if(id === 'raportit' && typeof laskeOsuvuus === 'function') laskeOsuvuus();
     window.scrollTo(0,0);
   }
   var alku = 'suunnittelu';
@@ -12503,9 +12538,18 @@ function paivitaVesilla(){
   var h = new Date().getHours(), paras = L.tunnit[0], ero = 99;
   L.tunnit.forEach(function(r){ var e = Math.abs(r.t - h); if(e < ero){ ero = e; paras = r; } });
 
-  syv.innerHTML = paras.syvyys.toFixed(1).replace('.',',') + ' <small>m</small>';
-  document.getElementById('vesillaSelite').textContent =
+  /* Haarukka isolla, mallin piste pienellä sen alla. Piste ei katoa — se on
+     se luku jonka ympärille kattaus rakennetaan — mutta se ei enää esiinny
+     yksin, koska yksin se väittää liikaa. */
+  const hrk = (typeof syvyysHaarukka === 'function')
+    ? syvyysHaarukka(vesillaLajiValinta, paras.syvyys) : null;
+  syv.innerHTML = (hrk ? haarukkaTeksti(hrk) : paras.syvyys.toFixed(1).replace('.',','))
+    + ' <small>m</small>';
+  document.getElementById('vesillaSelite').innerHTML =
     (ero === 0 ? 'Tavoitesyvyys nyt klo ' + paras.t : 'Lähin laskettu tunti klo ' + paras.t)
+    + (hrk ? ' · mallin piste ' + hrk.keski.toFixed(1).replace('.',',') + ' m'
+         + ' <span style="color:var(--muted)">(±' + hrk.puolikas.toFixed(1).replace('.',',')
+         + ' m, ' + hrk.lahde + ')</span>' : '')
     + (p.nakosyvyys ? ' · näkösyvyys ' + p.nakosyvyys.toFixed(1).replace('.',',') + ' m' : '');
   var n = L.nopeus || [];
   document.getElementById('vesillaNopeus').textContent = n.length === 2
@@ -12613,6 +12657,139 @@ async function haeSalamat(){
   } catch(e){
     el.textContent = 'Salamahaku ei onnistunut: ' + e.message;
   }
+}
+
+/* ===== MALLIN OSUVUUS LOKISTA =====
+   Vertaa toteutunutta saalissyvyyttä siihen mitä malli ennusti samalle lajille.
+   Kaksi lukua, jotka kertovat eri asiaa:
+     HARHA = keskimääräinen etumerkillinen ero. Jos se on +3 m, malli ennustaa
+             systemaattisesti liian matalaa — se on korjattavissa.
+     HAJONTA = keskimääräinen itseisarvoinen ero. Se kertoo kuinka tarkka malli
+             on silloinkin kun harha on korjattu.
+   Harha on se joka kannattaa korjata; hajonta on se jota ei voi. */
+function laskeOsuvuus(){
+  const tila = document.getElementById('osuvuusTila');
+  const taulu = document.getElementById('osuvuusTaulu');
+  if(!tila || !taulu) return;
+  let lista = [];
+  try { lista = JSON.parse(localStorage.getItem(LS_SAALIS)) || []; } catch(e){ lista = []; }
+
+  const parit = [];
+  lista.forEach(function(s){
+    if(s.nollareissu) return;
+    const e = s.laji === 'jarvilohi' ? s.ennusteJarvilohi
+            : (s.laji === 'kuha' ? s.ennusteKuha
+            : (s.laji === 'muikku' ? s.ennusteMuikku : s.ennusteTaimen));
+    if(typeof s.syvyysM === 'number' && typeof e === 'number'){
+      parit.push({ laji: s.laji || '?', ero: s.syvyysM - e, toteuma: s.syvyysM,
+                   ennuste: e, aika: s.aika, vesiC: s.vesiC, kausi: s.kausi });
+    }
+  });
+
+  if(parit.length < 3){
+    tila.innerHTML = 'Vertailuun tarvitaan vähintään kolme kirjausta joissa on sekä '
+      + 'saalissyvyys että mallin ennuste. Nyt niitä on <strong>' + parit.length + '</strong>. '
+      + 'Kirjaa syvyys kala kiinni -napin jälkeen, niin tämä alkaa kertyä.';
+    taulu.innerHTML = '';
+    return;
+  }
+
+  const lajit = {};
+  parit.forEach(function(p){ (lajit[p.laji] = lajit[p.laji] || []).push(p); });
+
+  function tilastot(rivit){
+    const n = rivit.length;
+    const harha = rivit.reduce(function(a,r){ return a + r.ero; }, 0) / n;
+    const hajonta = rivit.reduce(function(a,r){ return a + Math.abs(r.ero); }, 0) / n;
+    const jarj = rivit.map(function(r){ return r.ero; }).sort(function(a,b){ return a-b; });
+    const mediaani = jarj[Math.floor(n/2)];
+    return { n: n, harha: harha, hajonta: hajonta, mediaani: mediaani };
+  }
+
+  let html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+    + '<tr style="color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase;">'
+    + '<th style="text-align:left;padding:4px 2px;">laji</th>'
+    + '<th style="text-align:right;">kaloja</th><th style="text-align:right;">harha</th>'
+    + '<th style="text-align:right;">hajonta</th></tr>';
+  Object.keys(lajit).sort().forEach(function(l){
+    const t = tilastot(lajit[l]);
+    const vari = Math.abs(t.harha) < 1 ? 'var(--cyan)' : (Math.abs(t.harha) < 2.5 ? 'var(--amber)' : 'var(--hard-red)');
+    html += '<tr style="border-top:1px solid var(--line);">'
+      + '<td style="padding:6px 2px;">' + l + '</td>'
+      + '<td style="text-align:right;font-family:\'JetBrains Mono\',monospace;">' + t.n + '</td>'
+      + '<td style="text-align:right;font-family:\'JetBrains Mono\',monospace;color:' + vari + ';">'
+      + (t.harha >= 0 ? '+' : '') + t.harha.toFixed(1) + ' m</td>'
+      + '<td style="text-align:right;font-family:\'JetBrains Mono\',monospace;color:var(--muted);">'
+      + t.hajonta.toFixed(1) + ' m</td></tr>';
+  });
+  html += '</table>';
+
+  const kaikki = tilastot(parit);
+  let tulkinta;
+  if(kaikki.n < 8){
+    tulkinta = '<strong>' + kaikki.n + ' kalaa</strong> — liian vähän johtopäätöksiin, mutta suunta näkyy jo.';
+  } else if(Math.abs(kaikki.harha) < 1){
+    tulkinta = 'Malli osuu keskimäärin oikeaan (harha ' + kaikki.harha.toFixed(1)
+      + ' m). Hajonta ' + kaikki.hajonta.toFixed(1) + ' m on se tarkkuus jolla se toimii.';
+  } else {
+    tulkinta = 'Malli ennustaa systemaattisesti <strong>'
+      + (kaikki.harha > 0 ? 'liian matalaa' : 'liian syvää') + '</strong>: kalat ovat olleet keskimäärin '
+      + Math.abs(kaikki.harha).toFixed(1) + ' m ' + (kaikki.harha > 0 ? 'syvemmällä' : 'matalammalla')
+      + ' kuin ennuste. Se on korjattavissa. Hajonta ' + kaikki.hajonta.toFixed(1)
+      + ' m jää jäljelle sittenkin.';
+  }
+  tila.innerHTML = tulkinta;
+  taulu.innerHTML = html
+    + '<p class="hint" style="margin-top:8px;">Harha = keskimääräinen etumerkillinen ero '
+    + '(toteuma miinus ennuste). Hajonta = keskimääräinen poikkeama suuntaan katsomatta. '
+    + 'Harhan voi korjata mallista, hajontaa ei.</p>';
+}
+
+/* ===== SYVYYS HAARUKKANA =====
+   Malli antoi pisteen: "2,80 m". Kaksi desimaalia on tarkkuuslupaus jota malli
+   ei pysty pitämään — se nojaa taulukoihin, valomalliin ja biaseihin, joista
+   yksikään ei ole mitattu tästä järvestä. Kun kala tuli 9 metristä ja malli
+   sanoi 3,4 m, virhe oli mallissa mutta harha syntyi esitystavasta: piste
+   näyttää mittaukselta.
+
+   HAARUKAN LEVEYS EI OLE ARVAUS. Se otetaan ensisijaisesti saalislokista:
+   keskimääräinen itseisarvoinen poikkeama on juuri se hajonta jolla malli on
+   tähän asti osunut. Jos kirjauksia on alle kahdeksan, käytetään oletusta ja
+   se sanotaan ääneen. Leveys ei kapene alle 0,8 m eikä leviä yli 4 m: kapeampi
+   olisi sama tarkkuuslupaus uudessa muodossa, leveämpi ei ohjaisi mihinkään. */
+const HAARUKKA_OLETUS = { kuha: 2.0, taimen: 1.5, jarvilohi: 1.5, muikku: 1.0, hauki: 1.5 };
+
+function syvyysHaarukka(laji, d){
+  if(typeof d !== 'number' || isNaN(d)) return null;
+  let puolikas = HAARUKKA_OLETUS[laji] || 1.5;
+  let lahde = 'mallin oletus';
+  try {
+    const lista = JSON.parse(localStorage.getItem(LS_SAALIS)) || [];
+    const erot = [];
+    lista.forEach(function(x){
+      if(x.nollareissu || x.laji !== laji) return;
+      const e = laji === 'jarvilohi' ? x.ennusteJarvilohi
+              : (laji === 'kuha' ? x.ennusteKuha
+              : (laji === 'muikku' ? x.ennusteMuikku : x.ennusteTaimen));
+      if(typeof x.syvyysM === 'number' && typeof e === 'number') erot.push(Math.abs(x.syvyysM - e));
+    });
+    if(erot.length >= 8){
+      puolikas = erot.reduce(function(a,b){ return a+b; }, 0) / erot.length;
+      lahde = 'mitattu ' + erot.length + ' kalasta';
+    }
+  } catch(e){ /* lokia ei ole, oletus kelpaa */ }
+  puolikas = Math.max(0.8, Math.min(4, puolikas));
+  return {
+    ala: Math.max(0.5, d - puolikas),
+    yla: d + puolikas,
+    keski: d,
+    puolikas: puolikas,
+    lahde: lahde
+  };
+}
+function haarukkaTeksti(h){
+  if(!h) return '–';
+  return h.ala.toFixed(1).replace('.',',') + '–' + h.yla.toFixed(1).replace('.',',');
 }
 </script>
 
