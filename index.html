@@ -972,6 +972,13 @@ body{padding-bottom:66px}
       </div>
       <p class="hint" id="nopeusHalytysTila" style="margin-top:6px;">Käynnistä mittari, niin näet hälytyksen tilan tässä.</p>
 
+      <!-- VETOKESKIARVO — lisätty 17.9.2026. Hetkellinen nopeus kohisee eikä kerro
+           mitä oikeasti vedettiin; viiden minuutin keskiarvo kertoo. Vetosuunta on
+           kirjallisuudessa oma tekijänsä: sama paikka eri suuntaan ajettuna on eri
+           veto, koska viehe kulkee eri tavalla aaltoon ja tuuleen nähden. -->
+      <p class="hint" id="vetoKeskiarvo" style="margin-top:2px; font-family:'JetBrains Mono',monospace;
+         font-size:13px; color:var(--cyan);"></p>
+
       <p class="hint" id="speedStatus" style="margin-top:0px;"></p>
 
       <!-- PWA-ASENNUS -->
@@ -6293,28 +6300,89 @@ lataa(eka);
       btn.textContent = "Pysäytä mittari";
       btn.classList.add('selected');
       statusEl.textContent = "Etsitään GPS-signaalia...";
+      nopeusOtos = []; ylityksia = 0; alituksia = 0;
+      vetoPuskuri = []; vetoEdellinen = null;
 
       speedWatchId = navigator.geolocation.watchPosition(
         (pos) => {
-          let speedMs = pos.coords.speed;
+          /* KORJATTU 17.9.2026 — väärät nopeushälytykset järvellä.
+             Hälytys katsoi yhtä yksittäistä GPS-mittausta ilman suodatusta.
+             Kolme vikaa, jotka kaikki tuottivat hälytyksen vaikka vauhti oli
+             kohdallaan (Lowrance näytti oikein, koska se tasoittaa):
+               1. ei tasoitusta — puhelimen nopeudessa on ±0,5–1 km/h kohinaa,
+                  joten 4,8 km/h piikkasi yli 5,0 rajan
+               2. pos.coords.accuracy haettiin mutta ei käytetty
+               3. varalaskenta kahdesta sijainnista: 10 m hyppy sekunnissa = 36 km/h
+             Nyt: huono tarkkuus hylätään, varalaskenta vaatii pidemmän välin ja
+             järkevän tuloksen, ja hälytys katsoo mediaania viidestä. */
+          var TARKKUUS_RAJA = 30;     // m — tätä huonompi mittaus ei kerro nopeudesta
+          var VARA_MIN_S    = 3;      // s — lyhyemmästä välistä ei laskea nopeutta
+          var VARA_MAX_KMH  = 25;     // km/h — tätä suurempi varalaskenta on hyppy
 
-          // Fallback: Jos selain ei osaa suoraan antaa nopeutta, lasketaan se koordinaattien muutoksesta
-          if (speedMs === null) {
-            if (lastPos) {
-              let dist = haversineDistMeters(lastPos.lat, lastPos.lon, pos.coords.latitude, pos.coords.longitude);
-              let timeDiff = (pos.timestamp - lastTime) / 1000;
-              speedMs = (timeDiff > 0) ? (dist / timeDiff) : 0;
-            } else {
-              speedMs = 0;
+          if (pos.coords.accuracy != null && pos.coords.accuracy > TARKKUUS_RAJA) {
+            statusEl.textContent = 'GPS epätarkka (' + pos.coords.accuracy.toFixed(0)
+              + ' m) — mittaus ohitettu';
+            return;
+          }
+
+          let speedMs = pos.coords.speed;
+          let laskettu = false;
+
+          if (speedMs === null || isNaN(speedMs)) {
+            /* Varalaskenta vain riittävän pitkältä väliltä, ja tulos hylätään jos
+               se on epäuskottava. Aiemmin tämä oli yleisin väärän hälytyksen syy. */
+            if (lastPos && lastTime) {
+              const dist = haversineDistMeters(lastPos.lat, lastPos.lon,
+                             pos.coords.latitude, pos.coords.longitude);
+              const dt = (pos.timestamp - lastTime) / 1000;
+              if (dt >= VARA_MIN_S) {
+                const v = dist / dt;
+                if (v * 3.6 <= VARA_MAX_KMH) { speedMs = v; laskettu = true; }
+              }
+            }
+            if (speedMs === null || isNaN(speedMs)) {
+              lastPos = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+              lastTime = pos.timestamp;
+              return;   // ei nopeutta tältä mittaukselta — ei myöskään hälytystä
             }
           }
 
-          lastPos = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-          lastTime = pos.timestamp;
+          if (laskettu || !lastPos) {
+            lastPos = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+            lastTime = pos.timestamp;
+          }
 
-          let speedKmh = speedMs * 3.6;
+          /* Mediaani viidestä: yksi kohinapiikki ei enää liikuta lukua lainkaan,
+             mutta todellinen muutos näkyy noin kolmessa sekunnissa. */
+          nopeusOtos.push(speedMs * 3.6);
+          if (nopeusOtos.length > 5) nopeusOtos.shift();
+          const jarj = nopeusOtos.slice().sort(function(a,b){ return a-b; });
+          let speedKmh = jarj[Math.floor(jarj.length/2)];
           disp.innerHTML = `${speedKmh.toFixed(1)} <span style="font-size:16px; color:var(--muted)">km/h</span>`;
           statusEl.textContent = `Päivitetty: ${new Date().toLocaleTimeString('fi-FI')} (Tarkkuus: ${pos.coords.accuracy.toFixed(0)}m)`;
+
+          /* Suunta: laitteen oma kurssi jos se on saatavilla ja vene liikkuu,
+             muuten laskettu kahden sijainnin välistä. Paikallaan GPS:n heading on
+             mielivaltainen, joten se kelpaa vain liikkeessä. */
+          let suunta = null;
+          if (pos.coords.heading != null && !isNaN(pos.coords.heading) && speedKmh > 1.5) {
+            suunta = pos.coords.heading;
+          } else if (vetoEdellinen) {
+            const d = haversineDistMeters(vetoEdellinen.lat, vetoEdellinen.lon,
+                        pos.coords.latitude, pos.coords.longitude);
+            if (d >= 8) {
+              const la1 = vetoEdellinen.lat*Math.PI/180, la2 = pos.coords.latitude*Math.PI/180;
+              const dlo = (pos.coords.longitude - vetoEdellinen.lon)*Math.PI/180;
+              const y = Math.sin(dlo)*Math.cos(la2);
+              const x = Math.cos(la1)*Math.sin(la2) - Math.sin(la1)*Math.cos(la2)*Math.cos(dlo);
+              suunta = (Math.atan2(y,x)*180/Math.PI + 360) % 360;
+              vetoEdellinen = { lat:pos.coords.latitude, lon:pos.coords.longitude };
+            }
+          } else {
+            vetoEdellinen = { lat:pos.coords.latitude, lon:pos.coords.longitude };
+          }
+          vetoPuskuri.push({ t: Date.now(), kmh: speedKmh, dir: suunta });
+          paivitaVetoKeskiarvo();
 
           checkSpeedAlerts(speedKmh);
           updateSlideDiverLiveDepth(speedKmh);
@@ -6372,6 +6440,56 @@ lataa(eka);
       );
     }
 
+    /* VIIDEN MINUUTIN VETOKESKIARVO.
+       Nopeus: aritmeettinen keskiarvo — kohina keskiarvoituu pois.
+       Suunta: EI aritmeettinen keskiarvo. Kulmilla 350° ja 10° keskiarvo olisi
+       180° eli täsmälleen väärä suunta. Siksi suunnat lasketaan yksikkövektorien
+       summana ja tulos otetaan sen kulmasta (ns. ympyräkeskiarvo). Hajonta
+       kertoo kuinka suoraan on ajettu: R lähellä ykköstä = suora veto. */
+    let vetoPuskuri = [];             // {t, kmh, dir}
+    let vetoEdellinen = null;         // sijainti josta suunta lasketaan
+    const VETO_IKKUNA_MS = 5*60*1000;
+
+    function paivitaVetoKeskiarvo(){
+      const el = document.getElementById('vetoKeskiarvo');
+      if(!el) return;
+      const raja = Date.now() - VETO_IKKUNA_MS;
+      while(vetoPuskuri.length && vetoPuskuri[0].t < raja) vetoPuskuri.shift();
+      /* Paikallaan olo ei kuulu vetokeskiarvoon: se vetäisi sekä nopeuden että
+         suunnan harhaan tauon ajan. */
+      const v = vetoPuskuri.filter(function(r){ return r.kmh > 1.0; });
+      if(v.length < 5){
+        el.textContent = 'Vetokeskiarvo kertyy… (' + v.length + '/5 mittausta)';
+        return;
+      }
+      const kmh = v.reduce(function(a,r){ return a + r.kmh; }, 0) / v.length;
+      const kesto = Math.round((v[v.length-1].t - v[0].t)/1000);
+      let txt = kesto >= 270 ? '5 min' : Math.round(kesto/60*10)/10 + ' min';
+      txt += ': ' + kmh.toFixed(1).replace('.',',') + ' km/h';
+
+      const suunnat = v.filter(function(r){ return r.dir != null; });
+      if(suunnat.length >= 5){
+        let sx = 0, sy = 0;
+        suunnat.forEach(function(r){
+          const a = r.dir * Math.PI/180;
+          sx += Math.sin(a); sy += Math.cos(a);
+        });
+        let kulma = Math.atan2(sx/suunnat.length, sy/suunnat.length) * 180/Math.PI;
+        if(kulma < 0) kulma += 360;
+        const R = Math.sqrt(sx*sx + sy*sy)/suunnat.length;   // 1 = suora, 0 = pyörii
+        const S = ['P','KO','I','KA','E','LO','L','LU'][Math.round(kulma/45)%8];
+        txt += ' · veto ' + Math.round(kulma) + '° ' + S
+             + (R >= 0.95 ? ' suora' : R >= 0.75 ? ' loiva kaarre' : ' mutkittelee');
+      }
+      el.textContent = txt;
+    }
+
+    /* Nopeusotos mediaania varten ja peräkkäisten ylitysten laskuri. */
+    let nopeusOtos = [];
+    let ylityksia = 0, alituksia = 0;
+    const HYSTEREESI = 0.3;   // km/h — rajan pitää ylittyä selvästi, ei 0,1:llä
+    const PERAKKAIN  = 3;     // mittausta — kertapiikki ei riitä hälytykseen
+
     function checkSpeedAlerts(currentSpeed) {
       const now = Date.now();
       const minS = parseFloat(document.getElementById('minSpeedLimit').value);
@@ -6401,17 +6519,20 @@ lataa(eka);
 
       if (jaahdytysJaljella > 0) return; // Jäähdyttely, ettei huuda päällekkäin
 
-      // HANA! Jos vauhti tippuu liikaa (mutta vene on selvästi liikkeessä yli 1 km/h)
-      if (!isNaN(minS) && currentSpeed < minS && currentSpeed > 1.0) {
+      /* HYSTEREESI JA PERÄKKÄISYYS. Raja pitää ylittyä 0,3 km/h:lla ja kolmella
+         peräkkäisellä mittauksella. Yksittäinen kohinapiikki ei enää huuda, ja
+         rajan tuntumassa ajaminen ei aiheuta sarjaa hälytyksiä. */
+      const alle = !isNaN(minS) && currentSpeed < (minS - HYSTEREESI) && currentSpeed > 1.0;
+      const yli  = !isNaN(maxS) && currentSpeed > (maxS + HYSTEREESI);
+      alituksia = alle ? alituksia + 1 : 0;
+      ylityksia = yli  ? ylityksia + 1 : 0;
+
+      if (alituksia >= PERAKKAIN) {
         playAlertSound('hanaa');
-        lastAlertTime = now;
-        alertCooldown = 11000; // 10 sekunnin herätyskello + 1 sekunnin varmuus
-      }
-      // HIMMAA! Jos vauhti kasvaa yli sallitun rajan
-      else if (!isNaN(maxS) && currentSpeed > maxS) {
+        lastAlertTime = now; alertCooldown = 11000; alituksia = 0;
+      } else if (ylityksia >= PERAKKAIN) {
         playAlertSound('himmaa');
-        lastAlertTime = now;
-        alertCooldown = 16000; // 15 sekunnin sireeni + 1 sekunnin varmuus
+        lastAlertTime = now; alertCooldown = 16000; ylityksia = 0;
       }
     }
     // --- /UUSI: GPS NOPEUSMITTARI LOGIIKKA ---
