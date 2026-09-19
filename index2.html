@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#061018">
+<title>Uistelututka</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   UISTELUTUTKA — UUSI RUNKO. Vaihe 1, 13.9.2026
+   ============================================================
+   ERILLINEN TIEDOSTO TARKOITUKSELLA. Vanha index.html jää pystyyn ja
+   toimivaksi koko siirron ajan. Kalastuskausi on kesken; rikkinäinen
+   sovellus vesillä on pahempi ongelma kuin kaksi tiedostoa hetken aikaa.
+
+   PERIAATE: yksi ikkuna = yksi päätös.
+     48 h        lähdenkö          VALMIS
+     12-6 h      minne ja millä    siirretään päivän suunnitelmasta
+     lähtöhetki  onko muuttunut    vaatii eilisen ennusteen talteen
+     vesillä     mitä nyt          karsitaan nykyisestä
+     muut        loput             siirretään sellaisenaan
+
+   SIIRTOJÄRJESTYS JA MITÄ KUKIN VAATII on kirjattu jokaisen tyhjän
+   ikkunan sisään, jotta seuraava vaihe ei ala arvailusta.
+
+   AVAUTUMINEN: GPS ratkaisee. Liikkuva vene -> Vesillä, muuten 48 h.
+   Kellonajasta ei voi päätellä oletko lähdössä; arvaus joka avaa väärän
+   ikkunan on ärsyttävämpi kuin kiinteä oletus.
+   ============================================================ */
+
+:root{
+  --meri-900:#061018; --meri-800:#0a1a24; --meri-700:#0f2836;
+  --ruudukko:rgba(94,200,229,.07);
+  --viiva:rgba(122,170,190,.28); --viiva-vahva:rgba(122,170,190,.55);
+  --teksti:#e8f2f6; --himmea:#7c95a3; --paperi:#c8d8e0;
+  --syvan:#5ec8e5; --merkki:#ffc247; --vaara:#ff6b5e; --ok:#5fd6a4;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden}
+body{
+  background:var(--meri-900);color:var(--teksti);
+  font-family:'Barlow Condensed',system-ui,sans-serif;font-size:17px;
+  background-image:
+    linear-gradient(var(--ruudukko) 1px,transparent 1px),
+    linear-gradient(90deg,var(--ruudukko) 1px,transparent 1px),
+    linear-gradient(rgba(94,200,229,.035) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(94,200,229,.035) 1px,transparent 1px);
+  background-size:96px 96px,96px 96px,24px 24px,24px 24px;
+}
+.lehti{position:fixed;inset:0;display:flex;flex-direction:column}
+.otsikkopalkki{
+  flex:none;padding:10px 14px 8px;border-bottom:1px solid var(--viiva-vahva);
+  background:linear-gradient(180deg,rgba(6,16,24,.97),rgba(6,16,24,.82));
+  display:flex;align-items:flex-end;justify-content:space-between;gap:10px;
+}
+.lehtinro{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;
+  color:var(--himmea);text-transform:uppercase}
+.lehtinimi{font-size:23px;font-weight:700;letter-spacing:.04em;line-height:1}
+.lehtinimi em{font-style:normal;color:var(--syvan)}
+.koordinaatti{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--himmea);
+  text-align:right;line-height:1.5;white-space:nowrap}
+
+.ruudut{flex:1;display:flex;overflow:hidden;will-change:transform}
+.ruutu{flex:0 0 100%;height:100%;overflow-y:auto;overflow-x:hidden;
+  padding:14px 14px 24px;scrollbar-width:none}
+.ruutu::-webkit-scrollbar{display:none}
+
+.leima{display:inline-flex;border:1.5px solid currentColor;border-radius:3px;
+  padding:3px 9px;margin-bottom:12px;font-family:'JetBrains Mono',monospace;
+  font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
+  transform:rotate(-.6deg)}
+.leima.sininen{color:var(--syvan)} .leima.keltainen{color:var(--merkki)}
+.leima.punainen{color:var(--vaara)} .leima.vihrea{color:var(--ok)}
+
+.arvo{font-family:'JetBrains Mono',monospace;font-weight:700;line-height:1.1}
+.selite{font-size:13px;color:var(--himmea);margin-top:6px;
+  text-transform:uppercase;letter-spacing:.1em}
+
+.jakso{display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+  padding:9px 0;border-bottom:1px dotted var(--viiva)}
+.jakso:last-child{border-bottom:none}
+.jakso .kello{font-family:'JetBrains Mono',monospace;font-size:19px;font-weight:700;
+  white-space:nowrap;color:var(--ok)}
+
+.mitat{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--viiva);
+  border:1px solid var(--viiva);margin:12px 0}
+.mitta{background:var(--meri-800);padding:10px 11px}
+.mitta .nimi{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;
+  color:var(--himmea);text-transform:uppercase;margin-bottom:4px}
+.mitta .luku{font-family:'JetBrains Mono',monospace;font-size:21px;font-weight:700;line-height:1}
+.mitta .luku small{font-size:11px;color:var(--himmea);font-weight:400;margin-left:3px}
+
+.este{border:1.5px solid var(--vaara);border-radius:4px;padding:11px 12px;margin:12px 0;
+  font-size:14.5px;line-height:1.45;color:var(--paperi)}
+.este b{color:var(--vaara);display:block;font-size:12px;letter-spacing:.1em;
+  text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:5px}
+
+details.peruste{border-top:1px solid var(--viiva);margin-top:9px;padding-top:8px}
+details.peruste summary{list-style:none;cursor:pointer;font-family:'JetBrains Mono',monospace;
+  font-size:10px;letter-spacing:.12em;color:var(--himmea);text-transform:uppercase;
+  display:flex;align-items:center;gap:6px}
+details.peruste summary::-webkit-details-marker{display:none}
+details.peruste summary::before{content:'▸';font-size:11px}
+details.peruste[open] summary::before{content:'▾'}
+details.peruste .sisalto{font-size:14.5px;line-height:1.5;color:var(--paperi);margin-top:8px}
+details.peruste .sisalto p{margin:0 0 8px}
+.lahde{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--himmea);letter-spacing:.06em}
+.lahde.m{color:var(--ok)} .lahde.a{color:var(--merkki)}
+
+.jana{display:flex;height:30px;margin:12px 0 4px;border:1px solid var(--viiva);
+  border-radius:3px;overflow:hidden}
+.jana i{flex:1;min-width:0}
+.janaSelite{display:flex;justify-content:space-between;
+  font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--himmea)}
+
+select{width:100%;padding:11px 10px;font-size:16px;font-family:inherit;
+  background:var(--meri-800);color:var(--teksti);border:1px solid var(--viiva-vahva);
+  border-radius:4px;-webkit-appearance:none;appearance:none;margin-bottom:4px}
+.valintaOhje{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--himmea);
+  letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px}
+
+.marginaali{font-family:'JetBrains Mono',monospace;font-size:9.5px;line-height:1.6;
+  color:var(--himmea);letter-spacing:.05em;border-top:1px solid var(--viiva);
+  margin-top:18px;padding-top:10px}
+
+/* Tyhjä ikkuna: kertoo mitä siihen tulee ja mitä se vaatii. */
+.kesken{border:1px dashed var(--viiva-vahva);border-radius:6px;padding:16px;
+  font-size:15px;line-height:1.55;color:var(--paperi)}
+.kesken h4{margin:0 0 8px;font-size:17px;font-weight:700;color:var(--teksti)}
+.kesken ul{margin:8px 0 0;padding-left:18px}
+.kesken li{margin-bottom:5px}
+.kesken .vaatii{font-family:'JetBrains Mono',monospace;font-size:10px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--merkki);
+  margin-top:12px;display:block}
+
+.pillit{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.pillit button{background:var(--meri-800);border:1px solid var(--viiva-vahva);
+  border-radius:999px;padding:7px 13px;color:var(--himmea);font-family:inherit;
+  font-size:15px;cursor:pointer}
+.pillit button.on{background:var(--merkki);border-color:var(--merkki);
+  color:#10202c;font-weight:700}
+.iso-nappi{display:block;width:100%;margin-top:14px;padding:16px;background:transparent;
+  border:1.5px solid var(--merkki);border-radius:4px;color:var(--merkki);
+  font-family:inherit;font-size:19px;font-weight:700;letter-spacing:.08em;
+  text-transform:uppercase;cursor:pointer}
+nav{flex:none;display:grid;grid-template-columns:repeat(5,1fr);
+  border-top:1px solid var(--viiva-vahva);background:rgba(6,16,24,.97);
+  padding-bottom:env(safe-area-inset-bottom)}
+nav button{background:none;border:none;padding:9px 2px 11px;cursor:pointer;
+  color:var(--himmea);font-family:'JetBrains Mono',monospace;font-size:9px;
+  letter-spacing:.08em;text-transform:uppercase;display:flex;flex-direction:column;
+  align-items:center;gap:4px;border-top:2px solid transparent;margin-top:-1px}
+nav button b{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:.02em}
+nav button.on{color:var(--syvan);border-top-color:var(--syvan)}
+</style>
+</head>
+<body>
+
+<div class="lehti">
+  <div class="otsikkopalkki">
+    <div>
+      <div class="lehtinro" id="lehtinro">Lehdet 47.031 · 44.092 · 71.111</div>
+      <div class="lehtinimi">Uistelu<em>tutka</em></div>
+    </div>
+    <div class="koordinaatti">63°08′N 023°32′E<br><span id="kello">–</span></div>
+  </div>
+
+  <div class="ruudut" id="ruudut">
+
+    <!-- ============ 1. 48 H ============ -->
+    <section class="ruutu">
+      <div class="leima sininen">48 h · lähdenkö ja minne</div>
+      <div id="venePillit" class="pillit"></div>
+      <select id="vene" onchange="valitseVene(this.value)" style="display:none"></select>
+      <div class="valintaOhje" id="veneOhje">Vene · viimeksi käytetyt</div>
+      <div id="sisalto48">
+        <div class="arvo" style="font-size:26px;color:var(--himmea)">Haetaan ennustetta…</div>
+      </div>
+    </section>
+
+    <!-- ============ 2. 12–6 H ============ -->
+    <section class="ruutu">
+      <div class="leima keltainen">12–6 h · minne ja millä</div>
+      <select id="jarvi" onchange="valitseJarvi(this.value)"></select>
+      <div class="valintaOhje">Järvi · valinta muistetaan</div>
+      <div id="lajit" class="pillit"></div>
+      <div id="sisalto12"></div>
+    </section>
+
+    <!-- ============ 3. LÄHTÖHETKI ============ -->
+    <section class="ruutu">
+      <div class="leima punainen">Lähtöhetki · onko muuttunut</div>
+      <div class="kesken">
+        <h4>Näyttää vain erot</h4>
+        Ei toista eilistä analyysiä. Kertoo mikä poikkeaa siitä mitä viimeksi luki,
+        ja on muuten hiljainen.
+        <ul>
+          <li>Tuuli nyt vastaan ennuste</li>
+          <li>Sumuriski nyt</li>
+          <li>Vedenkorkeus ja veneenlasku</li>
+          <li>DepthRider-profiilin syöttö</li>
+          <li>Release the Dragon</li>
+        </ul>
+        <span class="vaatii">Vaatii: edellisen ennusteen tallennuksen vertailua varten</span>
+      </div>
+    </section>
+
+    <!-- ============ 4. VESILLÄ ============ -->
+    <section class="ruutu">
+      <div class="leima vihrea">Vesillä</div>
+      <div class="kesken">
+        <h4>Märät kädet, yksi käsi kaasulla</h4>
+        Ei tekstiä, ei kirjoittamista, isot kohteet. Kala kiinni -nappi kattaa
+        puolet ruudusta, loput on kolme lukua.
+        <ul>
+          <li>Kala kiinni · kirjaa nyt, täydennä illalla</li>
+          <li>Nopeus, tavoitesyvyys, pohja</li>
+          <li>Sataako</li>
+          <li>Vapautusohje kun syvyys on syötetty</li>
+        </ul>
+        <span class="vaatii">Vaatii: karsintaa, ei uutta logiikkaa</span>
+      </div>
+    </section>
+
+    <!-- ============ 5. MUUT ============ -->
+    <section class="ruutu">
+      <div class="leima sininen">Muut</div>
+      <div class="kesken">
+        <h4>Kaikki mitä ei tarvita päätöshetkellä</h4>
+        Siirretään sellaisenaan, omina avattavina osioinaan.
+        <br><br>Vene ja järvi EIVÄT ole täällä: vene vaihtuu trailerin ja
+        kaverien veneiden mukana, ja järvi on vapaa valinta. Molemmat ovat
+        päätöksiä eivätkä asetuksia, joten ne asuvat päätösikkunoissa.
+        <ul>
+          <li>Saalisloki ja CSV-vienti</li>
+          <li>Aallonkorkeuskartta · sumuriski · Windy · sadetutka</li>
+          <li>Valovyöhyke</li>
+          <li>SYKE-syvyysanalyysi ja omat merkinnät</li>
+          <li>Viehekalibrointi ja mallin säätimet</li>
+          <li>Kyselyn vastaukset · mallin lähtöarvot</li>
+        </ul>
+        <span class="vaatii">Vaatii: siirto, ei muutoksia</span>
+      </div>
+      <div style="border:1px solid var(--viiva);border-radius:6px;padding:12px 14px;margin-top:14px">
+        <div class="valintaOhje" style="margin-bottom:10px">Asetukset</div>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:15px;line-height:1.4">
+          <input type="checkbox" id="kaikkiJarvet" onchange="asetaKaikkiJarvet(this.checked)"
+                 style="width:20px;height:20px;accent-color:var(--syvan);flex:none">
+          <span>Näytä kaikki järvet<div class="selite" style="margin-top:2px;letter-spacing:.04em">
+            Oletuksena vertaillaan vain alle 200 km päässä olevat</div></span>
+        </label>
+
+        <div class="valintaOhje" style="margin:16px 0 8px">Lähtöaika · minuutteja</div>
+        <div id="lahtoKentat"></div>
+        <div class="selite" style="margin-top:8px;letter-spacing:.04em">
+          Yhteensä <span id="lahtoYht">–</span> min kotoa vesille. Vaiheet erikseen,
+          jotta näkee mistä karsia kun on kiire.</div>
+      </div>
+
+      <div class="marginaali">
+        Vaihe 1 · 13.9.2026<br>
+        Vanha index.html on yhä käytössä ja toimii.<br>
+        Datalähteet: Ilmatieteen laitos (CC BY 4.0)
+      </div>
+    </section>
+
+  </div>
+
+  <nav id="navi">
+    <button class="on" onclick="nayta(0,this)"><b>48h</b>ennakko</button>
+    <button onclick="nayta(1,this)"><b>12h</b>suunnittelu</button>
+    <button onclick="nayta(2,this)"><b>0h</b>lähtö</button>
+    <button onclick="nayta(3,this)"><b>▲</b>vesillä</button>
+    <button onclick="nayta(4,this)"><b>···</b>muut</button>
+  </nav>
+</div>
+
+<script>
+"use strict";
+
+/* ---------- PAIKAT ---------- */
+const PAIKAT = [
+  { nimi:'Lappajärvi', tunnus:'47.031', lat:63.14378, lon:23.53885, maxDepth:36, areaKm2:142 },
+  { nimi:'Hirvijärven tekoallas', tunnus:'44.092', lat:62.775, lon:23.011, maxDepth:7.5, areaKm2:16.5 },
+  { nimi:'Inarijärvi', tunnus:'71.111', lat:68.919, lon:27.733, maxDepth:92, areaKm2:1040 }
+];
+// Ei yhtä valittua järveä: 48 h vertaa kaikki. Kunkin laskenta saa paikan
+// parametrina, jotta samat funktiot toimivat millä tahansa järvellä.
+
+/* ---------- VENEET ----------
+   Raja = merkitsevä aallonkorkeus jossa uistelu lakkaa olemasta mielekästä.
+   Kalastajan omia arvioita omasta kalustostaan — parasta saatavilla olevaa
+   tietoa, mutta arvioita. Kymmenes vene on yksi rivi, myös valikkoon. */
+const VENEET = {
+  paijan470:{ nimi:'Päijän 470/471 · sähkö 55 lbs', raja:0.30,
+    syy:'Sähkömoottorin työntövoima loppuu vastatuulessa ja kevyt soutuvene sortaa hallitsemattomasti.' },
+  paijan520:{ nimi:'Päijän 520 · 10 hv', raja:0.40,
+    syy:'Kapea ja matalalaitainen runko kyntää terävää aaltoa, ja veden hörppäämisen riski kasvaa voimakkaasti.' },
+  sunbuster:{ nimi:'Sun Buster · 30 hv', raja:0.50,
+    syy:'Lyhyt, tylppä ja tasapohjainen alumiinirunko hakkaa aaltoihin rajusti ja roiskevedet kastelevat kuskin.' },
+  ph500:{ nimi:'Pilothouse 500 · 80 hv', raja:0.60,
+    syy:'Tylppä keula pamahtelee terävään aaltoon, ja korkea keulapainoinen hytti tekee ohjailusta sivutuulessa taistelua.' },
+  dorado100:{ nimi:'Silver Dorado · 100 hv', raja:0.60,
+    syy:'Etupainoisen HT-veneen keula alkaa rynkyttää plaanissa, ja kate kerää sivutuulta häiriten autopilotin työtä.' },
+  faster525:{ nimi:'Faster 525 CC', raja:0.70,
+    syy:'Keskipulpetti pitää suunnan, mutta lyhyt 5,2 metrin avorunko ei riitä ylittämään teräviä aaltoja ilman kovaa hakkautumista.' },
+  shark580:{ nimi:'Silver Shark CC 580 · 100 hv', raja:0.80,
+    syy:'Pidempi runko halkoo vettä loistavasti, mutta matalassa avoveneessä fyysinen rynkytys ja roiskevedet käyvät lopulta liian raskaaksi.' },
+  falconc7:{ nimi:'Falcon C 7 · 115 hv', raja:0.90,
+    syy:'Raskas ja pitkä runko kestää merta, mutta lähestyttäessä metriä suuren hytin tuulipinta-ala tekee veneen hallinnasta raastavaa.' },
+  beason630:{ nimi:'Beason 630 WA · 150 hv+', raja:1.20,
+    syy:'Syvä 24-asteinen V-pohja ja valtava massa sietävät jyrkkääkin keliä; raja tulee vastaan lähinnä kalastuksen fyysisessä mielekkyydessä.' }
+};
+const LS_VENE = 'uistelututka_vene';
+const HAMARA_KIRISTYS = 0.15;   // [A] valittu luku, ei mitattu
+let vene = 'ph500';
+let ennuste = [];
+
+/* ============================================================
+   LÄHTÖAIKA — liitetty 16.9.2026
+   ============================================================
+   Perustuu erilliseen Lähtöaikalaskuri.html-tiedostoon. Kolme asiaa muutettu:
+
+   1. KESÄAIKA LASKETAAN OIKEIN. Alkuperäinen antoi DST:n koko maalis- ja
+      lokakuulle, vaikka vaihto on kuukauden viimeisenä sunnuntaina. Tässä
+      aikavyöhyke tulee selaimelta, joten sitä ei tarvitse laskea lainkaan —
+      eikä UTC+2 ole kovakoodattu, joten laskuri toimii muuallakin.
+
+   2. AAMUHÄMÄRÄ LASKETAAN, EI ARVATA. Alkuperäinen käytti kiinteää
+      30 minuuttia ennen auringonnousua. Todellinen siviilihämärä kestää
+      Lappajärvellä elokuussa noin 45 min ja kesäkuussa se ei lopu ollenkaan.
+      Tässä etsitään hetki jolloin aurinko nousee -6 asteen yli — sama
+      funktio jota koko ikkuna käyttää.
+
+   3. KOLME PÄIVÄÄ, EI YHTÄ. Lähtöpäätös tehdään usein edellisenä päivänä,
+      ja kaverin kanssa sopiminen vaatii ylihuomisen. 48 h -ikkuna laskee
+      jaksot valmiiksi, joten lähtöaika lasketaan jokaiselle.
+
+   Ajat ovat vaiheittaisia, jotta näkee mistä kokonaisaika koostuu ja voi
+   karsia oikeasta kohdasta kun on kiire. */
+const LS_LAHTO = 'uistelututka_lahtoajat';
+const LAHTO_OLETUS = { matka:60, tankkaus:15, lasku:20, valmistelu:10 };
+let lahtoajat = Object.assign({}, LAHTO_OLETUS);
+
+function lahtoYhteensa(){
+  return lahtoajat.matka + lahtoajat.tankkaus + lahtoajat.lasku + lahtoajat.valmistelu;
+}
+
+/* Ensimmäinen hetki jolloin aurinko on yli -6 asteen: siviilihämärän alku.
+   Haetaan minuutin tarkkuudella keskiyöstä eteenpäin. Jos aurinko ei laske
+   -6 asteen alle lainkaan (kesäkuu), palautetaan null ja lähtöaika lasketaan
+   jakson alusta. */
+function hamaranAlku(paiva, pk){
+  const d = new Date(paiva.getFullYear(), paiva.getMonth(), paiva.getDate(), 0, 0, 0);
+  let edellinen = auringonKorkeus(d, pk);
+  for(let m = 10; m <= 18*60; m += 10){
+    const t = new Date(d.getTime() + m*60000);
+    const k = auringonKorkeus(t, pk);
+    if(edellinen < -6 && k >= -6) return t;
+    edellinen = k;
+  }
+  return null;
+}
+
+/* Lähtöaika kotoa jaksolle. Jakso alkaa aikaisintaan siviilihämärässä, mutta
+   jos jakso alkaa myöhemmin (tuuli), lähdetään sen mukaan. */
+function lahtoaika(jakso, pk){
+  const hamara = hamaranAlku(jakso.alku, pk);
+  const vesille = (hamara && hamara > jakso.alku) ? hamara : jakso.alku;
+  return { vesille: vesille, kotoa: new Date(vesille.getTime() - lahtoYhteensa()*60000) };
+}
+
+function asetaLahtoaika(kentta, arvo){
+  const n = parseInt(arvo, 10);
+  if(isNaN(n) || n < 0) return;
+  lahtoajat[kentta] = n;
+  try { localStorage.setItem(LS_LAHTO, JSON.stringify(lahtoajat)); } catch(e){}
+  piirraLahtoKentat();
+  piirra48();
+}
+
+/* ---------- ETÄISYYSSUODATIN ----------
+   Vertailussa näytetään vain järvet joihin oikeasti lähtisi. 200 km on raja,
+   jonka yli päivän reissu ei ole reissu vaan matka — ja Inari Lappajärven
+   rinnalla teki vertailusta hyödyttömän.
+
+   LÄHTÖPISTE: laitteen sijainti jos lupa on jo myönnetty, muuten viimeksi
+   tallennettu, muuten kotijärvi. Lupaa ei kysytä tämän takia.
+
+   Asetuksissa on ruksi joka avaa kaikki — suodatin on oletus, ei sääntö. */
+const ETAISYYSRAJA_KM = 200;
+const LS_KOTI = 'uistelututka_koti';
+const LS_KAIKKI_JARVET = 'uistelututka_kaikki_jarvet';
+let koti = null;
+let naytaKaikkiJarvet = false;
+
+function etaisyysKm(a, b){
+  const R = 6371, r = Math.PI/180;
+  const dLat = (b.lat - a.lat)*r, dLon = (b.lon - a.lon)*r;
+  const x = Math.sin(dLat/2)**2
+    + Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.min(1, Math.sqrt(x)));
+}
+
+function kotiPiste(){
+  if(koti) return koti;
+  try {
+    const raw = localStorage.getItem(LS_KOTI);
+    if(raw){ koti = JSON.parse(raw); return koti; }
+  } catch(e){}
+  return PAIKAT[0];   // kotijärvi varalle
+}
+
+function jarvenEtaisyys(pk){ return etaisyysKm(kotiPiste(), pk); }
+
+/* Vertailtavat järvet. Valittu järvi on aina mukana, vaikka olisi kaukana —
+   jos olet päättänyt ajaa Inarille, sen keli kuuluu näyttää. */
+function vertailtavat(){
+  if(naytaKaikkiJarvet) return PAIKAT;
+  const lahella = PAIKAT.filter(p => jarvenEtaisyys(p) <= ETAISYYSRAJA_KM);
+  if(typeof jarvi === 'object' && jarvi && lahella.indexOf(jarvi) === -1) lahella.push(jarvi);
+  return lahella.length ? lahella : PAIKAT;
+}
+
+/* Sijainti talteen jos lupa on jo myönnetty. Ei kysytä uutta lupaa. */
+function paivitaKoti(){
+  if(!navigator.permissions || !navigator.geolocation) return;
+  navigator.permissions.query({ name:'geolocation' }).then(r => {
+    if(r.state !== 'granted') return;
+    navigator.geolocation.getCurrentPosition(p => {
+      koti = { lat:p.coords.latitude, lon:p.coords.longitude };
+      try { localStorage.setItem(LS_KOTI, JSON.stringify(koti)); } catch(e){}
+      hae();
+    }, () => {}, { maximumAge:3600000, timeout:8000 });
+  }).catch(() => {});
+}
+
+/* ---------- AURINKO ---------- */
+const D2R = Math.PI/180;
+function auringonKorkeus(d, pk){
+  const doy = Math.floor((d - new Date(d.getFullYear(),0,0))/86400000);
+  const h = d.getHours() + d.getMinutes()/60;
+  const tz = -d.getTimezoneOffset()/60;
+  const dec = 23.45*Math.sin(D2R*360*(284+doy)/365);
+  const B = D2R*360*(doy-81)/364;
+  const et = 9.87*Math.sin(2*B) - 7.53*Math.cos(B) - 1.5*Math.sin(B);
+  const aurAika = h + (4*(pk.lon - 15*tz) + et)/60;
+  const tunti = D2R*15*(aurAika-12);
+  const s = Math.sin(D2R*pk.lat)*Math.sin(D2R*dec)
+          + Math.cos(D2R*pk.lat)*Math.cos(D2R*dec)*Math.cos(tunti);
+  return Math.asin(Math.max(-1,Math.min(1,s)))/D2R;
+}
+
+/* ---------- AALLONKORKEUS ----------
+   Sama malli kuin aallonkorkeuskartassa, mutta ilman maskia: yksi luku
+   tunnille, järven pahin. Pyyhkäisymatka ympyräekvivalenttina pinta-alasta.
+   Kartta tekee suunnatun laskennan ja kertoo missä on suojaisaa; tämä
+   kertoo milloin kannattaa lähteä. Jos kaavoja muutetaan, molemmat. */
+function hs(U, tunteja, pk){
+  if(!(U > 0.5)) return 0;
+  const g = 9.81;
+  const L = 2*Math.sqrt(pk.areaKm2*1e6/Math.PI);
+  const syvyys = Math.min(12, pk.maxDepth);
+  const kesto = Math.pow(tunteja*3600*Math.pow(U,0.34)*Math.pow(g,0.33)/77.23, 1/0.67);
+  const F = Math.max(50, Math.min(L, kesto));
+  return Math.min(0.0016*Math.sqrt(g*F/(U*U))*U*U/g,
+                  0.283*(U*U/g)*Math.tanh(0.53*Math.pow(g*syvyys/(U*U),0.75)));
+}
+
+/* Raja tunnille. null = pimeä, ei lähdetä. Kiristys liukuva. */
+function raja(aika, pk){
+  const perus = VENEET[vene].raja;
+  const k = auringonKorkeus(aika, pk);
+  if(k < -6) return null;
+  if(k >= 10) return perus;
+  return perus - HAMARA_KIRISTYS*(1 - (k+6)/16);
+}
+
+/* Kelvolliset jaksot, ei ensimmäinen este. */
+function jaksot(ennuste, pk){
+  const ulos = []; let auki = null;
+  ennuste.forEach((t,i) => {
+    const r = raja(t.aika, pk);
+    const kelpaa = r !== null && t.hs <= r;
+    if(kelpaa && !auki) auki = { alku:t.aika, pahin:t.hs };
+    else if(kelpaa && auki) auki.pahin = Math.max(auki.pahin, t.hs);
+    if(!kelpaa && auki){ auki.loppu = ennuste[i-1].aika; ulos.push(auki); auki = null; }
+  });
+  if(auki){ auki.loppu = ennuste[ennuste.length-1].aika; ulos.push(auki); }
+  return ulos.filter(j => (j.loppu - j.alku)/3600000 >= 2);
+}
+
+function pieninRiittava(h){
+  const k = Object.keys(VENEET).filter(x => VENEET[x].raja >= h)
+    .sort((a,b) => VENEET[a].raja - VENEET[b].raja);
+  return k.length ? VENEET[k[0]].nimi : null;
+}
+
+const pad = n => String(n).padStart(2,'0');
+/* Lähtöaika tarvitsee minuutit — tunti ei riitä kun kokonaisaika on 105 min. */
+const aikaTxt = d => pad(d.getHours()) + ':' + pad(d.getMinutes());
+const kello = d => pad(d.getHours()) + ':00';
+function paivanNimi(d){
+  const n = new Date();
+  const e = Math.round((new Date(d.getFullYear(),d.getMonth(),d.getDate())
+          - new Date(n.getFullYear(),n.getMonth(),n.getDate()))/86400000);
+  return e===0?'Tänään':e===1?'Huomenna':e===2?'Ylihuomenna'
+       :['su','ma','ti','ke','to','pe','la'][d.getDay()];
+}
+const nro = x => x.toFixed(2).replace('.',',');
+
+/* ---------- PIIRTO ----------
+   KYSYMYS ON "KUMMALLE JÄRVELLE", EI VAIN "LÄHDENKÖ". Matala Hirvijärvi
+   kestää tuulta jossa iso Lappajärvi ei — sama tuuli antaa siellä noin
+   40 % matalamman aallon. Siksi ikkuna vertaa järvet ja nostaa parhaan
+   kärkeen sen sijaan että kysyisi järven etukäteen. */
+let tila = [];   // [{ paikka, ennuste, jaksot }]
+
+/* Paras järvi: se jolla on aikaisin alkava kelvollinen jakso. Tasapelissä
+   pidempi voittaa. Jos yhdelläkään ei ole jaksoa, palautetaan null. */
+function parasJarvi(){
+  const kelpaavat = tila.filter(t => t.jaksot.length);
+  if(!kelpaavat.length) return null;
+  /* Kolme kriteeriä järjestyksessä. Kevyellä tuulella kaikki järvet kelpaavat
+     ja rajoittava tekijä on pimeä, jolloin ensimmäiset kaksi menevät tasan —
+     silloin ratkaisee MARGINAALI eli kuinka paljon rajaan on varaa. Se on
+     oikea erotin, koska se kertoo kumpi kestää tuulen yltymisen. */
+  kelpaavat.sort((a,b) => {
+    const ae = a.jaksot[0].alku - b.jaksot[0].alku;
+    if(Math.abs(ae) > 3600000) return ae;
+    const pituus = (b.jaksot[0].loppu - b.jaksot[0].alku) - (a.jaksot[0].loppu - a.jaksot[0].alku);
+    if(Math.abs(pituus) > 3600000) return pituus;
+    return a.jaksot[0].pahin - b.jaksot[0].pahin;
+  });
+  return kelpaavat[0];
+}
+
+/* Suomen taivutus: 1 tunti, 2 tuntia. Pieni asia, mutta "1 tuntia" pistää
+   silmään joka kerta. */
+function tuntia(n){ return n + (n === 1 ? ' tunti' : ' tuntia'); }
+
+function piirra48(){
+  const box = document.getElementById('sisalto48');
+  const v = VENEET[vene];
+  if(!tila.length || tila.every(t => !t.ennuste.length)){
+    box.innerHTML = '<div class="arvo" style="font-size:26px;color:var(--merkki)">'
+      + 'Ennustetta ei saatu</div><div class="selite">Tarkista verkkoyhteys</div>';
+    return;
+  }
+
+  const paras = parasJarvi();
+  let paa;
+  if(!paras){
+    const matalin = Math.min.apply(null, tila.flatMap(t => t.ennuste.map(x => x.hs)));
+    const ehdotus = pieninRiittava(matalin);
+    paa = '<div class="arvo" style="font-size:27px;color:var(--vaara)">Ei kelvollista jaksoa</div>'
+      + '<div class="selite">Millään järvellä · '
+      + (ehdotus ? 'vaatisi vähintään ' + ehdotus : 'kahden vuorokauden sisällä') + '</div>';
+  } else {
+    const j = paras.jaksot[0];
+    const L = lahtoaika(j, paras.paikka);
+    paa = '<div class="arvo" style="font-size:30px;color:var(--ok)">' + paras.paikka.nimi + '</div>'
+      + '<div class="arvo" style="font-size:26px;color:var(--ok);margin-top:2px">'
+      + paivanNimi(j.alku) + ' ' + kello(j.alku) + '–' + kello(j.loppu) + '</div>'
+      + '<div class="selite">Pahin aalto jaksolla ' + nro(j.pahin) + ' m</div>'
+      /* Lähtöaika on päätös siinä missä järvikin — se kuuluu isolle. */
+      + '<div style="margin-top:12px;padding:11px 12px;border:1px solid var(--merkki);'
+      + 'border-radius:4px;display:flex;justify-content:space-between;align-items:baseline;gap:10px">'
+      + '<div><div class="selite" style="margin:0">Lähde kotoa</div>'
+      + '<div class="selite" style="margin-top:2px;letter-spacing:.04em">vesille '
+      + aikaTxt(L.vesille) + ' · ' + lahtoYhteensa() + ' min</div></div>'
+      + '<div class="arvo" style="font-size:30px;color:var(--merkki)">' + aikaTxt(L.kotoa)
+      + '</div></div>';
+  }
+
+  /* Järvivertailu: jokaiselta ensimmäinen jakso ja tuuli nyt. Tämä on ikkunan
+     ydin — vastaus on järven nimi, ei pelkkä kellonaika. */
+  const vertailu = tila.map(t => {
+    const paras2 = t.jaksot.length ? t.jaksot[0] : null;
+    const nyt = t.ennuste.length ? t.ennuste[0] : null;
+    const korosta = paras && t.paikka.nimi === paras.paikka.nimi;
+    return '<div class="jakso"' + (korosta ? ' style="background:rgba(95,214,164,.07)"' : '')
+      + '><div><span style="font-size:16px' + (korosta ? ';color:var(--ok);font-weight:700' : '') + '">'
+      + t.paikka.nimi + '</span>'
+      + '<div class="selite" style="margin-top:2px;letter-spacing:.04em">'
+      + (nyt ? Math.round(jarvenEtaisyys(t.paikka)) + ' km · aalto ' + nro(nyt.hs)
+              + ' m · tuuli ' + nyt.U.toFixed(0) + ' m/s'
+              + (paras2 ? ' · varaa ' + nro(VENEET[vene].raja - paras2.pahin) + ' m' : '')
+          : 'ei ennustetta')
+      + '</div></div><div class="kello"'
+      + (paras2 ? '' : ' style="color:var(--vaara);font-size:14px"') + '>'
+      + (paras2
+          /* Kaksi ensimmäistä jaksoa, ei vain yhtä. Kevyellä tuulella tämän
+             hetken ikkuna on kaikilla järvillä sama (pimeä rajoittaa), ja
+             ero syntyy vasta huomenna. Se ero on juuri se mitä ollaan
+             valitsemassa, joten se ei saa jäädä piiloon. */
+          ? t.jaksot.slice(0,3).map(j =>
+              '<div style="font-size:' + (j === paras2 ? '17' : '14') + 'px'
+              + (j === paras2 ? '' : ';color:var(--himmea);font-weight:400') + '">'
+              + paivanNimi(j.alku).slice(0,2).toLowerCase() + ' '
+              + kello(j.alku) + '–' + kello(j.loppu)
+              + ' <span style="color:var(--merkki);font-size:13px">→ '
+              + aikaTxt(lahtoaika(j, t.paikka).kotoa) + '</span></div>').join('')
+          : 'ei ikkunaa')
+      + '</div></div>';
+  }).join('');
+
+  /* Aikajana piirretään parhaasta järvestä, tai ensimmäisestä jos yhtään ei kelpaa. */
+  const jt = paras || tila.find(t => t.ennuste.length);
+  const jana = '<div class="jana">' + jt.ennuste.map(t => {
+      const r = raja(t.aika, jt.paikka);
+      const c = r === null ? 'rgba(255,255,255,.07)'
+        : t.hs <= r*0.7 ? 'var(--ok)' : t.hs <= r ? 'var(--merkki)' : 'var(--vaara)';
+      return '<i style="background:' + c + '" title="' + kello(t.aika) + ' · ' + nro(t.hs) + ' m"></i>';
+    }).join('') + '</div><div class="janaSelite"><span>' + jt.paikka.nimi + ' · '
+    + paivanNimi(jt.ennuste[0].aika) + ' ' + kello(jt.ennuste[0].aika) + '</span><span>'
+    + kello(jt.ennuste[jt.ennuste.length-1].aika) + '</span></div>';
+
+  /* Sumu tarkistetaan parhaasta järvestä — se on se jonne ollaan menossa. */
+  const sumutunnit = jt.ennuste.filter(t => t.T != null && t.Td != null
+    && (t.T - t.Td) < 1.0 && t.U < 3 && raja(t.aika, jt.paikka) !== null);
+  /* SUMU: KYNNYS NOSTETTU KAHTEEN TUNTIIN 15.9.2026.
+     Yksi tunti pimeän rajalla ei ole este vaan tilastollinen sattuma, ja iso
+     punainen laatikko siitä syö uskottavuuden koko varoitukselta. Kahden
+     tunnin kynnys erottaa oikean riskin kohinasta.
+
+     Lisäksi erotellaan MILLOIN: jos sumu osuu vasta jakson loppuun, se on
+     paluumatkan ongelma eikä lähtöeste. Ne vaativat eri toimenpiteen. */
+  const jaksonLoppu = paras ? paras.jaksot[0].loppu : null;
+  const sumuAlussa = sumutunnit.filter(t => !jaksonLoppu || t.aika < jaksonLoppu - 7200000);
+  const sumu = sumutunnit.length < 2 ? ''
+    : '<div class="este"' + (sumuAlussa.length ? '' : ' style="border-color:var(--merkki)"')
+      + '><b' + (sumuAlussa.length ? '' : ' style="color:var(--merkki)"') + '>Sumuriski · '
+      + (sumuAlussa.length ? 'erillinen este' : 'paluumatkalla') + '</b>'
+      + tuntia(sumutunnit.length) + ' ' + jt.paikka.nimi + '-ennusteessa, joissa lämpötilan ja '
+      + 'kastepisteen ero on alle asteen ja tuuli alle 3 m/s — ensimmäinen '
+      + paivanNimi(sumutunnit[0].aika).toLowerCase() + ' klo ' + kello(sumutunnit[0].aika) + '. '
+      + (sumuAlussa.length
+          ? 'Aallonkorkeus ei muutu tästä, mutta ilman tutkaa rannan löytäminen muuttuu arvailuksi.'
+          : 'Osuu jakson loppuun, joten se on paluumatkan asia: aja rantaan ennen sitä tai pysy tutulla rantaviivalla.')
+      + '</div>';
+
+  const mitat = '<div class="mitat">'
+    + '<div class="mitta"><div class="nimi">Veneen raja</div><div class="luku">'
+      + nro(v.raja) + '<small>m</small></div></div>'
+    + '<div class="mitta"><div class="nimi">Järviä</div><div class="luku">'
+      + tila.filter(t => t.jaksot.length).length + '<small>/ ' + tila.length + '</small></div></div>'
+    + '<div class="mitta"><div class="nimi">Ennuste</div><div class="luku">'
+      + (jt.ennuste.length) + '<small>h</small></div></div></div>';
+
+  const peruste =
+      '<details class="peruste"><summary>Veneen raja ja syy</summary><div class="sisalto">'
+    + '<p><strong>' + v.nimi + ' · raja ' + nro(v.raja) + ' m</strong></p><p>' + v.syy + '</p>'
+    + '<p class="lahde a">[A] Kalastajan oma arvio omasta kalustostaan</p></div></details>'
+    + '<details class="peruste"><summary>Miksi järvet eroavat</summary><div class="sisalto">'
+    + '<p>Aallonkorkeus riippuu tuulen lisäksi siitä kuinka pitkän matkan se saa vaikuttaa '
+    + 'ja kuinka syvää vesi on. Iso ja syvä järvi kasvattaa aallon täyteen mittaansa; '
+    + 'pieni ja matala leikkaa sen kahdesti — matka loppuu ja pohja rajoittaa.</p>'
+    + '<p>Siksi sama tuuli antaa Hirvijärvellä noin 40 % matalamman aallon kuin '
+    + 'Lappajärvellä. Kun iso järvi menee rajan yli, pieni voi olla yhä ajettava.</p>'
+    + '<p class="lahde a">[A] Aallonkorkeus: kalibroimaton arvio</p></div></details>'
+    + '<details class="peruste"><summary>Miksi hämärä kiristää rajaa</summary><div class="sisalto">'
+    + '<p>Aallokossa ajaminen perustuu siihen että aallot näkee etukäteen. Hämärässä ennakointi '
+    + 'katoaa ensin ja pimeässä kokonaan. Raja kiristyy liukuvasti auringon korkeuden mukaan, '
+    + 'ja pimeä aika rajataan pois. Aurinko lasketaan kullekin järvelle erikseen.</p>'
+    + '<p class="lahde a">[A] Kiristys 0,15 m on valittu luku</p></div></details>';
+
+  box.innerHTML = paa + sumu + vertailu + jana + mitat + peruste
+    + '<div class="marginaali">Haettu ' + kello(new Date()) + ' · ' + tila.length
+    + ' järveä' + (naytaKaikkiJarvet ? ' · suodatin pois'
+        : ' · alle ' + ETAISYYSRAJA_KM + ' km')
+    + (PAIKAT.length > tila.length && !naytaKaikkiJarvet
+        ? ' · ' + (PAIKAT.length - tila.length) + ' rajattu pois' : '')
+    + '<br>Datalähteet: Ilmatieteen laitos (CC BY 4.0)</div>';
+}
+
+/* ---------- FMI ----------
+   Haku per järvi, rinnakkain. Kolme pientä hakua on halvempaa kuin yksi iso,
+   eikä käyttäjä odota kolminkertaista aikaa. Jos yksi epäonnistuu, muut
+   toimivat silti — siksi jokainen catch palauttaa tyhjän eikä kaada muita. */
+function fmiUrl(pk){
+  return 'https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature'
+    + '&storedquery_id=fmi::forecast::harmonie::surface::point::simple'
+    + '&latlon=' + pk.lat + ',' + pk.lon
+    + '&parameters=Temperature,DewPoint,WindSpeedMS,WindDirection&timestep=60';
+}
+
+function haeJarvi(pk){
+  return fetch(fmiUrl(pk), { cache:'no-store' })
+    .then(r => r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status)))
+    .then(txt => {
+      const xml = new DOMParser().parseFromString(txt, 'application/xml');
+      const NS = 'http://xml.fmi.fi/schema/wfs/2.0';
+      const el = xml.getElementsByTagNameNS(NS, 'BsWfsElement');
+      if(!el.length) throw new Error('ei kohteita');
+      const hetket = new Map();
+      for(let i=0;i<el.length;i++){
+        const aika = el[i].getElementsByTagNameNS(NS,'Time')[0];
+        const nimi = el[i].getElementsByTagNameNS(NS,'ParameterName')[0];
+        const arvo = el[i].getElementsByTagNameNS(NS,'ParameterValue')[0];
+        if(!aika || !nimi || !arvo) continue;
+        const a = parseFloat(arvo.textContent);
+        if(isNaN(a)) continue;
+        const t = aika.textContent;
+        if(!hetket.has(t)) hetket.set(t, { aika:new Date(t) });
+        hetket.get(t)[nimi.textContent] = a;
+      }
+      const rivit = Array.from(hetket.values())
+        .filter(r => r.WindSpeedMS != null)
+        .sort((a,b) => a.aika - b.aika).slice(0,49);
+      return rivit.map((r,i) => {
+        let t = 1;
+        for(let k=i-1;k>=0;k--){
+          const ero = Math.abs(((rivit[k].WindDirection - r.WindDirection + 540) % 360) - 180);
+          if(ero > 45 || rivit[k].WindSpeedMS < 0.55*Math.max(r.WindSpeedMS,0.5)) break;
+          t++;
+        }
+        return { aika:r.aika, U:r.WindSpeedMS, dir:r.WindDirection,
+                 T:r.Temperature, Td:r.DewPoint, hs:hs(r.WindSpeedMS, t, pk) };
+      });
+    })
+    .catch(() => []);
+}
+
+function hae(){
+  Promise.all(vertailtavat().map(pk => haeJarvi(pk).then(e => ({
+    paikka: pk, ennuste: e, jaksot: e.length ? jaksot(e, pk) : []
+  })))).then(tulos => { tila = tulos; piirra48(); });
+}
+
+/* Venevalinnan muutos ei vaadi uutta hakua — vain jaksot lasketaan uudestaan. */
+function laskeJaksotUudelleen(){
+  tila = tila.map(t => ({ paikka:t.paikka, ennuste:t.ennuste,
+                          jaksot: t.ennuste.length ? jaksot(t.ennuste, t.paikka) : [] }));
+}
+
+/* ============================================================
+   12–6 H · MINNE JA MILLÄ
+   ============================================================
+   VAIHE 2 LUKEE VANHAN SOVELLUKSEN TUOTTAMAN PAKETIN, ei laske syvyyksiä
+   itse. Paketti on sama jonka "Lähetä TrollingProlle" kirjoittaa: kaikkien
+   lajien tavoitesyvyydet tunneittain, värit pintoineen ja näkösyvyys.
+
+   MIKSI NÄIN: syvyysmallit ovat vanhassa tiedostossa satoja rivejä
+   taulukoita ja lähdeviitteitä. Niiden kopioiminen tähän tekisi kaksi
+   mallia samasta asiasta — se on juuri se virhe jota olemme purkaneet koko
+   projektin ajan. Yksi laskee, toinen näyttää.
+
+   TÄMÄ ON VÄLIAIKAINEN: kun siirto etenee, mallit muuttavat tänne ja vanha
+   jää pois. Siihen asti index2 kertoo suoraan jos pakettia ei ole, eikä
+   arvaa mitään sen puolesta.
+
+   localStorage on jaettu, koska molemmat sivut ovat samassa originissa.
+   ============================================================ */
+const TP_PAKETTI = 'tp2_uistelututka_paketti';
+const LS_JARVI = 'uistelututka_jarvi';
+let jarvi = PAIKAT[0];
+let laji = 'taimen';
+
+function luePaketti(){
+  try {
+    const raw = localStorage.getItem(TP_PAKETTI);
+    if(!raw) return null;
+    const p = JSON.parse(raw);
+    return (p && p.lajit) ? p : null;
+  } catch(e){ return null; }
+}
+
+function valitseJarvi(t){
+  jarvi = PAIKAT.find(p => p.tunnus === t) || PAIKAT[0];
+  try { localStorage.setItem(LS_JARVI, jarvi.tunnus); } catch(e){}
+  piirra12();
+}
+function valitseLaji(k){ laji = k; piirra12(); }
+
+function piirra12(){
+  const box = document.getElementById('sisalto12');
+  const pillit = document.getElementById('lajit');
+  if(!box) return;
+
+  const p = luePaketti();
+  if(!p){
+    pillit.innerHTML = '';
+    box.innerHTML = '<div class="kesken"><h4>Suunnitelmaa ei ole</h4>'
+      + 'Tämä ikkuna lukee vanhan sovelluksen laskeman paketin: kaikkien lajien '
+      + 'tavoitesyvyydet tunneittain ja värit. Aja vanhassa sovelluksessa '
+      + '<strong>Lähetä TrollingProlle</strong> tai <strong>Release the Dragon</strong>, '
+      + 'niin paketti syntyy ja tämä ikkuna täyttyy.'
+      + '<span class="vaatii">Väliaikainen · mallit siirtyvät tänne myöhemmin</span></div>';
+    return;
+  }
+
+  const lajit = Object.keys(p.lajit);
+  if(lajit.indexOf(laji) === -1) laji = lajit[0];
+  pillit.innerHTML = lajit.map(k =>
+    '<button class="' + (k === laji ? 'on' : '') + '" onclick="valitseLaji(\'' + k + '\')">'
+    + p.lajit[k].nimi + '</button>').join('');
+
+  const L = p.lajit[laji];
+  const h = new Date().getHours();
+  const rivi = L.tunnit.length
+    ? L.tunnit.reduce((a,b) => Math.abs(b.t - h) < Math.abs(a.t - h) ? b : a)
+    : null;
+
+  if(!rivi){
+    box.innerHTML = '<div class="kesken">Paketissa ei ole tunteja tälle lajille.</div>';
+    return;
+  }
+
+  const ika = Math.round((Date.now() - new Date(p.luotu))/60000);
+  const ikaTxt = ika < 60 ? ika + ' min sitten' : Math.round(ika/60) + ' h sitten';
+  const vanha = ika > 240;
+
+  const paa = '<div class="arvo" style="font-size:44px;color:var(--merkki)">'
+    + nro(rivi.syvyys) + '<span style="font-size:22px;color:var(--himmea)"> m</span></div>'
+    + '<div class="selite">' + L.nimi + ' · tavoitesyvyys klo ' + pad(rivi.t) + '</div>';
+
+  const varit = (rivi.varit && rivi.varit.length)
+    ? '<div class="jakso"><div>Väri<div class="selite" style="margin-top:2px;letter-spacing:.04em">'
+      + rivi.varit.slice(0,3).map(v => v[1]).join(' · ') + '</div></div>'
+      + '<div class="kello" style="color:var(--merkki);font-size:16px">'
+      + rivi.varit[0][0] + '</div></div>'
+    : '';
+
+  /* Tapa seuraa syvyyttä samalla logiikalla kuin TrollingProssa: plaanari
+     lyijyllä 3,5 metriin, Dipsy 12:een, sen alle takila. */
+  const tapa = rivi.syvyys <= 1.5 ? 'Plaanari tai veneen takaa'
+    : rivi.syvyys <= 3.5 ? 'Plaanari + lyijypaino'
+    : rivi.syvyys <= 12 ? 'Dipsy' : 'Takila';
+  const kattaus = rivi.syvyys <= 1.5 ? 'Painopiste plaanareilla'
+    : rivi.syvyys <= 5 ? 'Dipsyt kärkeen, plaanarit ulommas'
+    : rivi.syvyys <= 12 ? 'Dipsyt matalilla asetuksilla, takila syvimmälle'
+    : 'Takilat kärkeen';
+
+  const rivit = '<div class="jakso"><div>Tapa<div class="selite" style="margin-top:2px;letter-spacing:.04em">'
+      + kattaus + '</div></div><div class="kello" style="font-size:16px">' + tapa + '</div></div>'
+    + varit
+    + '<div class="jakso"><div>Nopeus</div><div class="kello" style="font-size:17px">'
+      + nro(L.nopeus[0]) + '–' + nro(L.nopeus[1]) + ' km/h</div></div>'
+    + '<div class="jakso"><div>Näkösyvyys<div class="selite" style="margin-top:2px;letter-spacing:.04em">'
+      + (p.nakosyvyysLahde || 'lähde tuntematon') + '</div></div>'
+      + '<div class="kello" style="font-size:17px">' + nro(p.nakosyvyys) + ' m</div></div>';
+
+  /* Päivän käyrä: tunti ja syvyys, nykyinen korostettuna. */
+  const kayra = '<div class="jana" style="height:46px;align-items:flex-end;padding:3px">'
+    + L.tunnit.map(t => {
+        const maxS = Math.max.apply(null, L.tunnit.map(x => x.syvyys)) || 1;
+        const korkeus = Math.max(8, Math.round(38*t.syvyys/maxS));
+        const c = t.t === rivi.t ? 'var(--merkki)' : 'rgba(94,200,229,.4)';
+        return '<i style="align-self:flex-end;height:' + korkeus + 'px;background:' + c
+          + ';margin:0 1px" title="klo ' + pad(t.t) + ' · ' + nro(t.syvyys) + ' m"></i>';
+      }).join('')
+    + '</div><div class="janaSelite"><span>klo ' + pad(L.tunnit[0].t) + '</span>'
+    + '<span>syvyys päivän mittaan</span>'
+    + '<span>klo ' + pad(L.tunnit[L.tunnit.length-1].t) + '</span></div>';
+
+  const tuoreus = '<div class="marginaali">Paketti ' + (p.paikka || '—') + ' · ' + ikaTxt
+    + (vanha ? ' <span style="color:var(--merkki)">— vanha, aja analyysi uudelleen</span>' : '')
+    + '<br>Valittu järvi: ' + jarvi.nimi
+    + (p.paikka && p.paikka.indexOf(jarvi.nimi.split(' ')[0]) === -1
+       ? ' <span style="color:var(--vaara)">— paketti on eri järveltä</span>' : '')
+    + '</div>';
+
+  box.innerHTML = paa + rivit + kayra
+    + '<button class="iso-nappi" onclick="location.href=\'./index.html\'">'
+    + 'Avaa vanha sovellus</button>' + tuoreus;
+}
+
+function piirraLahtoKentat(){
+  const box = document.getElementById('lahtoKentat');
+  if(!box) return;
+  const kentat = [
+    ['matka', 'Matka kotoa rantaan'],
+    ['tankkaus', 'Tankkaus matkan varrella'],
+    ['lasku', 'Veneen lasku'],
+    ['valmistelu', 'Valmistelut ennen uistelua']
+  ];
+  box.innerHTML = kentat.map(k =>
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;'
+    + 'padding:7px 0;border-bottom:1px dotted var(--viiva)">'
+    + '<span style="font-size:15px">' + k[1] + '</span>'
+    + '<input type="number" min="0" step="5" value="' + lahtoajat[k[0]] + '" '
+    + 'onchange="asetaLahtoaika(\'' + k[0] + '\', this.value)" '
+    + 'style="width:74px;padding:7px;font-size:16px;font-family:inherit;text-align:right;'
+    + 'background:var(--meri-800);color:var(--teksti);border:1px solid var(--viiva-vahva);'
+    + 'border-radius:4px"></div>').join('');
+  const y = document.getElementById('lahtoYht');
+  if(y) y.textContent = lahtoYhteensa();
+}
+
+/* Suodattimen kytkin. Muutos hakee ennusteet uudelleen, koska rajatuille
+   järville ei ole haettu mitään — turha haku on turhempi kuin turha odotus. */
+function asetaKaikkiJarvet(paalla){
+  naytaKaikkiJarvet = !!paalla;
+  try { localStorage.setItem(LS_KAIKKI_JARVET, paalla ? '1' : '0'); } catch(e){}
+  hae();
+}
+
+/* ---------- NAVIGOINTI ---------- */
+const ruudut = document.getElementById('ruudut');
+let nyt = 0;
+function nayta(i, el){
+  nyt = i;
+  ruudut.style.transition = 'transform .28s cubic-bezier(.4,0,.2,1)';
+  ruudut.style.transform = 'translateX(' + (-i*100) + '%)';
+  document.querySelectorAll('#navi button').forEach(b => b.classList.remove('on'));
+  (el || document.querySelectorAll('#navi button')[i]).classList.add('on');
+}
+let x0 = null;
+ruudut.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; }, {passive:true});
+ruudut.addEventListener('touchend', e => {
+  if(x0 === null) return;
+  const d = e.changedTouches[0].clientX - x0;
+  if(Math.abs(d) > 60) nayta(Math.max(0, Math.min(4, nyt + (d < 0 ? 1 : -1))));
+  x0 = null;
+}, {passive:true});
+
+/* AVAUTUMINEN: GPS ratkaisee. Liikkuva vene -> Vesillä, muuten 48 h.
+   Kysytään vain jos lupa on jo myönnetty — sovelluksen avaaminen ei ole
+   syy pompauttaa lupaikkunaa. */
+function avaaOikeaIkkuna(){
+  if(!navigator.permissions || !navigator.geolocation) return;
+  navigator.permissions.query({ name:'geolocation' }).then(r => {
+    if(r.state !== 'granted') return;
+    navigator.geolocation.getCurrentPosition(p => {
+      const kmh = (p.coords.speed || 0) * 3.6;
+      if(kmh > 2) nayta(3);
+    }, () => {}, { maximumAge:60000, timeout:5000 });
+  }).catch(() => {});
+}
+
+/* ---------- KÄYNNISTYS ---------- */
+/* VENEVALINTA PILLEREINÄ — muutettu 13.9.2026.
+   Vene vaihtuu useammin kuin järvi: trailerilla mennään minne huvittaa, ja
+   kaverin vene tai oma soutuvene tarkoittaa täysin eri rajaa. Ero soutuveneen
+   0,30 ja Beasonin 1,20 metrin välillä on nelinkertainen, eli venevalinta
+   muuttaa koko vastauksen.
+
+   Siksi se ei ole asetus vaan päätös, ja siksi se on pillereinä eikä
+   pudotusvalikossa: laiturilla kaverin veneen vieressä yhdeksän rivin
+   valikko on hidas. Kolme viimeksi käytettyä näkyy suoraan, loput valikon
+   takana. Historia tallennetaan, joten lista muotoutuu käytön mukaan. */
+const LS_VENEET_VIIMEKSI = 'uistelututka_veneet_viimeksi';
+
+function veneHistoria(){
+  try {
+    const raw = localStorage.getItem(LS_VENEET_VIIMEKSI);
+    const lista = raw ? JSON.parse(raw) : [];
+    return lista.filter(k => VENEET[k]);
+  } catch(e){ return []; }
+}
+
+function merkitseKaytetyksi(k){
+  let h = veneHistoria().filter(x => x !== k);
+  h.unshift(k);
+  h = h.slice(0, 4);
+  try { localStorage.setItem(LS_VENEET_VIIMEKSI, JSON.stringify(h)); } catch(e){}
+}
+
+function piirraVenePillit(){
+  const box = document.getElementById('venePillit');
+  if(!box) return;
+  // Viimeksi käytetyt ensin, täydennetään pienimmillä jos historiaa ei ole
+  let nakyvat = veneHistoria();
+  if(nakyvat.indexOf(vene) === -1) nakyvat.unshift(vene);
+  const loput = Object.keys(VENEET)
+    .sort((a,b) => VENEET[a].raja - VENEET[b].raja)
+    .filter(k => nakyvat.indexOf(k) === -1);
+  nakyvat = nakyvat.slice(0,3);
+
+  const lyhyt = k => VENEET[k].nimi.split(' · ')[0];
+  box.innerHTML = nakyvat.map(k =>
+      '<button class="' + (k === vene ? 'on' : '') + '" onclick="valitseVene(\'' + k + '\')">'
+      + lyhyt(k) + ' <span style="opacity:.65">' + nro(VENEET[k].raja) + '</span></button>').join('')
+    + (loput.length ? '<button onclick="naytaKaikkiVeneet()">Muu vene ▾</button>' : '');
+
+  document.getElementById('veneOhje').textContent =
+    'Vene · raja ' + nro(VENEET[vene].raja) + ' m · ' + VENEET[vene].nimi;
+}
+
+function naytaKaikkiVeneet(){
+  const sel = document.getElementById('vene');
+  sel.style.display = 'block';
+  sel.focus();
+  if(sel.showPicker) { try { sel.showPicker(); } catch(e){} }
+}
+
+function valitseVene(k){
+  vene = k;
+  merkitseKaytetyksi(k);
+  try { localStorage.setItem(LS_VENE, k); } catch(e){}
+  document.getElementById('vene').style.display = 'none';
+  piirraVenePillit();
+  laskeJaksotUudelleen();
+  piirra48();
+}
+(function(){
+  try { const v = localStorage.getItem(LS_VENE); if(v && VENEET[v]) vene = v; } catch(e){}
+  const sel = document.getElementById('vene');
+  Object.keys(VENEET).sort((a,b) => VENEET[a].raja - VENEET[b].raja).forEach(k => {
+    const o = document.createElement('option');
+    o.value = k;
+    o.textContent = VENEET[k].nimi + ' · ' + nro(VENEET[k].raja) + ' m';
+    sel.appendChild(o);
+  });
+  sel.value = vene;
+  piirraVenePillit();
+
+  try {
+    const raw = localStorage.getItem(LS_LAHTO);
+    if(raw) lahtoajat = Object.assign({}, LAHTO_OLETUS, JSON.parse(raw));
+  } catch(e){}
+  piirraLahtoKentat();
+
+  try { naytaKaikkiJarvet = localStorage.getItem(LS_KAIKKI_JARVET) === '1'; } catch(e){}
+  const ruksi = document.getElementById('kaikkiJarvet');
+  if(ruksi) ruksi.checked = naytaKaikkiJarvet;
+
+  try { const j = localStorage.getItem(LS_JARVI);
+        const l = PAIKAT.find(p => p.tunnus === j); if(l) jarvi = l; } catch(e){}
+  const jsel = document.getElementById('jarvi');
+  PAIKAT.forEach(p => {
+    const o = document.createElement('option');
+    o.value = p.tunnus; o.textContent = p.nimi;
+    jsel.appendChild(o);
+  });
+  jsel.value = jarvi.tunnus;
+  piirra12();
+  document.getElementById('lehtinro').textContent =
+    'Lehdet ' + PAIKAT.map(p => p.tunnus).join(' · ');
+  hae();
+  paivitaKoti();
+  avaaOikeaIkkuna();
+  setInterval(() => {
+    const d = new Date();
+    document.getElementById('kello').textContent =
+      d.getDate() + '.' + (d.getMonth()+1) + '. ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }, 1000);
+})();
+</script>
+</body>
+</html>
