@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kivitippu 19.9.2026 · kisalaskin</title>
+<style>
+:root{--tausta:#0b1016;--kortti:#141d26;--viiva:rgba(140,175,200,.22);
+  --teksti:#eaf2f7;--himmea:#8ca6b8;--kulta:#f2b632;--ok:#3faa62;--vaara:#c9382e}
+*{box-sizing:border-box}
+body{margin:0;background:var(--tausta);color:var(--teksti);font-size:15px;
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  padding:10px;max-width:780px;margin:0 auto;line-height:1.5}
+h1{font-size:19px;margin:0 0 2px}
+h2{font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--himmea);
+  margin:18px 0 6px;font-weight:700}
+.kortti{background:var(--kortti);border:1px solid var(--viiva);border-radius:9px;
+  padding:12px;margin-bottom:10px}
+.alku{color:var(--himmea);font-size:13px;margin:0 0 10px}
+.iso{font-family:ui-monospace,monospace;font-size:30px;font-weight:800;color:var(--kulta)}
+.vrt{font-size:13px;color:var(--himmea)}
+select,input,button{font-size:16px;padding:9px;border-radius:6px;
+  border:1px solid var(--viiva);background:#0f1b24;color:var(--teksti)}
+button{background:#17384a;font-weight:700;cursor:pointer}
+button.paa{background:var(--kulta);color:#241a00;border-color:var(--kulta)}
+.rivi{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.rivi>*{flex:1;min-width:0}
+.rivi>button{flex:0 0 auto}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{text-align:left;padding:5px 4px;border-bottom:1px solid var(--viiva)}
+th{color:var(--himmea);font-weight:600;font-size:11.5px;letter-spacing:.05em;
+  text-transform:uppercase}
+td.num{text-align:right;font-family:ui-monospace,monospace}
+.saalis td{padding:7px 4px}
+.poista{background:none;border:none;color:var(--vaara);font-size:18px;padding:0 6px;cursor:pointer}
+.huom{font-size:13px;color:var(--himmea)}
+.varo{border-left:3px solid var(--vaara);padding-left:10px;margin:8px 0}
+.kulta{color:var(--kulta);font-weight:700}
+ul{margin:6px 0;padding-left:20px}
+li{margin:3px 0}
+.kello{font-family:ui-monospace,monospace;font-size:15px;color:var(--kulta);font-weight:700}
+</style>
+</head>
+<body>
+
+<h1>Kivitippu-uistelu · 19.9.2026</h1>
+<p class="alku">Lappajärvi · klo 10.00–16.00 · kipparikokous 9.15 · 10 vapaa, 2 uistinta/vapa
+  <br><span id="laskuri" class="kello"></span></p>
+
+<!-- ===== 1. MIKSI LOHIKALA ===== -->
+<div class="kortti">
+  <h2 style="margin-top:0">Kertoimet · miksi lohikala ratkaisee</h2>
+  <p class="huom">Pisteet = paino kg × 1000 × kerroin. Lohikalan kerroin 15 on niin
+  suuri, että yksi mitallinen taimen vastaa kymmenien kilojen ahvensaalista.</p>
+  <table>
+    <tr><th>kala</th><th class="num">kg</th><th class="num">pisteet</th><th class="num">= 25 cm ahventa</th></tr>
+    <tr><td>ahven 25 cm</td><td class="num">0,18</td><td class="num">540</td><td class="num">1</td></tr>
+    <tr><td>ahven 10 kg · n. 56 kalaa</td><td class="num">10,0</td><td class="num">30 000</td><td class="num">56</td></tr>
+    <tr><td>kuha 43 cm</td><td class="num">0,70</td><td class="num">1 400</td><td class="num">3</td></tr>
+    <tr><td>kuha 55 cm</td><td class="num">1,6</td><td class="num">3 200</td><td class="num">7</td></tr>
+    <tr><td>hauki 50 cm</td><td class="num">1,0</td><td class="num">1 000</td><td class="num">2</td></tr>
+    <tr><td>hauki 5 kg</td><td class="num">5,0</td><td class="num">10 000</td><td class="num">22</td></tr>
+    <tr><td class="kulta">taimen 51 cm</td><td class="num">1,6</td><td class="num kulta">24 000</td><td class="num">53</td></tr>
+    <tr><td class="kulta">järvilohi 61 cm</td><td class="num">2,5</td><td class="num kulta">37 500</td><td class="num">83</td></tr>
+    <tr><td class="kulta">järvilohi 70 cm</td><td class="num">3,8</td><td class="num kulta">57 000</td><td class="num">127</td></tr>
+  </table>
+  <p class="huom" style="margin-bottom:0">Painot ovat tyypillisiä arvioita pituudesta,
+  eivät sääntö. Punnitus ratkaisee.</p>
+</div>
+
+<!-- ===== 2. LASKIN ===== -->
+<div class="kortti">
+  <h2 style="margin-top:0">Pistelaskin</h2>
+  <div class="rivi">
+    <select id="laji">
+      <option value="15|lohikala">Taimen tai järvilohi · ×15</option>
+      <option value="3|ahven">Ahven · ×3</option>
+      <option value="2|kuha">Kuha · ×2</option>
+      <option value="1|hauki">Hauki alle 5 kg · ×1</option>
+      <option value="2|hauki5">Hauki yli 5 kg · ×2</option>
+    </select>
+    <input id="paino" type="number" step="0.05" min="0" placeholder="paino kg" inputmode="decimal">
+    <button class="paa" id="lisaa">Lisää</button>
+  </div>
+  <div style="margin-top:12px">
+    <div class="iso" id="summa">0</div>
+    <div class="vrt" id="vertaus">ei saalista</div>
+  </div>
+  <table class="saalis" id="lista"></table>
+  <p class="huom" id="tyhjennaRivi" style="display:none;margin-bottom:0">
+    <button id="tyhjenna" style="font-size:13px;padding:6px 10px">Tyhjennä kaikki</button></p>
+</div>
+
+<!-- ===== 3. ALAMITAT JA SÄÄNNÖT ===== -->
+<div class="kortti">
+  <h2 style="margin-top:0">Ennen punnitusta · tarkista</h2>
+  <div class="varo">
+    <b>Rasvaevä ratkaisee lohikalan.</b> Taimen 51 cm ja järvilohi 61 cm kelpaavat
+    <b>vain rasvaevä leikattuna</b>. Villi eli rasvaevällinen on vapautettava — se on
+    nolla pistettä ja koko kisan suurin yksittäinen virhe, koska se osuu juuri siihen
+    kalaan josta pisteet tulevat.
+  </div>
+  <table>
+    <tr><th>laji</th><th class="num">alamitta</th><th>huomio</th></tr>
+    <tr><td>Hauki</td><td class="num">50 cm</td><td></td></tr>
+    <tr><td>Kuha</td><td class="num">43 cm</td><td></td></tr>
+    <tr><td>Ahven</td><td class="num">25 cm</td><td></td></tr>
+    <tr><td>Taimen</td><td class="num">51 cm</td><td>rasvaevä leikattu</td></tr>
+    <tr><td>Järvilohi</td><td class="num">61 cm</td><td>rasvaevä leikattu</td></tr>
+  </table>
+  <ul class="huom">
+    <li>Kalat kylmälaatikossa punnitukseen.</li>
+    <li>Kilpailukalat jäävät järjestäjälle — <b>paitsi lohikalat</b>.</li>
+    <li><b>Vetoaika 10.00–16.00, eli kuusi tuntia täyttä kalastusta.</b>
+        Siirtymien 30 min tulee sen päälle, ei sisältä.</li>
+    <li>Veneenlaskut: Kivitippu, Kärnänsalmi, Karvalan ns., sairaalanranta.</li>
+  </ul>
+</div>
+
+<!-- ===== 4. TAKTIIKKA — KUHALORDIN LUVUILLA ===== -->
+<div class="kortti">
+  <h2 style="margin-top:0">Mitä pisteitä oikeasti tarvitaan</h2>
+  <p class="huom">Nämä eivät ole arvioita. Kuhalordi 22.8.2026 samalla järvellä,
+  31 venekuntaa, ja heidän saaliinsa laskettu <b>Kivitipun kertoimilla</b>
+  (kuha ×2, hauki ×1).</p>
+  <table>
+    <tr><th>sija</th><th class="num">kuha</th><th class="num">hauki</th>
+        <th class="num">pisteet</th><th class="num">= lohikalaa</th></tr>
+    <tr><td>1.</td><td class="num">37,1</td><td class="num">16,8</td>
+        <td class="num">91 000</td><td class="num kulta">6,1 kg</td></tr>
+    <tr><td>3.</td><td class="num">35,2</td><td class="num">17,7</td>
+        <td class="num">88 075</td><td class="num kulta">5,9 kg</td></tr>
+    <tr><td>5.</td><td class="num">36,3</td><td class="num">10,5</td>
+        <td class="num">83 215</td><td class="num kulta">5,5 kg</td></tr>
+    <tr><td>mediaani</td><td class="num">13,1</td><td class="num">18,1</td>
+        <td class="num">51 385</td><td class="num">3,4 kg</td></tr>
+  </table>
+  <div class="varo">
+    <b>Yksi taimen ei riitä.</b> Mitallinen 1,6 kg taimen on 24 000 pistettä, eli
+    <b>26 % voittajan pisteistä</b>. Palkintosijoille olisi tarvinnut 5,5 kg lohikalaa
+    — käytännössä kolme mitallista taimenta tai yksi hyvin iso lohi.
+  </div>
+  <p class="huom">Kerroin 15 on kerroin <b>kilolle</b>, ei kalalle. Kuhakeikka voittaa
+  siksi että kiloja tulee: 37 kg kuhaa on 74 000 pistettä, ja sitä ei ohiteta yhdellä
+  kalalla.</p>
+  <h2>Kalustonjako · 10 vapaa</h2>
+  <table>
+    <tr><th>strategia</th><th>jako</th><th>mitä luvut sanovat</th></tr>
+    <tr><td class="kulta">Kuha edellä</td><td>8 kuhalle<br>2 lohikalalle</td>
+        <td>Ainoa jako jolla voittolukemat ovat realistisia. Kaksi lohilinjaa on
+            arpalippu jonka hinta on pieni.</td></tr>
+    <tr><td>Tasainen</td><td>5 + 5</td>
+        <td>Puolittaa kuhakiloja eikä silti takaa lohikalaa. Huonoin molemmissa
+            päissä.</td></tr>
+    <tr><td>Lohikala edellä</td><td>8 lohikalalle<br>2 kuhalle</td>
+        <td>Voittaa vain jos tulee 5–6 kg lohikalaa. Nollan riski suuri, mutta jos
+            osuu, ohittaa kaikki.</td></tr>
+  </table>
+  <p class="huom" style="margin-bottom:0"><b>Kolme varausta näihin lukuihin.</b>
+  Kuhalordi oli elokuussa ja kuhakisa; Kivitippu on 19.9. ja kuusi tuntia, joten
+  kuhakilot ovat todennäköisesti pienemmät. Kivitipussa on lisäksi
+  <b>ahven ×3</b>, jota Kuhalordissa ei ollut — mutta <b>25 cm alamitta muuttaa
+  sen luonteen</b>: mitallinen ahven painaa noin 180 g, joten 10 kg on noin
+  <b>56 kalaa</b>. Sitä ei kerätä hajasaaliilla vaan se vaatii osumisen isojen
+  parveen ja siinä pysymisen. Uistelukalustolla ahven on sivusaalista, ei perusta.
+  Vetoaika on kuitenkin kuusi tuntia täyttä kalastusta, joten kuhakilot eivät
+  putoa niin paljon kuin aluksi arvioin.</p>
+</div>
+
+<div class="kortti">
+  <h2 style="margin-top:0">Kaksi paikkaa joissa kerroin maksaa yli</h2>
+  <p class="huom"><b>Hauen viiden kilon kynnys on kisan jyrkin raja.</b>
+  4,95 kg on 4 950 pistettä, 5,05 kg on 10 100. Sata grammaa on
+  <b>5 150 pistettä</b> — enemmän kuin kolme mitallista kuhaa. Viiden kilon
+  tuntumassa oleva hauki kannattaa punnita, ei arvioida.</p>
+  <p class="huom"><b>Järvilohen 61 cm alamitta</b> tarkoittaa että jokainen
+  laillinen on jo noin 2,6 kg eli 39 000 pistettä yhdestä kalasta. Kerroin on
+  kuitenkin asetettu kalalle jota Lappajärvellä tulee satunnaisesti — se on
+  lottovoitto, ei strategia. <b>Taimen on se lohikala jota kannattaa hakea</b>,
+  koska sitä järvessä on ja sitä istutetaan.</p>
+</div>
+
+<!-- ===== 5. SÄÄ KISA-AIKANA ===== -->
+<div class="kortti">
+  <h2 style="margin-top:0">Keli kisa-aikana</h2>
+  <div class="rivi" style="margin-bottom:8px">
+    <button id="haeSaa" style="flex:0 0 auto">Hae ennuste</button>
+    <span class="huom" id="saaTila">Ilmatieteen laitos, Lappajärvi</span>
+  </div>
+  <table id="saaTaulu"></table>
+  <p class="huom" style="margin-bottom:0">Aallonkorkeus ja suojaisa ranta:
+    <a href="./index.html" style="color:var(--kulta)">avaa Uistelututka</a> ja sen
+    aallonkorkeuskartta — se kertoo kumpi pää järveä on ajettavissa ja missä suoja on.</p>
+</div>
+
+<script>
+"use strict";
+/* ---------- LASKIN ----------
+   Pisteet = paino kg × 1000 × kerroin. Juliste sanoo 1 kg lohikala = 15 000 p,
+   mistä kilokerroin 1000 seuraa suoraan.
+   Saalis tallentuu selaimeen, jotta laskin kestää sovelluksen sulkemisen
+   kesken kisan. */
+const LS = 'kisa_maksimi_saalis_19092026';
+const NIMET = { lohikala:'Lohikala', ahven:'Ahven', kuha:'Kuha',
+                hauki:'Hauki', hauki5:'Hauki yli 5 kg' };
+const AHVEN_YKSI = 0.15*1000*3;   // 25 cm ahven vertailuyksikkönä
+
+function lue(){ try{ const x=JSON.parse(localStorage.getItem(LS)); return Array.isArray(x)?x:[]; }catch(e){ return []; } }
+function talleta(s){ try{ localStorage.setItem(LS, JSON.stringify(s)); }catch(e){} }
+
+function pisteet(r){ return r.kg*1000*r.kerroin; }
+
+function piirra(){
+  const s = lue();
+  const yht = s.reduce((a,r)=>a+pisteet(r),0);
+  document.getElementById('summa').textContent = yht.toLocaleString('fi-FI');
+  document.getElementById('vertaus').textContent = s.length
+    ? s.length + ' kalaa · vastaa ' + Math.round(yht/AHVEN_YKSI) + ' kappaletta 25 cm ahventa'
+    : 'ei saalista';
+  const t = document.getElementById('lista');
+  t.innerHTML = s.length
+    ? '<tr><th>kala</th><th class="num">kg</th><th class="num">pisteet</th><th></th></tr>'
+      + s.map((r,i)=>'<tr><td>'+NIMET[r.laji]+'</td><td class="num">'
+        + r.kg.toFixed(2).replace('.',',') + '</td><td class="num">'
+        + pisteet(r).toLocaleString('fi-FI') + '</td><td style="width:34px">'
+        + '<button class="poista" data-i="'+i+'">&times;</button></td></tr>').join('')
+    : '';
+  document.getElementById('tyhjennaRivi').style.display = s.length ? '' : 'none';
+}
+
+document.getElementById('lisaa').addEventListener('click', ()=>{
+  const kg = parseFloat(document.getElementById('paino').value.replace(',','.'));
+  if(!(kg > 0)){ document.getElementById('paino').focus(); return; }
+  const [k,laji] = document.getElementById('laji').value.split('|');
+  const s = lue(); s.push({ laji, kerroin:+k, kg });
+  talleta(s); document.getElementById('paino').value=''; piirra();
+});
+document.getElementById('lista').addEventListener('click', e=>{
+  const i = e.target.getAttribute && e.target.getAttribute('data-i');
+  if(i===null||i===undefined) return;
+  const s=lue(); s.splice(+i,1); talleta(s); piirra();
+});
+document.getElementById('tyhjenna').addEventListener('click', ()=>{
+  if(confirm('Tyhjennetäänkö koko saalislista?')){ talleta([]); piirra(); }
+});
+piirra();
+
+/* ---------- LASKURI ----------
+   Kisa alkaa 19.9.2026 klo 10.00 ja päättyy 16.00: kuusi tuntia vetoaikaa.
+   Siirtymien 30 min tulee sen päälle eikä syö kalastusaikaa. */
+const ALKU = new Date(2026,8,19,10,0,0), LOPPU = new Date(2026,8,19,16,0,0);
+function laskuri(){
+  const n = new Date(), el = document.getElementById('laskuri');
+  if(n < ALKU){
+    const s = Math.floor((ALKU-n)/1000);
+    const d = Math.floor(s/86400), h = Math.floor(s%86400/3600), m = Math.floor(s%3600/60);
+    el.textContent = 'Kisaan ' + (d?d+' vrk ':'') + h + ' h ' + m + ' min';
+  } else if(n < LOPPU){
+    const s = Math.floor((LOPPU-n)/1000);
+    el.textContent = 'Kisaa jäljellä ' + Math.floor(s/3600) + ' h ' + Math.floor(s%3600/60) + ' min';
+  } else el.textContent = 'Kisa ohi — punnitus';
+}
+laskuri(); setInterval(laskuri, 20000);
+
+/* ---------- SÄÄ ----------
+   Sama haku kuin Uistelututkassa. Näytetään vain kisatunnit 9-17. */
+document.getElementById('haeSaa').addEventListener('click', function(){
+  const n=this, t=document.getElementById('saaTila');
+  n.disabled=true; t.textContent='Haetaan…';
+  fetch('https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature'
+    + '&storedquery_id=fmi::forecast::harmonie::surface::point::simple'
+    + '&latlon=63.14378,23.53885'
+    + '&parameters=WindSpeedMS,WindDirection,WindGust,Temperature,Precipitation1h'
+    + '&timestep=60', {cache:'no-store'})
+    .then(r=> r.ok ? r.text() : Promise.reject(new Error('HTTP '+r.status)))
+    .then(txt=>{
+      const xml=new DOMParser().parseFromString(txt,'application/xml');
+      const NS='http://xml.fmi.fi/schema/wfs/2.0';
+      const el=xml.getElementsByTagNameNS(NS,'BsWfsElement');
+      if(!el.length) throw new Error('ei kohteita');
+      const h=new Map();
+      for(let i=0;i<el.length;i++){
+        const a=el[i].getElementsByTagNameNS(NS,'Time')[0];
+        const p=el[i].getElementsByTagNameNS(NS,'ParameterName')[0];
+        const v=el[i].getElementsByTagNameNS(NS,'ParameterValue')[0];
+        if(!a||!p||!v) continue;
+        const x=parseFloat(v.textContent); if(isNaN(x)) continue;
+        const k=a.textContent;
+        if(!h.has(k)) h.set(k,{aika:new Date(k)});
+        h.get(k)[p.textContent]=x;
+      }
+      const SUU=['P','KO','I','KA','E','LO','L','LU'];
+      const rivit=[...h.values()].filter(r=>{
+        const d=r.aika;
+        return d.getFullYear()===2026 && d.getMonth()===8 && d.getDate()===19
+               && d.getHours()>=9 && d.getHours()<=17;
+      }).sort((a,b)=>a.aika-b.aika);
+      if(!rivit.length){
+        t.textContent='Lauantai ei ole vielä ennusteessa — Harmonie kattaa noin 50 h. Kokeile huomenna.';
+        n.disabled=false; n.textContent='Hae ennuste'; return;
+      }
+      document.getElementById('saaTaulu').innerHTML =
+        '<tr><th>klo</th><th class="num">tuuli</th><th>suunta</th><th class="num">lämpö</th><th class="num">sade</th></tr>'
+        + rivit.map(r=>{
+            const pu = r.WindGust!=null ? '/'+r.WindGust.toFixed(0) : '';
+            const purske = r.WindGust!=null &&
+              ((r.WindGust-r.WindSpeedMS)>=5 || (r.WindGust/Math.max(r.WindSpeedMS,0.5))>=1.5);
+            return '<tr><td>'+String(r.aika.getHours()).padStart(2,'0')+'</td>'
+              + '<td class="num"'+(purske?' style="color:#f2b632"':'')+'>'
+              + r.WindSpeedMS.toFixed(0)+pu+' m/s'+(purske?' ⚠':'')+'</td>'
+              + '<td>'+SUU[Math.round(((r.WindDirection%360)+360)%360/45)%8]+'</td>'
+              + '<td class="num">'+(r.Temperature!=null?r.Temperature.toFixed(0)+'°':'–')+'</td>'
+              + '<td class="num">'+(r.Precipitation1h!=null?r.Precipitation1h.toFixed(1):'–')+'</td></tr>';
+          }).join('');
+      t.textContent='Haettu '+new Date().toLocaleTimeString('fi-FI',{hour:'2-digit',minute:'2-digit'})
+        + ' · ⚠ = purskeinen tunti';
+      n.textContent='Päivitä';
+    })
+    .catch(e=>{ t.textContent='Haku ei onnistunut: '+e.message; n.textContent='Hae ennuste'; })
+    .then(()=>{ n.disabled=false; });
+});
+</script>
+</body>
+</html>

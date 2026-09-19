@@ -12,7 +12,7 @@
 // VERSIO: kasvata tätä aina kun julkaiset uuden version. Vanha välimuisti siivotaan.
 // Versionumeron kasvatus on se mekanismi joka SIIVOAA vanhan välimuistin,
 // index2.html mukaan lukien. Ilman tätä poisto ei näkyisi puhelimissa.
-const VERSIO = 'uistelututka-v83';
+const VERSIO = 'uistelututka-v85';
 const SIVU = './';
 
 // MUUTETTU 18.9.2026. index2.html oli keskeneräinen uusi käyttöliittymä, ja se
@@ -30,6 +30,7 @@ const ESILADATTAVAT = [
   './aaltokartta.html',
   './pyyhkaisy-laskenta.html',
   './kisa_maksimi.html',
+  './Lahtoaikalaskuri.html',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
