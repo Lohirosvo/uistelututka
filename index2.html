@@ -136,6 +136,14 @@ select{width:100%;padding:11px 10px;font-size:16px;font-family:inherit;
   letter-spacing:.1em;text-transform:uppercase;color:var(--merkki);
   margin-top:12px;display:block}
 
+details.tyokalu{border:1px solid var(--viiva-vahva);border-radius:6px;
+  padding:10px 13px;margin-bottom:8px}
+details.tyokalu summary{list-style:none;cursor:pointer;font-size:18px;font-weight:600;
+  letter-spacing:.02em;color:var(--syvan)}
+details.tyokalu summary::-webkit-details-marker{display:none}
+.linkki{display:block;color:var(--syvan);text-decoration:none;font-size:15px;margin-top:8px}
+.linkki.iso{border:1px solid var(--viiva-vahva);border-radius:6px;padding:13px;
+  margin-bottom:8px;font-size:17px;font-weight:600}
 .kalanappi{display:flex;flex-direction:column;align-items:center;justify-content:center;
   width:100%;min-height:154px;margin:4px 0 14px;
   background:linear-gradient(180deg,rgba(255,194,71,.14),rgba(255,194,71,.05));
@@ -217,22 +225,29 @@ nav button.on{color:var(--syvan);border-top-color:var(--syvan)}
     <!-- ============ 5. MUUT ============ -->
     <section class="ruutu">
       <div class="leima sininen">Muut</div>
-      <div class="kesken">
-        <h4>Kaikki mitä ei tarvita päätöshetkellä</h4>
-        Siirretään sellaisenaan, omina avattavina osioinaan.
-        <br><br>Vene ja järvi EIVÄT ole täällä: vene vaihtuu trailerin ja
-        kaverien veneiden mukana, ja järvi on vapaa valinta. Molemmat ovat
-        päätöksiä eivätkä asetuksia, joten ne asuvat päätösikkunoissa.
-        <ul>
-          <li>Saalisloki ja CSV-vienti</li>
-          <li>Aallonkorkeuskartta · sumuriski · Windy · sadetutka</li>
-          <li>Valovyöhyke</li>
-          <li>SYKE-syvyysanalyysi ja omat merkinnät</li>
-          <li>Viehekalibrointi ja mallin säätimet</li>
-          <li>Kyselyn vastaukset · mallin lähtöarvot</li>
-        </ul>
-        <span class="vaatii">Vaatii: siirto, ei muutoksia</span>
-      </div>
+      <!-- TYÖKALUT. Kevyet upotukset tänne, raskaat jäävät toistaiseksi
+           vanhaan sovellukseen ja avautuvat linkistä. Aallonkorkeuskartta,
+           saalisloki ja kalibroinnit siirtyvät vasta kun rakenne on testattu
+           vesillä — turha siirtää jotain jonka paikka voi vielä vaihtua. -->
+      <details class="tyokalu">
+        <summary>🌬 Windy · tuulikartta</summary>
+        <div id="windySlot" style="margin-top:10px"></div>
+        <a id="windyKoko" href="https://www.windy.com/" target="_blank" rel="noopener"
+           class="linkki">Avaa koko näytölle</a>
+      </details>
+
+      <details class="tyokalu">
+        <summary>🌧 Sataako · sadetutka</summary>
+        <div id="sadeSlot" style="margin-top:10px"></div>
+        <a id="sadeKoko" href="https://www.sataako.fi/" target="_blank" rel="noopener"
+           class="linkki">Avaa koko näytölle</a>
+      </details>
+
+      <div class="valintaOhje" style="margin:16px 0 6px">Vanhassa sovelluksessa</div>
+      <a class="linkki iso" href="./index.html#aaltokartta">🌊 Aallonkorkeuskartta</a>
+      <a class="linkki iso" href="./index.html#sumuriski">🌫 Sumuriski 24 h</a>
+      <a class="linkki iso" href="./index.html">📋 Saalisloki · kalibroinnit · analyysi</a>
+
       <div style="border:1px solid var(--viiva);border-radius:6px;padding:12px 14px;margin-top:14px">
         <div class="valintaOhje" style="margin-bottom:10px">Asetukset</div>
         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:15px;line-height:1.4">
@@ -800,6 +815,9 @@ function luePaketti(){
 function valitseJarvi(t){
   jarvi = PAIKAT.find(p => p.tunnus === t) || PAIKAT[0];
   try { localStorage.setItem(LS_JARVI, jarvi.tunnus); } catch(e){}
+  /* Kartat tyhjennetään, jotta ne latautuvat uudestaan oikeaan paikkaan. */
+  const w = document.getElementById('windySlot');
+  if(w) w.innerHTML = '';
   piirra12();
 }
 function valitseLaji(k){ laji = k; piirra12(); piirra4(); }
@@ -1229,6 +1247,56 @@ function piirra4(){
     + 'Kolme lukua ja yksi nappi. Loput illalla.</div>';
 }
 
+/* ============================================================
+   MUUT · TYÖKALUT. Vaihe 5, 16.9.2026
+   ============================================================
+   Kevyet upotukset ladataan laiskasti: iframe syntyy vasta kun laatikko
+   avataan, eikä sitä haeta uudelleen. Raskaat osiot — aallonkorkeuskartta
+   maskeineen, saalisloki, kalibroinnit — jäävät toistaiseksi vanhaan
+   sovellukseen ja avautuvat linkistä.
+
+   MIKSI EI SIIRRETÄ HETI: ne ovat satoja kilotavuja ja niiden paikka uudessa
+   rakenteessa voi vielä vaihtua. Turha siirtää jotain kahdesti. Siirto tehdään
+   vasta kun rakenne on testattu vesillä.
+
+   Koordinaatit seuraavat valittua järveä, joten kartat osoittavat sinne minne
+   ollaan menossa eivätkä kiinteään pisteeseen. */
+function upotaKartat(){
+  const wSlot = document.getElementById('windySlot');
+  const wLinkki = document.getElementById('windyKoko');
+  const la = jarvi.lat.toFixed(3), lo = jarvi.lon.toFixed(3);
+  if(wLinkki) wLinkki.href = 'https://www.windy.com/?' + la + ',' + lo + ',10';
+  if(wSlot && !wSlot.firstChild){
+    const f = document.createElement('iframe');
+    f.src = 'https://embed.windy.com/embed2.html?lat=' + la + '&lon=' + lo
+      + '&zoom=9&level=surface&overlay=wind&product=ecmwf'
+      + '&menu=&message=&marker=true&type=map&location=coordinates'
+      + '&detailLat=' + la + '&detailLon=' + lo + '&detail=true'
+      + '&metricWind=m%2Fs&metricTemp=%C2%B0C&radarRange=-1';
+    f.width = '100%'; f.height = '380'; f.loading = 'lazy';
+    f.style.border = '0'; f.style.borderRadius = '6px';
+    wSlot.appendChild(f);
+  }
+}
+
+function upotaSade(){
+  const slot = document.getElementById('sadeSlot');
+  const linkki = document.getElementById('sadeKoko');
+  /* Sadetutka seuraa sijaintia jos se on tiedossa, muuten valittua järveä —
+     sade on paikallinen ilmiö ja kiinnostaa siellä missä ollaan. */
+  const k = kotiPiste();
+  const la = (k.lat || jarvi.lat).toFixed(4), lo = (k.lon || jarvi.lon).toFixed(4);
+  const url = 'https://www.sataako.fi/?lng=' + lo + '&lat=' + la + '&zoom=8&collapsed=true';
+  if(linkki) linkki.href = url;
+  if(slot && !slot.firstChild){
+    const f = document.createElement('iframe');
+    f.src = url;
+    f.width = '100%'; f.height = '380'; f.loading = 'lazy';
+    f.style.border = '0'; f.style.borderRadius = '6px';
+    slot.appendChild(f);
+  }
+}
+
 /* ---------- NAVIGOINTI ---------- */
 const ruudut = document.getElementById('ruudut');
 let nyt = 0;
@@ -1240,6 +1308,17 @@ function nayta(i, el){
   (el || document.querySelectorAll('#navi button')[i]).classList.add('on');
   if(i === 2) piirra0();
   if(i === 3){ kaynnistaGps(); piirra4(); }
+  if(i === 4){
+    const w = document.querySelectorAll('.tyokalu');
+    if(w[0] && !w[0].dataset.kytketty){
+      w[0].dataset.kytketty = '1';
+      w[0].addEventListener('toggle', function(){ if(this.open) upotaKartat(); });
+    }
+    if(w[1] && !w[1].dataset.kytketty){
+      w[1].dataset.kytketty = '1';
+      w[1].addEventListener('toggle', function(){ if(this.open) upotaSade(); });
+    }
+  }
 }
 let x0 = null;
 ruudut.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; }, {passive:true});
