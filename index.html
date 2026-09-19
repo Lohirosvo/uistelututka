@@ -824,51 +824,17 @@
 
 .ak-kartta{position:relative;background:#eef1f0;border-radius:8px;overflow:hidden}
 .ak-kartta canvas{width:100%;display:block;image-rendering:auto}
-/* SIIRRETTY ALAS OIKEALLE 15.9.2026. Ylhäällä se peitti järven pohjoispään,
-   ja aika jäi pieneen tekstiin. Alhaalla se on samalla rivillä tuulitiedon
-   kanssa ja lähempänä liukusäädintä, jolloin molemmat näkyvät kun tuntia
-   siirretään. */
-.ak-leima{position:absolute;bottom:8px;right:8px;background:rgba(255,255,255,.94);
-    border-radius:6px;padding:6px 10px;font-size:1.15rem;font-weight:750;
-    font-variant-numeric:tabular-nums;text-align:right;line-height:1.15;
-    max-width:56%}
-.ak-leima small{display:block;font-weight:400;font-size:.7rem;color:var(--harmaa)}
-.ak-leima .aika{display:block;font-weight:700;font-size:.82rem;color:#1a2b28;
-    margin-top:2px}
-/* TUULI LUETTAVAKSI 15.9.2026. Oli .75rem harmaalla pohjalla ja hädin tuskin
-   erottui kartan väreistä. Tuuli on toinen niistä kahdesta luvusta joiden takia
-   karttaa katsotaan, joten se saa saman painon kuin osuuslaatikko. */
-.ak-tuuli{position:absolute;left:8px;bottom:8px;background:rgba(255,255,255,.94);
-    border-radius:6px;padding:6px 10px;font-size:1rem;font-weight:750;color:#10201c;
-    font-variant-numeric:tabular-nums;line-height:1.15;max-width:44%;
-    box-shadow:0 1px 4px rgba(0,0,0,.28)}
-.ak-tuuli small{display:block;font-weight:500;font-size:.72rem;color:var(--harmaa);
-    margin-top:1px}
-.ak-leima{box-shadow:0 1px 4px rgba(0,0,0,.28)}
+.ak-leima{position:absolute;top:8px;right:8px;background:rgba(255,255,255,.92);
+    border-radius:6px;padding:5px 9px;font-size:.8rem;font-weight:650;
+    font-variant-numeric:tabular-nums;text-align:center;line-height:1.25}
+.ak-leima small{display:block;font-weight:400;font-size:.68rem;color:var(--harmaa)}
+.ak-tuuli{position:absolute;left:8px;bottom:8px;background:rgba(255,255,255,.92);
+    border-radius:6px;padding:5px 9px;font-size:.75rem;font-variant-numeric:tabular-nums}
 
-.ak-jana{display:flex;height:16px;margin:2px 0 0;border-radius:3px;overflow:hidden;
-    border:1px solid rgba(160,190,170,.35);cursor:pointer}
-.ak-jana i{flex:1;min-width:0}
-.ak-jana i.nyt{outline:2px solid #10201c;outline-offset:-2px}
-.ak-paivat{position:relative;height:15px;margin-bottom:2px}
-.ak-paivat span{position:absolute;top:0;font-size:.62rem;font-weight:700;
-    color:var(--harmaa);transform:translateX(-50%);white-space:nowrap;
-    padding-top:4px}
-.ak-paivat span::before{content:"";position:absolute;top:0;left:50%;
-    width:1px;height:4px;background:rgba(80,110,95,.55)}
 .ak-asteikko{display:flex;margin-top:8px;border-radius:3px;overflow:hidden;
     font-size:.62rem;font-variant-numeric:tabular-nums}
 .ak-asteikko div{flex:1;text-align:center;padding:3px 0;color:#fff;
     text-shadow:0 0 2px rgba(0,0,0,.45)}
-.ak-piste{font-family:ui-monospace,monospace;font-size:.78rem;text-align:center;
-    line-height:1.45;margin-top:8px;min-height:2.6em;color:var(--harmaa)}
-.ak-piste b{font-size:.95rem}
-.ak-raja{display:flex;align-items:center;gap:8px;margin-top:8px}
-.ak-raja select{flex:1;min-width:0;padding:5px;background:#12201c;color:#e8efe9;
-  border:1px solid rgba(160,190,170,.35);border-radius:6px;font-size:12px}
-.ak-raja input[type=range]{flex:1.2;min-width:0;height:26px;accent-color:#3faa62}
-.ak-raja span{font-family:ui-monospace,monospace;font-size:12px;min-width:52px;
-  text-align:right}
 .ak-alarivi{display:flex;justify-content:space-between;align-items:center;
     margin-top:4px;gap:10px}
 .ak-kytkin{font-size:.72rem;color:#4a5654;display:flex;align-items:center;gap:5px;
@@ -877,6 +843,26 @@
 .ak-yksikko{font-size:.66rem;color:var(--harmaa)}
 
 input[type=range]{width:100%;margin:12px 0 2px;accent-color:#16211f}
+
+/* ---- AIKARULLA ---- */
+.ak-yleis{display:flex;height:14px;margin:12px 0 4px;border:1px solid var(--raja);
+  border-radius:3px;overflow:hidden;cursor:pointer}
+.ak-yleis i{flex:1;min-width:0}
+.ak-yleis i.tassa{outline:2px solid #16211f;outline-offset:-2px;z-index:1}
+.ak-rulla{overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none;
+  border:1px solid var(--raja);border-radius:6px;background:rgba(255,255,255,.03)}
+.ak-rulla::-webkit-scrollbar{display:none}
+.ak-rullasisus{display:flex;height:56px;align-items:flex-end}
+.ak-tunti{flex:0 0 15px;scroll-snap-align:center;display:flex;flex-direction:column;
+  align-items:center;justify-content:flex-end;height:100%;cursor:pointer;
+  border-right:1px solid rgba(255,255,255,.05)}
+.ak-tunti b{display:block;width:9px;border-radius:2px 2px 0 0;background:#8cc63f}
+.ak-tunti span{font-size:8px;color:var(--harmaa);margin-top:2px;
+  font-variant-numeric:tabular-nums;line-height:1}
+.ak-tunti.vrk{border-right:2px solid var(--muste)}
+.ak-tunti.valittu b{outline:2px solid var(--muste);outline-offset:1px}
+.ak-tunti.valittu span{color:var(--muste);font-weight:700}
 .ak-aika{display:flex;justify-content:space-between;font-size:.72rem;
     color:var(--harmaa);font-variant-numeric:tabular-nums}
 
@@ -888,89 +874,6 @@ input[type=range]{width:100%;margin:12px 0 2px;accent-color:#16211f}
 .ak-huom{margin-top:11px;font-size:.72rem;color:var(--harmaa);line-height:1.5}
 .ak-virhe{font-size:.83rem;color:#8f1414}
 
-
-/* ===== KOLME RUUTUA — lisätty 17.9.2026 =====
-   Sovellus oli yksi pitkä sivu, jolta vastaus piti etsiä. Sisältö jaetaan
-   kolmeen ruutuun sen mukaan MILLOIN sitä tarvitaan: vesillä, suunnitellessa,
-   jälkeenpäin. Mitään ei poisteta eikä siirretä merkkauksessa — samat
-   elementit vain siirretään DOM:issa kolmen säiliön alle, jolloin kaikki
-   kuuntelijat, id:t ja logiikka säilyvät koskemattomina. */
-#ruutuNavi{position:fixed;left:0;right:0;bottom:0;z-index:9000;display:flex;
-  background:rgba(8,14,20,.97);border-top:1px solid var(--line);
-  padding-bottom:env(safe-area-inset-bottom,0)}
-#ruutuNavi button{flex:1;background:none;border:none;color:var(--muted);
-  padding:9px 4px 11px;font-family:'Barlow Condensed',sans-serif;cursor:pointer;
-  display:flex;flex-direction:column;align-items:center;gap:1px;font-size:12px;
-  letter-spacing:.09em;text-transform:uppercase}
-#ruutuNavi button b{font-size:18px;font-weight:700;letter-spacing:.02em}
-#ruutuNavi button.on{color:var(--cyan)}
-#ruutuNavi button.on b{color:var(--cyan)}
-body{padding-bottom:66px}
-.ruutuOtsake{font-family:'Barlow Condensed',sans-serif;font-size:13px;
-  letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
-  border:1px solid var(--line);border-radius:20px;padding:4px 14px;
-  display:inline-block;margin:2px 0 12px}
-
-/* ===== ALOITUSRUUTU — lisätty 17.9.2026 =====
-   Otsikko vei noin 150 px joka ruudulta ja toisti saman tekstin kolmesti.
-   Teksti siirtyy tänne ja näkyy kerran avauksessa, jolloin ruuduille jää
-   tilaa tiedolle. Kesto on lyhyt tarkoituksella: tämä on vero joka maksetaan
-   joka avauksella, myös silloin kun sovellus avataan märillä käsillä
-   katsomaan pelkkää nopeutta. Napautus ohittaa, ja intro näytetään vain
-   kylmästä käynnistyksestä — ei välilehteä vaihtaessa eikä taustalta
-   palatessa (sessionStorage). Kesto 1,0 s (aluksi 0,7 s, ei ehtinyt nähdä). */
-#intro{position:fixed;inset:0;z-index:99999;background:var(--bg,#080e14);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:18px;padding:24px;text-align:center;transition:opacity .35s ease}
-#intro.pois{opacity:0;pointer-events:none}
-#intro .eyebrow{font-size:12px}
-#intro h1{margin:6px 0 4px}
-#intro .sub{max-width:34ch;margin:0 auto}
-#intro figure{margin:8px 0 0;position:relative}
-#intro img{width:min(58vw,240px);border-radius:14px;display:block;
-  border:1px solid var(--line);box-shadow:0 10px 30px rgba(0,0,0,.55)}
-#intro figure::after{content:"";position:absolute;inset:-6px;border-radius:19px;
-  border:1px solid var(--cyan);opacity:.35;pointer-events:none}
-#intro .ohita{font-size:11px;color:var(--muted);letter-spacing:.1em;
-  text-transform:uppercase;margin-top:4px}
-@media (prefers-reduced-motion: reduce){ #intro{transition:none} }
-.wrap > header{display:none}
-
-/* ===== VESILLÄ-NÄKYMÄ — lisätty 17.9.2026 =====
-   Märät kädet, yksi käsi kaasulla. Vastaus ylimpänä ja isolla: tavoitesyvyys,
-   tapa, nopeus. Ei valikkoja ruudulla — lajin vaihto avautuu sivulta.
-   EI UUTTA LASKENTAA: luvut tulevat vvRakennaPaketti():sta, samasta lähteestä
-   jonka TrollingPro ja 12 h -ikkuna lukevat. Jos malli muuttuu, tämä muuttuu
-   mukana eikä kahta totuutta synny. */
-#vesillaPaneeli{border:1px solid var(--line);border-radius:12px;padding:10px 12px;
-  margin-bottom:10px;background:linear-gradient(180deg,rgba(12,26,36,.92),rgba(8,16,24,.92))}
-#vesillaPaneeli .laji{display:flex;align-items:center;justify-content:space-between;gap:10px}
-#vesillaPaneeli .lajinimi{font-family:'Barlow Condensed',sans-serif;font-size:18px;
-  font-weight:700;letter-spacing:.03em;color:var(--cyan)}
-#vesillaPaneeli .vaihda{background:none;border:1px solid var(--line);color:var(--muted);
-  border-radius:20px;padding:6px 14px;font-size:12px;letter-spacing:.08em;
-  text-transform:uppercase;cursor:pointer}
-#vesillaSyvyys{font-family:'JetBrains Mono',monospace;font-size:44px;font-weight:800;
-  line-height:1;color:var(--amber);margin:4px 0 1px}
-#vesillaSyvyys small{font-size:22px;color:var(--muted);font-weight:600}
-#vesillaSelite{font-size:12px;color:var(--muted);line-height:1.4}
-#vesillaRivit{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;
-  font-family:'JetBrains Mono',monospace;font-size:13px}
-#vesillaRivit span{border:1px solid var(--line);border-radius:14px;padding:3px 9px;
-  color:var(--text);white-space:nowrap}
-#salamaRivi{margin-top:8px;font-size:12.5px;line-height:1.4}
-/* Sivulta avautuva valitsin: ei vie tilaa ruudulta eikä vaadi vierittämistä. */
-#lajiLaatikko{position:fixed;inset:0;z-index:9500;display:none}
-#lajiLaatikko.auki{display:block}
-#lajiLaatikko .tausta{position:absolute;inset:0;background:rgba(0,0,0,.55)}
-#lajiLaatikko .paneeli{position:absolute;top:0;right:0;bottom:0;width:min(82vw,320px);
-  background:#0b1620;border-left:1px solid var(--line);padding:18px 16px;
-  overflow-y:auto;display:flex;flex-direction:column;gap:8px}
-#lajiLaatikko h4{margin:4px 0 2px;font-family:'Barlow Condensed',sans-serif;
-  font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
-#lajiLaatikko button.val{background:#122634;border:1px solid var(--line);
-  color:var(--text);border-radius:9px;padding:13px;font-size:16px;text-align:left;cursor:pointer}
-#lajiLaatikko button.val.on{border-color:var(--cyan);color:var(--cyan);font-weight:700}
 </style>
 
   <!-- PWA: aloitusnäyttökuvake, koko ruutu ja offline-tuki -->
@@ -982,54 +885,8 @@ body{padding-bottom:66px}
 </head>
 
 <body>
-<!-- ALOITUSRUUTU: tekstit yläpuolella, hahmo alapuolella. Kuva on upotettu
-     tiedostoon, jotta sovellus toimii yhtenä tiedostona myös offline. -->
-<div id="intro" aria-hidden="true">
-  <div>
-    <div class="eyebrow">Taktinen uistelututka · Lappajärvi</div>
-    <h1>Kuha, <span class="hauki">Hauki</span><span class="taimen">, Taimen</span>
-        <span class="syotti">&amp; Muikku</span></h1>
-    <p class="sub">Automaattinen syvyysennuste, tuulidynamiikka ja GPS-nopeusvaroitin.</p>
-  </div>
-  <figure><img alt="" src="data:image/jpeg;base64,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"></figure>
-  <div class="ohita">napauta ohittaaksesi</div>
-</div>
-
 
   <div class="wrap">
-<!-- VESILLÄ-PANEELI. Sijoitetaan ruutujaossa vesillä-ruudun kärkeen. -->
-<div id="vesillaPaneeli" data-ruutu-kohde="vesilla">
-  <div class="laji">
-    <div class="lajinimi" id="vesillaLaji">Taimen</div>
-    <button class="vaihda" onclick="avaaLajiLaatikko()">Vaihda</button>
-  </div>
-  <div id="vesillaSyvyys">– <small>m</small></div>
-  <div id="vesillaSelite">Aja Analysoi kerran, niin syvyys ilmestyy tähän.</div>
-  <!-- TIIVISTETTY 18.9.2026. Kolme laatikkoa vei kolme riviä pystysuunnassa, ja
-       vesillä ruudun korkeus on niukin resurssi. Yksi rivi riittää: luvut ovat
-       lyhyitä eikä niitä lueta erikseen vaan vilkaisulla. -->
-  <div id="vesillaRivit">
-    <span id="vesillaNopeus">–</span>
-    <span id="vesillaVari">–</span>
-    <span id="vesillaValo">–</span>
-  </div>
-  <!-- Salamarivi näkyy VAIN kun on jotain kerrottavaa: nappi vei tilaa ja vaati
-       painalluksen, ja tyhjä rivi kertoo tyhjää. Haku tapahtuu itsestään. -->
-  <div id="salamaRivi" style="display:none;"></div>
-</div>
-
-<div id="lajiLaatikko" aria-hidden="true">
-  <div class="tausta" onclick="suljeLajiLaatikko()"></div>
-  <div class="paneeli">
-    <h4>Laji</h4>
-    <div id="lajiNapit" style="display:flex;flex-direction:column;gap:8px"></div>
-    <h4 style="margin-top:14px">Näkymä</h4>
-    <button class="val" onclick="suljeLajiLaatikko(); naytaRuutu('suunnittelu')">Suunnitteluun</button>
-    <button class="val" onclick="suljeLajiLaatikko(); naytaRuutu('raportit')">Raportteihin</button>
-    <button class="val" style="margin-top:14px" onclick="suljeLajiLaatikko()">Sulje</button>
-  </div>
-</div>
-
     <header>
       <div class="header-icon" aria-hidden="true">
         <svg width="52" height="46" viewBox="0 0 52 46" fill="none">
@@ -1078,13 +935,6 @@ body{padding-bottom:66px}
         </div>
       </div>
       <p class="hint" id="nopeusHalytysTila" style="margin-top:6px;">Käynnistä mittari, niin näet hälytyksen tilan tässä.</p>
-
-      <!-- VETOKESKIARVO — lisätty 17.9.2026. Hetkellinen nopeus kohisee eikä kerro
-           mitä oikeasti vedettiin; viiden minuutin keskiarvo kertoo. Vetosuunta on
-           kirjallisuudessa oma tekijänsä: sama paikka eri suuntaan ajettuna on eri
-           veto, koska viehe kulkee eri tavalla aaltoon ja tuuleen nähden. -->
-      <p class="hint" id="vetoKeskiarvo" style="margin-top:2px; font-family:'JetBrains Mono',monospace;
-         font-size:13px; color:var(--cyan);"></p>
 
       <p class="hint" id="speedStatus" style="margin-top:0px;"></p>
 
@@ -1237,16 +1087,6 @@ body{padding-bottom:66px}
           ⛵ 48 H — LÄHDENKÖ
         </summary>
         <div id="ikkuna48" style="margin-top:12px;"></div>
-        <!-- LÄHTÖAIKALASKURI — liitetty 18.9.2026. 48 h -ikkuna vastaa
-             kysymykseen lähdenkö; laskuri vastaa siihen mitä lähdön jälkeen
-             tehdään. Ne kuuluvat samaan kohtaan, koska päätös on sama. -->
-        <a href="./Lahtoaikalaskuri.html"
-           style="display:block; margin-top:10px; padding:10px 12px; text-align:center;
-                  border:1px solid var(--cyan); border-radius:10px; color:var(--cyan);
-                  text-decoration:none; font-family:'Barlow Condensed',sans-serif;
-                  font-size:17px; font-weight:700; letter-spacing:.02em;">
-          🕑 LÄHTÖAIKALASKURI — aikataulu ja raportti
-        </a>
       </details>
 
       <details id="sumuriskiBox" style="margin-top:8px; border:1px solid var(--muted); border-radius:12px; padding:10px 14px;">
@@ -1295,31 +1135,15 @@ body{padding-bottom:66px}
     <span class="ak-yksikko">merkitsevä aallonkorkeus, m</span>
   </div>
 
-  <!-- KALASTUSRAJA — liitetty 15.9.2026.
-       Kartta kertoi aallonkorkeuden, muttei sitä mikä osa siitä on uisteltavissa.
-       Veneen turvaraja vastaa eri kysymykseen (kestääkö runko) kuin uistelu
-       (pystyykö vapoja hoitamaan). Rajan yli menevä vesi himmennetään, jolloin
-       kelvollinen alue erottuu ilman että väriasteikko katoaa. -->
-  <!-- NAPAUTUS — 15.9.2026. Kalibrointia varten: kartta kertoo värin, mutta oman
-       rajan löytäminen vaatii luvun siitä kohdasta järveä jossa oikeasti oltiin. -->
-  <div class="ak-piste" id="akPiste">Napauta karttaa: kertoo sen kohdan aallon</div>
-
-  <div class="ak-raja">
-    <select id="akVene"></select>
-    <input type="range" id="akRaja" min="0.10" max="0.60" step="0.01" value="0.20">
-    <span id="akRajaL"></span>
-  </div>
-
-  <input type="range" id="akLiuku" min="0" max="0" value="0" aria-label="Tunti">
-  <!-- 48 H JANA — 15.9.2026. Liuku näyttää yhden tunnin kerrallaan, mutta
-       lähtöpäätös tehdään koko jaksosta. Jana kertoo jokaisen tunnin
-       uisteltavan osuuden yhtenä nauhana: vihreä yli neljännes, keltainen
-       vähän, punainen ei mitään. Palkkia napauttamalla hyppää siihen tuntiin. -->
-  <div class="ak-jana" id="akJana"></div>
-  <!-- PÄIVÄMERKIT — 15.9.2026. Ennuste on jopa 84 tuntia, eli lähes neljä
-       vuorokautta. Pelkät alku- ja loppuajat eivät kerro mistä kohtaa nauhaa
-       mikäkin päivä alkaa, joten jokainen aamuseitsemän merkitään. -->
-  <div class="ak-paivat" id="akPaivat"></div>
+  <!-- AIKARULLA — korvasi liukusäätimen 16.9.2026.
+       Liukusäätimellä 84 tuntia mahtui puhelimen leveydelle, eli noin kolme
+       pikseliä tunnissa: sormella ei voinut osua haluttuun tuntiin, joten
+       säädin oli karkea selaus eikä valinta. Rullassa yksi vuorokausi täyttää
+       ruudun, jolloin tunti on noin 15 pikseliä ja kosketeltava.
+       scroll-snap napsauttaa jokaiseen tuntiin — juuri se tekee siitä rullan
+       eikä liu'un, ja sormi tuntee askeleet. -->
+  <div class="ak-yleis" id="akYleis" title="koko ennustejakso"></div>
+  <div class="ak-rulla" id="akRulla"><div class="ak-rullasisus" id="akRullaSisus"></div></div>
   <div class="ak-aika"><span id="akAlku"></span><span id="akLoppu"></span></div>
 
   <div class="ak-taulu" id="akTaulu"></div>
@@ -3456,8 +3280,6 @@ body{padding-bottom:66px}
     }
 
     /* Palauttaa Wedderburn-analyysin tai null jos lähtötietoja puuttuu. */
-    function dirApu(d){ return ((d % 360) + 360) % 360; }
-
     function kumpuamisAnalyysi() {
       const saa = saaNyt();
       if (saa.tuuli === null || !drProfiili || drProfiili.tasalampoinen) return null;
@@ -3472,17 +3294,7 @@ body{padding-bottom:66px}
       // muuten 10 km. Tämä on tarkkuuden kannalta tärkein parametri ja riippuu
       // tuulen suunnasta — ympyräekvivalentti on keskiarvo, ei suunnattu matka.
       const A = currentLocation.areaKm2 || 142;
-      let L = 2 * Math.sqrt(A * 1e6 / Math.PI);
-      let Llahde = 'ympyräekvivalentti';
-      /* MUUTETTU 15.9.2026: jos aallonkorkeuskartta on avattu, siltä saadaan
-         pisin yhtenäinen vesimatka juuri tämän tuulen suunnassa. Se on sama
-         suure oikein laskettuna, ei toinen malli. Ellei karttaa ole avattu,
-         käytetään ympyräekvivalenttia kuten ennen. */
-      if (saa.tuuliSuunta != null && typeof window.akSuunnattuMitta === 'function') {
-        const Ld = window.akSuunnattuMitta(saa.tuuliSuunta,
-                     currentLocation && currentLocation.name);
-        if (Ld && Ld > 200) { L = Ld; Llahde = 'suunnattu, ' + Math.round(dirApu(saa.tuuliSuunta)) + '°'; }
-      }
+      const L = 2 * Math.sqrt(A * 1e6 / Math.PI);
 
       const rhoEpi = vedenTiheys(T_epi), rhoHypo = vedenTiheys(T_hypo);
       const gp = 9.81 * (rhoHypo - rhoEpi) / rhoHypo;
@@ -3498,7 +3310,7 @@ body{padding-bottom:66px}
       const Ukrit = uStarKrit / Math.sqrt(Cd * 1.225 / rhoEpi);
 
       return { W: W, Ti: Ti, kestoH: Ti / 4 / 3600, Ukrit: Ukrit,
-               tuuli: saa.tuuli, lahde: saa.tuuliLahde, h1: h1, L: L, Llahde: Llahde };
+               tuuli: saa.tuuli, lahde: saa.tuuliLahde, h1: h1, L: L };
     }
 
     function vvKumpuaminenSelostus() {
@@ -3533,7 +3345,6 @@ body{padding-bottom:66px}
       let tila;
       if (k.W <= 1) {
         tila = `<strong>Wedderburn-luku ${k.W.toFixed(2)} — kumpuaminen on mahdollista.</strong> `
-             + `<span class="hint">(pyyhkäisymatka ${(k.L/1000).toFixed(1)} km, ${k.Llahde})</span> `
              + 'Tuuli riittää kallistamaan harppauskerroksen pintaan asti tuulen vastaisella rannalla.';
       } else if (k.W <= 3) {
         tila = `<strong>Wedderburn-luku ${k.W.toFixed(1)} — osittainen kallistuma.</strong> `
@@ -4286,32 +4097,6 @@ var VARIT = ["#cfe0e6","#7fc6a0","#3faa62","#8cc63f","#c8d422","#f2c200",
 // erot näkyvät myös tyynenä päivänä.
 var korosta = false, venytys = 1;
 
-/* Veneet ja kalastusrajat. turva = kestääkö runko. kalaOletus = se aalto jossa
-   uistelu on vielä kalastusta eikä työtä; varovainen arvio pyytävän alueen
-   rajasta eikä veneen kyky, ja se muuttuu kokemuksen karttuessa. Säädetty arvo
-   muistetaan venekohtaisesti. Raja ei ole järvikohtainen: aalto on aalto, ja
-   matalan järven pienempi aalto näkyy kartassa itsestään. */
-var AK_VENEET = [
-  { id:'paijan470', nimi:'Päijän 470/471 · sähkö', turva:0.30, kalaOletus:0.15 },
-  { id:'paijan520', nimi:'Päijän 520 · 10 hv',     turva:0.40, kalaOletus:0.18 },
-  { id:'sunbuster', nimi:'Sun Buster · 30 hv',      turva:0.50, kalaOletus:0.20 },
-  { id:'ph500',     nimi:'Pilothouse 500 · 80 hv',  turva:0.60, kalaOletus:0.20 },
-  { id:'dorado100', nimi:'Silver Dorado · 100 hv',  turva:0.60, kalaOletus:0.20 }
-];
-var AK_LS_RAJAT = 'aaltokartta_kalastusrajat', AK_LS_VENE = 'aaltokartta_vene';
-function akLueRajat(){
-  try { var r = JSON.parse(localStorage.getItem(AK_LS_RAJAT));
-        return (r && typeof r === 'object') ? r : {}; } catch(e){ return {}; }
-}
-function akVene(){
-  var i = $("akVene") ? $("akVene").selectedIndex : 3;
-  return AK_VENEET[i] || AK_VENEET[3];
-}
-function akKalaRaja(){
-  var v = akVene(), r = akLueRajat();
-  return Math.min(typeof r[v.id] === 'number' ? r[v.id] : v.kalaOletus, v.turva);
-}
-
 function vari(h){
   var x = h*venytys;
   for (var i = RAJAT.length-1; i >= 0; i--) if (x >= RAJAT[i]) return VARIT[i];
@@ -4386,18 +4171,6 @@ function pyyhkaisyKentta(mask, W, H, ruutu, suunta){
 // ---- Piirto ------------------------------------------------------------
 var data = [], valittu = 0, jarvi = null, mask = null, kentta = null, viimeSuunta = null;
 
-/* Pyyhkäisykenttien välimuisti suunnittain. Jana tarvitsee kentän jokaiselle
-   tunnille, ja ilman välimuistia sama suunta laskettaisiin uudestaan joka
-   kerta. Tyhjennetään järven vaihdossa. */
-var akKentat = {};
-function akKentta(suunta){
-  if (!akKentat[suunta]){
-    akKentat[suunta] = pyyhkaisyKentta(mask, jarvi.kartta.W, jarvi.kartta.H,
-                                       jarvi.kartta.ruutu, suunta);
-  }
-  return akKentat[suunta];
-}
-
 function piirra(){
   var d = data[valittu], k = jarvi.kartta;
   if (!d || !k) return;
@@ -4405,7 +4178,7 @@ function piirra(){
   // pyyhkäisykenttä lasketaan vain kun suunta vaihtuu
   var suunta = Math.round(d.dir/5)*5;
   if (suunta !== viimeSuunta){
-    kentta = akKentta(suunta);
+    kentta = pyyhkaisyKentta(mask, k.W, k.H, k.ruutu, suunta);
     viimeSuunta = suunta;
   }
 
@@ -4417,16 +4190,12 @@ function piirra(){
   // asteikko siihen, muuten käytetään kiinteää järviasteikkoa.
   // Aallonkorkeus jokaiselle ruudulle
   var hs = new Float32Array(mask.length), korkein = 0;
-  var kalaRaja = akKalaRaja(), kelpaa = 0, vesiruutuja = 0;
   for (var q = 0; q < mask.length; q++){
     if (!mask[q]) continue;
     var Fq = Math.min(kentta[q], Fkesto);
     hs[q] = Math.min(jonswapHs(Math.max(Fq, 50), U), katto);
     if (hs[q] > korkein) korkein = hs[q];
-    vesiruutuja++;
-    if (hs[q] <= kalaRaja) kelpaa++;
   }
-  d.osuus = vesiruutuja ? kelpaa/vesiruutuja : 0;
 
   venytys = 1;
   if (korosta && korkein > 0.02) venytys = RAJAT[RAJAT.length-1]/(korkein*1.02);
@@ -4473,19 +4242,8 @@ function piirra(){
           summa += hs[kk]*p; paino += p;
         }
       }
-      var arvo = paino > 0 ? summa/paino : hs[nj*k.W + ni];
-      var t = rgb(arvo);
-      if (arvo > kalaRaja){
-        /* Rajan yli: himmennetään kohti tummaa. Väri jää luettavaksi mutta
-           kelvollinen alue hyppää esiin. Turvarajan yli vielä enemmän. */
-        var kerroin = arvo > akVene().turva ? 0.30 : 0.55;
-        kuva.data[o]   = Math.round(t[0]*kerroin);
-        kuva.data[o+1] = Math.round(t[1]*kerroin);
-        kuva.data[o+2] = Math.round(t[2]*kerroin);
-      } else {
-        kuva.data[o] = t[0]; kuva.data[o+1] = t[1]; kuva.data[o+2] = t[2];
-      }
-      kuva.data[o+3] = 255;
+      var t = rgb(paino > 0 ? summa/paino : hs[nj*k.W + ni]);
+      kuva.data[o] = t[0]; kuva.data[o+1] = t[1]; kuva.data[o+2] = t[2]; kuva.data[o+3] = 255;
     }
   }
   ctx.putImageData(kuva, 0, 0);
@@ -4510,237 +4268,21 @@ function piirra(){
   }
   ctx.stroke();
 
-  /* Talteen napautusta varten: nämä ovat piirron paikallisia, mutta napautus
-     tarvitsee ne piirron jälkeen. */
-  akViime = { hs:hs, kentta:kentta, k:k, S:S, kalaRaja:kalaRaja, turva:akVene().turva };
-  akPiirraMerkki(ctx, S);
-
   d.korkein = korkein;
   d.Tp = jonswapTp(Math.min(d.Fpahin, Fkesto), U);
   naytaTiedot(d);
-  akNaytaPiste();
-}
-
-var akViime = null, akValittu = null;
-
-/* Yhden tunnin uisteltava osuus. Sama laskenta kuin kartassa, mutta ilman
-   piirtoa: vain osuus rajan alla. */
-function akOsuus(d, kalaRaja){
-  var k = jarvi.kartta, ke = akKentta(Math.round(d.dir/5)*5);
-  var U = Math.max(0.5, d.U);
-  var Fkesto = kestonPyyhkaisy(d.tunteja*3600, U), katto = syvyysKatto(jarvi.syvyys, U);
-  var n = 0, vesi = 0;
-  for (var q = 0; q < mask.length; q++){
-    if (!mask[q]) continue;
-    vesi++;
-    if (Math.min(jonswapHs(Math.max(Math.min(ke[q], Fkesto), 50), U), katto) <= kalaRaja) n++;
-  }
-  return vesi ? n/vesi : 0;
-}
-
-function akPiirraJana(){
-  var el = $("akJana");
-  if (!el || !data.length || !mask) return;
-  var raja = akKalaRaja();
-  el.innerHTML = data.map(function(d, i){
-    var o = akOsuus(d, raja);
-    var v = o >= 0.25 ? "#3faa62" : o > 0.05 ? "#f2c200" : "#bd2430";
-    /* Purskeinen tunti ei saa näyttää puhtaan vihreältä vaikka aalto olisi
-       matala: puuska ei kasvata aaltoa mutta vie vavan kädestä. */
-    var tyyli = akPuuskainen(d)
-      ? "background:repeating-linear-gradient(45deg," + v + "," + v
-        + " 3px,#10201c 3px,#10201c 5px)"
-      : "background:" + v;
-    return '<i data-i="' + i + '" style="' + tyyli + '"></i>';
-  }).join("");
-  akPiirraPaivat();
-  akKorostaJana();
-}
-/* Päivämerkit janan alle. Sijoitetaan suhteellisesti samalle kohdalle kuin
-   vastaava palkki: palkin keskikohta on (i + 0.5)/n nauhan leveydestä. */
-function akPiirraPaivat(){
-  var el = $("akPaivat");
-  if (!el || !data.length) return;
-  var pv = ["su","ma","ti","ke","to","pe","la"], n = data.length, ulos = "";
-  for (var i = 0; i < n; i++){
-    if (data[i].aika.getHours() !== 7) continue;
-    var x = (i + 0.5)/n*100;
-    /* Reunoilla nimi valuisi ulos, joten se vedetään sisään. */
-    var siirto = x < 6 ? "translateX(-10%)" : x > 94 ? "translateX(-90%)" : null;
-    ulos += '<span style="left:' + x.toFixed(2) + '%'
-          + (siirto ? ';transform:' + siirto : '') + '">'
-          + pv[data[i].aika.getDay()] + ' 7</span>';
-  }
-  el.innerHTML = ulos;
-}
-
-/* SUUNNATTU JÄRVENMITTA MUILLE OSILLE — 15.9.2026.
-   Kumpuamisanalyysi käytti pyyhkäisymatkana pinta-alan ympyräekvivalenttia, ja
-   sen oma kommentti sanoo miksi se on huono: se on keskiarvo eikä suunnattu
-   matka. Sama korjaus kuin aallonkorkeudessa. Maski on jo purettu tässä
-   moduulissa, joten tarjotaan pisin yhtenäinen vesimatka tuulen suunnassa.
-   Julkaistaan globaaliin, koska kumpuamisanalyysi on toisessa lohkossa.
-   Palauttaa metrejä, tai null jos karttaa ei ole avattu tai järvi on eri. */
-/* JÄRVEN KESKIPISTE MASKISTA — 18.9.2026.
-   Kumpuamisen tulkinta tarvitsee suuntiman järven keskeltä mittausasemalle.
-   Aiemmin vertailupisteenä oli currentLocation, joka on kotiranta tai
-   kalastusalue — Lappajärvellä noin 6 km järven todellisesta keskipisteestä
-   lounaaseen. Siitä laskettu suuntima olisi ollut systemaattisesti vinossa.
-   Vesiruutujen painopiste maskista on oikea keskipiste, ja se on jo laskettu
-   tässä moduulissa muuta varten. */
-window.akJarvenKeskipiste = function(){
-  try {
-    if (!mask || !jarvi || !jarvi.kartta) return null;
-    const k = jarvi.kartta;
-    let si = 0, sj = 0, n = 0;
-    for (let j = 0; j < k.H; j++) for (let i = 0; i < k.W; i++) {
-      if (mask[j*k.W + i]) { si += i; sj += j; n++; }
-    }
-    if (!n) return null;
-    const ic = si/n, jc = sj/n;
-    /* Ruutu on k.ruutu metriä. Pohjoiskoordinaatti pienenee etelään päin,
-       itäkoordinaatti kasvaa itään. */
-    const lat = k.pohjoisLat - (jc * k.ruutu) / 111320;
-    const lon = k.lansiLon + (ic * k.ruutu) / (111320 * Math.cos(lat * Math.PI/180));
-    return { lat: lat, lon: lon, nimi: jarvi.nimi };
-  } catch (e) { return null; }
-};
-
-window.akSuunnattuMitta = function(dir, jarvenNimi){
-  try {
-    if (!mask || !jarvi || !jarvi.kartta) return null;
-    if (jarvenNimi && jarvi.nimi && jarvi.nimi.indexOf(jarvenNimi.split(" ")[0]) < 0) return null;
-    var ke = akKentta(Math.round(dir/5)*5 % 360), pisin = 0;
-    for (var q = 0; q < ke.length; q++) if (mask[q] && ke[q] > pisin) pisin = ke[q];
-    return pisin > 0 ? pisin : null;
-  } catch (e) { return null; }
-};
-
-/* ===== HAVAINTOKORJAUS — 15.9.2026 =====
-   Malli antoi Hirvijärvelle 4 m/s samaan aikaan kun 13 km päässä Rengonharjun
-   asema mittasi 5,8. Aallonkorkeus kasvaa suunnilleen tuulen neliössä, joten
-   kolmanneksen virhe tuulessa on kaksinkertainen virhe aallossa — tämä on niitä
-   harvoja syötteitä joissa yksi luku kaataa koko vastauksen.
-
-   MIKSI EI KORVATA VAAN KORJATAAN: asema on maalla, eri paikassa ja eri
-   rosoisuudella kuin järven pinta. Suora korvaus vaihtaisi tunnetun virheen
-   tuntemattomaan. Sen sijaan otetaan ERO havainnon ja saman tunnin ennusteen
-   välillä ja siirretään sillä lähitunteja.
-
-   MIKSI VAIMENEE: poikkeama kertoo tästä hetkestä, ei huomisesta. Täysi korjaus
-   nyt, puolet kolmen tunnin päästä, nolla kuuden jälkeen. Kaukaiset tunnit
-   jäävät ennusteen varaan koska mitään parempaa niistä ei ole.
-
-   Uenn säilyttää alkuperäisen ennusteen, jotta korjaus voidaan laskea uudelleen
-   eikä se kasaudu itsensä päälle. */
-var AK_KORJAUS_H = 6;
-var akKorjaus = null;
-
-function akHavaintokorjaus(){
-  akKorjaus = null;
-  if (!data.length) return;
-  var h = (typeof window.akHavaittuTuuli === "function") ? window.akHavaittuTuuli() : null;
-  if (!h || h.ws == null || !h.aika) return;
-
-  /* Sama tunti ennusteesta kuin havainto. Jos havainto on yli kaksi tuntia
-     vanha, sitä ei käytetä: keli on voinut vaihtua. */
-  var hetki = h.aika.getTime(), paras = null, pieninEro = Infinity;
-  for (var i = 0; i < data.length; i++){
-    var ero = Math.abs(data[i].aika.getTime() - hetki);
-    if (ero < pieninEro){ pieninEro = ero; paras = i; }
-  }
-  if (paras === null || pieninEro > 2*3600*1000) return;
-
-  var erotus = h.ws - data[paras].Uenn;
-  akKorjaus = { erotus: erotus, asema: h.asema, havaittu: h.ws,
-                ennustettu: data[paras].Uenn, puuska: h.wg, i: paras };
-
-  for (var j = 0; j < data.length; j++){
-    var tunteja = Math.abs(data[j].aika.getTime() - hetki)/3600000;
-    var paino = Math.max(0, 1 - tunteja/AK_KORJAUS_H);
-    data[j].U = Math.max(0.3, data[j].Uenn + erotus*paino);
-  }
-  viimeSuunta = null;   // aalto lasketaan uusilla tuulilla
-}
-
-/* PUUSKAISUUS. Ehto oli aiemmin pelkkä erotus (puuska yli 5 m/s keskituulta
-   kovempi). Hannun havainto 5,8 / 9,6 paljasti sen vian: erotus on 3,8 eikä
-   laukea, mutta suhde on 1,66 — poikkeuksellisen purskeinen keli. Erotus toimii
-   kovilla tuulilla, suhde matalilla. Molemmat tarvitaan. */
-function akPuuskainen(d){
-  if (!d || d.puuska == null || isNaN(d.puuska) || !d.U) return false;
-  return (d.puuska - d.U) >= 5 || (d.puuska / Math.max(d.U, 0.5)) >= 1.5;
-}
-
-function akKorostaJana(){
-  var el = $("akJana");
-  if (!el) return;
-  for (var i = 0; i < el.children.length; i++){
-    el.children[i].className = (i === valittu) ? "nyt" : "";
-  }
-}
-
-function akPiirraMerkki(ctx, S){
-  if (!akValittu || !akViime) return;
-  var k = akViime.k;
-  if (akValittu.i >= k.W || akValittu.j >= k.H) return;
-  var x = (akValittu.i + 0.5)*S, y = (akValittu.j + 0.5)*S, r = Math.max(5, S*1.6);
-  ctx.strokeStyle = "rgba(20,28,26,.85)"; ctx.lineWidth = Math.max(1.6, S*0.35);
-  ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.stroke();
-  ctx.strokeStyle = "rgba(255,255,255,.95)"; ctx.lineWidth = Math.max(1, S*0.2);
-  ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.stroke();
-}
-
-function akNaytaPiste(){
-  var el = $("akPiste");
-  if (!el) return;
-  if (!akValittu || !akViime){
-    el.textContent = "Napauta karttaa: kertoo sen kohdan aallon"; return;
-  }
-  var k = akViime.k, q = akValittu.j*k.W + akValittu.i;
-  if (!mask[q]){ el.textContent = "Maata — napauta vesialuetta"; return; }
-  var h = akViime.hs[q], F = akViime.kentta[q];
-  var tila = h <= akViime.kalaRaja ? "uisteltavissa"
-           : h <= akViime.turva ? "vain kuljettavissa" : "yli turvarajan";
-  el.innerHTML = "Tässä kohdassa <b>" + h.toFixed(2).replace(".", ",") + " m</b> · " + tila
-    + "<br>avointa vettä tuulen suuntaan "
-    + (F >= 1000 ? (F/1000).toFixed(1).replace(".", ",") + " km" : Math.round(F) + " m")
-    + " · huiput noin " + (h*1.86).toFixed(2).replace(".", ",") + " m";
 }
 
 function naytaTiedot(d){
   var pad = function(n){ return ("0"+n).slice(-2); };
   var pv = ["su","ma","ti","ke","to","pe","la"];
 
-  /* OSUUS LEIMAAN — 15.9.2026. Prosentti oli vain taulukossa, jonne pitää
-     vierittää. Se on kuitenkin se luku joka vastaa kysymykseen lähdenkö,
-     joten se kuuluu kartan päälle. Korkein järvellä jää alle pienempänä. */
-  var pros = Math.round((d.osuus || 0)*100);
-  var vari = pros >= 25 ? '#1c7a42' : pros > 0 ? '#9a7b00' : '#9b1f28';
-  $("akLeima").innerHTML = '<span style="color:' + vari + '">' + pros + ' %</span>'
-    + '<small>uisteltavissa</small>'
-    + '<span class="aika">' + pv[d.aika.getDay()] + ' klo ' + pad(d.aika.getHours()) + '</span>'
-    + '<small>huippu ' + d.korkein.toFixed(2).replace('.', ',') + ' m</small>';
-  /* Nopeus isolla, suunta omalle riville: "8 m/s" ja alle "lounaasta".
-     Yhtenä rivinä se katkesi kapealla ruudulla kesken sanan. */
-  $("akTuuli").innerHTML = d.U.toFixed(0) + " m/s"
-    + (d.puuska != null ? '<small>puuskat ' + d.puuska.toFixed(0) + ' m/s</small>' : "")
-    + "<small>" + kompassi(d.dir) + "</small>"
-    + (akKorjaus && Math.abs(akKorjaus.erotus) >= 0.5
-        ? '<small style="color:#8a5a00">korjattu havainnolla '
-          + (akKorjaus.erotus > 0 ? "+" : "") + akKorjaus.erotus.toFixed(1) + " m/s</small>"
-        : "");
+  $("akLeima").innerHTML = d.korkein.toFixed(2) + " m<small>"
+    + pv[d.aika.getDay()] + " klo " + pad(d.aika.getHours()) + "</small>";
+  $("akTuuli").textContent = d.U.toFixed(0) + " m/s " + kompassi(d.dir);
 
-  var pros = Math.round((d.osuus || 0)*100);
-  var vari = pros >= 25 ? '#3faa62' : pros > 0 ? '#f2c200' : '#bd2430';
   $("akTaulu").innerHTML =
-      '<div><span>Kalastusraja</span><b>' + akKalaRaja().toFixed(2) + ' m · '
-        + akVene().nimi.split(' · ')[0] + '</b></div>'
-    + (akKorjaus && Math.abs(akKorjaus.erotus) >= 0.5
-        ? '<div><span>Havaintokorjaus</span><b>' + akKorjaus.havaittu.toFixed(1)
-          + ' mitattu vs ' + akKorjaus.ennustettu.toFixed(1) + ' ennuste · '
-          + akKorjaus.asema + '</b></div>' : '')
-    + '<div><span>Korkein järvellä</span><b>' + d.korkein.toFixed(2) + ' m</b></div>'
+      '<div><span>Korkein järvellä</span><b>' + d.korkein.toFixed(2) + ' m</b></div>'
     + '<div><span>Suurin yksittäinen</span><b>' + (1.86*d.korkein).toFixed(2) + ' m</b></div>'
     + '<div><span>Jakso</span><b>' + d.Tp.toFixed(1) + ' s</b></div>'
     + '<div><span>Tuuli</span><b>' + d.U.toFixed(1) + ' m/s, '
@@ -4748,40 +4290,85 @@ function naytaTiedot(d){
     + '<div><span>Tuullut</span><b>' + d.tunteja + ' h samasta suunnasta</b></div>';
 }
 
-$("akLiuku").addEventListener("input", function(){
-  valittu = +this.value;
-  akKorostaJana();
-  piirra();
-});
+/* ---- AIKARULLA ----
+   Rulla piirretään kerran datan saavuttua. Valinta seuraa vierityksen
+   keskikohtaa, ja scroll-snap pitää sen tunnin tarkkuudessa.
 
-$("akJana").addEventListener("click", function(e){
-  var i = e.target && e.target.getAttribute && e.target.getAttribute("data-i");
-  if (i === null || i === undefined) return;
-  valittu = +i;
-  $("akLiuku").value = valittu;
-  akKorostaJana();
-  piirra();
-});
+   Vieritystä ei kuunnella jokaisesta pikselistä vaan requestAnimationFramella
+   — muuten raskas piirtofunktio jumittaisi rullauksen puhelimella. */
+var rullaOdottaa = false;
 
-/* Napautus. Canvasin näyttökoko ja sisäinen ruudukko ovat eri asia, joten
-   muunnos tehdään getBoundingClientRectin kautta eikä pikseleistä. */
-(function(){
-  var c = $("akKuva");
-  function osu(x, y){
-    if (!akViime) return;
-    var r = c.getBoundingClientRect(), k = akViime.k;
-    var i = Math.floor((x - r.left)/r.width*k.W);
-    var j = Math.floor((y - r.top)/r.height*k.H);
-    if (i < 0 || i >= k.W || j < 0 || j >= k.H) return;
-    akValittu = { i:i, j:j };
-    piirra();
-  }
-  c.addEventListener("click", function(e){ osu(e.clientX, e.clientY); });
-  c.addEventListener("touchstart", function(e){
-    if (!e.touches.length) return;
-    e.preventDefault(); osu(e.touches[0].clientX, e.touches[0].clientY);
-  }, { passive:false });
-})();
+function piirraRulla(){
+  var sis = $("akRullaSisus"), yleis = $("akYleis");
+  if(!sis || !data.length) return;
+  var korkein = 0;
+  for (var i = 0; i < data.length; i++) if (data[i].U > korkein) korkein = data[i].U;
+  if (korkein <= 0) korkein = 1;
+
+  var pv = ["su","ma","ti","ke","to","pe","la"];
+  var pad = function(n){ return ("0"+n).slice(-2); };
+
+  sis.innerHTML = data.map(function(d, i){
+    /* Pylvään korkeus tuulesta, ei aallosta: aallonkorkeus lasketaan vasta
+       valitulle tunnille, ja koko sarjan laskeminen etukäteen olisi raskasta.
+       Tuuli on sen paras ennakkokuva ja päivittyy samaan tahtiin. */
+    var h = Math.max(4, Math.round(34 * d.U / korkein));
+    var vrk = (d.aika.getHours() === 0) ? " vrk" : "";
+    var nyt = (i === valittu) ? " valittu" : "";
+    return '<div class="ak-tunti' + vrk + nyt + '" data-i="' + i + '">'
+      + '<b style="height:' + h + 'px"></b>'
+      + '<span>' + (d.aika.getHours() % 6 === 0 ? pad(d.aika.getHours()) : '') + '</span></div>';
+  }).join("");
+
+  yleis.innerHTML = data.map(function(d, i){
+    var v = d.U < 4 ? "#7fc6a0" : d.U < 7 ? "#c8d422" : d.U < 11 ? "#f79800" : "#bd2430";
+    return '<i style="background:' + v + '" data-i="' + i + '"'
+      + (i === valittu ? ' class="tassa"' : '') + '></i>';
+  }).join("");
+}
+
+function keskitaRulla(i, pehmea){
+  var r = $("akRulla"), sis = $("akRullaSisus");
+  if(!r || !sis.children[i]) return;
+  var el = sis.children[i];
+  r.scrollTo({ left: el.offsetLeft - r.clientWidth/2 + el.offsetWidth/2,
+               behavior: pehmea ? "smooth" : "auto" });
+}
+
+function valitseTunti(i){
+  if(i < 0 || i >= data.length || i === valittu) return;
+  valittu = i;
+  var sis = $("akRullaSisus");
+  for (var k = 0; k < sis.children.length; k++)
+    sis.children[k].classList.toggle("valittu", k === valittu);
+  var y = $("akYleis");
+  for (var m = 0; m < y.children.length; m++)
+    y.children[m].classList.toggle("tassa", m === valittu);
+  piirra();
+}
+
+$("akRulla").addEventListener("scroll", function(){
+  if (rullaOdottaa) return;
+  rullaOdottaa = true;
+  requestAnimationFrame(function(){
+    rullaOdottaa = false;
+    var r = $("akRulla"), sis = $("akRullaSisus");
+    if(!sis.children.length) return;
+    var leveys = sis.children[0].offsetWidth || 15;
+    var i = Math.round((r.scrollLeft + r.clientWidth/2 - leveys/2) / leveys);
+    valitseTunti(Math.max(0, Math.min(data.length-1, i)));
+  });
+}, { passive:true });
+
+/* Napautus rullasta tai yleiskuvasta hyppää suoraan tuntiin. */
+$("akRulla").addEventListener("click", function(e){
+  var el = e.target.closest(".ak-tunti");
+  if(el){ var i = +el.dataset.i; valitseTunti(i); keskitaRulla(i, true); }
+});
+$("akYleis").addEventListener("click", function(e){
+  var i = e.target.dataset ? +e.target.dataset.i : NaN;
+  if(!isNaN(i)){ valitseTunti(i); keskitaRulla(i, true); }
+});
 
 // ---- FMI ---------------------------------------------------------------
 function fmiUrl(lat, lon){
@@ -4790,7 +4377,7 @@ function fmiUrl(lat, lon){
   return "https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature"
     + "&storedquery_id=fmi::forecast::edited::weather::scandinavia::point::timevaluepair"
     + "&latlon=" + lat + "," + lon
-    + "&parameters=WindSpeedMS,WindDirection,WindGust&timestep=60"
+    + "&parameters=WindSpeedMS,WindDirection&timestep=60"
     + "&starttime=" + a.toISOString().slice(0,19) + "Z"
     + "&endtime="   + z.toISOString().slice(0,19) + "Z";
 }
@@ -4821,8 +4408,6 @@ function parsi(txt){
 function lataa(avain){
   jarvi = JARVET[avain];
   viimeSuunta = null;
-  akKentat = {};          // toisen järven kentät eivät kelpaa tälle
-  akValittu = null;
 
   if (!jarvi.kartta || !jarvi.kartta.maski){
     $("akLeima").innerHTML = '<small>karttadata puuttuu</small>';
@@ -4837,12 +4422,11 @@ function lataa(avain){
     .then(function(r){ return r.ok ? r.text() : Promise.reject(new Error("palvelin " + r.status)); })
     .then(function(txt){
       var s = parsi(txt);
-      var nop = s.windspeedms, suu = s.winddirection, puu = s.windgust;
+      var nop = s.windspeedms, suu = s.winddirection;
       if (!nop || !nop.length) throw new Error("tuulitietoja ei saatu");
 
       var sarja = nop.map(function(p, i){
-        return {aika:p.aika, U:p.arvo, dir: suu && suu[i] ? suu[i].arvo : null,
-                puuska: (puu && puu[i]) ? puu[i].arvo : null};
+        return {aika:p.aika, U:p.arvo, dir: suu && suu[i] ? suu[i].arvo : null};
       }).filter(function(p){ return p.U != null && p.dir != null; });
       if (!sarja.length) throw new Error("ennusteessa ei ollut arvoja");
 
@@ -4854,21 +4438,23 @@ function lataa(avain){
           if (ero > 45 || sarja[k].U < 0.55*Math.max(p.U,0.5)) break;
           t++;
         }
-        return {aika:p.aika, U:p.U, Uenn:p.U, dir:p.dir, puuska:p.puuska,
-                tunteja:t, Fpahin:20000, korkein:0, Tp:0};
+        return {aika:p.aika, U:p.U, dir:p.dir, tunteja:t, Fpahin:20000, korkein:0, Tp:0};
       });
-      akHavaintokorjaus();
 
+      /* Avataan NYKYHETKEEN eikä jakson alkuun. Menneet tunnit saavat näkyä
+         vasemmalla, mutta niitä ei katsota. */
+      var nytMs = Date.now();
       valittu = 0;
-      $("akLiuku").max = data.length - 1;
-      $("akLiuku").value = 0;
+      for (var q = 0; q < data.length; q++)
+        if (data[q].aika.getTime() <= nytMs) valittu = q;
+      piirraRulla();
+      setTimeout(function(){ keskitaRulla(valittu, false); }, 0);
       var pv = ["su","ma","ti","ke","to","pe","la"];
       var pad = function(n){ return ("0"+n).slice(-2); };
       $("akAlku").textContent  = pv[data[0].aika.getDay()] + " " + pad(data[0].aika.getHours()) + ":00";
       var v = data[data.length-1].aika;
       $("akLoppu").textContent = pv[v.getDay()] + " " + pad(v.getHours()) + ":00";
       piirra();
-      akPiirraJana();
     })
     .catch(function(e){
       $("akLeima").innerHTML = '<small>ei ennustetta</small>';
@@ -4891,40 +4477,6 @@ $("akKorosta").addEventListener("change", function(){
   korosta = this.checked;
   piirra();
 });
-
-/* Venevalinta ja kalastusraja. Raja tallentuu sille veneelle jonka kanssa sitä
-   säädetään, ja valittu vene muistetaan. */
-(function(){
-  var sel = $("akVene");
-  AK_VENEET.forEach(function(v){
-    var o = document.createElement("option");
-    o.textContent = v.nimi + " · turva " + v.turva.toFixed(2).replace(".", ",") + " m";
-    sel.appendChild(o);
-  });
-  var i = 3;
-  try { var t = localStorage.getItem(AK_LS_VENE);
-        var kk = AK_VENEET.map(function(v){ return v.id; }).indexOf(t);
-        if (kk >= 0) i = kk; } catch(e){}
-  sel.selectedIndex = i;
-
-  function naytaRaja(){
-    var r = akKalaRaja();
-    $("akRaja").max = akVene().turva;
-    $("akRaja").value = r;
-    $("akRajaL").textContent = r.toFixed(2).replace(".", ",") + " m";
-  }
-  naytaRaja();
-
-  sel.addEventListener("change", function(){
-    try { localStorage.setItem(AK_LS_VENE, akVene().id); } catch(e){}
-    naytaRaja(); akPiirraJana(); piirra();
-  });
-  $("akRaja").addEventListener("input", function(){
-    try { var r = akLueRajat(); r[akVene().id] = +this.value;
-          localStorage.setItem(AK_LS_RAJAT, JSON.stringify(r)); } catch(e){}
-    naytaRaja(); akPiirraJana(); piirra();
-  });
-})();
 
 var val = $("akJarvi");
 Object.keys(JARVET).forEach(function(k){
@@ -6442,89 +5994,28 @@ lataa(eka);
       btn.textContent = "Pysäytä mittari";
       btn.classList.add('selected');
       statusEl.textContent = "Etsitään GPS-signaalia...";
-      nopeusOtos = []; ylityksia = 0; alituksia = 0;
-      vetoPuskuri = []; vetoEdellinen = null;
 
       speedWatchId = navigator.geolocation.watchPosition(
         (pos) => {
-          /* KORJATTU 17.9.2026 — väärät nopeushälytykset järvellä.
-             Hälytys katsoi yhtä yksittäistä GPS-mittausta ilman suodatusta.
-             Kolme vikaa, jotka kaikki tuottivat hälytyksen vaikka vauhti oli
-             kohdallaan (Lowrance näytti oikein, koska se tasoittaa):
-               1. ei tasoitusta — puhelimen nopeudessa on ±0,5–1 km/h kohinaa,
-                  joten 4,8 km/h piikkasi yli 5,0 rajan
-               2. pos.coords.accuracy haettiin mutta ei käytetty
-               3. varalaskenta kahdesta sijainnista: 10 m hyppy sekunnissa = 36 km/h
-             Nyt: huono tarkkuus hylätään, varalaskenta vaatii pidemmän välin ja
-             järkevän tuloksen, ja hälytys katsoo mediaania viidestä. */
-          var TARKKUUS_RAJA = 30;     // m — tätä huonompi mittaus ei kerro nopeudesta
-          var VARA_MIN_S    = 3;      // s — lyhyemmästä välistä ei laskea nopeutta
-          var VARA_MAX_KMH  = 25;     // km/h — tätä suurempi varalaskenta on hyppy
-
-          if (pos.coords.accuracy != null && pos.coords.accuracy > TARKKUUS_RAJA) {
-            statusEl.textContent = 'GPS epätarkka (' + pos.coords.accuracy.toFixed(0)
-              + ' m) — mittaus ohitettu';
-            return;
-          }
-
           let speedMs = pos.coords.speed;
-          let laskettu = false;
 
-          if (speedMs === null || isNaN(speedMs)) {
-            /* Varalaskenta vain riittävän pitkältä väliltä, ja tulos hylätään jos
-               se on epäuskottava. Aiemmin tämä oli yleisin väärän hälytyksen syy. */
-            if (lastPos && lastTime) {
-              const dist = haversineDistMeters(lastPos.lat, lastPos.lon,
-                             pos.coords.latitude, pos.coords.longitude);
-              const dt = (pos.timestamp - lastTime) / 1000;
-              if (dt >= VARA_MIN_S) {
-                const v = dist / dt;
-                if (v * 3.6 <= VARA_MAX_KMH) { speedMs = v; laskettu = true; }
-              }
-            }
-            if (speedMs === null || isNaN(speedMs)) {
-              lastPos = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-              lastTime = pos.timestamp;
-              return;   // ei nopeutta tältä mittaukselta — ei myöskään hälytystä
+          // Fallback: Jos selain ei osaa suoraan antaa nopeutta, lasketaan se koordinaattien muutoksesta
+          if (speedMs === null) {
+            if (lastPos) {
+              let dist = haversineDistMeters(lastPos.lat, lastPos.lon, pos.coords.latitude, pos.coords.longitude);
+              let timeDiff = (pos.timestamp - lastTime) / 1000;
+              speedMs = (timeDiff > 0) ? (dist / timeDiff) : 0;
+            } else {
+              speedMs = 0;
             }
           }
 
-          if (laskettu || !lastPos) {
-            lastPos = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-            lastTime = pos.timestamp;
-          }
+          lastPos = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+          lastTime = pos.timestamp;
 
-          /* Mediaani viidestä: yksi kohinapiikki ei enää liikuta lukua lainkaan,
-             mutta todellinen muutos näkyy noin kolmessa sekunnissa. */
-          nopeusOtos.push(speedMs * 3.6);
-          if (nopeusOtos.length > 5) nopeusOtos.shift();
-          const jarj = nopeusOtos.slice().sort(function(a,b){ return a-b; });
-          let speedKmh = jarj[Math.floor(jarj.length/2)];
+          let speedKmh = speedMs * 3.6;
           disp.innerHTML = `${speedKmh.toFixed(1)} <span style="font-size:16px; color:var(--muted)">km/h</span>`;
           statusEl.textContent = `Päivitetty: ${new Date().toLocaleTimeString('fi-FI')} (Tarkkuus: ${pos.coords.accuracy.toFixed(0)}m)`;
-
-          /* Suunta: laitteen oma kurssi jos se on saatavilla ja vene liikkuu,
-             muuten laskettu kahden sijainnin välistä. Paikallaan GPS:n heading on
-             mielivaltainen, joten se kelpaa vain liikkeessä. */
-          let suunta = null;
-          if (pos.coords.heading != null && !isNaN(pos.coords.heading) && speedKmh > 1.5) {
-            suunta = pos.coords.heading;
-          } else if (vetoEdellinen) {
-            const d = haversineDistMeters(vetoEdellinen.lat, vetoEdellinen.lon,
-                        pos.coords.latitude, pos.coords.longitude);
-            if (d >= 8) {
-              const la1 = vetoEdellinen.lat*Math.PI/180, la2 = pos.coords.latitude*Math.PI/180;
-              const dlo = (pos.coords.longitude - vetoEdellinen.lon)*Math.PI/180;
-              const y = Math.sin(dlo)*Math.cos(la2);
-              const x = Math.cos(la1)*Math.sin(la2) - Math.sin(la1)*Math.cos(la2)*Math.cos(dlo);
-              suunta = (Math.atan2(y,x)*180/Math.PI + 360) % 360;
-              vetoEdellinen = { lat:pos.coords.latitude, lon:pos.coords.longitude };
-            }
-          } else {
-            vetoEdellinen = { lat:pos.coords.latitude, lon:pos.coords.longitude };
-          }
-          vetoPuskuri.push({ t: Date.now(), kmh: speedKmh, dir: suunta });
-          paivitaVetoKeskiarvo();
 
           checkSpeedAlerts(speedKmh);
           updateSlideDiverLiveDepth(speedKmh);
@@ -6582,56 +6073,6 @@ lataa(eka);
       );
     }
 
-    /* VIIDEN MINUUTIN VETOKESKIARVO.
-       Nopeus: aritmeettinen keskiarvo — kohina keskiarvoituu pois.
-       Suunta: EI aritmeettinen keskiarvo. Kulmilla 350° ja 10° keskiarvo olisi
-       180° eli täsmälleen väärä suunta. Siksi suunnat lasketaan yksikkövektorien
-       summana ja tulos otetaan sen kulmasta (ns. ympyräkeskiarvo). Hajonta
-       kertoo kuinka suoraan on ajettu: R lähellä ykköstä = suora veto. */
-    let vetoPuskuri = [];             // {t, kmh, dir}
-    let vetoEdellinen = null;         // sijainti josta suunta lasketaan
-    const VETO_IKKUNA_MS = 5*60*1000;
-
-    function paivitaVetoKeskiarvo(){
-      const el = document.getElementById('vetoKeskiarvo');
-      if(!el) return;
-      const raja = Date.now() - VETO_IKKUNA_MS;
-      while(vetoPuskuri.length && vetoPuskuri[0].t < raja) vetoPuskuri.shift();
-      /* Paikallaan olo ei kuulu vetokeskiarvoon: se vetäisi sekä nopeuden että
-         suunnan harhaan tauon ajan. */
-      const v = vetoPuskuri.filter(function(r){ return r.kmh > 1.0; });
-      if(v.length < 5){
-        el.textContent = 'Vetokeskiarvo kertyy… (' + v.length + '/5 mittausta)';
-        return;
-      }
-      const kmh = v.reduce(function(a,r){ return a + r.kmh; }, 0) / v.length;
-      const kesto = Math.round((v[v.length-1].t - v[0].t)/1000);
-      let txt = kesto >= 270 ? '5 min' : Math.round(kesto/60*10)/10 + ' min';
-      txt += ': ' + kmh.toFixed(1).replace('.',',') + ' km/h';
-
-      const suunnat = v.filter(function(r){ return r.dir != null; });
-      if(suunnat.length >= 5){
-        let sx = 0, sy = 0;
-        suunnat.forEach(function(r){
-          const a = r.dir * Math.PI/180;
-          sx += Math.sin(a); sy += Math.cos(a);
-        });
-        let kulma = Math.atan2(sx/suunnat.length, sy/suunnat.length) * 180/Math.PI;
-        if(kulma < 0) kulma += 360;
-        const R = Math.sqrt(sx*sx + sy*sy)/suunnat.length;   // 1 = suora, 0 = pyörii
-        const S = ['P','KO','I','KA','E','LO','L','LU'][Math.round(kulma/45)%8];
-        txt += ' · veto ' + Math.round(kulma) + '° ' + S
-             + (R >= 0.95 ? ' suora' : R >= 0.75 ? ' loiva kaarre' : ' mutkittelee');
-      }
-      el.textContent = txt;
-    }
-
-    /* Nopeusotos mediaania varten ja peräkkäisten ylitysten laskuri. */
-    let nopeusOtos = [];
-    let ylityksia = 0, alituksia = 0;
-    const HYSTEREESI = 0.3;   // km/h — rajan pitää ylittyä selvästi, ei 0,1:llä
-    const PERAKKAIN  = 3;     // mittausta — kertapiikki ei riitä hälytykseen
-
     function checkSpeedAlerts(currentSpeed) {
       const now = Date.now();
       const minS = parseFloat(document.getElementById('minSpeedLimit').value);
@@ -6661,20 +6102,17 @@ lataa(eka);
 
       if (jaahdytysJaljella > 0) return; // Jäähdyttely, ettei huuda päällekkäin
 
-      /* HYSTEREESI JA PERÄKKÄISYYS. Raja pitää ylittyä 0,3 km/h:lla ja kolmella
-         peräkkäisellä mittauksella. Yksittäinen kohinapiikki ei enää huuda, ja
-         rajan tuntumassa ajaminen ei aiheuta sarjaa hälytyksiä. */
-      const alle = !isNaN(minS) && currentSpeed < (minS - HYSTEREESI) && currentSpeed > 1.0;
-      const yli  = !isNaN(maxS) && currentSpeed > (maxS + HYSTEREESI);
-      alituksia = alle ? alituksia + 1 : 0;
-      ylityksia = yli  ? ylityksia + 1 : 0;
-
-      if (alituksia >= PERAKKAIN) {
+      // HANA! Jos vauhti tippuu liikaa (mutta vene on selvästi liikkeessä yli 1 km/h)
+      if (!isNaN(minS) && currentSpeed < minS && currentSpeed > 1.0) {
         playAlertSound('hanaa');
-        lastAlertTime = now; alertCooldown = 11000; alituksia = 0;
-      } else if (ylityksia >= PERAKKAIN) {
+        lastAlertTime = now;
+        alertCooldown = 11000; // 10 sekunnin herätyskello + 1 sekunnin varmuus
+      }
+      // HIMMAA! Jos vauhti kasvaa yli sallitun rajan
+      else if (!isNaN(maxS) && currentSpeed > maxS) {
         playAlertSound('himmaa');
-        lastAlertTime = now; alertCooldown = 16000; ylityksia = 0;
+        lastAlertTime = now;
+        alertCooldown = 16000; // 15 sekunnin sireeni + 1 sekunnin varmuus
       }
     }
     // --- /UUSI: GPS NOPEUSMITTARI LOGIIKKA ---
@@ -6694,15 +6132,6 @@ lataa(eka);
         // Kalenteri antaa lähtöoletuksen. Rajat ovat Etelä-Pohjanmaan tyypillisiä,
         // eivät tutkimustulos — siksi kysymys on yhä muutettavissa.
         get defaultVal() {
-          /* MUUTETTU 18.9.2026: mitattu pintaveden lämpötila ja sen suunta
-             voittavat kalenterin. Kalenteri ei tunne järveä — Lappajärvi on
-             36 m kraatterijärvi ja kääntyy myöhemmin kuin matala naapuri, ja
-             sama päivämäärä oli väärä ainakin toiselle. Kalenteri jää
-             varalähteeksi kun mittausta ei ole. */
-          try {
-            const m = kausiMitatusta();
-            if (m) return m;
-          } catch (e) { /* mittausta ei ole, jatketaan kalenterilla */ }
           const kk = new Date().getMonth() + 1, pv = new Date().getDate();
           if (kk <= 3 || kk === 12) return 'spring';        // jääkausi, lähtöoletus kevät
           if (kk === 4 || (kk === 5 && pv <= 20)) return 'spring';
@@ -7179,18 +6608,7 @@ lataa(eka);
     // (CORS). Jos ei salli, haku epäonnistuu hiljaisesti ja malli käyttää Open-Meteoa
     // kuten ennenkin — mitään ei rikkoudu.
     let fmiTuuli = null;   // { ws, wg, wd, aika, asema }
-    let fmiPaineSarja = [];        // { t, p } lähimmän aseman p_sea-lukemat
-    let fmiPaineTrendi = null;     // { hpa, muutos3h, tunnit, luokka }
     let fmiVirhe = null;   // viimeisin syy, näytetään käyttäjälle
-
-    /* KORJATTU 18.9.2026. Parametriluetteloon päätyi p_sea kahdesti, ja FMI
-       hylkäsi koko kyselyn virheellä HTTP 400 — jolloin myös tuulihavainto
-       katosi, eli yhden lisäyksen virhe kaatoi toimivan osan.
-       Kaksi suojaa: luettelo on nyt yksi muuttuja (ei voi tuplaantua), ja jos
-       kysely silti hylätään, se toistetaan ilman painetta. Paine on lisä;
-       tuulihavainto on se jota ilman malli huononee. */
-    const FMI_HAVAINTO_PERUS = 'ws_10min,wg_10min,wd_10min,vis,rh,t2m';
-    let FMI_HAVAINTO_PARAMS = FMI_HAVAINTO_PERUS + ',p_sea';
 
     async function haeFmiTuuli(lat, lon) {
       try {
@@ -7213,16 +6631,9 @@ lataa(eka);
         const url = 'https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature'
           + '&storedquery_id=fmi::observations::weather::simple'
           + `&bbox=${bbox}`
-          + '&parameters=' + FMI_HAVAINTO_PARAMS
+          + '&parameters=ws_10min,wg_10min,wd_10min,vis,rh,t2m'
           + `&starttime=${alku}`;
-        let r = await fetch(url, { cache: 'no-store' });
-        if (r.status === 400 && FMI_HAVAINTO_PARAMS !== FMI_HAVAINTO_PERUS) {
-          /* Paine ei kelvannut tälle kyselylle: pudotetaan se pysyvästi ja
-             haetaan uudelleen, jotta tuuli saadaan silti. */
-          FMI_HAVAINTO_PARAMS = FMI_HAVAINTO_PERUS;
-          r = await fetch(url.replace(/&parameters=[^&]*/,
-                '&parameters=' + FMI_HAVAINTO_PERUS), { cache: 'no-store' });
-        }
+        const r = await fetch(url, { cache: 'no-store' });
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const xml = new DOMParser().parseFromString(await r.text(), 'text/xml');
         const el = xml.getElementsByTagNameNS('*', 'BsWfsElement');
@@ -7250,15 +6661,6 @@ lataa(eka);
             });
           }
           const a = asemat.get(avain);
-          /* MITATTU ILMANPAINE — 18.9.2026. Paineen trendi oli mallin biaseissa
-             mukana, mutta se tuli Open-Meteon ENNUSTEESTA. Asemat mittaavat
-             painetta, ja mittaus voittaa mallin samasta hetkestä. p_sea on
-             merenpinnan tasoon redusoitu, joten asemien korkeusero ei sotke.
-             Paine talteen SARJANA: trendi tarvitsee kaksi hetkeä. */
-          if (nimi === 'p_sea' && aikaT) {
-            if (!a.paine) a.paine = [];
-            a.paine.push({ t: new Date(aikaT).getTime(), p: arvo });
-          }
           // Uudempi havainto korvaa vanhemman samalta asemalta.
           if (!a.aika || (aikaT && aikaT >= a.aika)) { a.arvot[nimi] = arvo; a.aika = aikaT; }
           else if (a.arvot[nimi] === undefined) a.arvot[nimi] = arvo;
@@ -7270,20 +6672,6 @@ lataa(eka);
         if (kelvot.length === 0) throw new Error('ei tuulihavaintoja lähialueella');
 
         const valittu = kelvot[0];
-        fmiPaineSarja = valittu.paine || [];
-        fmiPaineTrendi = null;
-        if (fmiPaineSarja.length >= 2) {
-          fmiPaineSarja.sort(function(a,b){ return a.t - b.t; });
-          const eka = fmiPaineSarja[0], vika = fmiPaineSarja[fmiPaineSarja.length-1];
-          const tunnit = (vika.t - eka.t) / 3600000;
-          if (tunnit >= 1) {
-            const muutos3h = (vika.p - eka.p) / tunnit * 3;
-            /* Sama kynnys kuin Open-Meteon versiossa (1,5 hPa / 3 h), jotta
-               mittaus ja malli eivät anna eri vastausta samasta säästä. */
-            fmiPaineTrendi = { hpa: vika.p, muutos3h: muutos3h, tunnit: Math.round(tunnit),
-              luokka: muutos3h <= -1.5 ? 'falling' : (muutos3h >= 1.5 ? 'rising' : 'stable') };
-          }
-        }
         fmiTuuli = {
           ws: valittu.arvot.ws_10min,
           wg: valittu.arvot.wg_10min,
@@ -7296,35 +6684,6 @@ lataa(eka);
           asemia: kelvot.length
         };
         fmiVirhe = null;
-        /* Kartalle: mitattu tuuli havaintokorjausta varten. Kartta on eri
-           lohkossa, joten tieto välitetään globaalin kautta. */
-        /* MITATTU ILMANPAINE — lisätty 18.9.2026.
-           Paineen trendi oli mallin biaseissa mukana, mutta se tuli Open-Meteon
-           ENNUSTEESTA. Asemat mittaavat painetta, ja mittaus on aina parempi kuin
-           malli samasta hetkestä. p_sea on merenpinnan tasoon redusoitu paine,
-           eli asemien korkeuserot eivät sotke vertailua.
-           Trendi lasketaan hakuikkunan yli: vanhin ja tuorein lukema. */
-        try {
-          if (Array.isArray(fmiPaineSarja) && fmiPaineSarja.length >= 2) {
-            fmiPaineSarja.sort(function(a,b){ return a.t - b.t; });
-            const eka = fmiPaineSarja[0], vika = fmiPaineSarja[fmiPaineSarja.length-1];
-            const tunnit = (vika.t - eka.t) / 3600000;
-            if (tunnit >= 1) {
-              const muutos3h = (vika.p - eka.p) / tunnit * 3;   // hPa / 3 h
-              fmiPaineTrendi = {
-                hpa: vika.p, muutos3h: muutos3h, tunnit: Math.round(tunnit),
-                /* Sama kynnys kuin Open-Meteon versiossa (1,5 hPa / 3 h),
-                   jotta mittaus ja malli eivät anna eri vastausta samasta säästä. */
-                luokka: muutos3h <= -1.5 ? 'falling' : (muutos3h >= 1.5 ? 'rising' : 'stable')
-              };
-            }
-          }
-        } catch(e) { fmiPaineTrendi = null; }
-
-        window.akHavaittuTuuli = function(){
-          return fmiTuuli ? { ws:fmiTuuli.ws, wg:fmiTuuli.wg, wd:fmiTuuli.wd,
-                              aika:fmiTuuli.aika, asema:fmiTuuli.asema } : null;
-        };
         return fmiTuuli;
       } catch (e) {
         // Virhe näkyviin, jotta syy voidaan päätellä. "Failed to fetch" samaan aikaan
@@ -7422,9 +6781,6 @@ lataa(eka);
         }
         if (fmiTuuli.rh !== undefined && !isNaN(fmiTuuli.rh)) lisat.push(`kosteus ${fmiTuuli.rh.toFixed(0)} %`);
         if (fmiTuuli.t2m !== undefined && !isNaN(fmiTuuli.t2m)) lisat.push(`ilma ${fmiTuuli.t2m.toFixed(1)} °C`);
-        if (fmiPaineTrendi) lisat.push(`paine ${fmiPaineTrendi.hpa.toFixed(0)} hPa `
-          + (fmiPaineTrendi.muutos3h > 0 ? '+' : '') + fmiPaineTrendi.muutos3h.toFixed(1)
-          + '/3 h (mitattu)');
       }
       const lisarivi = lisat.length
         ? `<br><span style="color:var(--muted);">${lisat.join(' · ')}</span>` : '';
@@ -7510,52 +6866,20 @@ lataa(eka);
     // Versionumero näkyviin. Tämä on käytännön tarve: useaan kertaan on jäänyt
     // epäselväksi, onko puhelimessa uusi vai vanha versio, kun service worker
     // tarjoaa välimuistista vanhaa. Numero luetaan service workerilta.
-    /* KORJATTU 18.9.2026. Tässä oli käsin kirjoitettu APP_VERSIO, jota verrattiin
-       sw.js:n versioon. Kaksi käsin ylläpidettävää lukua ei pysy synkassa: sw.js
-       kasvoi v82:een ja tämä jäi v80:een, jolloin sovellus väitti ikuisesti
-       olevansa vanhentunut vaikka se oli ajan tasalla. Se on pahempi kuin ei
-       tarkistusta lainkaan, koska se opettaa ohittamaan varoituksen.
-
-       Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
-       AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
-       sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v83';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v81';
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
-      if (!('serviceWorker' in navigator)) {
-        if (el()) el().textContent = APP_VERSIO;
-        if (st()) st().textContent = 'ei service workeria'; return;
-      }
-      /* Aktiivisen service workerin versio. Jos se ei vastaa sekunnissa
-         (vanha versio ilman viestikäsittelijää), käytetään sivun omaa lukua. */
-      const kaytossa = await new Promise(res => {
-        const sw = navigator.serviceWorker.controller;
-        if (!sw) return res(null);
-        const kanava = ev => {
-          if (ev.data && ev.data.swVersio) {
-            navigator.serviceWorker.removeEventListener('message', kanava);
-            res(String(ev.data.swVersio).replace('uistelututka-', ''));
-          }
-        };
-        navigator.serviceWorker.addEventListener('message', kanava);
-        sw.postMessage('versio');
-        setTimeout(() => res(null), 1000);
-      });
-      if (el()) el().textContent = kaytossa || APP_VERSIO;
+      if (el()) el().textContent = APP_VERSIO;
+      if (!('serviceWorker' in navigator)) { if (st()) st().textContent = 'ei service workeria'; return; }
       try {
         const r = await fetch('sw.js', { cache: 'no-store' });
         const t = await r.text();
         const m = t.match(/uistelututka-(v\d+)/);
-        const palvelimella = m ? m[1] : null;
         if (st()) {
-          if (!palvelimella) st().textContent = 'version tarkistus ei onnistunut';
-          else if (!kaytossa) st().innerHTML =
-            `<span style="color:var(--muted);">palvelimella ${palvelimella} — käytössä oleva versio ei kerro omaansa (vanha service worker)</span>`;
-          else if (kaytossa === palvelimella) st().innerHTML =
-            '<span style="color:var(--cyan);">ajan tasalla</span>';
-          else st().innerHTML =
-            `<span style="color:var(--amber);">käytössä ${kaytossa}, palvelimella ${palvelimella} — sulje sovellus kokonaan ja avaa uudelleen</span>`;
+          st().innerHTML = (m && m[1] === APP_VERSIO)
+            ? '<span style="color:var(--cyan);">ajan tasalla</span>'
+            : `<span style="color:var(--amber);">palvelimella ${m ? m[1] : '?'} — sulje sovellus ja avaa uudelleen</span>`;
         }
       } catch (e) { if (st()) st().textContent = 'version tarkistus ei onnistunut'; }
     })();
@@ -8729,15 +8053,8 @@ lataa(eka);
     //   sade   — FMI HARMONIE (Precipitation1h); Open-Meteolta ei haeta sadetta
     // Havainto voittaa ennusteen, ja tuorein voittaa vanhemman.
     function saaNyt() {
-      const ulos = { tuuli: null, tuuliLahde: null, tuuliSuunta: null,
-                     pilvi: null, pilviLahde: null, sade: null, sadeLahde: null };
-      /* Suunta lisätty 15.9.2026 kumpuamisen suunnattua pyyhkäisymatkaa varten.
-         Sama lähdejärjestys kuin nopeudella. */
-      if (typeof fmiTuuli === 'object' && fmiTuuli && fmiTuuli.wd != null) {
-        ulos.tuuliSuunta = fmiTuuli.wd;
-      } else if (omLatest && omLatest.windDir != null) {
-        ulos.tuuliSuunta = omLatest.windDir;
-      }
+      const ulos = { tuuli: null, tuuliLahde: null, pilvi: null, pilviLahde: null,
+                     sade: null, sadeLahde: null };
       if (typeof fmiTuuli === 'object' && fmiTuuli && fmiTuuli.ws != null) {
         ulos.tuuli = fmiTuuli.ws; ulos.tuuliLahde = 'FMI havainto';
       } else if (omLatest && omLatest.wind != null) {
@@ -9108,49 +8425,12 @@ lataa(eka);
               best = { score: r.score, label: r.label, hour, parts: r.parts, ws, cc };
             }
           }
-          /* KOKO PÄIVÄN LUKU — lisätty 18.9.2026.
-             Päivän luku oli sen PARAS TUNTI, ja se ei erottele päiviä: paras tunti
-             osuu lähes aina hämärään ja saa korkean pisteen melkein joka päivä.
-             Uistelussa mennään koko päiväksi, joten mittarin pitää kertoa mitä
-             päivä kokonaisuutena tarjoaa.
-
-             MITTARI: paras yhtenäinen 6 tunnin jakso valoisana aikana, sen
-             keskiarvo. Kuusi tuntia on tyypillinen vetopäivä (myös kisan mitta).
-             Yhtenäinen siksi, että hajallaan olevat hyvät tunnit eivät ole sama
-             asia kuin peräkkäiset — venettä ei siirretä kolmesti päivässä.
-             Rinnalle lasketaan hyvien tuntien määrä, joka kertoo pelivaran. */
-          const valoisatTunnit = [];
-          for (let h2 = 0; h2 < 24; h2++) {
-            const e = hourly[h2];
-            if (e && e.valoisa) valoisatTunnit.push({ h: h2, s: e.score });
-          }
-          let paivaLuku = null, paivaAlku = null, hyviaTunteja = 0;
-          if (valoisatTunnit.length) {
-            hyviaTunteja = valoisatTunnit.filter(function(x){ return x.s >= 60; }).length;
-            const W = Math.min(6, valoisatTunnit.length);
-            for (let a = 0; a + W <= valoisatTunnit.length; a++) {
-              /* Vain peräkkäiset kellotunnit kelpaavat jaksoksi. */
-              if (valoisatTunnit[a + W - 1].h - valoisatTunnit[a].h !== W - 1) continue;
-              let sum = 0;
-              for (let b = a; b < a + W; b++) sum += valoisatTunnit[b].s;
-              const ka = sum / W;
-              if (paivaLuku === null || ka > paivaLuku) { paivaLuku = ka; paivaAlku = valoisatTunnit[a].h; }
-            }
-            if (paivaLuku === null) {   // ei yhtenäistä jaksoa: koko valoisan ajan keskiarvo
-              paivaLuku = valoisatTunnit.reduce(function(a2,x){ return a2 + x.s; }, 0) / valoisatTunnit.length;
-              paivaAlku = valoisatTunnit[0].h;
-            }
-            paivaLuku = Math.round(paivaLuku);
-          }
-          if (best) days.push({ dateStr, date: new Date(dateStr + 'T12:00'), hourly, sunRise, sunSet,
-                                paivaLuku, paivaAlku, hyviaTunteja, W: Math.min(6, valoisatTunnit.length), ...best });
+          if (best) days.push({ dateStr, date: new Date(dateStr + 'T12:00'), hourly, sunRise, sunSet, ...best });
         }
 
         if (days.length === 0) { el.innerHTML = '<p class="hint">Ennustetta ei saatu.</p>'; return; }
 
-        /* Paras päivä valitaan nyt päiväluvulla eikä huipputunnilla. */
-        const bestDay = days.reduce((a, b) =>
-          ((b.paivaLuku != null ? b.paivaLuku : b.score) > (a.paivaLuku != null ? a.paivaLuku : a.score)) ? b : a);
+        const bestDay = days.reduce((a, b) => b.score > a.score ? b : a);
         const nimet = ['Tänään', 'Huomenna', 'Ylihuomenna'];
         const col = (s) => s >= 75 ? 'var(--cyan)' : s >= 60 ? '#7ED957' : s >= 45 ? 'var(--amber)' : s >= 30 ? '#FF9040' : 'var(--hard-red)';
 
@@ -9185,23 +8465,21 @@ lataa(eka);
               <div style="flex:1; background:${d === bestDay ? 'rgba(69,211,232,0.10)' : 'var(--panel-alt)'}; border:1px solid ${d === bestDay ? 'var(--cyan)' : 'var(--line)'}; border-radius:8px; padding:12px 8px; text-align:center;">
                 <div style="font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em;">${nimet[i]}</div>
                 <div style="font-size:11px; color:var(--muted); font-family:'JetBrains Mono',monospace;">${d.date.toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' })}</div>
-                <div style="font-family:'JetBrains Mono',monospace; font-size:30px; font-weight:700; color:${col(d.paivaLuku != null ? d.paivaLuku : d.score)}; line-height:1.15;">${d.paivaLuku != null ? d.paivaLuku : d.score}%</div>
-                <div style="font-size:11px; color:var(--muted); letter-spacing:.05em; text-transform:uppercase;">koko päivä</div>
-                <div style="font-size:12px; color:var(--text); margin-top:6px; font-family:'JetBrains Mono',monospace;">${d.paivaAlku != null ? 'paras jakso ' + String(d.paivaAlku).padStart(2,'0') + '–' + String(d.paivaAlku + d.W).padStart(2,'0') : ''}</div>
-                <div style="font-size:11px; color:var(--muted); margin-top:2px;">${d.hyviaTunteja} hyvää tuntia · huippu klo ${String(d.hour).padStart(2, '0')} (${d.score}%)</div>
+                <div style="font-family:'JetBrains Mono',monospace; font-size:30px; font-weight:700; color:${col(d.score)}; line-height:1.15;">${d.score}%</div>
+                <div style="font-size:13px; color:${col(d.score)}; font-weight:600;">${d.label}</div>
+                <div style="font-size:12px; color:var(--text); margin-top:6px; font-family:'JetBrains Mono',monospace;">paras klo ${String(d.hour).padStart(2, '0')}</div>
                 <div style="font-size:11px; color:var(--muted); margin-top:2px;">${d.ws.toFixed(1)} m/s · ${d.cc.toFixed(0)}% pilviä</div>
               </div>`).join('')}
           </div>
           <div style="background:var(--panel-alt); border:1px solid var(--cyan); border-radius:8px; padding:12px;">
             <div style="font-size:13px; color:var(--cyan); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">Paras päivä</div>
-            <div style="font-size:17px; font-weight:600; margin-bottom:8px;">${nimet[days.indexOf(bestDay)]} ${bestDay.date.toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' })} — koko päivä ${bestDay.paivaLuku != null ? bestDay.paivaLuku : bestDay.score}%, paras jakso klo ${String(bestDay.paivaAlku).padStart(2,'0')}–${String(bestDay.paivaAlku + bestDay.W).padStart(2,'0')}</div>
-            <div style="font-size:13px; color:var(--muted); margin-bottom:8px;">Huipputunti klo ${String(bestDay.hour).padStart(2, '0')} on ${bestDay.score}% (${bestDay.label}). Erittely alla koskee sitä tuntia.</div>
+            <div style="font-size:17px; font-weight:600; margin-bottom:8px;">${nimet[days.indexOf(bestDay)]} ${bestDay.date.toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' })} klo ${String(bestDay.hour).padStart(2, '0')} — ${bestDay.score}% (${bestDay.label})</div>
             ${bestDay.parts.map(p => `<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px solid rgba(30,51,80,0.5);font-size:13px;">
               <span style="color:#BAC9DB;">${p.t}</span>
               <span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${p.v > 0 ? 'var(--cyan)' : 'var(--hard-red)'};white-space:nowrap;">${p.v > 0 ? '+' : ''}${p.v}</span>
             </div>`).join('')}
           </div>
-          <p class="hint" style="margin-top:10px;">Iso luku on <strong>koko päivän mittari</strong>: parhaan yhtenäisen kuuden tunnin jakson keskiarvo valoisana aikana. Se erottaa päivän jossa on yksi hyvä hetki päivästä joka kantaa koko reissun. Huipputunti näkyy erikseen — se on useimmiten hämärässä ja korkea lähes joka päivä, joten se ei yksin kerro paljon. Veden lämpötila oletetaan samaksi koko jaksolle, ja sääennusteen epävarmuus kasvaa selvästi kolmatta päivää kohti.</p>`;
+          <p class="hint" style="margin-top:10px;">Kunkin päivän luku on sen päivän <strong>paras tunti</strong> valoisana aikana. Veden lämpötila oletetaan samaksi koko jaksolle. Sääennusteen epävarmuus kasvaa selvästi kolmatta päivää kohti.</p>`;
       } catch (err) {
         console.error('Taimenkeli-ennuste epäonnistui:', err);
         el.innerHTML = '<p class="hint" style="color:var(--hard-red);">Ennusteen haku epäonnistui.</p>';
@@ -9643,12 +8921,10 @@ lataa(eka);
         if (!isNaN(val)) d = Math.min(d, val);
       }
 
-      /* Valoperäiset erikseen: niistä otetaan suurin, ei summa. */
-      let bias = valoBias([
-        wind === 'foam' ? 1.5 * tuuliKerroin() : 0,
-        wind === 'hard' ? 1 : 0,
-        light === 'cloudy' ? 1.5 : 0
-      ]);
+      let bias = 0;
+      if (wind === 'foam') bias += 1.5;
+      if (wind === 'hard') bias += 1;
+      if (light === 'cloudy') bias += 1.5;
       if (a.pressure === 'falling') bias += 1;
       if (a.pressure === 'stable') d += 1;
       if (a.windside === 'windward') d -= 1.5;
@@ -9718,11 +8994,10 @@ lataa(eka);
         if (!isNaN(val) && t !== undefined && t >= 16) d = Math.min(d, val);
       }
 
-      let bias = valoBias([
-        wind === 'foam' ? 1 * tuuliKerroin() : 0,
-        wind === 'hard' ? 0.5 : 0,
-        light === 'cloudy' ? 1 : 0
-      ]);
+      let bias = 0;
+      if (wind === 'foam') bias += 1;
+      if (wind === 'hard') bias += 0.5;
+      if (light === 'cloudy') bias += 1;
       d = Math.max(0.5, d - bias * 0.4);
       if (currentLocation.maxDepth) d = Math.min(d, currentLocation.maxDepth - 0.5);
       return d;
@@ -9782,16 +9057,14 @@ lataa(eka);
         d = activeBaitDepth + 2;
       }
 
-      /* Hämärä on nimenomaan valoa, joten se kuuluu samaan ryhmään eikä
-         lisäykseksi sen päälle. */
-      const hamara = (Math.abs(hour - cachedSunData.rise) <= 1.5
-                   || Math.abs(hour - cachedSunData.set) <= 1.5) ? 1.5 : 0;
-      let bias = valoBias([
-        wind === 'foam' ? 1.5 * tuuliKerroin() : 0,
-        wind === 'hard' ? 2.5 : 0,
-        light === 'cloudy' ? 2 : 0,
-        hamara
-      ]);
+      let bias = 0;
+      if (wind === 'foam') bias += 1.5;
+      if (wind === 'hard') bias += 2.5;
+      if (light === 'cloudy') bias += 2;
+
+      if (Math.abs(hour - cachedSunData.rise) <= 1.5 || Math.abs(hour - cachedSunData.set) <= 1.5) {
+        bias += 1.5;
+      }
 
       if (a.clarity !== undefined) {
         if (a.clarity <= 2) bias += 1.5;
@@ -9934,7 +9207,7 @@ lataa(eka);
       }
 
       let bias = 0;
-      if (wind === 'foam') bias += 1 * tuuliKerroin();
+      if (wind === 'foam') bias += 1;
       if (light === 'cloudy') bias += 1;
       d = Math.max(0.5, d - bias * 0.4);
       if (currentLocation.maxDepth) d = Math.min(d, currentLocation.maxDepth - 1.0);
@@ -10339,32 +9612,10 @@ lataa(eka);
           });
           if (paras) { station = paras; asemaEtaisyys = lyhin / 1000; }
         }
-        /* ASEMAN SIJAINTI TALTEEN — 18.9.2026.
-           Yksi mittauspiste ei kerro koko järvestä. Tuuli kallistaa
-           harppauskerrosta: TUULEN PUOLEISELLA rannalla kylmä nousee, ja
-           VASTARANNALLA lämmin päällysvesi kasautuu paksummaksi. Sama tuuli voi
-           siis laskea lämpötilaa toisella rannalla ja nostaa sitä toisella.
-           Ilman aseman sijaintia lämpötilan muutosta ei voi tulkita oikein. */
-        sykeAsema = null;
-        try {
-          const E = station.KoordErTmIta ?? station.KoordItaEtrs ?? station.Ita ?? null;
-          const N = station.KoordErTmPohj ?? station.KoordPohjEtrs ?? station.Pohjoinen ?? null;
-          if (E !== null && N !== null) {
-            const k = TM35.inv(E, N);
-            sykeAsema = { nimi: station.Nimi, lat: k.lat, lon: k.lon };
-          }
-        } catch (e) { sykeAsema = null; }
         const tempUrl = new URL(`${baseUrl}/LampoPintavesi`);
         tempUrl.searchParams.set('$filter', `Paikka_Id eq ${station.Paikka_Id}`);
         tempUrl.searchParams.set('$orderby', 'Aika desc');
-        /* AIKASARJA, ei vain viimeisin — muutettu 18.9.2026.
-           Yksi lukema kertoo missä ollaan, sarja kertoo minne mennään. Sama
-           rajapinta, sama kysely, vain $top vaihtuu. Trendi ratkaisee kaksi
-           asiaa joita kalenteri ei osaa: onko järvi viilenemässä (kausi) ja
-           onko pinta pudonnut äkillisesti (kumpuaminen).
-           40 mittausta riittää: asemat mittaavat tyypillisesti kerran päivässä
-           tai harvemmin, joten se kattaa noin kuukauden. */
-        tempUrl.searchParams.set('$top', '40');
+        tempUrl.searchParams.set('$top', '1');
         const tempRes = await fetch(tempUrl, { cache: 'no-store' });
         if (!tempRes.ok) throw new Error('Network error (LampoPintavesi)');
         const tempData = await tempRes.json();
@@ -10377,19 +9628,6 @@ lataa(eka);
           tempTime = dateObj.toLocaleDateString('fi-FI') + ' klo ' + dateObj.toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' });
         }
 
-        /* TRENDI. Lasketaan pienimmän neliösumman kulmakerroin viimeisen 10
-           vuorokauden mittauksista, ja erikseen äkillinen pudotus viimeisen
-           kahden vuorokauden sisällä. */
-        sykeLampoSarja = [];
-        if (tempData.value && tempData.value.length) {
-          tempData.value.forEach(function (r) {
-            const a = Number(r.Arvo), t = new Date(r.Aika).getTime();
-            if (!isNaN(a) && !isNaN(t)) sykeLampoSarja.push({ t: t, c: a });
-          });
-          sykeLampoSarja.sort(function (a, b) { return a.t - b.t; });
-        }
-        sykeLampoTrendi = laskeLampoTrendi(sykeLampoSarja);
-
         if (tempVal !== null) {
           // MITTAUKSEN IKÄ — uusi 2.9.2026. Aiemmin viimeisin lukema näytettiin
           // sellaisenaan riippumatta siitä oliko se eilinen vai vuosien takainen.
@@ -10398,16 +9636,6 @@ lataa(eka);
           latestSykeTemp = (ikaVrk <= 14) ? tempVal : null;
 
           let huom = '';
-          /* Trendi näkyviin: yksi lukema ei kerro onko järvi kääntymässä. */
-          if (sykeLampoTrendi) {
-            const T = sykeLampoTrendi;
-            const merkki = T.kulma > 0 ? '+' : '';
-            huom += ` <span style="color:var(--cyan);">${T.suunta} ${merkki}${T.kulma.toFixed(2)} °C/vrk`
-                 +  ` (${T.mittauksia} mittausta / ${T.vrk} vrk)</span>`;
-            if (T.pudotus2vrk !== null && T.pudotus2vrk <= -1.5) {
-              huom += ` <span style="color:var(--amber);">— pinta pudonnut ${Math.abs(T.pudotus2vrk).toFixed(1)} °C kahdessa vuorokaudessa, mahdollinen kumpuaminen</span>`;
-            }
-          }
           huom += ` <span style="color:var(--muted);">${station.Nimi}`;
           if (kaytettyTermi !== hakuTermit[0]) huom += ` (haettu sanalla "${kaytettyTermi}")`;
           huom += '</span>';
@@ -10648,12 +9876,7 @@ lataa(eka);
     async function fetchRecentWindHistory(lat, lon) {
       const el = document.getElementById('windHistoryStatus');
       try {
-        /* MUUTETTU 18.9.2026: 3 vrk -> 7 vrk. Kerrostuneisuus ei synny eikä hajoa
-           kolmessa vuorokaudessa: syvällä järvellä se on viikkojen asia, ja
-           yksittäinen tyyni jakso kolmen vuorokauden lopussa antoi harhaanjohtavan
-           kuvan. Rajapinta sallii jopa 92 vrk, joten tämä oli vain valittu luku.
-           Seitsemän on kompromissi: kattaa yhden sääjakson, pysyy silti tuoreena. */
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=wind_speed_10m,wind_direction_10m&past_days=7&forecast_days=1&wind_speed_unit=ms&timezone=auto`;
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=wind_speed_10m,wind_direction_10m&past_days=3&forecast_days=1&wind_speed_unit=ms&timezone=auto`;
         const res = await fetch(url);
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
@@ -10663,7 +9886,7 @@ lataa(eka);
         const speeds = [];
         for (let i = 0; i < data.hourly.time.length; i++) {
           const t = new Date(data.hourly.time[i]);
-          if (t <= now && t >= new Date(now.getTime() - 7 * 86400000)) {
+          if (t <= now && t >= new Date(now.getTime() - 3 * 86400000)) {
             const v = data.hourly.wind_speed_10m[i];
             if (v !== null && v !== undefined) speeds.push(v);
           }
@@ -10671,70 +9894,11 @@ lataa(eka);
         if (speeds.length === 0) return;
         const maxWind = Math.max(...speeds);
         const avgWind = speeds.reduce((a, b) => a + b, 0) / speeds.length;
-        /* Kaksi vuorokautta erikseen: sekoittuminen on tuore ilmiö, ja viikon
-           takainen myrsky ei kerro tästä hetkestä samaa kuin eilinen. */
-        const tuoreet = [];
-        for (let i = 0; i < data.hourly.time.length; i++) {
-          const t2 = new Date(data.hourly.time[i]);
-          if (t2 <= now && t2 >= new Date(now.getTime() - 2 * 86400000)) {
-            const v2 = data.hourly.wind_speed_10m[i];
-            if (v2 !== null && v2 !== undefined) tuoreet.push(v2);
-          }
-        }
-        const maxTuore = tuoreet.length ? Math.max(...tuoreet) : maxWind;
 
         let mixText;
-        if (maxTuore >= 8) mixText = "Viimeisen 2 vrk aikana kova tuuli (" + maxTuore.toFixed(0) + " m/s) — vesi todennäköisesti sekoittunut, harppauskerros voi olla heikko tai hajonnut.";
-        else if (maxTuore >= 5) mixText = "Viimeisen 2 vrk aikana kohtalaista tuulta (" + maxTuore.toFixed(0) + " m/s) — jonkin verran sekoittumista.";
-        else if (maxWind >= 8) mixText = "Viimeiset 2 vrk tyyniä, mutta viikon sisällä kova tuuli (" + maxWind.toFixed(0) + " m/s) — kerrostuneisuus rakentuu uudelleen.";
-        else mixText = "Viikko melko tyyntä (huippu " + maxWind.toFixed(0) + " m/s, keskiarvo " + avgWind.toFixed(1) + " m/s) — kerrostuneisuus on päässyt vahvistumaan.";
-
-        /* Mitattu pintaveden trendi kertoo saman asian toisesta suunnasta:
-           tuuli on syy, lämpötilan käyttäytyminen on seuraus. Kun molemmat
-           sanovat samaa, arvio on vahvempi kuin kumpikaan yksin. */
-        try {
-          if (typeof sykeLampoTrendi !== 'undefined' && sykeLampoTrendi) {
-            const T = sykeLampoTrendi;
-            /* MITTAUSPISTEEN SIJAINTI RATKAISEE TULKINNAN — 18.9.2026.
-               Aiempi versio luki pudotuksen suoraan kumpuamiseksi. Se on oikein
-               vain jos asema sattuu olemaan tuulen puoleisella rannalla. Tuuli
-               kallistaa harppauskerrosta: yläpuolella kylmä nousee, alapuolella
-               lämmin kasautuu. Siksi
-                 - pudotus YLÄTUULEN asemalla  = kumpuaminen siinä kohdassa
-                 - pudotus ALATUULEN asemalla  = koko järvi viilenee tai sekoittuu
-                 - EI pudotusta alatuulen asemalla EI tarkoita ettei kumpua:
-                   se voi kummuta vastarannalla jota asema ei näe.
-               Tuulen suunta otetaan mitatusta havainnosta, ei ennusteesta. */
-            const tuuliSuunta = (typeof fmiTuuli === 'object' && fmiTuuli && fmiTuuli.wd != null)
-              ? fmiTuuli.wd : (omLatest ? omLatest.windDir : null);
-            const puoli = (typeof asemanPuoli === 'function') ? asemanPuoli(tuuliSuunta) : null;
-            const asemaNimi = (typeof sykeAsema === 'object' && sykeAsema) ? sykeAsema.nimi : 'mittauspiste';
-
-            if (T.pudotus2vrk !== null && T.pudotus2vrk <= -1.5) {
-              mixText += " Pintavesi on pudonnut " + Math.abs(T.pudotus2vrk).toFixed(1)
-                + " °C kahdessa vuorokaudessa (" + asemaNimi + ")";
-              if (puoli === 'ylatuuli') {
-                mixText += " — asema on tuulen puoleisella rannalla, eli tämä on juuri se kohta"
-                        +  " jossa kumpuaminen näkyy. Vahva merkki.";
-              } else if (puoli === 'alatuuli') {
-                mixText += " — asema on alatuulen rannalla, jossa lämmin vesi pikemminkin kasautuu."
-                        +  " Pudotus siellä viittaa koko järven viilenemiseen tai sekoittumiseen,"
-                        +  " ei paikalliseen kumpuamiseen.";
-              } else {
-                mixText += " — viittaa kumpuamiseen tai sekoittumiseen.";
-              }
-            } else if (puoli === 'alatuuli' && maxTuore >= 5) {
-              /* Tämä on se tapaus jonka yksi mittari piilottaa kokonaan. */
-              mixText += " HUOM: " + asemaNimi + " on alatuulen rannalla, jossa lämmin päällysvesi"
-                      +  " kasautuu. Tasainen tai nouseva lämpötila siellä EI sulje pois kumpuamista"
-                      +  " vastarannalla — päinvastoin, kallistuva harppauskerros tuottaa molemmat"
-                      +  " yhtä aikaa.";
-            } else if (T.suunta === 'viilenee' && maxTuore < 5) {
-              mixText += " Pintavesi viilenee tasaisesti (" + T.kulma.toFixed(2)
-                + " °C/vrk) ilman kovaa tuulta — normaalia syyskiertoa.";
-            }
-          }
-        } catch (e) { /* lämpötilatrendiä ei ole, tuuliteksti riittää */ }
+        if (maxWind >= 8) mixText = "Viimeisen 3 vrk aikana kova tuuli — vesi todennäköisesti hyvin sekoittunut, harppauskerros voi olla heikko/hajonnut.";
+        else if (maxWind >= 5) mixText = "Viimeisen 3 vrk aikana kohtalaista tuulta — jonkin verran sekoittumista.";
+        else mixText = "Viimeiset 3 vrk melko tyyniä — kerrostuneisuus on päässyt vahvistumaan.";
 
         recentWindSummary = mixText;
         laskeTuuliKertyma(data, now);
@@ -10828,32 +9992,9 @@ lataa(eka);
       }
     }
 
-    /* TUULIBIAS SUHTEESSA MITATTUUN — lisätty 15.9.2026.
-       Keskimmäinen tuuliluokka kattaa 2–6 m/s. Aiemmin jokainen sen sisällä
-       oleva tuuli antoi saman biasin, eli 2,1 m/s ja 5,9 m/s siirsivät kalaa
-       yhtä paljon. Ne eivät ole sama keli: edellisessä on väreitä, jälkimmäisessä
-       vaahtolinjat, ja bias on nimenomaan pinnan rikkoutumisesta.
-       Kerroin on lineaarinen kaistan yli: 2 m/s -> 0, 6 m/s -> 1. Jos mitattua
-       tuulta ei ole (käsin valittu luokka), palautetaan 1 eli vanha käytös. */
-    let mitattuTuuliMs = null;
-    function tuuliKerroin(){
-      if (mitattuTuuliMs === null || isNaN(mitattuTuuliMs)) return 1;
-      return Math.max(0, Math.min(1, (mitattuTuuliMs - 2) / 4));
-    }
-
     function applyOpenMeteo() {
       if (!omLatest) return;
-      // KORJATTU 15.9.2026. Rajat olivat 3 ja 7 m/s, mutta painikkeiden omat
-      // tekstit sanovat "Tyyni (0–2 m/s)" ja "Kova (> 6 m/s)". Luokittelu ja
-      // painikkeen teksti olivat siis eri mieltä, ja 3,1 m/s luiskahti
-      // keskiluokkaan jonka nimi on "vaahtolinjoja näkyy". Rajat siirretään
-      // vastaamaan sitä mitä painikkeissa lukee.
-      const windVal = omLatest.wind < 2 ? 'calm' : (omLatest.wind < 6 ? 'foam' : 'hard');
-      /* Paine: mitattu voittaa mallin, kuten tuulessakin. */
-      if (fmiPaineTrendi) omLatest.trend = fmiPaineTrendi.luokka;
-      // Mitattu tuuli talteen, jotta biasia ei tarvitse antaa koko 2–6 m/s
-      // kaistalle samansuuruisena. Ks. tuuliKerroin().
-      mitattuTuuliMs = omLatest.wind;
+      const windVal = omLatest.wind < 3 ? 'calm' : (omLatest.wind < 7 ? 'foam' : 'hard');
       const q2 = questions.find(x => x.id === 'wind');
       const wi = q2.options.findIndex(o => o.v === windVal);
       const o2 = document.getElementById('opts-wind');
@@ -12201,117 +11342,6 @@ lataa(eka);
       return pts[0].c;
     }
 
-    /* Pintaveden lämpötilasarja ja siitä johdettu trendi. Sarja on aikajärjestyksessä
-       vanhimmasta uusimpaan. */
-    let sykeLampoSarja = [];
-    let sykeLampoTrendi = null;
-    let sykeAsema = null;          // { nimi, lat, lon } — mittauspisteen sijainti
-
-    /* Mittauspisteen asema tuuleen nähden. Palauttaa 'ylatuuli' (asema on sillä
-       rannalla mistä tuulee — siellä kylmä nousee), 'alatuuli' (asema on sillä
-       rannalla johon tuuli puhaltaa — siellä lämmin kasautuu) tai 'sivussa'.
-       Vertailu tehdään järven keskipisteestä katsoen. */
-    function asemanPuoli(tuuliSuunta) {
-      if (!sykeAsema || tuuliSuunta == null || isNaN(tuuliSuunta)) return null;
-      /* Keskipiste karttamaskista jos aallonkorkeuskartta on avattu — se on
-         järven todellinen painopiste. Muuten currentLocation, joka voi olla
-         kilometrejä sivussa; silloin tulos on suuntaa-antava ja se sanotaan. */
-      let kesk = null, keskLahde = 'kotiranta';
-      if (typeof window.akJarvenKeskipiste === 'function') {
-        const km = window.akJarvenKeskipiste();
-        if (km) { kesk = km; keskLahde = 'kartta'; }
-      }
-      if (!kesk && currentLocation) {
-        kesk = { lat: currentLocation.sykeLat ?? currentLocation.lat,
-                 lon: currentLocation.sykeLon ?? currentLocation.lon };
-      }
-      if (!kesk) return null;
-      /* Suuntima keskipisteestä asemalle. */
-      const la1 = kesk.lat * Math.PI/180, la2 = sykeAsema.lat * Math.PI/180;
-      const dlo = (sykeAsema.lon - kesk.lon) * Math.PI/180;
-      const y = Math.sin(dlo) * Math.cos(la2);
-      const x = Math.cos(la1)*Math.sin(la2) - Math.sin(la1)*Math.cos(la2)*Math.cos(dlo);
-      let suuntima = (Math.atan2(y, x) * 180/Math.PI + 360) % 360;
-      /* Tuulen suunta on se MISTÄ tuulee, eli yläpuoli on samassa suunnassa. */
-      let ero = Math.abs(((suuntima - tuuliSuunta + 540) % 360) - 180);
-      /* Aseman etäisyys keskipisteestä: jos asema on käytännössä keskellä,
-         puolta ei voi määrittää eikä pidäkään. */
-      const km = Math.hypot((sykeAsema.lat - kesk.lat)*111.3, (sykeAsema.lon - kesk.lon)*50.4);
-      if (km < 1.5) return 'keskella';
-      /* Jos keskipiste on arvattu kotirannasta, raja pidetään tiukempana:
-         väärä keskipiste kääntää suuntiman helposti 20–30 astetta. */
-      const raja = (keskLahde === 'kartta') ? 60 : 45;
-      if (ero <= raja) return 'ylatuuli';
-      if (ero >= 180 - raja) return 'alatuuli';
-      return 'sivussa';
-    }
-
-    function laskeLampoTrendi(sarja) {
-      if (!sarja || sarja.length < 3) return null;
-      const nyt = Date.now();
-      const ikkuna = sarja.filter(function (r) { return nyt - r.t <= 10 * 86400000; });
-      if (ikkuna.length < 3) return null;
-      /* Kulmakerroin °C/vrk pienimmän neliösumman suoralta. */
-      const x = ikkuna.map(function (r) { return (r.t - ikkuna[0].t) / 86400000; });
-      const y = ikkuna.map(function (r) { return r.c; });
-      const n = x.length;
-      const mx = x.reduce(function (a, b) { return a + b; }, 0) / n;
-      const my = y.reduce(function (a, b) { return a + b; }, 0) / n;
-      let num = 0, den = 0;
-      for (let i = 0; i < n; i++) { num += (x[i] - mx) * (y[i] - my); den += (x[i] - mx) * (x[i] - mx); }
-      if (den === 0) return null;
-      const kulma = num / den;
-
-      /* Äkillinen pudotus: viimeisin verrattuna kahden vuorokauden takaiseen.
-         Kumpuaminen näkyy nimenomaan tässä, ei kausitrendissä. */
-      const viim = ikkuna[ikkuna.length - 1];
-      let pudotus = null;
-      for (let i = ikkuna.length - 2; i >= 0; i--) {
-        if (viim.t - ikkuna[i].t >= 1.5 * 86400000) { pudotus = viim.c - ikkuna[i].c; break; }
-      }
-      return {
-        kulma: kulma,                       // °C vuorokaudessa
-        vrk: Math.round((ikkuna[ikkuna.length-1].t - ikkuna[0].t) / 86400000),
-        mittauksia: n,
-        viimeisin: viim.c,
-        pudotus2vrk: pudotus,
-        suunta: kulma <= -0.15 ? 'viilenee' : (kulma >= 0.15 ? 'lämpenee' : 'tasainen')
-      };
-    }
-
-    /* Kausi mitatusta lämpötilasta ja sen suunnasta. Kalenteri kertoo kumpaa
-       puolta vuotta ollaan (lämpenevä vai viilenevä), mittaus kertoo missä
-       vaiheessa. Pelkkä lämpötila ei riitä: 14 °C on toukokuussa alkukesää ja
-       syyskuussa syksyä. Palauttaa null jos mittausta ei ole. */
-    function kausiMitatusta() {
-      if (!sykeLampoTrendi || latestSykeTemp === null || latestSykeTemp === undefined) return null;
-      const t = latestSykeTemp;
-      const kk = new Date().getMonth() + 1;
-      const viilenee = sykeLampoTrendi.kulma < 0;
-      if (t < 8)  return kk <= 7 ? 'spring' : 'autumn';
-      if (t < 13) return (kk <= 7 && !viilenee) ? 'earlysummer' : 'autumn';
-      if (t < 17) return (kk <= 7 && !viilenee) ? 'earlysummer' : 'midsummer';
-      return 'midsummer';
-    }
-
-    /* VALOBIASIEN KASAUTUMINEN — korjattu 18.9.2026.
-       Biasit laskettiin yhteen: aallokko + pilvisyys + hämärä. Ne kaikki
-       kuvaavat SAMAA asiaa, veden valomäärää, joten summaaminen laskee saman
-       vaikutuksen kahdesti tai kolmesti. Hannun tapauksessa kolme
-       samansuuntaista säätä siirsi kuhaa 1,6 metriä, ja kaksi niistä oli valoa.
-
-       Nyt valoperäisistä otetaan SUURIN, ei summa. Se on sama periaate jolla
-       aallonkorkeudessa käytetään rajoittavaa tekijää: pimein tekijä määrää,
-       eikä pimeys kasaudu lisäämällä pimeitä asioita päällekkäin.
-       Paine on eri mekanismi ja pysyy erillisenä lisäyksenä.
-
-       Kerroin 0,4 jätetään ennalleen: sille ei ole lähdettä, mutta sen
-       muuttaminen samalla kertaa tekisi vaikutuksen mahdottomaksi erottaa. */
-    function valoBias(osat){
-      const v = osat.filter(function(x){ return typeof x === 'number' && x > 0; });
-      return v.length ? Math.max.apply(null, v) : 0;
-    }
-
     function autoFillTemp() {
       if (answers.temp !== undefined) return;
       const dateStr = document.getElementById('tripDate').value;
@@ -12413,389 +11443,7 @@ lataa(eka);
         if (tuuliLuokkaMitatusta()) { autoFillTuuli(); clearInterval(tuuliAjastin); }
       }, 2000);
     })();
-  
-/* ===== KOLME RUUTUA — jako ajonaikaisesti =====
-   Kortit tunnistetaan id:llä. Tuntemattomat menevät suunnitteluun, jotta
-   myöhemmin lisätty osio ei katoa näkyvistä. */
-(function(){
-  var wrap = document.querySelector('.wrap');
-  if(!wrap || document.getElementById('ruutuNavi')) return;
-
-  var JAKO = {
-    vesilla:   ['vesillaPaneeli','speedMonitorSection'],
-    raportit:  ['result','malliOsuvuus']
-    /* loput -> suunnittelu */
-  };
-  var RUUDUT = [
-    { id:'vesilla',     merkki:'▲',   nimi:'Vesillä',     otsake:'Vesillä · märät kädet' },
-    { id:'suunnittelu', merkki:'48h', nimi:'Suunnittelu', otsake:'Suunnittelu · oma harkinta' },
-    { id:'raportit',    merkki:'···', nimi:'Raportit',    otsake:'Raportit · mitä malli sanoi' }
-  ];
-
-  /* header ja footer jäävät paikoilleen kaikkien ruutujen ylä- ja alapuolelle */
-  var header = wrap.querySelector(':scope > header');
-  var footer = wrap.querySelector(':scope > footer');
-  var lapset = Array.prototype.slice.call(wrap.children)
-                 .filter(function(e){ return e !== header && e !== footer; });
-
-  var sailio = {};
-  RUUDUT.forEach(function(r){
-    var d = document.createElement('div');
-    d.id = 'ruutu-' + r.id; d.style.display = 'none';
-    d.innerHTML = '<div class="ruutuOtsake">' + r.otsake + '</div>';
-    sailio[r.id] = d;
-    if(footer) wrap.insertBefore(d, footer); else wrap.appendChild(d);
-  });
-
-  lapset.forEach(function(e){
-    var kohde = 'suunnittelu';
-    for(var k in JAKO) if(JAKO[k].indexOf(e.id) >= 0) kohde = k;
-    sailio[kohde].appendChild(e);
-  });
-  /* Analysoi- ja Dragon-napit ovat .wrap:n ulkopuolella mutta kuuluvat
-     suunnitteluun, samoin omien merkintöjen paneeli. */
-  ['ctaBar'].forEach(function(id){
-    var e = document.getElementById(id); if(e) sailio.suunnittelu.appendChild(e);
-  });
-  var merkinnat = document.querySelector('body > details.q');
-  if(merkinnat) sailio.suunnittelu.appendChild(merkinnat);
-
-  var navi = document.createElement('nav'); navi.id = 'ruutuNavi';
-  RUUDUT.forEach(function(r){
-    var b = document.createElement('button');
-    b.innerHTML = '<b>' + r.merkki + '</b>' + r.nimi;
-    b.onclick = function(){ nayta(r.id); };
-    b.setAttribute('data-ruutu', r.id);
-    navi.appendChild(b);
-  });
-  document.body.appendChild(navi);
-
-  function nayta(id){
-    RUUDUT.forEach(function(r){ sailio[r.id].style.display = (r.id===id) ? '' : 'none'; });
-    Array.prototype.forEach.call(navi.children, function(b){
-      b.classList.toggle('on', b.getAttribute('data-ruutu') === id);
-    });
-    try{ localStorage.setItem('uistelututka_ruutu', id); }catch(e){}
-    if(id === 'vesilla' && typeof paivitaVesilla === 'function') paivitaVesilla();
-    if(id === 'raportit' && typeof laskeOsuvuus === 'function') laskeOsuvuus();
-    window.scrollTo(0,0);
-  }
-  var alku = 'suunnittelu';
-  try{ var t = localStorage.getItem('uistelututka_ruutu');
-       if(t && sailio[t]) alku = t; }catch(e){}
-  nayta(alku);
-  window.naytaRuutu = nayta;
-})();
-
-/* ===== ALOITUSRUUDUN OHJAUS ===== */
-(function(){
-  var el = document.getElementById('intro');
-  if(!el) return;
-  var kylma = false;
-  try { kylma = !sessionStorage.getItem('uistelututka_intro_nahty');
-        sessionStorage.setItem('uistelututka_intro_nahty','1'); }
-  catch(e){ kylma = true; }
-  if(!kylma){ el.parentNode.removeChild(el); return; }
-
-  var poistettu = false;
-  function pois(){
-    if(poistettu) return; poistettu = true;
-    el.classList.add('pois');
-    setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 400);
-  }
-  el.addEventListener('click', pois);
-  el.addEventListener('touchstart', pois, {passive:true});
-  setTimeout(pois, 1000);   // 700 ms oli liian nopea: ei ehtinyt nähdä
-})();
-
-/* ===== VESILLÄ-PANEELIN SISÄLTÖ =====
-   Luvut vvRakennaPaketti():sta. Paneeli ei laske mitään itse. */
-var vesillaLajiValinta = 'taimen';
-try { var tv = localStorage.getItem('uistelututka_vesilla_laji');
-      if (tv) vesillaLajiValinta = tv; } catch(e){}
-
-function paivitaVesilla(){
-  var syv = document.getElementById('vesillaSyvyys');
-  if(!syv) return;
-  var p = null;
-  try { p = vvRakennaPaketti(); } catch(e){ p = null; }
-  var L = p && p.lajit ? p.lajit[vesillaLajiValinta] : null;
-  var nimiEl = document.getElementById('vesillaLaji');
-  if(nimiEl) nimiEl.textContent = (L && L.nimi) || (VV_LAJI[vesillaLajiValinta]||{}).nimi || '—';
-
-  if(!L || !L.tunnit || !L.tunnit.length){
-    syv.innerHTML = '– <small>m</small>';
-    document.getElementById('vesillaSelite').textContent =
-      'Syvyyttä ei ole vielä laskettu. Käy suunnitteluruudussa kerran — sen jälkeen tämä päivittyy itsestään.';
-    return;
-  }
-  /* Lähin tunti nykyhetkeen: yöllä lista voi alkaa vasta aamusta, jolloin
-     näytetään ensimmäinen valoisa tunti eikä tyhjää. */
-  var h = new Date().getHours(), paras = L.tunnit[0], ero = 99;
-  L.tunnit.forEach(function(r){ var e = Math.abs(r.t - h); if(e < ero){ ero = e; paras = r; } });
-
-  /* Haarukka isolla, mallin piste pienellä sen alla. Piste ei katoa — se on
-     se luku jonka ympärille kattaus rakennetaan — mutta se ei enää esiinny
-     yksin, koska yksin se väittää liikaa. */
-  const hrk = (typeof syvyysHaarukka === 'function')
-    ? syvyysHaarukka(vesillaLajiValinta, paras.syvyys) : null;
-  syv.innerHTML = (hrk ? haarukkaTeksti(hrk) : paras.syvyys.toFixed(1).replace('.',','))
-    + ' <small>m</small>';
-  document.getElementById('vesillaSelite').innerHTML =
-    (ero === 0 ? 'Tavoitesyvyys nyt klo ' + paras.t : 'Lähin laskettu tunti klo ' + paras.t)
-    + (hrk ? ' · mallin piste ' + hrk.keski.toFixed(1).replace('.',',') + ' m'
-         + ' <span style="color:var(--muted)">(±' + hrk.puolikas.toFixed(1).replace('.',',')
-         + ' m, ' + hrk.lahde + ')</span>' : '')
-    + (p.nakosyvyys ? ' · näkösyvyys ' + p.nakosyvyys.toFixed(1).replace('.',',') + ' m' : '');
-  var n = L.nopeus || [];
-  document.getElementById('vesillaNopeus').textContent = n.length === 2
-    ? n[0].toFixed(1).replace('.',',') + '–' + n[1].toFixed(1).replace('.',',') + ' km/h' : '–';
-  document.getElementById('vesillaVari').textContent =
-    (paras.varit && paras.varit.length) ? paras.varit[0][0] : '–';
-  document.getElementById('vesillaValo').textContent = paras.valo || '–';
-}
-
-function avaaLajiLaatikko(){
-  var k = document.getElementById('lajiLaatikko'); if(!k) return;
-  var n = document.getElementById('lajiNapit'); n.innerHTML = '';
-  Object.keys(VV_LAJI).forEach(function(id){
-    var b = document.createElement('button');
-    b.className = 'val' + (id === vesillaLajiValinta ? ' on' : '');
-    b.textContent = VV_LAJI[id].nimi + ' · ' + VV_LAJI[id].nopeus.join('–') + ' km/h';
-    b.onclick = function(){
-      vesillaLajiValinta = id;
-      try { localStorage.setItem('uistelututka_vesilla_laji', id); } catch(e){}
-      paivitaVesilla(); suljeLajiLaatikko();
-    };
-    n.appendChild(b);
-  });
-  k.classList.add('auki');
-}
-function suljeLajiLaatikko(){
-  var k = document.getElementById('lajiLaatikko'); if(k) k.classList.remove('auki');
-}
-setInterval(paivitaVesilla, 60000);
-/* Salamat itsestään: heti käynnistyksessä ja sen jälkeen viiden minuutin
-   välein. Haku itse rajoittaa tiheyden, joten tiheämpi ajastus ei aiheuta
-   ylimääräisiä kutsuja. */
-setTimeout(function(){ if(typeof haeSalamat === 'function') haeSalamat(); }, 4000);
-setInterval(function(){ if(typeof haeSalamat === 'function') haeSalamat(); }, 5*60*1000);
-
-/* ===== SALAMAHAVAINNOT =====
-   FMI:n salamadata on erillinen tallennettu kysely. Se palauttaa iskut
-   koordinaatteineen ja aikoineen; sovellus laskee niistä lähimmän etäisyyden
-   ja sen onko rintama lähestymässä (vertailu 30 min puoliskoissa).
-
-   VAROVAINEN TOTEUTUS: en ole voinut varmistaa kyselyn tarkkaa nimeä tästä
-   ympäristöstä käsin. Jos nimi on väärä, FMI palauttaa virhe-XML:n — se
-   käsitellään ja kerrotaan käyttäjälle sen sijaan että sivu hajoaisi.
-   Tämä ei myöskään korvaa silmiä eikä ukkosen kuuloa: 30/30-sääntö (salaman
-   ja jyrinän väli alle 30 s = suojaan, ja 30 min viimeisen jyrinän jälkeen)
-   on yhä se joka pätee veneessä. */
-let salamaHaettu = 0;
-async function haeSalamat(){
-  const el = document.getElementById('salamaRivi');
-  if(!el) return;
-  const nyt = Date.now();
-  /* AUTOMAATTINEN 18.9.2026. Nappi oli turha: salamatilanne kiinnostaa aina,
-     ei silloin kun sitä muistaa painaa. Viisi minuuttia on tiheämpi kuin
-     ukkosrintaman liike vaatii ja riittävän harva ettei se kuormita. */
-  if(nyt - salamaHaettu < 5*60*1000){ return; }
-  salamaHaettu = nyt;
-
-  const lat = (currentLocation && currentLocation.lat) || 63.14378;
-  const lon = (currentLocation && currentLocation.lon) || 23.53885;
-  const d = 1.0, dl = 2.0;   // noin 110 km pohjois-etelä, 100 km itä-länsi
-  const alku = new Date(nyt - 60*60*1000).toISOString().slice(0,19) + 'Z';
-  const url = 'https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature'
-    + '&storedquery_id=fmi::observations::lightning::simple'
-    + '&bbox=' + (lon-dl).toFixed(2) + ',' + (lat-d).toFixed(2) + ','
-               + (lon+dl).toFixed(2) + ',' + (lat+d).toFixed(2)
-    + '&starttime=' + alku;
-  try {
-    const r = await fetch(url, { cache:'no-store' });
-    if(!r.ok) throw new Error('HTTP ' + r.status);
-    const txt = await r.text();
-    if(/ExceptionReport|ExceptionText/i.test(txt)){
-      el.style.display = 'none'; return;
-    }
-    const xml = new DOMParser().parseFromString(txt, 'application/xml');
-    const el2 = xml.getElementsByTagNameNS('*','BsWfsElement');
-    const iskut = [];
-    for(let i=0;i<el2.length;i++){
-      const pos = el2[i].getElementsByTagNameNS('*','pos')[0];
-      const aika = el2[i].getElementsByTagNameNS('*','Time')[0];
-      if(!pos) continue;
-      const o = pos.textContent.trim().split(/\s+/).map(Number);
-      if(isNaN(o[0])||isNaN(o[1])) continue;
-      const km = Math.hypot((o[0]-lat)*111.3, (o[1]-lon)*111.3*Math.cos(lat*Math.PI/180));
-      iskut.push({ km: km, t: aika ? new Date(aika.textContent).getTime() : nyt });
-    }
-    /* Sama isku tulee useana rivinä (eri parametrit), joten karsitaan
-       lähes samat aika-paikka-parit. */
-    const uniikit = [];
-    iskut.forEach(function(x){
-      if(!uniikit.some(function(y){ return Math.abs(y.t-x.t)<1000 && Math.abs(y.km-x.km)<0.3; }))
-        uniikit.push(x);
-    });
-    if(!uniikit.length){
-      /* Ei salamoita = ei riviä. Tyhjä rivi vie tilaa kertomatta mitään. */
-      el.style.display = 'none'; return;
-    }
-    const lahin = Math.min.apply(null, uniikit.map(function(x){ return x.km; }));
-    const vanha = uniikit.filter(function(x){ return nyt-x.t > 30*60*1000; });
-    const tuore = uniikit.filter(function(x){ return nyt-x.t <= 30*60*1000; });
-    const lahinVanha = vanha.length ? Math.min.apply(null, vanha.map(function(x){ return x.km; })) : null;
-    const lahinTuore = tuore.length ? Math.min.apply(null, tuore.map(function(x){ return x.km; })) : null;
-    let suunta = '';
-    if(lahinVanha !== null && lahinTuore !== null){
-      if(lahinTuore < lahinVanha - 5) suunta = ' — lähestyy';
-      else if(lahinTuore > lahinVanha + 5) suunta = ' — loittonee';
-    }
-    const vari = lahin < 15 ? 'var(--hard-red)' : (lahin < 40 ? 'var(--amber)' : 'var(--muted)');
-    el.style.display = '';
-    el.innerHTML = '<span style="color:' + vari + '; font-weight:700;">⚡ '
-      + uniikit.length + ' salamaa tunnin sisällä, lähin ' + lahin.toFixed(0) + ' km' + suunta + '</span>'
-      + (lahin < 15 ? '<br><span style="color:var(--hard-red);">Maihin. 30/30-sääntö: alle 30 s salaman ja jyrinän välillä tarkoittaa että ollaan iskualueella.</span>' : '');
-  } catch(e){
-    /* Verkkokatkos ei ole uutinen veneessä — rivi pysyy piilossa. */
-    el.style.display = 'none';
-  }
-}
-
-/* ===== MALLIN OSUVUUS LOKISTA =====
-   Vertaa toteutunutta saalissyvyyttä siihen mitä malli ennusti samalle lajille.
-   Kaksi lukua, jotka kertovat eri asiaa:
-     HARHA = keskimääräinen etumerkillinen ero. Jos se on +3 m, malli ennustaa
-             systemaattisesti liian matalaa — se on korjattavissa.
-     HAJONTA = keskimääräinen itseisarvoinen ero. Se kertoo kuinka tarkka malli
-             on silloinkin kun harha on korjattu.
-   Harha on se joka kannattaa korjata; hajonta on se jota ei voi. */
-function laskeOsuvuus(){
-  const tila = document.getElementById('osuvuusTila');
-  const taulu = document.getElementById('osuvuusTaulu');
-  if(!tila || !taulu) return;
-  let lista = [];
-  try { lista = JSON.parse(localStorage.getItem(LS_SAALIS)) || []; } catch(e){ lista = []; }
-
-  const parit = [];
-  lista.forEach(function(s){
-    if(s.nollareissu) return;
-    const e = s.laji === 'jarvilohi' ? s.ennusteJarvilohi
-            : (s.laji === 'kuha' ? s.ennusteKuha
-            : (s.laji === 'muikku' ? s.ennusteMuikku : s.ennusteTaimen));
-    if(typeof s.syvyysM === 'number' && typeof e === 'number'){
-      parit.push({ laji: s.laji || '?', ero: s.syvyysM - e, toteuma: s.syvyysM,
-                   ennuste: e, aika: s.aika, vesiC: s.vesiC, kausi: s.kausi });
-    }
-  });
-
-  if(parit.length < 3){
-    tila.innerHTML = 'Vertailuun tarvitaan vähintään kolme kirjausta joissa on sekä '
-      + 'saalissyvyys että mallin ennuste. Nyt niitä on <strong>' + parit.length + '</strong>. '
-      + 'Kirjaa syvyys kala kiinni -napin jälkeen, niin tämä alkaa kertyä.';
-    taulu.innerHTML = '';
-    return;
-  }
-
-  const lajit = {};
-  parit.forEach(function(p){ (lajit[p.laji] = lajit[p.laji] || []).push(p); });
-
-  function tilastot(rivit){
-    const n = rivit.length;
-    const harha = rivit.reduce(function(a,r){ return a + r.ero; }, 0) / n;
-    const hajonta = rivit.reduce(function(a,r){ return a + Math.abs(r.ero); }, 0) / n;
-    const jarj = rivit.map(function(r){ return r.ero; }).sort(function(a,b){ return a-b; });
-    const mediaani = jarj[Math.floor(n/2)];
-    return { n: n, harha: harha, hajonta: hajonta, mediaani: mediaani };
-  }
-
-  let html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
-    + '<tr style="color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase;">'
-    + '<th style="text-align:left;padding:4px 2px;">laji</th>'
-    + '<th style="text-align:right;">kaloja</th><th style="text-align:right;">harha</th>'
-    + '<th style="text-align:right;">hajonta</th></tr>';
-  Object.keys(lajit).sort().forEach(function(l){
-    const t = tilastot(lajit[l]);
-    const vari = Math.abs(t.harha) < 1 ? 'var(--cyan)' : (Math.abs(t.harha) < 2.5 ? 'var(--amber)' : 'var(--hard-red)');
-    html += '<tr style="border-top:1px solid var(--line);">'
-      + '<td style="padding:6px 2px;">' + l + '</td>'
-      + '<td style="text-align:right;font-family:\'JetBrains Mono\',monospace;">' + t.n + '</td>'
-      + '<td style="text-align:right;font-family:\'JetBrains Mono\',monospace;color:' + vari + ';">'
-      + (t.harha >= 0 ? '+' : '') + t.harha.toFixed(1) + ' m</td>'
-      + '<td style="text-align:right;font-family:\'JetBrains Mono\',monospace;color:var(--muted);">'
-      + t.hajonta.toFixed(1) + ' m</td></tr>';
-  });
-  html += '</table>';
-
-  const kaikki = tilastot(parit);
-  let tulkinta;
-  if(kaikki.n < 8){
-    tulkinta = '<strong>' + kaikki.n + ' kalaa</strong> — liian vähän johtopäätöksiin, mutta suunta näkyy jo.';
-  } else if(Math.abs(kaikki.harha) < 1){
-    tulkinta = 'Malli osuu keskimäärin oikeaan (harha ' + kaikki.harha.toFixed(1)
-      + ' m). Hajonta ' + kaikki.hajonta.toFixed(1) + ' m on se tarkkuus jolla se toimii.';
-  } else {
-    tulkinta = 'Malli ennustaa systemaattisesti <strong>'
-      + (kaikki.harha > 0 ? 'liian matalaa' : 'liian syvää') + '</strong>: kalat ovat olleet keskimäärin '
-      + Math.abs(kaikki.harha).toFixed(1) + ' m ' + (kaikki.harha > 0 ? 'syvemmällä' : 'matalammalla')
-      + ' kuin ennuste. Se on korjattavissa. Hajonta ' + kaikki.hajonta.toFixed(1)
-      + ' m jää jäljelle sittenkin.';
-  }
-  tila.innerHTML = tulkinta;
-  taulu.innerHTML = html
-    + '<p class="hint" style="margin-top:8px;">Harha = keskimääräinen etumerkillinen ero '
-    + '(toteuma miinus ennuste). Hajonta = keskimääräinen poikkeama suuntaan katsomatta. '
-    + 'Harhan voi korjata mallista, hajontaa ei.</p>';
-}
-
-/* ===== SYVYYS HAARUKKANA =====
-   Malli antoi pisteen: "2,80 m". Kaksi desimaalia on tarkkuuslupaus jota malli
-   ei pysty pitämään — se nojaa taulukoihin, valomalliin ja biaseihin, joista
-   yksikään ei ole mitattu tästä järvestä. Kun kala tuli 9 metristä ja malli
-   sanoi 3,4 m, virhe oli mallissa mutta harha syntyi esitystavasta: piste
-   näyttää mittaukselta.
-
-   HAARUKAN LEVEYS EI OLE ARVAUS. Se otetaan ensisijaisesti saalislokista:
-   keskimääräinen itseisarvoinen poikkeama on juuri se hajonta jolla malli on
-   tähän asti osunut. Jos kirjauksia on alle kahdeksan, käytetään oletusta ja
-   se sanotaan ääneen. Leveys ei kapene alle 0,8 m eikä leviä yli 4 m: kapeampi
-   olisi sama tarkkuuslupaus uudessa muodossa, leveämpi ei ohjaisi mihinkään. */
-const HAARUKKA_OLETUS = { kuha: 2.0, taimen: 1.5, jarvilohi: 1.5, muikku: 1.0, hauki: 1.5 };
-
-function syvyysHaarukka(laji, d){
-  if(typeof d !== 'number' || isNaN(d)) return null;
-  let puolikas = HAARUKKA_OLETUS[laji] || 1.5;
-  let lahde = 'mallin oletus';
-  try {
-    const lista = JSON.parse(localStorage.getItem(LS_SAALIS)) || [];
-    const erot = [];
-    lista.forEach(function(x){
-      if(x.nollareissu || x.laji !== laji) return;
-      const e = laji === 'jarvilohi' ? x.ennusteJarvilohi
-              : (laji === 'kuha' ? x.ennusteKuha
-              : (laji === 'muikku' ? x.ennusteMuikku : x.ennusteTaimen));
-      if(typeof x.syvyysM === 'number' && typeof e === 'number') erot.push(Math.abs(x.syvyysM - e));
-    });
-    if(erot.length >= 8){
-      puolikas = erot.reduce(function(a,b){ return a+b; }, 0) / erot.length;
-      lahde = 'mitattu ' + erot.length + ' kalasta';
-    }
-  } catch(e){ /* lokia ei ole, oletus kelpaa */ }
-  puolikas = Math.max(0.8, Math.min(4, puolikas));
-  return {
-    ala: Math.max(0.5, d - puolikas),
-    yla: d + puolikas,
-    keski: d,
-    puolikas: puolikas,
-    lahde: lahde
-  };
-}
-function haarukkaTeksti(h){
-  if(!h) return '–';
-  return h.ala.toFixed(1).replace('.',',') + '–' + h.yla.toFixed(1).replace('.',',');
-}
-</script>
+  </script>
 
 
   <!-- OTTIPISTEHÄLYTYS: käyttäjän oma ääniraita, upotettu tiedostoon jotta toimii

@@ -1,8 +1,8 @@
 // Service worker — Nopeusnäyttö pro1
 //
 // Tehtävä: sovellus aukeaa ilman verkkoa ja ilman että Acoden palvelinta tarvitsee
-// käynnistää. Sivu on yksi iso HTML-tiedosto (n. 1,6 MB, josta ottipisteääni on
-// noin 0,9 MB), joten välimuistiin riittää käytännössä se, jaetut sivut ja kuvakkeet.
+// käynnistää. Sivu on yksi iso HTML-tiedosto (n. 1,2 MB, sisältää ottipisteäänen),
+// joten välimuistiin riittää käytännössä se ja kuvakkeet.
 //
 // STRATEGIA: sovellussivu haetaan verkosta ensin ja tallennetaan välimuistiin
 // (network-first). Jos verkkoa ei ole, tarjotaan välimuistista. Näin päivitetty
@@ -10,27 +10,15 @@
 // Muut tiedostot (kuvakkeet, manifest) haetaan välimuistista ensin — ne eivät muutu.
 //
 // VERSIO: kasvata tätä aina kun julkaiset uuden version. Vanha välimuisti siivotaan.
-// Versionumeron kasvatus on se mekanismi joka SIIVOAA vanhan välimuistin,
-// index2.html mukaan lukien. Ilman tätä poisto ei näkyisi puhelimissa.
-const VERSIO = 'uistelututka-v85';
+const VERSIO = 'uistelututka-v81';
 const SIVU = './';
 
-// MUUTETTU 18.9.2026. index2.html oli keskeneräinen uusi käyttöliittymä, ja se
-// poistettiin: sen aaltomalli (suunnattu pyyhkäisy, puuska, kalastusraja) on
-// siirretty index.html:n aallonkorkeuskarttaan, joten kahta mallia samasta
-// asiasta ei enää ole. Välimuistista poistaminen on tässä olennaista: ilman
-// sitä vanha kopio jäisi puhelimiin elämään omaa elämäänsä.
-//
-// Lisätty aaltokartta.html ja pyyhkaisy-laskenta.html, jotka ovat jaettuja
-// sivuja ja joita käytetään nimenomaan vesillä — siis juuri silloin kun
-// verkkoa ei välttämättä ole. Ne puuttuivat listalta kokonaan.
+// KAKSI SOVELLUSSIVUA 13.9.2026 alkaen: vanha index.html ja uusi index2.html.
+// Molemmat välimuistissa omalla avaimellaan — ks. fetch-käsittelijän korjaus.
 const ESILADATTAVAT = [
   './',
   './index.html',
-  './aaltokartta.html',
-  './pyyhkaisy-laskenta.html',
-  './kisa_maksimi.html',
-  './Lahtoaikalaskuri.html',
+  './index2.html',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
@@ -62,17 +50,6 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-/* VERSION KERTOMINEN SIVULLE — lisätty 18.9.2026.
-   Sivulla oli käsin kirjoitettu APP_VERSIO, jota verrattiin sw.js:n versioon.
-   Kahta käsin ylläpidettävää lukua ei voi pitää synkassa: sw.js kasvoi v82:een
-   ja sivun luku jäi v80:een, jolloin sovellus väitti ikuisesti olevansa
-   vanhentunut vaikka se oli ajan tasalla.
-   Nyt AKTIIVINEN service worker kertoo oman versionsa, ja sivu vertaa sitä
-   palvelimella olevaan sw.js:ään. Kumpaakaan ei tarvitse kirjoittaa käsin. */
-self.addEventListener('message', (e) => {
-  if (e.data === 'versio' && e.source) e.source.postMessage({ swVersio: VERSIO });
-});
-
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
@@ -88,20 +65,13 @@ self.addEventListener('fetch', (e) => {
 
   if (onSivu) {
     // KORJATTU 13.9.2026. Aiemmin jokaisen navigoinnin vastaus tallennettiin
-    // KIINTEÄLLÄ avaimella './'. Usean sivun kanssa se rikkoo kaikki: toisen
-    // sivun avaaminen olisi korvannut juuren sisällön, ja offline-tilassa
+    // KIINTEÄLLÄ avaimella './'. Kahden sovellussivun kanssa se rikkoo molemmat:
+    // index2.html:n avaaminen olisi korvannut juuren sisällön, ja offline-tilassa
     // sovellus olisi avannut väärän sivun. Nyt jokainen sivu tallentuu omalla
     // osoitteellaan, ja juuri './' päivitetään vain kun juurta itseään pyydetään.
-    // Tämä koskee yhä aaltokarttaa ja kisasivua, jotka ovat omia sivujaan.
     const juuri = url.pathname.endsWith('/') || url.pathname.endsWith('index.html');
-    /* KORJATTU 18.9.2026. fetch(req) sai vastauksen SELAIMEN omasta
-       välimuistista: GitHub Pages pyytää säilyttämään tiedostot noin kymmenen
-       minuuttia, joten uusi versio ei näkynyt vaikka se oli jo palvelimella ja
-       vaikka strategia on verkko-ensin. cache:'reload' ohittaa selaimen
-       välimuistin ja hakee aina palvelimelta.
-       Offline-varasto ei muutu: jos verkkoa ei ole, mennään yhä catch-haaraan. */
     e.respondWith(
-      fetch(new Request(req.url, { cache: 'reload', credentials: 'same-origin' }))
+      fetch(req)
         .then(vast => {
           const kopio = vast.clone();
           caches.open(VERSIO).then(c => {
