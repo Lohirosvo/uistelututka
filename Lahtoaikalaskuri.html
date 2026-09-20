@@ -236,7 +236,10 @@ function laskeTunti(r){
   let paras=null, arvo=Infinity;
   for(let s=0;s<8;s++) if(lkm[s] && summa[s]/lkm[s]<arvo){ arvo=summa[s]/lkm[s]; paras=s; }
   const puuska=r.WindGust;
-  const purske = puuska!=null && ((puuska-U)>=5 || (puuska/Math.max(U,0.5))>=1.5);
+  /* Raja 1,8 eikä 1,5: puuska on maa-alueilla tyypillisesti noin 1,7-kertainen
+     keskituuleen verrattuna (Ilmatieteen laitos), joten 1,5 olisi alle
+     normaalin ja merkitsisi lähes jokaisen tunnin purskeiseksi. */
+  const purske = puuska!=null && ((puuska-U)>=5 || (puuska/Math.max(U,0.5))>=1.8);
   return { dir, U, hs, pienin, suurin, suoja:paras, purske, puuska,
            valo: valovyohyke(r.TotalCloudCover!=null?r.TotalCloudCover:50, r.aika) };
 }
