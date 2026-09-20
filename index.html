@@ -12231,7 +12231,25 @@ lataa(eka);
         // mutta saman altaan sisällä. Käytetään aseman etäisyysvertailuun, jottei
         // varoitus laukea turhaan.
         sykeLat: 62.80938, sykeLon: 23.04584, secchiMeters: 0.88, secchiNote: 'itse mitattu talvella jään alta — avovesikaudella todennäköisesti sameampi' },
-      { name: 'Inarijärvi', lat: 68.919, lon: 27.733, maxDepth: 92, areaKm2: 1040, clarityClass: 5, sykeTerm: 'Inari', waterLevelStationId: 2564 }
+      { name: 'Inarijärvi', lat: 68.919, lon: 27.733, maxDepth: 92, areaKm2: 1040, clarityClass: 5, sykeTerm: 'Inari', waterLevelStationId: 2564 },
+
+      /* JÄRVET JOILLA ON LÄMPÖTILALUOTAUS — lisätty 20.9.2026.
+         Nämä kolme valittiin siksi että niillä on toimiva luotauspaikka, eli
+         harppauskerros saadaan MITTAUKSESTA eikä käsin syötettynä. Se on
+         sovelluksen heikoin kohta kaikkialla muualla.
+         Mitat Wikipediasta ja SYKEn suurten järvien listasta; ne vaikuttavat
+         vain ympyräekvivalenttiin aallonkorkeudessa, koska näille ei ole
+         karttamaskia — aallonkorkeuskartta ei siis toimi näillä järvillä,
+         vaan 48 h -ikkuna käyttää yhtä lukua koko järvelle.
+         Kirkkausluokka on arvio: Päijänne kirkas, Näsijärvi ja Pielinen
+         humuspitoisia. Se vaikuttaa valomalliin ja se kannattaa tarkistaa
+         paikan päällä näkösyvyydellä. */
+      { name: 'Näsijärvi', lat: 61.567, lon: 23.767, maxDepth: 65, areaKm2: 256,
+        clarityClass: 2, sykeTerm: 'Näsijärvi' },
+      { name: 'Päijänne', lat: 61.583, lon: 25.500, maxDepth: 95, areaKm2: 1083,
+        clarityClass: 4, sykeTerm: 'Päijänne' },
+      { name: 'Pielinen', lat: 63.266, lon: 29.614, maxDepth: 60, areaKm2: 894,
+        clarityClass: 2, sykeTerm: 'Pielinen' }
     ];
     let currentLocation = locations[0];
 
@@ -13458,7 +13476,13 @@ async function laskeKiertoIlmasto(){
    syötetystä arviosta. Luotaus tehdään kolme kertaa kuukaudessa, joten
    profiili voi olla päiviä vanha — ikä näytetään, koska tuuli muuttaa
    vesipatsasta nopeammin kuin mittausväli. */
-const LUOTAUSPAIKAT = { 'Inarijärvi': 3254, 'Inari': 3254 };
+const LUOTAUSPAIKAT = {
+  'Inarijärvi': 3254,   // Inari, Nellim, Paksuvuono — aktiivinen
+  'Inari':      3254,
+  'Pielinen':   3246,   // Pielinen, Nurmes — aktiivinen
+  'Päijänne':   3247,   // Päijänne, Tehi, Linnasaari — sarja alkaa 1950
+  'Näsijärvi':  3252    // Näsijärvi, Pengonpohja — PÄÄTTYNYT 2013, vain historia
+};
 
 async function haeJarvenProfiili(){
   const el = document.getElementById('luotausTulos');
