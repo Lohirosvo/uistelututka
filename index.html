@@ -13526,6 +13526,22 @@ async function haeJarvenProfiili(){
     }
     const ikaVrk = Math.round((Date.now() - new Date(pvm + 'T12:00').getTime()) / 86400000);
 
+    /* VANHA PROFIILI EI KERRO TÄSTÄ HETKESTÄ — lisätty 20.9.2026.
+       Luotauksia tehdään kolme kertaa kuukaudessa, mutta kaikilla paikoilla
+       ei ympäri vuoden: Päijänteen tuorein oli huhtikuulta ja Näsijärven
+       sarja päättyi 2013. Viisi kuukautta vanha profiili on kevätkierrosta,
+       ei syyskuusta, ja sen esittäminen nykytilana on harhaanjohtavaa.
+
+       Kun tuorein on yli 30 vrk vanha, haetaan sen sijaan SAMAN AJANKOHDAN
+       luotaukset aiemmilta vuosilta ja lasketaan niistä mediaani syvyyttä
+       kohden. Se on ilmastollinen arvio eikä mittaus tästä päivästä, ja se
+       sanotaan. Mutta se kertoo mikä on tyypillinen tilanne tähän aikaan
+       vuodesta — mikä on juuri se mitä lähtöä suunnitellessa kysytään. */
+    if (ikaVrk > 30) {
+      const arvio = await haeAjankohdanProfiili(base, pid, nimi, el);
+      if (arvio) return arvio;
+    }
+
     /* Malliin: harppauskerros ja pintalämpö mitatusta profiilista. */
     if(typeof answers === 'object'){
       answers.temp = profiili[0].c;
@@ -13549,6 +13565,93 @@ async function haeJarvenProfiili(){
     if(el) el.textContent = 'Profiilin haku ei onnistunut: ' + e.message;
     return null;
   }
+}
+
+/* ===== SAMAN AJANKOHDAN PROFIILI AIEMMILTA VUOSILTA =====
+   Haetaan vain kuluvan ja viereisten kuukausien rivit, jolloin datamäärä
+   pysyy kohtuullisena vaikka sarja olisi 76 vuotta pitkä. OData v3 tukee
+   month()-funktiota; jos palvelin ei tue, palataan sivuttaiseen hakuun. */
+async function haeAjankohdanProfiili(base, pid, nimi, el){
+  const nyt = new Date();
+  const kk = nyt.getMonth() + 1;
+  const kuukaudet = [kk === 1 ? 12 : kk - 1, kk, kk === 12 ? 1 : kk + 1];
+  const doyNyt = Math.round((nyt - new Date(nyt.getFullYear(), 0, 0)) / 86400000);
+  const IKKUNA = 20;   // vrk kumpaankin suuntaan
+
+  if(el) el.textContent = 'Tuorein luotaus on vanha — haetaan saman ajankohdan '
+    + 'luotaukset aiemmilta vuosilta…';
+  let rivit = [];
+  try {
+    const kkEhto = kuukaudet.map(function(m){ return 'month(Aika) eq ' + m; }).join(' or ');
+    let skip = 0;
+    while(skip < 20000){
+      const u = new URL(base + '/LampoLuotaus');
+      u.searchParams.set('$filter', 'Paikka_Id eq ' + pid + ' and (' + kkEhto + ')');
+      u.searchParams.set('$orderby', 'Aika desc');
+      u.searchParams.set('$top', '1000');
+      u.searchParams.set('$skip', String(skip));
+      const r = await fetch(u, { cache:'no-store' });
+      if(!r.ok) break;
+      const d = await r.json();
+      const v = d.value || [];
+      rivit.push.apply(rivit, v);
+      if(el) el.textContent = 'Haettu ' + rivit.length + ' riviä…';
+      if(v.length < 1000) break;
+      skip += 1000;
+    }
+  } catch(e){ return null; }
+  if(!rivit.length) return null;
+
+  /* Ryhmittely päivittäin, ja vain ne päivät jotka osuvat ikkunaan. */
+  const paivat = new Map();
+  rivit.forEach(function(x){
+    const pvm = String(x.Aika).slice(0,10);
+    const d = new Date(pvm + 'T12:00');
+    let ero = Math.abs(Math.round((d - new Date(d.getFullYear(),0,0))/86400000) - doyNyt);
+    if(ero > 182) ero = 365 - ero;          // vuodenvaihteen yli
+    if(ero > IKKUNA) return;
+    const syv = parseFloat(x.Syvyys), c = parseFloat(x.Arvo);
+    if(isNaN(syv) || isNaN(c)) return;
+    if(!paivat.has(pvm)) paivat.set(pvm, []);
+    paivat.get(pvm).push({ syv: syv, c: c });
+  });
+  if(paivat.size < 2) return null;
+
+  /* Mediaani syvyyttä kohden. Mediaani eikä keskiarvo: yksittäinen poikkeava
+     vuosi (hellekesä tai aikainen kierto) ei saa vetää arviota mukanaan. */
+  const syvyydet = new Map();
+  [...paivat.values()].forEach(function(prof){
+    prof.forEach(function(x){
+      const avain = Math.round(x.syv);
+      if(!syvyydet.has(avain)) syvyydet.set(avain, []);
+      syvyydet.get(avain).push(x.c);
+    });
+  });
+  const profiili = [...syvyydet.entries()]
+    .filter(function(e){ return e[1].length >= Math.max(2, Math.floor(paivat.size/3)); })
+    .map(function(e){
+      const v = e[1].slice().sort(function(a,b){ return a-b; });
+      return { syv: e[0], c: v[Math.floor(v.length/2)], n: v.length };
+    })
+    .sort(function(a,b){ return a.syv - b.syv; });
+  if(profiili.length < 3) return null;
+
+  const vuodet = [...paivat.keys()].map(function(x){ return +x.slice(0,4); });
+  const alin = Math.min.apply(null, vuodet), ylin = Math.max.apply(null, vuodet);
+
+  if(el){
+    el.innerHTML = '<strong style="color:var(--amber);">Ilmastollinen arvio</strong> — '
+      + 'tuorein luotaus on liian vanha, joten tämä on <strong>' + paivat.size
+      + ' luotauksen mediaani</strong> vuosilta ' + alin + '–' + ylin
+      + ', ±' + IKKUNA + ' vrk tästä päivästä.<br><br>'
+      + naytaProfiili(profiili, nimi + ' · ajankohdan mediaani', alin + '–' + ylin)
+      + '<br><span style="color:var(--muted);">Tämä ei ole mittaus tästä päivästä. '
+      + 'Se kertoo mikä on tyypillinen tilanne tähän aikaan vuodesta — yksittäinen '
+      + 'vuosi voi poiketa viikkoja suuntaan tai toiseen.</span>';
+  }
+  /* Ilmastollista arviota EI viedä malliin automaattisesti: answers.thermo
+     tarkoittaa havaittua harppauskerrosta, ei tilastoa. */
+  return profiili;
 }
 </script>
 
