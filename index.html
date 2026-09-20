@@ -1464,6 +1464,36 @@ body{padding-bottom:66px}
         <input type="number" step="1" id="vedenkorkeusRaja" style="width:90px;" value="6955">
       </div>
       <p class="hint" id="vedenkorkeusStatus" style="margin-top:10px;"></p>
+
+      <!-- LÄMPÖTILALUOTAUS — lisätty 20.9.2026.
+           SYKEn havaintoverkkoon kuuluu lämpötilaluotaus: järven pystysuuntainen
+           lämpötilajakauma mitataan kolme kertaa kuukaudessa syvänteen kohdalla
+           mittanauhan päähän kiinnitetyllä digitaalimittarilla. Se on juuri se
+           tieto jota harppauskerros- ja kumpuamislaskenta tarvitsee ja jota
+           sovelluksella ei ole ollut.
+           EI TIEDETÄ onko Lappajärvellä luotauspaikkaa — verkko on harva. Tämä
+           nappi ei arvaa vaan kysyy rajapinnalta: se listaa mitä entiteettejä
+           rajapinta tarjoaa ja hakee niistä luotaukseen viittaavat. -->
+      <div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--line);">
+        <button class="chip" onclick="etsiLuotaus()" style="border-color:var(--cyan); color:var(--cyan);">
+          Etsi lämpötilaluotaus</button>
+        <button class="chip" onclick="haeLuotausProfiili()" style="border-color:var(--amber); color:var(--amber);">
+          Hae profiili</button>
+        <!-- Vapaa hakusana: luotausverkko on harva, joten on hyödyllistä voida
+             kysyä mistä tahansa järvestä ilman että sovelluksen paikkalistaa
+             tarvitsee muuttaa. Tyhjänä käytetään valittua järveä. -->
+        <button class="chip" onclick="testaaLuotauslista()" style="border-color:var(--muted); color:var(--muted);">
+          Testaa tunnetut paikat</button>
+        <button class="chip" onclick="laskeKiertoIlmasto()" style="border-color:var(--cyan); color:var(--cyan);">
+          Milloin kierto</button>
+        <button class="chip" onclick="haeJarvenProfiili()" style="border-color:var(--amber); color:var(--amber);">
+          Tämän järven profiili</button>
+        <input type="text" id="luotausNimi" placeholder="järven nimi (tyhjä = valittu)"
+               style="margin-top:8px; width:100%; max-width:260px; padding:6px 8px;
+                      background:var(--panel); color:var(--text);
+                      border:1px solid var(--line); border-radius:6px; font-size:13px;">
+        <p class="hint" id="luotausTulos" style="margin-top:8px;"></p>
+      </div>
     </div>
 
     <div class="progress" id="progress"></div>
@@ -8437,6 +8467,18 @@ lataa(eka);
     const DR_HARPPAUS_MIN_GRAD = 0.5;   // °C per metri
     const DR_LAMPO_RAJA = 1.0;          // kuinka paljon pinnasta saa jäädä jäljessä
                                         // ja silti lasketaan "lämpimäksi"
+    /* PROFIILI SÄILYY SELAIMESSA — 20.9.2026.
+       Tarkistettu samana päivänä: SYKEn LampoLuotaus-aineistossa EI OLE
+       Lappajärven luotauspaikkaa. Nimellä löytyi 12 paikkaa, yhdelläkään ei
+       luotaushavaintoja. Luotausverkko on harva (vanhin paikka Päijänteen
+       Tehinselkä 1950), joten pystyprofiili jää DepthRiderin varaan.
+       ÄLÄ ETSI UUDESTAAN: vastaus on kysytty rajapinnalta, ei arvattu.
+
+       Koska anturi jää takilaan, profiili mitataan harvoin — ehkä kerran
+       reissussa. Siksi se tallennetaan ja säilyy sovelluksen sulkemisen yli,
+       ja sen IKÄ näytetään: vanha profiili on yhä parempi kuin ei mitään,
+       mutta käyttäjän kuuluu tietää katsovansa eilistä vesipatsasta. */
+    const LS_PROFIILI = 'uistelututka_dr_profiili';
     let drProfiili = null;   // { lukemat:[{depth,temp,mitattu}], pinta, pohja, ero,
                              //   termokliini, lampoUlottuu, tasalampoinen }
 
@@ -8512,6 +8554,8 @@ lataa(eka);
         syvinMitattu: annetut[annetut.length - 1].depth,
         aika: new Date().toISOString()
       };
+
+      try { localStorage.setItem(LS_PROFIILI, JSON.stringify(drProfiili)); } catch(e){}
 
       // Pintalämpö malliin. Tämä osa toimi ennenkin ja vaikuttaa kaikkeen.
       answers.temp = pinta;
@@ -10417,8 +10461,17 @@ lataa(eka);
             const merkki = T.kulma > 0 ? '+' : '';
             huom += ` <span style="color:var(--cyan);">${T.suunta} ${merkki}${T.kulma.toFixed(2)} °C/vrk`
                  +  ` (${T.mittauksia} mittausta / ${T.vrk} vrk)</span>`;
-            if (T.pudotus2vrk !== null && T.pudotus2vrk <= -1.5) {
-              huom += ` <span style="color:var(--amber);">— pinta pudonnut ${Math.abs(T.pudotus2vrk).toFixed(1)} °C kahdessa vuorokaudessa, mahdollinen kumpuaminen</span>`;
+            /* RANTAVESIVARAUS — 20.9.2026, lähde SY 566 (Korhonen 2002).
+               Halkosaaren mittaus tehdään puolen metrin päässä rantaviivasta,
+               veden syvyys 30 cm, loiva hiekkaranta, varjossa aamukahdeksalta,
+               ja Laasasen (1982) mukaan paikan rantavesi sekoittuu heikosti.
+               Raportti sanoo itse että paikka edustaa RANTAVEDEN keskimääräistä
+               pintalämpötilaa — ei selän pintavettä.
+               Kolmenkymmenen sentin rantavesi seuraa ilman lämpötilaa ja aurinkoa
+               paljon nopeammin kuin selkä, joten pudotus siellä voi olla sää eikä
+               kumpuaminen. Kynnys nostettu 1,5 -> 2,5 °C ja sanamuoto varovaisemmaksi. */
+            if (T.pudotus2vrk !== null && T.pudotus2vrk <= -2.5) {
+              huom += ` <span style="color:var(--amber);">— rantavesi pudonnut ${Math.abs(T.pudotus2vrk).toFixed(1)} °C kahdessa vuorokaudessa (mittaus 30 cm syvyydestä rannalta)</span>`;
             }
           }
           huom += ` <span style="color:var(--muted);">${station.Nimi}`;
@@ -10723,12 +10776,13 @@ lataa(eka);
             const puoli = (typeof asemanPuoli === 'function') ? asemanPuoli(tuuliSuunta) : null;
             const asemaNimi = (typeof sykeAsema === 'object' && sykeAsema) ? sykeAsema.nimi : 'mittauspiste';
 
-            if (T.pudotus2vrk !== null && T.pudotus2vrk <= -1.5) {
-              mixText += " Pintavesi on pudonnut " + Math.abs(T.pudotus2vrk).toFixed(1)
-                + " °C kahdessa vuorokaudessa (" + asemaNimi + ")";
+            if (T.pudotus2vrk !== null && T.pudotus2vrk <= -2.5) {
+              mixText += " Rantavesi on pudonnut " + Math.abs(T.pudotus2vrk).toFixed(1)
+                + " °C kahdessa vuorokaudessa (" + asemaNimi + ", mittaus 30 cm syvyydestä rannalta)";
               if (puoli === 'ylatuuli') {
-                mixText += " — asema on tuulen puoleisella rannalla, eli tämä on juuri se kohta"
-                        +  " jossa kumpuaminen näkyy. Vahva merkki.";
+                mixText += " — asema on tuulen puoleisella rannalla, eli tämä on se kohta"
+                        +  " jossa kumpuaminen näkyisi. Matala rantavesi seuraa silti myös ilman"
+                        +  " lämpötilaa, joten merkki on suuntaa-antava.";
               } else if (puoli === 'alatuuli') {
                 mixText += " — asema on alatuulen rannalla, jossa lämmin vesi pikemminkin kasautuu."
                         +  " Pudotus siellä viittaa koko järven viilenemiseen tai sekoittumiseen,"
@@ -12123,7 +12177,11 @@ lataa(eka);
     }
 
     const locations = [
-      { name: 'Lappajärvi (Karvala)', jarvitunnus: '47.031.1.001', lat: 63.14378, lon: 23.53885, maxDepth: 36, areaKm2: 142, clarityClass: 2, sykeTerm: 'Lappajärvi', waterLevelStationId: 2324, hasHotspotData: true, knownTasokorjaus: 13,
+      /* MITAT PÄIVITETTY 20.9.2026 lähteestä SY 566 (Korhonen 2002, Kuusisto 1992):
+         pinta-ala 141 km2, suurin syvyys 38 m, keskisyvyys 7,4 m (sama luku jota
+         aaltomalli käyttää), näkösyvyys 1,5-3 m. Aiemmat 36 m ja 142 km2 olivat
+         lähellä mutta eivät julkaistuja arvoja. */
+      { name: 'Lappajärvi (Karvala)', jarvitunnus: '47.031.1.001', lat: 63.14378, lon: 23.53885, maxDepth: 38, areaKm2: 141, clarityClass: 2, sykeTerm: 'Lappajärvi', waterLevelStationId: 2324, hasHotspotData: true, knownTasokorjaus: 13,
         // LÄHDE: Lappajärvi-artikkeli (Kalastus-lehti) — "Kun tuuli työntää aukealla selällä
         // vettä, syntyy matalikkojen päälle sekä taakse imua. Tämä vetää syvänteestä vettä ja
         // sekoittaa kalan mieleisen lämpötilan. Lappajärven kalat, myös taimenet, iskevät
@@ -12829,6 +12887,524 @@ function syvyysHaarukka(laji, d){
 function haarukkaTeksti(h){
   if(!h) return '–';
   return h.ala.toFixed(1).replace('.',',') + '–' + h.yla.toFixed(1).replace('.',',');
+}
+
+/* ===== LÄMPÖTILALUOTAUKSEN ETSINTÄ =====
+   Kysyy SYKEn hydrologiarajapinnalta mitä se tarjoaa, sen sijaan että
+   arvaisin entiteetin nimen täältä käsin. Kaksi vaihetta:
+     1. $metadata kertoo kaikki entiteetit — luotaukseen viittaavat poimitaan
+     2. jos sellainen löytyy, haetaan siitä muutama rivi nähtäväksi
+   Tämä on kertaluonteinen selvitys, ei ominaisuus: kun tiedetään mitä
+   rajapinnassa on, se kytketään kunnolla. */
+async function etsiLuotaus(){
+  const el = document.getElementById('luotausTulos');
+  if(!el) return;
+  const base = 'https://rajapinnat.ymparisto.fi/api/Hydrologiarajapinta/1.0/odata';
+  el.textContent = 'Kysytään rajapinnalta…';
+  try {
+    const r = await fetch(base + '/$metadata', { cache:'no-store' });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const txt = await r.text();
+    const nimet = [];
+    const re = /<EntitySet[^>]*Name="([^"]+)"/g;
+    let m;
+    while((m = re.exec(txt)) !== null) nimet.push(m[1]);
+    if(!nimet.length) throw new Error('entiteettejä ei löytynyt');
+
+    const luotaus = nimet.filter(function(n){
+      return /luotaus|lampotilaluot|syvyysprofiili|profiili/i.test(n);
+    });
+    const lampo = nimet.filter(function(n){ return /lampo|lämpö/i.test(n); });
+
+    let ulos = '<strong>' + nimet.length + ' entiteettiä rajapinnassa.</strong><br>';
+    ulos += 'Lämpötilaan viittaavat: ' + (lampo.length ? lampo.join(', ') : 'ei yhtään') + '<br>';
+    ulos += 'Luotaukseen viittaavat: <strong>'
+         + (luotaus.length ? luotaus.join(', ') : 'ei yhtään') + '</strong><br><br>';
+    ulos += '<span style="color:var(--muted);">Kaikki: ' + nimet.join(', ') + '</span>';
+    el.innerHTML = ulos;
+
+    /* Jos luotausentiteetti löytyi, katsotaan onko siellä Lappajärveä. */
+    if(luotaus.length){
+      const e = luotaus[0];
+      const r2 = await fetch(base + '/' + e + '?$top=5', { cache:'no-store' });
+      if(r2.ok){
+        const d = await r2.json();
+        const rivit = (d && d.value) ? d.value : [];
+        el.innerHTML += '<br><br><strong>' + e + ' — ensimmäiset rivit:</strong><br>'
+          + '<span style="font-family:monospace;font-size:11px;">'
+          + (rivit.length ? rivit.map(function(x){ return JSON.stringify(x).slice(0,160); }).join('<br>')
+                          : 'tyhjä') + '</span>';
+      }
+    }
+  } catch(e){
+    el.textContent = 'Kysely ei onnistunut: ' + e.message
+      + ' — tämä voi johtua selainrajoituksesta (CORS), ei välttämättä siitä ettei dataa ole.';
+  }
+}
+
+/* ===== LÄMPÖTILALUOTAUS: PAIKAN ETSINTÄ JA PROFIILIN HAKU =====
+   LampoLuotaus-entiteetti varmistui 20.9.2026: kentät Paikka_Id, Aika, Arvo
+   (°C) ja Syvyys (m), mittaus metrin välein, aineistoa vuodesta 1950.
+   SYKEn kuvauksen mukaan luotaus tehdään kolme kertaa kuukaudessa järvisyvänteen
+   kohdalla — eli tämä on MITATTU pystyprofiili, ei malli.
+
+   Paikkahaku: Paikka-entiteetin Suure_Id kertoo mitä paikalla mitataan.
+   Pintavedellä se on 11, vedenkorkeudella 1. Luotauksen tunnusta ei tiedetä,
+   joten sitä ei arvata: haetaan Lappajärven nimellä KAIKKI paikat ja
+   kokeillaan kutakin LampoLuotaus-kyselyllä. Se on muutama kysely kerran,
+   ja vastaus on varma sen sijaan että se olisi oletus. */
+async function haeLuotausProfiili(){
+  const el = document.getElementById('luotausTulos');
+  if(!el) return;
+  const base = 'https://rajapinnat.ymparisto.fi/api/Hydrologiarajapinta/1.0/odata';
+  const syote = document.getElementById('luotausNimi');
+  const hakusana = (syote && syote.value.trim())
+    || (currentLocation && currentLocation.sykeTerm) || 'Lappajärvi';
+  /* Pelkkä numero tulkitaan Paikka_Id:ksi: kun tunnus on tiedossa, nimihaku on
+     turha kierros. Esim. 3246 Pielinen Nurmes, 3252 Näsijärvi Pengonpohja,
+     3254 Inari Paksuvuono. */
+  if (/^\d+$/.test(hakusana)) {
+    return haeProfiiliIdlla(base, parseInt(hakusana, 10), el);
+  }
+  const termi = hakusana;
+  el.textContent = 'Etsitään luotauspaikkoja (' + termi + ')…';
+  try {
+    const u = new URL(base + '/Paikka');
+    u.searchParams.set('$filter', "substringof('" + termi + "', Nimi)");
+    u.searchParams.set('$top', '40');
+    const r = await fetch(u, { cache:'no-store' });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    const paikat = d.value || [];
+    if(!paikat.length){ el.textContent = 'Nimellä ' + termi + ' ei löytynyt paikkoja.'; return; }
+
+    el.innerHTML = paikat.length + ' paikkaa nimellä ' + termi + '. Kokeillaan luotausta…';
+    const loydot = [];
+    for(let i = 0; i < paikat.length && i < 25; i++){
+      const pid = paikat[i].Paikka_Id;
+      const lu = new URL(base + '/LampoLuotaus');
+      lu.searchParams.set('$filter', 'Paikka_Id eq ' + pid);
+      lu.searchParams.set('$orderby', 'Aika desc');
+      lu.searchParams.set('$top', '1');
+      try {
+        const rr = await fetch(lu, { cache:'no-store' });
+        if(!rr.ok) continue;
+        const dd = await rr.json();
+        if(dd.value && dd.value.length){
+          loydot.push({ id: pid, nimi: paikat[i].Nimi, viimeisin: dd.value[0].Aika });
+        }
+      } catch(e){ /* yksittäinen paikka ohi */ }
+    }
+
+    if(!loydot.length){
+      el.innerHTML = '<strong>Ei luotauspaikkaa.</strong> Nimellä ' + termi + ' löytyi '
+        + paikat.length + ' paikkaa, mutta yhdelläkään ei ole LampoLuotaus-havaintoja. '
+        + 'Verkko on harva — harppauskerros jää DepthRiderin varaan.';
+      return;
+    }
+
+    /* Uusin profiili. EI päivämääräsuodatinta: OData-versioiden datetime-literaalit
+       eroavat toisistaan, ja väärä muoto kaataisi koko kyselyn. Haetaan sen sijaan
+       120 uusinta riviä laskevassa aikajärjestyksessä ja poimitaan niistä uusimman
+       päivämäärän rivit selaimessa. Yksi luotaus on korkeintaan muutama kymmenen
+       riviä, joten 120 kattaa uusimman varmasti. */
+    const paras = loydot.sort(function(a,b){ return (a.viimeisin < b.viimeisin) ? 1 : -1; })[0];
+    const pu = new URL(base + '/LampoLuotaus');
+    pu.searchParams.set('$filter', 'Paikka_Id eq ' + paras.id);
+    pu.searchParams.set('$orderby', 'Aika desc');
+    pu.searchParams.set('$top', '120');
+    const pr = await fetch(pu, { cache:'no-store' });
+    const pd = pr.ok ? await pr.json() : { value: [] };
+    const kaikki = pd.value || [];
+    const uusinPvm = kaikki.length ? String(kaikki[0].Aika).slice(0,10) : null;
+    let profiili = kaikki
+      .filter(function(x){ return String(x.Aika).slice(0,10) === uusinPvm; })
+      .map(function(x){ return { syv: parseFloat(x.Syvyys), c: parseFloat(x.Arvo) }; })
+      .filter(function(x){ return !isNaN(x.syv) && !isNaN(x.c); })
+      .sort(function(a,b){ return a.syv - b.syv; });
+
+    let ulos = '<strong>Luotauspaikka löytyi:</strong> ' + paras.nimi + ' (id ' + paras.id + ')<br>'
+      + 'Uusin luotaus ' + String(paras.viimeisin).slice(0,10)
+      + (loydot.length > 1 ? ' · ' + loydot.length + ' paikkaa' : '') + '<br><br>';
+
+    if(profiili.length){
+      /* Jyrkin muutos metriä kohti = harppauskerros. Lasketaan mittauspisteiden
+         VÄLILTÄ, ei tasoitetusta käyrästä — muuten tasoitus määrää tuloksen. */
+      let jyrkin = null;
+      for(let i = 1; i < profiili.length; i++){
+        const dz = profiili[i].syv - profiili[i-1].syv;
+        if(dz <= 0) continue;
+        const g = (profiili[i-1].c - profiili[i].c) / dz;
+        if(!jyrkin || g > jyrkin.g) jyrkin = { g: g, syv: (profiili[i].syv + profiili[i-1].syv)/2 };
+      }
+      ulos += '<span style="font-family:monospace;font-size:11.5px;">'
+        + profiili.map(function(x){ return x.syv.toFixed(0) + ' m: ' + x.c.toFixed(1) + ' °C'; }).join(' · ')
+        + '</span><br><br>';
+      if(jyrkin && jyrkin.g >= 0.5){
+        ulos += '<strong style="color:var(--amber);">Harppauskerros noin '
+          + jyrkin.syv.toFixed(1) + ' m</strong>, jyrkkyys '
+          + jyrkin.g.toFixed(2) + ' °C/m. Päällysveden paksuus '
+          + jyrkin.syv.toFixed(1) + ' m.';
+      } else {
+        ulos += '<strong>Ei selvää harppauskerrosta</strong> — jyrkin muutos '
+          + (jyrkin ? jyrkin.g.toFixed(2) : '0') + ' °C/m. Vesipatsas on sekoittunut.';
+      }
+    } else {
+      ulos += 'Profiilin rivejä ei saatu (päivämääräsuodatin voi vaatia toisen muodon).';
+    }
+    el.innerHTML = ulos;
+  } catch(e){
+    el.textContent = 'Haku ei onnistunut: ' + e.message;
+  }
+}
+
+/* Profiilin palautus ja ikä. Ajetaan kerran käynnistyksessä. */
+(function(){
+  try {
+    const raw = localStorage.getItem('uistelututka_dr_profiili');
+    if(!raw) return;
+    const p = JSON.parse(raw);
+    if(!p || !p.lukemat) return;
+    drProfiili = p;
+    if(typeof answers === 'object' && p.pinta != null) answers.temp = p.pinta;
+    const el = document.getElementById('drStatus');
+    if(el){
+      const ika = p.aika ? (Date.now() - new Date(p.aika).getTime())/3600000 : null;
+      const ikaTxt = ika === null ? '' :
+        (ika < 2 ? Math.round(ika*60) + ' min sitten'
+         : ika < 48 ? Math.round(ika) + ' h sitten'
+         : Math.round(ika/24) + ' vrk sitten');
+      el.innerHTML = 'Tallennettu profiili palautettu: pinta ' + p.pinta.toFixed(1) + ' °C, '
+        + (p.termokliini !== null && p.termokliini !== undefined
+            ? 'harppauskerros ' + p.termokliini.toFixed(1) + ' m'
+            : 'ei harppauskerrosta')
+        + (ikaTxt ? ' <span style="color:var(--amber)">· mitattu ' + ikaTxt + '</span>' : '')
+        + '<br><span style="color:var(--muted)">Tuuli muuttaa vesipatsasta: yli vuorokauden vanha '
+        + 'profiili kertoo enää suuruusluokan.</span>';
+    }
+  } catch(e){}
+})();
+
+/* ===== LUOTAUSPAIKKOJEN JOUKKOTESTI =====
+   Lista ehdotettuja luotauspaikkoja on VÄITE, ei lähde — sama lähde väitti
+   aiemmin että tämä sovellus lukee luotauksia, mikä ei pidä paikkaansa.
+   Siksi jokainen nimi testataan rajapintaa vasten: onko paikkaa, ja onko
+   sillä LampoLuotaus-havaintoja.
+
+   Yksi vihje tukee listaa: aineiston vanhimmat rivit ovat 30.7.1950
+   (Paikka_Id 3247), ja SY 566:n mukaan vanhin syvän veden mittauspaikka on
+   Päijänteen Tehinselkä, otettu käyttöön 1950. */
+const LUOTAUS_EHDOKKAAT = ['Inari','Näsijärvi','Kallavesi','Pielavesi','Pielinen',
+                           'Päijänne','Oulujärvi','Haukivesi','Kuortane','Ähtäri'];
+
+async function testaaLuotauslista(){
+  const el = document.getElementById('luotausTulos');
+  if(!el) return;
+  const base = 'https://rajapinnat.ymparisto.fi/api/Hydrologiarajapinta/1.0/odata';
+  el.innerHTML = 'Testataan ' + LUOTAUS_EHDOKKAAT.length + ' nimeä…';
+  const rivit = [];
+  for(const nimi of LUOTAUS_EHDOKKAAT){
+    let paikkoja = 0, loydot = [];
+    try {
+      const u = new URL(base + '/Paikka');
+      u.searchParams.set('$filter', "substringof('" + nimi + "', Nimi)");
+      u.searchParams.set('$top', '20');
+      const r = await fetch(u, { cache:'no-store' });
+      if(r.ok){
+        const d = await r.json();
+        const paikat = d.value || [];
+        paikkoja = paikat.length;
+        for(let i = 0; i < paikat.length && i < 12 && loydot.length < 3; i++){
+          const lu = new URL(base + '/LampoLuotaus');
+          lu.searchParams.set('$filter', 'Paikka_Id eq ' + paikat[i].Paikka_Id);
+          lu.searchParams.set('$orderby', 'Aika desc');
+          lu.searchParams.set('$top', '1');
+          try {
+            const rr = await fetch(lu, { cache:'no-store' });
+            if(!rr.ok) continue;
+            const dd = await rr.json();
+            if(dd.value && dd.value.length){
+              loydot.push({ nimi: paikat[i].Nimi, id: paikat[i].Paikka_Id,
+                            viimeisin: String(dd.value[0].Aika).slice(0,10) });
+            }
+          } catch(e){}
+        }
+      }
+    } catch(e){}
+    rivit.push({ nimi, paikkoja, loydot });
+    el.innerHTML = 'Testattu ' + rivit.length + '/' + LUOTAUS_EHDOKKAAT.length + '…';
+  }
+
+  let ulos = '<table style="width:100%;border-collapse:collapse;font-size:12.5px;">'
+    + '<tr style="color:var(--muted);font-size:10.5px;text-transform:uppercase;">'
+    + '<th style="text-align:left;padding:3px 2px;">haku</th>'
+    + '<th style="text-align:right;">paikkoja</th>'
+    + '<th style="text-align:left;padding-left:8px;">luotauspaikat</th></tr>';
+  rivit.forEach(function(r){
+    const on = r.loydot.length > 0;
+    ulos += '<tr style="border-top:1px solid var(--line);">'
+      + '<td style="padding:5px 2px;' + (on ? 'color:var(--cyan);font-weight:700;' : '') + '">' + r.nimi + '</td>'
+      + '<td style="text-align:right;font-family:monospace;">' + r.paikkoja + '</td>'
+      + '<td style="padding-left:8px;">'
+      + (on ? r.loydot.map(function(x){ return x.nimi + ' (' + x.viimeisin + ')'; }).join('<br>')
+            : '<span style="color:var(--muted)">ei luotausta</span>')
+      + '</td></tr>';
+  });
+  ulos += '</table>';
+  const osui = rivit.filter(function(r){ return r.loydot.length; }).length;
+  ulos += '<p class="hint" style="margin-top:8px;">' + osui + '/' + rivit.length
+    + ' nimestä löytyi luotauspaikka. Nimi hakukenttään ja "Hae profiili" näyttää '
+    + 'uusimman profiilin metri metriltä.</p>';
+  el.innerHTML = ulos;
+}
+
+/* Profiilin haku suoraan Paikka_Id:llä. Sama laskenta kuin nimihaussa, mutta
+   ilman paikkojen kokeilua. */
+async function haeProfiiliIdlla(base, pid, el){
+  el.textContent = 'Haetaan profiilia (id ' + pid + ')…';
+  try {
+    const u = new URL(base + '/LampoLuotaus');
+    u.searchParams.set('$filter', 'Paikka_Id eq ' + pid);
+    u.searchParams.set('$orderby', 'Aika desc');
+    u.searchParams.set('$top', '120');
+    const r = await fetch(u, { cache:'no-store' });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    const kaikki = d.value || [];
+    if(!kaikki.length){ el.textContent = 'Id ' + pid + ': ei luotaushavaintoja.'; return; }
+    const pvm = String(kaikki[0].Aika).slice(0,10);
+    const profiili = kaikki
+      .filter(function(x){ return String(x.Aika).slice(0,10) === pvm; })
+      .map(function(x){ return { syv: parseFloat(x.Syvyys), c: parseFloat(x.Arvo) }; })
+      .filter(function(x){ return !isNaN(x.syv) && !isNaN(x.c); })
+      .sort(function(a,b){ return a.syv - b.syv; });
+    el.innerHTML = naytaProfiili(profiili, 'id ' + pid, pvm);
+  } catch(e){ el.textContent = 'Haku ei onnistunut: ' + e.message; }
+}
+
+/* Profiilin esitys ja harppauskerroksen laskenta. Jyrkkyys lasketaan
+   MITTAUSPISTEIDEN VÄLILTÄ eikä tasoitetusta käyrästä — muuten tasoitus itse
+   määräisi tuloksen. Päällysveden paksuus on jyrkimmän kohdan yläpuoli, ja se
+   on juuri se h1 jota Wedderburn-luku tarvitsee. */
+function naytaProfiili(profiili, nimi, pvm){
+  if(!profiili.length) return 'Profiilin rivejä ei saatu.';
+  let jyrkin = null;
+  for(let i = 1; i < profiili.length; i++){
+    const dz = profiili[i].syv - profiili[i-1].syv;
+    if(dz <= 0) continue;
+    const gr = (profiili[i-1].c - profiili[i].c) / dz;
+    if(!jyrkin || gr > jyrkin.g) jyrkin = { g: gr, syv: (profiili[i].syv + profiili[i-1].syv)/2 };
+  }
+  const pinta = profiili[0].c, pohja = profiili[profiili.length-1].c;
+  let ulos = '<strong>' + nimi + '</strong> · luotaus ' + pvm + ' · '
+    + profiili.length + ' mittaussyvyyttä<br>'
+    + 'pinta ' + pinta.toFixed(1) + ' °C, pohja ' + pohja.toFixed(1) + ' °C ('
+    + profiili[profiili.length-1].syv.toFixed(0) + ' m)<br><br>'
+    + '<span style="font-family:monospace;font-size:11.5px;">'
+    + profiili.map(function(x){ return x.syv.toFixed(0) + ':' + x.c.toFixed(1); }).join(' · ')
+    + '</span><br><br>';
+  if(jyrkin && jyrkin.g >= 0.5){
+    ulos += '<strong style="color:var(--amber);">Harppauskerros noin ' + jyrkin.syv.toFixed(1)
+      + ' m</strong> · jyrkkyys ' + jyrkin.g.toFixed(2) + ' °C/m · päällysvesi '
+      + jyrkin.syv.toFixed(1) + ' m<br>'
+      + '<span style="color:var(--muted);">Yli 1 °C/m on seinä jonka läpi kala ei juuri liiku; '
+      + 'alle sen on vyöhyke.</span>';
+  } else {
+    ulos += '<strong>Ei selvää harppauskerrosta</strong> — jyrkin muutos '
+      + (jyrkin ? jyrkin.g.toFixed(2) : '0') + ' °C/m. Vesipatsas on sekoittunut.';
+  }
+  return ulos;
+}
+
+/* ===== SYYSKIERRON AJANKOHTA ARKISTOSTA =====
+   Sovelluksen kausiraja oli kalenterista: 21.8. alkaen syksy. Se osoittautui
+   vääräksi — 12.9.2026 Pielinen oli yhä kerrostunut 20 metriin asti.
+   Nyt kysytään aineistolta: MILLOIN kerrostuneisuus tyypillisesti hajoaa.
+
+   MENETELMÄ. Kerrostuneisuus on olemassa kun pinnan ja 20 metrin välillä on
+   selvä lämpötilaero. Haetaan siis vain kaksi syvyyttä (0 m ja 20 m) kaikilta
+   vuosilta — koko profiilin hakeminen olisi kymmeniä tuhansia rivejä, tämä on
+   muutama tuhat. Jokaiselle luotauspäivälle lasketaan ero, ja kunkin syksyn
+   ENSIMMÄINEN päivä jolloin ero alittaa 0,5 °C on sen vuoden kiertopäivä.
+
+   RAJAUS: tämä kertoo kyseisen järven kierrosta, ei Lappajärven. Pielinen on
+   samalla leveysasteella (63,5 vs 63,1) mutta syvempi, joten se kiertää
+   MYÖHEMMIN kuin matalampi järvi. Luku on yläraja, ei Lappajärven vastaus. */
+async function laskeKiertoIlmasto(){
+  const el = document.getElementById('luotausTulos');
+  if(!el) return;
+  const base = 'https://rajapinnat.ymparisto.fi/api/Hydrologiarajapinta/1.0/odata';
+  const syote = document.getElementById('luotausNimi');
+  const pid = (syote && /^\d+$/.test(syote.value.trim())) ? parseInt(syote.value.trim(),10) : 3246;
+  el.textContent = 'Haetaan pinta- ja 20 m lukemat (id ' + pid + ')… tämä kestää hetken.';
+  try {
+    const rivit = [];
+    let skip = 0;
+    while(skip < 6000){
+      const u = new URL(base + '/LampoLuotaus');
+      u.searchParams.set('$filter', 'Paikka_Id eq ' + pid + ' and (Syvyys eq 0 or Syvyys eq 20)');
+      u.searchParams.set('$orderby', 'Aika');
+      u.searchParams.set('$top', '1000');
+      u.searchParams.set('$skip', String(skip));
+      const r = await fetch(u, { cache:'no-store' });
+      if(!r.ok) break;
+      const d = await r.json();
+      const v = d.value || [];
+      rivit.push.apply(rivit, v);
+      el.textContent = 'Haettu ' + rivit.length + ' riviä…';
+      if(v.length < 1000) break;
+      skip += 1000;
+    }
+    if(!rivit.length){ el.textContent = 'Ei rivejä. Kokeile toista paikkaa.'; return; }
+
+    /* Ryhmitellään päivän mukaan ja lasketaan pinta miinus 20 m. */
+    const paivat = new Map();
+    rivit.forEach(function(x){
+      const pvm = String(x.Aika).slice(0,10);
+      const syv = parseFloat(x.Syvyys), c = parseFloat(x.Arvo);
+      if(isNaN(syv) || isNaN(c)) return;
+      if(!paivat.has(pvm)) paivat.set(pvm, {});
+      paivat.get(pvm)[syv === 0 ? 'pinta' : 'syva'] = c;
+    });
+
+    const vuodet = new Map();
+    [...paivat.entries()].forEach(function(e){
+      const pvm = e[0], v = e[1];
+      if(v.pinta == null || v.syva == null) return;
+      const d = new Date(pvm + 'T12:00');
+      const kk = d.getMonth() + 1;
+      if(kk < 8 || kk > 12) return;                 // vain syksy
+      const vuosi = d.getFullYear();
+      const ero = v.pinta - v.syva;
+      if(!vuodet.has(vuosi)) vuodet.set(vuosi, []);
+      vuodet.get(vuosi).push({ pvm: pvm, d: d, ero: ero });
+    });
+
+    const kierrot = [];
+    [...vuodet.entries()].forEach(function(e){
+      const lista = e[1].sort(function(a,b){ return a.d - b.d; });
+      /* Kierto = ensimmäinen päivä jolloin ero alittaa 0,5 °C, mutta vain jos
+         sitä ennen on ollut kerrostunut havainto samana syksynä. */
+      let kerrostunut = false, kierto = null;
+      lista.forEach(function(x){
+        if(x.ero >= 1.0) kerrostunut = true;
+        if(kerrostunut && kierto === null && x.ero < 0.5) kierto = x;
+      });
+      if(kierto) kierrot.push({ vuosi: e[0], pvm: kierto.pvm, d: kierto.d });
+    });
+
+    if(!kierrot.length){
+      el.innerHTML = 'Rivejä ' + rivit.length + ', luotauspäiviä ' + paivat.size
+        + ', mutta kiertopäivää ei voitu määrittää (20 m lukemat voivat puuttua).';
+      return;
+    }
+    const pv = kierrot.map(function(k){
+      return Math.round((k.d - new Date(k.d.getFullYear(),0,0)) / 86400000);
+    });
+    const ka = pv.reduce(function(a,b){ return a+b; }, 0) / pv.length;
+    const jarj = pv.slice().sort(function(a,b){ return a-b; });
+    const mediaani = jarj[Math.floor(jarj.length/2)];
+    const pvmTeksti = function(n){
+      const d = new Date(2026, 0, n);
+      return d.getDate() + '.' + (d.getMonth()+1) + '.';
+    };
+    let ulos = '<strong>Syyskierron ajankohta, ' + kierrot.length + ' vuotta</strong><br>'
+      + 'Keskimäärin <strong style="color:var(--cyan);">' + pvmTeksti(Math.round(ka)) + '</strong>'
+      + ' · mediaani ' + pvmTeksti(mediaani)
+      + ' · aikaisin ' + pvmTeksti(jarj[0]) + ' · myöhäisin ' + pvmTeksti(jarj[jarj.length-1]) + '<br><br>'
+      + '<span style="font-family:monospace;font-size:11px;">'
+      + kierrot.sort(function(a,b){ return b.vuosi - a.vuosi; }).slice(0,14)
+          .map(function(k){ return k.vuosi + ': ' + k.pvm.slice(5); }).join(' · ')
+      + '</span><br><br>'
+      + '<span style="color:var(--muted);">Kierto = ensimmäinen luotaus jossa pinnan ja 20 m ero '
+      + 'alittaa 0,5 °C sen jälkeen kun järvi on ollut kerrostunut. Tämä koskee kyseistä järveä: '
+      + 'syvä järvi kiertää myöhemmin kuin matala, joten luku on Lappajärvelle yläraja. '
+      + 'Sovelluksen kalenteriraja on 21.8.</span>';
+    el.innerHTML = ulos;
+  } catch(e){
+    el.textContent = 'Laskenta ei onnistunut: ' + e.message;
+  }
+}
+
+/* ===== LUOTAUSPAIKAT SOVELLUKSEN JÄRVILLE =====
+   Varmistettu rajapinnasta 20.9.2026 kokeilemalla, ei arvattu:
+     Inarijärvi  -> 3254  Inari, Nellim, Paksuvuono   (uusin 30.8.2026, aktiivinen)
+     Lappajärvi  -> ei luotauspaikkaa (12 paikkaa nimellä, ei havaintoja)
+     Hirvijärvi  -> ei luotauspaikkaa
+   Muita tunnettuja: 3246 Pielinen Nurmes (aktiivinen), 3252 Näsijärvi
+   Pengonpohja (päättyi 2013).
+
+   Kun järvellä on paikka, harppauskerros tulee MITTAUKSESTA eikä käsin
+   syötetystä arviosta. Luotaus tehdään kolme kertaa kuukaudessa, joten
+   profiili voi olla päiviä vanha — ikä näytetään, koska tuuli muuttaa
+   vesipatsasta nopeammin kuin mittausväli. */
+const LUOTAUSPAIKAT = { 'Inarijärvi': 3254, 'Inari': 3254 };
+
+async function haeJarvenProfiili(){
+  const el = document.getElementById('luotausTulos');
+  const nimi = (currentLocation && currentLocation.name) || '';
+  let pid = null;
+  Object.keys(LUOTAUSPAIKAT).forEach(function(k){
+    if(nimi.indexOf(k) >= 0) pid = LUOTAUSPAIKAT[k];
+  });
+  if(!pid){
+    if(el) el.innerHTML = '<strong>' + (nimi || 'Tälle järvelle') + '</strong> ei ole '
+      + 'luotauspaikkaa (tarkistettu rajapinnasta 20.9.2026). Harppauskerros jää '
+      + 'DepthRiderin varaan.';
+    return null;
+  }
+  const base = 'https://rajapinnat.ymparisto.fi/api/Hydrologiarajapinta/1.0/odata';
+  if(el) el.textContent = 'Haetaan mitattu profiili…';
+  try {
+    const u = new URL(base + '/LampoLuotaus');
+    u.searchParams.set('$filter', 'Paikka_Id eq ' + pid);
+    u.searchParams.set('$orderby', 'Aika desc');
+    u.searchParams.set('$top', '120');
+    const r = await fetch(u, { cache:'no-store' });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    const kaikki = d.value || [];
+    if(!kaikki.length) throw new Error('ei rivejä');
+    const pvm = String(kaikki[0].Aika).slice(0,10);
+    const profiili = kaikki
+      .filter(function(x){ return String(x.Aika).slice(0,10) === pvm; })
+      .map(function(x){ return { syv: parseFloat(x.Syvyys), c: parseFloat(x.Arvo) }; })
+      .filter(function(x){ return !isNaN(x.syv) && !isNaN(x.c); })
+      .sort(function(a,b){ return a.syv - b.syv; });
+    if(profiili.length < 3) throw new Error('profiili liian lyhyt');
+
+    let jyrkin = null;
+    for(let i = 1; i < profiili.length; i++){
+      const dz = profiili[i].syv - profiili[i-1].syv;
+      if(dz <= 0) continue;
+      const gr = (profiili[i-1].c - profiili[i].c) / dz;
+      if(!jyrkin || gr > jyrkin.g) jyrkin = { g: gr, syv: (profiili[i].syv + profiili[i-1].syv)/2 };
+    }
+    const ikaVrk = Math.round((Date.now() - new Date(pvm + 'T12:00').getTime()) / 86400000);
+
+    /* Malliin: harppauskerros ja pintalämpö mitatusta profiilista. */
+    if(typeof answers === 'object'){
+      answers.temp = profiili[0].c;
+      if(jyrkin && jyrkin.g >= 0.5){
+        answers.thermo = 'known';
+        const kentta = document.getElementById('thermoDepth');
+        if(kentta) kentta.value = jyrkin.syv.toFixed(1);
+      } else {
+        answers.thermo = 'none';
+      }
+    }
+    if(el){
+      el.innerHTML = '<strong>Mitattu profiili käytössä</strong> · ' + pvm
+        + ' (' + ikaVrk + ' vrk sitten)<br>'
+        + naytaProfiili(profiili, nimi, pvm)
+        + '<br><span style="color:var(--muted);">Luotaus tehdään kolme kertaa kuukaudessa. '
+        + 'Tuuli muuttaa vesipatsasta nopeammin, joten vanha profiili kertoo suuruusluokan.</span>';
+    }
+    return profiili;
+  } catch(e){
+    if(el) el.textContent = 'Profiilin haku ei onnistunut: ' + e.message;
+    return null;
+  }
 }
 </script>
 
