@@ -4621,6 +4621,11 @@ function akPiirraPaivat(){
 window.akJarvenKeskipiste = function(){
   try {
     if (!mask || !jarvi || !jarvi.kartta) return null;
+    /* Varmistus: jos kartalla on eri järvi kuin sovelluksessa, keskipistettä
+       ei anneta lainkaan. Väärä keskipiste on pahempi kuin ei keskipistettä,
+       koska se näyttää oikealta. */
+    if (typeof currentLocation === 'object' && currentLocation && currentLocation.name
+        && jarvi.nimi && currentLocation.name.slice(0,6) !== jarvi.nimi.slice(0,6)) return null;
     const k = jarvi.kartta;
     let si = 0, sj = 0, n = 0;
     for (let j = 0; j < k.H; j++) for (let i = 0; i < k.W; i++) {
@@ -4976,9 +4981,39 @@ Object.keys(JARVET).forEach(function(k){
   val.appendChild(o);
 });
 val.addEventListener("change", function(){ lataa(this.value); });
-var eka = Object.keys(JARVET).filter(function(k){
-  return JARVET[k].kartta && JARVET[k].kartta.maski;
-})[0] || Object.keys(JARVET)[0];
+
+/* KARTTA SEURAA SOVELLUKSEN PAIKKAVALINTAA — korjattu 20.9.2026.
+   Kartalla oli oma järvivalinta joka ei tiennyt mitään currentLocationista.
+   Siitä seurasi kaksi vikaa:
+     1. Lappajärvi valittuna kartta saattoi näyttää Hirvijärveä, koska
+        valinta jäi siihen mihin se viimeksi jätettiin
+     2. PAHEMPI: akSuunnattuMitta ja akJarvenKeskipiste lukevat kartan
+        järveä, joten kumpuamisen pyyhkäisymatka ja mittausaseman suuntima
+        laskettiin VÄÄRÄSTÄ JÄRVESTÄ ilman että se näkyi missään
+   Sama asia kahdessa paikassa valittavana on se virhe jota olemme purkaneet
+   koko projektin. Nyt sovelluksen valinta ohjaa, ja kartan valitsin jää
+   käsikäyttöön vertailua varten. */
+function akSovitaPaikkaan(){
+  var nimi = (typeof currentLocation === 'object' && currentLocation && currentLocation.name)
+             ? currentLocation.name : '';
+  if(!nimi) return null;
+  var osuma = Object.keys(JARVET).filter(function(k){
+    var jn = JARVET[k].nimi || '';
+    /* "Hirvijärven tekoallas" ja "Hirvijärven tekojärvi" ovat sama paikka
+       eri nimellä, joten verrataan alkuosaa eikä koko merkkijonoa. */
+    return nimi.slice(0,8) === jn.slice(0,8) || jn.indexOf(nimi.split(' ')[0]) === 0;
+  })[0];
+  return osuma || null;
+}
+window.akPaivitaPaikka = function(){
+  var k = akSovitaPaikkaan();
+  if(k && val.value !== k){ val.value = k; lataa(k); }
+};
+
+var eka = akSovitaPaikkaan()
+  || Object.keys(JARVET).filter(function(k){
+       return JARVET[k].kartta && JARVET[k].kartta.maski;
+     })[0] || Object.keys(JARVET)[0];
 val.value = eka;
 lataa(eka);
 }
@@ -12221,6 +12256,12 @@ lataa(eka);
         sel.value = currentLocation.name;
       } else {
         currentLocation = locations.find(l => l.name === sel.value) || currentLocation;
+        /* Aallonkorkeuskartta seuraa mukana. Ilman tätä kartta jäisi edelliseen
+           järveen, ja sen lisäksi kumpuamisen pyyhkäisymatka ja aseman suuntima
+           laskettaisiin väärästä järvestä. */
+        if (typeof window.akPaivitaPaikka === 'function') {
+          try { window.akPaivitaPaikka(); } catch(e){}
+        }
         document.getElementById('newLocationRow').style.display = 'none';
         document.getElementById('vedenkorkeusStatus').textContent = '';
         document.getElementById('vedenkorkeusRaja').value = '';
@@ -13162,6 +13203,21 @@ async function testaaLuotauslista(){
    ilman paikkojen kokeilua. */
 async function haeProfiiliIdlla(base, pid, el){
   el.textContent = 'Haetaan profiilia (id ' + pid + ')…';
+  /* Paikan nimi erikseen: id yksin ei kerro mistä järvestä on kyse, ja
+     numeroista on mahdoton muistaa kumpi oli Pielinen ja kumpi Inari. */
+  let nimi = 'id ' + pid;
+  try {
+    const pu = new URL(base + '/Paikka');
+    pu.searchParams.set('$filter', 'Paikka_Id eq ' + pid);
+    pu.searchParams.set('$top', '1');
+    const pr = await fetch(pu, { cache:'no-store' });
+    if(pr.ok){
+      const pd = await pr.json();
+      if(pd.value && pd.value.length && pd.value[0].Nimi){
+        nimi = pd.value[0].Nimi + ' (id ' + pid + ')';
+      }
+    }
+  } catch(e){ /* nimi jää tunnukseksi */ }
   try {
     const u = new URL(base + '/LampoLuotaus');
     u.searchParams.set('$filter', 'Paikka_Id eq ' + pid);
@@ -13171,14 +13227,14 @@ async function haeProfiiliIdlla(base, pid, el){
     if(!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
     const kaikki = d.value || [];
-    if(!kaikki.length){ el.textContent = 'Id ' + pid + ': ei luotaushavaintoja.'; return; }
+    if(!kaikki.length){ el.textContent = nimi + ': ei luotaushavaintoja.'; return; }
     const pvm = String(kaikki[0].Aika).slice(0,10);
     const profiili = kaikki
       .filter(function(x){ return String(x.Aika).slice(0,10) === pvm; })
       .map(function(x){ return { syv: parseFloat(x.Syvyys), c: parseFloat(x.Arvo) }; })
       .filter(function(x){ return !isNaN(x.syv) && !isNaN(x.c); })
       .sort(function(a,b){ return a.syv - b.syv; });
-    el.innerHTML = naytaProfiili(profiili, 'id ' + pid, pvm);
+    el.innerHTML = naytaProfiili(profiili, nimi, pvm);
   } catch(e){ el.textContent = 'Haku ei onnistunut: ' + e.message; }
 }
 
@@ -13240,10 +13296,14 @@ async function laskeKiertoIlmasto(){
   try {
     const rivit = [];
     let skip = 0;
-    while(skip < 6000){
+    while(skip < 12000){
       const u = new URL(base + '/LampoLuotaus');
       u.searchParams.set('$filter', 'Paikka_Id eq ' + pid + ' and (Syvyys eq 0 or Syvyys eq 20)');
-      u.searchParams.set('$orderby', 'Aika');
+      /* KORJATTU 20.9.2026: järjestys oli nouseva ja haku katkesi 6000 riviin,
+         jolloin tulokseksi tuli vain VANHIMMAT vuodet (1980-1991) ja uudet
+         jäivät kokonaan pois. Laskeva järjestys antaa tuoreimmat ensin, mikä
+         on oikea valinta jos haku katkeaa kesken. */
+      u.searchParams.set('$orderby', 'Aika desc');
       u.searchParams.set('$top', '1000');
       u.searchParams.set('$skip', String(skip));
       const r = await fetch(u, { cache:'no-store' });
@@ -13290,7 +13350,17 @@ async function laskeKiertoIlmasto(){
         if(x.ero >= 1.0) kerrostunut = true;
         if(kerrostunut && kierto === null && x.ero < 0.5) kierto = x;
       });
-      if(kierto) kierrot.push({ vuosi: e[0], pvm: kierto.pvm, d: kierto.d });
+      /* Luotauksia tehdään kolme kertaa kuukaudessa, ja syksyllä väli voi olla
+         pidempi. Silloin "ensimmäinen sekoittunut luotaus" voi olla viikkoja
+         todellisen kierron jälkeen. Joulukuun havainto ei kerro kierrosta vaan
+         siitä että edellinen luotaus oli kauan sitten — rajataan syys-marraskuu.
+         Syyskuun alun osumat taas syntyvät kun 20 m lukema puuttuu ja ero jää
+         näennäisen pieneksi; ne on jo rajattu pois vaatimalla kerrostunut
+         havainto samana syksynä. */
+      if(kierto){
+        const kk = kierto.d.getMonth() + 1;
+        if(kk >= 9 && kk <= 11) kierrot.push({ vuosi: e[0], pvm: kierto.pvm, d: kierto.d });
+      }
     });
 
     if(!kierrot.length){
@@ -13325,6 +13395,56 @@ async function laskeKiertoIlmasto(){
     el.textContent = 'Laskenta ei onnistunut: ' + e.message;
   }
 }
+
+/* ===================================================================
+   LÄMPÖTILALUOTAUKSET — MITÄ ON SELVITETTY 20.9.2026
+   Kaikki alla oleva on KYSYTTY RAJAPINNALTA, ei arvattu eikä otettu
+   tekoälyn väitteestä. Tämä on kirjattu tänne siksi, ettei samaa
+   selvitettäisi uudestaan.
+
+   RAJAPINTA
+     SYKE hydrologiarajapinta, entiteetti LampoLuotaus
+     kentät: Paikka_Id, Aika, Arvo (°C), Syvyys (m)
+     mittaus metrin välein pinnasta 20 m, siitä alas 2 m välein
+     SYKEn kuvaus: luotaus tehdään kolme kertaa kuukaudessa
+     järvisyvänteen kohdalla mittanauhaan kiinnitetyllä mittarilla
+
+   PAIKAT JOTKA ON VARMISTETTU
+     3246  Pielinen, Nurmes              aktiivinen, uusin 12.9.2026
+     3247  Päijänne, Tehi, Linnasaari    vanhin sarja, alkaa 1950
+     3252  Näsijärvi, Pengonpohja        PÄÄTTYNYT, uusin 20.10.2013
+     3254  Inari, Nellim, Paksuvuono     aktiivinen, uusin 30.8.2026
+     LAPPAJÄRVI: EI LUOTAUSPAIKKAA. 12 paikkaa nimellä, yhdelläkään ei
+     luotaushavaintoja. Hirvijärvi sama. ÄLÄ ETSI UUDESTAAN.
+
+   MITATUT PROFIILIT JOTKA ON NÄHTY
+     Inari 30.8.2026    pinta 13,9  alus 6,2 (40 m)  harppaus 16,5 m, 1,00 °C/m
+     Pielinen 12.9.2026 pinta 14,5  alus 10,3 (40 m) harppaus 21 m, 1,05 °C/m
+                        päällysvesi tasainen 19 metriin asti
+     Näsijärvi 20.10.13 pinta 8,1   sekoittunut 26 m asti, ei harppausta
+     Päijänne 21.4.2026 pinta 3,1   sekoittunut 71 m asti, kevätkierto
+
+   MITÄ NIISTÄ SEURAA
+     1. KALENTERIRAJA 21.8. ON VÄÄRÄ. Inari oli 69. leveysasteella
+        vahvasti kerrostunut 30.8., yhdeksän päivää rajan jälkeen.
+        Siksi kausi päätellään nyt mitatusta pintalämmöstä ja sen
+        trendistä (ks. kausiMitatusta), ei päivämäärästä.
+     2. LAPPAJÄRVI ON SYYSKUUSSA ENIMMÄKSEEN SEKOITTUNUT. Pielisen
+        12.9. profiilin päällysvesi ulottui 19-20 metriin. Lappajärven
+        syvyysjakaumasta noin 85 % pinta-alasta on alle 20 m, eli
+        suurimmalla osalla järveä vesi on pinnasta pohjaan samaa.
+        Kuhan happirajoite (d = min(d, termokliini)) ei siis käytännössä
+        koske syyskuista Lappajärveä — valo ja pohja ratkaisevat.
+        Tämä vastaa sitä mitä kalastaja on havainnut kuhapuolella.
+     3. HARPPAUSKERROS ON PAIKAN OMINAISUUS, EI JÄRVEN. Tuuli painaa
+        lämpimän alatuulen rannalle ja nostaa kylmän ylätuuleen. Matala
+        alatuulen ranta voi olla sekoittunut pohjaan asti samalla kun
+        syvänteessä on kerros. Sovellus käsittelee sitä yhtenä lukuna.
+     4. PINTAVEDEN LÄMPÖTILA (LampoPintavesi) MITATAAN 20 cm SYVYYDESTÄ
+        RANNALTA. Halkosaaressa mittauspiste on 0,5 m rantaviivasta,
+        vesi 30 cm, ja Laasasen (1982) mukaan se sekoittuu heikosti.
+        Siksi kumpuamisen kynnys on 2,5 °C eikä 1,5 °C.
+   =================================================================== */
 
 /* ===== LUOTAUSPAIKAT SOVELLUKSEN JÄRVILLE =====
    Varmistettu rajapinnasta 20.9.2026 kokeilemalla, ei arvattu:
