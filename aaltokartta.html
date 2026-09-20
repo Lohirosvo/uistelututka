@@ -4,6 +4,28 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Aallonkorkeuskartta</title>
+
+<!-- KUVAKE — 20.9.2026, korjattu varmaksi tavaksi.
+     Ensin kuvat olivat tiedoston sisällä data-URI:na, jotta vietäviä
+     tiedostoja olisi vain yksi. Android Chrome ei kuitenkaan hyväksy
+     manifestin kuvakkeita data-URI:na kaikissa versioissa, joten se
+     tyrkytti vanhaa harmaata oletusta.
+
+     Nyt kuvat ja manifest ovat omia tiedostojaan ja viittaukset ovat
+     nimellä. Vietäviä on neljä, mutta se toimii eikä riipu siitä mitä
+     selain sattuu tukemaan.
+
+     VIE VARASTON JUUREEN KAIKKI NELJÄ:
+       aaltokartta.html · manifest-aalto.json
+       kuvake-192.png · kuvake-512.png · kuvake-180.png -->
+<meta name="theme-color" content="#081a25">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Aalto">
+<link rel="icon" type="image/png" sizes="192x192" href="kuvake-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="kuvake-512.png">
+<link rel="apple-touch-icon" sizes="180x180" href="kuvake-180.png">
+<link rel="manifest" href="manifest-aalto.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
@@ -93,6 +115,22 @@ body{margin:0;background:var(--tausta);color:var(--teksti);
 .ak-yksikko{font-size:.66rem;color:var(--harmaa)}
 
 input[type=range]{width:100%;margin:12px 0 2px;accent-color:#16211f}
+/* ---- AIKARULLA ---- */
+.ak-rulla{overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none;margin:12px 0 6px;
+  border:1px solid var(--raja);border-radius:6px;background:#f2f5f4}
+.ak-rulla::-webkit-scrollbar{display:none}
+.ak-rullasisus{display:flex;height:56px;align-items:flex-end}
+.ak-tunti{flex:0 0 15px;scroll-snap-align:center;display:flex;flex-direction:column;
+  align-items:center;justify-content:flex-end;height:100%;cursor:pointer;
+  border-right:1px solid rgba(22,33,31,.06)}
+.ak-tunti b{display:block;width:9px;border-radius:2px 2px 0 0;background:#8cc63f}
+.ak-tunti span{font-size:8px;color:var(--harmaa);margin-top:2px;
+  font-variant-numeric:tabular-nums;line-height:1}
+.ak-tunti.vrk{border-right:2px solid var(--muste)}
+.ak-tunti.valittu b{outline:2px solid var(--muste);outline-offset:1px}
+.ak-tunti.valittu span{color:var(--muste);font-weight:700}
+
 .ak-aika{display:flex;justify-content:space-between;font-size:.72rem;
     color:var(--harmaa);font-variant-numeric:tabular-nums}
 
@@ -138,7 +176,17 @@ input[type=range]{width:100%;margin:12px 0 2px;accent-color:#16211f}
     <span id="akRajaL"></span>
   </div>
 
-  <input type="range" id="akLiuku" min="0" max="0" value="0" aria-label="Tunti">
+  <!-- AIKARULLA — korvasi liukusäätimen 20.9.2026.
+       Liuku mahdutti 84 tuntia ruudun leveydelle eli noin 4,6 pikseliä
+       tunnissa: sormella ei voinut osua haluttuun tuntiin, joten se oli
+       karkea selaus eikä valinta. Rullassa tunti on 15 pikseliä ja vuorokausi
+       täyttää ruudun. scroll-snap napsauttaa jokaiseen tuntiin — se tekee
+       siitä rullan eikä liu'un, ja sormi tuntee askeleet.
+
+       Alla oleva 48 h -jana jää ennalleen ja toimii yleiskuvana: rulla on
+       tarkka valinta, jana on koko jakso yhdellä silmäyksellä. Ne täydentävät
+       toisiaan, eikä kumpikaan korvaa toista. -->
+  <div class="ak-rulla" id="akRulla"><div class="ak-rullasisus" id="akRullaSisus"></div></div>
   <!-- 48 H JANA — 15.9.2026. Liuku näyttää yhden tunnin kerrallaan, mutta
        lähtöpäätös tehdään koko jaksosta. Jana kertoo jokaisen tunnin
        uisteltavan osuuden yhtenä nauhana: vihreä yli neljännes, keltainen
@@ -731,19 +779,75 @@ function naytaTiedot(d){
     + '<div><span>Tuullut</span><b>' + d.tunteja + ' h samasta suunnasta</b></div>';
 }
 
-$("akLiuku").addEventListener("input", function(){
-  valittu = +this.value;
+/* ---- AIKARULLA ----
+   Vieritystä ei kuunnella jokaisesta pikselistä vaan requestAnimationFramella:
+   karttapiirto on raskas ja jumittaisi rullauksen puhelimella. */
+var akRullaOdottaa = false;
+
+function akPiirraRulla(){
+  var sis = $("akRullaSisus");
+  if (!sis || !data.length) return;
+  var korkein = 0;
+  for (var i = 0; i < data.length; i++) if (data[i].U > korkein) korkein = data[i].U;
+  if (korkein <= 0) korkein = 1;
+  var pad = function(n){ return ("0"+n).slice(-2); };
+
+  sis.innerHTML = data.map(function(d, i){
+    /* Pylvään korkeus TUULESTA, ei aallosta: aallonkorkeus lasketaan vasta
+       valitulle tunnille (maski ja pyyhkäisykenttä), ja koko sarjan laskeminen
+       etukäteen olisi raskasta. Tuuli on sen paras ennakkokuva ja päivittyy
+       samaan tahtiin. Aallon oma väri näkyy alla janassa. */
+    var h = Math.max(4, Math.round(34 * d.U / korkein));
+    var vrk = (d.aika.getHours() === 0) ? " vrk" : "";
+    var nyt = (i === valittu) ? " valittu" : "";
+    return '<div class="ak-tunti' + vrk + nyt + '" data-i="' + i + '">'
+      + '<b style="height:' + h + 'px"></b>'
+      + '<span>' + (d.aika.getHours() % 6 === 0 ? pad(d.aika.getHours()) : '') + '</span></div>';
+  }).join("");
+}
+
+function akKeskitaRulla(i, pehmea){
+  var r = $("akRulla"), sis = $("akRullaSisus");
+  if (!r || !sis || !sis.children[i]) return;
+  var el = sis.children[i];
+  r.scrollTo({ left: el.offsetLeft - r.clientWidth/2 + el.offsetWidth/2,
+               behavior: pehmea ? "smooth" : "auto" });
+}
+
+function akValitseTunti(i){
+  if (i < 0 || i >= data.length || i === valittu) return;
+  valittu = i;
+  var sis = $("akRullaSisus");
+  if (sis) for (var k = 0; k < sis.children.length; k++)
+    sis.children[k].classList.toggle("valittu", k === valittu);
   akKorostaJana();
   piirra();
+}
+
+$("akRulla").addEventListener("scroll", function(){
+  if (akRullaOdottaa) return;
+  akRullaOdottaa = true;
+  requestAnimationFrame(function(){
+    akRullaOdottaa = false;
+    var r = $("akRulla"), sis = $("akRullaSisus");
+    if (!sis || !sis.children.length) return;
+    var leveys = sis.children[0].offsetWidth || 15;
+    var i = Math.round((r.scrollLeft + r.clientWidth/2 - leveys/2) / leveys);
+    akValitseTunti(Math.max(0, Math.min(data.length-1, i)));
+  });
+}, { passive:true });
+
+$("akRulla").addEventListener("click", function(e){
+  var el = e.target.closest ? e.target.closest(".ak-tunti") : null;
+  if (el){ var i = +el.getAttribute("data-i"); akValitseTunti(i); akKeskitaRulla(i, true); }
 });
 
+/* Jana on yleiskuva: napautus siitä siirtää myös rullan oikeaan kohtaan. */
 $("akJana").addEventListener("click", function(e){
   var i = e.target && e.target.getAttribute && e.target.getAttribute("data-i");
   if (i === null || i === undefined) return;
-  valittu = +i;
-  $("akLiuku").value = valittu;
-  akKorostaJana();
-  piirra();
+  akValitseTunti(+i);
+  akKeskitaRulla(+i, true);
 });
 
 /* Napautus. Canvasin näyttökoko ja sisäinen ruudukko ovat eri asia, joten
@@ -854,8 +958,13 @@ function lataa(avain){
       }
 
       valittu = 0;
-      $("akLiuku").max = data.length - 1;
-      $("akLiuku").value = 0;
+      /* Avataan NYKYHETKEEN eikä jakson alkuun. Menneet tunnit saavat näkyä
+         vasemmalla, mutta niitä ei tarvitse ohittaa joka kerta. */
+      var nytMs = Date.now();
+      for (var q = 0; q < data.length; q++)
+        if (data[q].aika.getTime() <= nytMs) valittu = q;
+      akPiirraRulla();
+      setTimeout(function(){ akKeskitaRulla(valittu, false); }, 0);
       var pv = ["su","ma","ti","ke","to","pe","la"];
       var pad = function(n){ return ("0"+n).slice(-2); };
       $("akAlku").textContent  = pv[data[0].aika.getDay()] + " " + pad(data[0].aika.getHours()) + ":00";
