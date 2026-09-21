@@ -9691,7 +9691,12 @@ lataa(eka);
       if (a.thermo === 'known') {
         const el = document.getElementById('thermoDepth');
         const val = el ? parseFloat(el.value) : NaN;
-        if (!isNaN(val)) d = val + 1;
+        /* MUUTETTU 21.9.2026: ei enää d = val + 1, joka heitti pois taulukon ja
+           valomallin. Kerros rajaa, ei korvaa. */
+        if (!isNaN(val)) {
+          const vy = harppausVyohyke('kuha', val, window.viimeisinJyrkkyys, a.temp);
+          d = rajaaHarppauksella(d, vy);
+        }
       }
       else {
         if (hour >= 9 && hour <= 18) {
@@ -9867,7 +9872,12 @@ lataa(eka);
       if (a.thermo === 'known') {
         const el = document.getElementById('thermoDepth');
         const val = el ? parseFloat(el.value) : NaN;
-        if (!isNaN(val)) d = val - 1.5;
+        /* MUUTETTU 21.9.2026: ei enää d = val − 1,5. Lohikala puristuu kerroksen
+           tuntumaan vain kun pinta on lämmin; viileässä vedessä rajaa ei ole. */
+        if (!isNaN(val)) {
+          const vy = harppausVyohyke('taimen', val, window.viimeisinJyrkkyys, a.temp);
+          d = rajaaHarppauksella(d, vy);
+        }
       }
 
       if (activeBaitDepth !== null) {
@@ -12935,9 +12945,27 @@ function syvyysHaarukka(laji, d){
     }
   } catch(e){ /* lokia ei ole, oletus kelpaa */ }
   puolikas = Math.max(0.8, Math.min(4, puolikas));
+  let ala = Math.max(0.5, d - puolikas), yla = d + puolikas;
+  /* Harppauskerros kaventaa haarukkaa. Tämä on ainoa kohta jossa haarukka saa
+     kaventua mitatun hajonnan alle, koska kyse on fysikaalisesta rajasta eikä
+     mallin tarkkuudesta. Alle metrin ei silti mennä. */
+  try {
+    const termo = (typeof answers === 'object' && answers.thermo === 'known')
+      ? parseFloat((document.getElementById('thermoDepth') || {}).value) : NaN;
+    if(!isNaN(termo) && typeof harppausVyohyke === 'function'){
+      const vy = harppausVyohyke(laji, termo, window.viimeisinJyrkkyys,
+                                 (typeof answers === 'object') ? answers.temp : null);
+      if(vy && (vy.min != null || vy.max != null)){
+        if(vy.min != null) ala = Math.max(ala, vy.min);
+        if(vy.max != null) yla = Math.min(yla, vy.max);
+        if(yla - ala < 1.0){ const k = (ala + yla) / 2; ala = Math.max(0.5, k - 0.5); yla = k + 0.5; }
+        lahde += ' · harppauskerros rajaa';
+      }
+    }
+  } catch(e){}
   return {
-    ala: Math.max(0.5, d - puolikas),
-    yla: d + puolikas,
+    ala: ala,
+    yla: yla,
     keski: d,
     puolikas: puolikas,
     lahde: lahde
@@ -13277,6 +13305,9 @@ function naytaProfiili(profiili, nimi, pvm){
     + '<span style="font-family:monospace;font-size:11.5px;">'
     + profiili.map(function(x){ return x.syv.toFixed(0) + ':' + x.c.toFixed(1); }).join(' · ')
     + '</span><br><br>';
+  /* Jyrkkyys talteen malliin: se ratkaisee onko kerros seinä vai vyöhyke.
+     Tämä luku on ollut laskettuna mutta käyttämättä 18.9.2026 asti. */
+  window.viimeisinJyrkkyys = (jyrkin && jyrkin.g >= 0.5) ? jyrkin.g : null;
   if(jyrkin && jyrkin.g >= 0.5){
     ulos += '<strong style="color:var(--amber);">Harppauskerros noin ' + jyrkin.syv.toFixed(1)
       + ' m</strong> · jyrkkyys ' + jyrkin.g.toFixed(2) + ' °C/m · päällysvesi '
@@ -13652,6 +13683,96 @@ async function haeAjankohdanProfiili(base, pid, nimi, el){
   /* Ilmastollista arviota EI viedä malliin automaattisesti: answers.thermo
      tarkoittaa havaittua harppauskerrosta, ei tilastoa. */
   return profiili;
+}
+
+/* ===== HARPPAUSKERROS RAJANA, EI ARVONA =====
+   Lisätty 21.9.2026. Aiemmin syötetty termokliini KORVASI mallin tuloksen:
+   taimen = termo − 1,5 ja kuha = termo + 1. Yksi luku heitti pois taulukon,
+   valomallin ja syöttikalan. Se on liian vahva liike: kerros kertoo missä
+   RAJA on, ei missä kala on.
+
+   Nyt kerros kaventaa haarukkaa. Perustelu tulee kahdesta suunnasta jotka
+   sanovat samaa:
+     kalastajat — kuha pysyy päällysvedessä loppukesällä, taimen hakeutuu
+       viileän rajalle kun pinta lämpiää
+     limnologia — kerrostuneen humusjärven alusvesi hapettuu loppuun, ja
+       lohikalat puristuvat lämpötilan ja hapen väliin metalimnioniin
+
+   JYRKKYYS RATKAISEE KUINKA TIUKKA RAJA ON. Tämä on se tieto joka on ollut
+   laskettuna mutta käyttämättä:
+     alle 0,5 °C/m  ei ole raja lainkaan — vesipatsas on käytännössä yhtenäinen
+     0,5–1,0 °C/m   vyöhyke jonka yli kala liikkuu — raja joustaa 1,5 m
+     yli 1,0 °C/m   seinä — raja pitää
+
+   Haarukka ei koskaan kavennu alle metrin: kapeampi olisi tarkkuuslupaus
+   jota mikään tässä ketjussa ei kanna. */
+function harppausVyohyke(laji, termo, jyrkkyys, pintalampo){
+  if(termo == null || isNaN(termo) || termo <= 0) return null;
+  const g = (jyrkkyys == null || isNaN(jyrkkyys)) ? 1.0 : jyrkkyys;
+  if(g < 0.5) return { syy: 'kerros on liian loiva rajaksi (' + g.toFixed(2) + ' °C/m)' };
+  const jousto = (g >= 1.0) ? 0 : 1.5;
+  const lampo = (pintalampo == null || isNaN(pintalampo)) ? 15 : pintalampo;
+
+  if(laji === 'taimen' || laji === 'jarvilohi' || laji === 'kirjolohi'){
+    /* Lohikalat: kun pinta on lämmin, ne eivät voi olla päällysvedessä eivätkä
+       hapettomassa alusvedessä. Vyöhyke on kerroksen molemmin puolin.
+       Viileässä vedessä (alle 16 °C) puristusta ei ole eikä rajaa tarvita. */
+    if(lampo < 16) return { syy: 'pinta ' + lampo.toFixed(1) + ' °C — ei lämpöpuristusta' };
+    return { min: Math.max(0.5, termo - 4), max: termo + 1 + jousto,
+             syy: 'lohikala puristuu kerroksen tuntumaan kun pinta on ' + lampo.toFixed(1) + ' °C' };
+  }
+  /* Kuha, ahven, hauki: päällysvesi. Alusvesi on hapen puolesta pois laskuista
+     kerrostuneena, ja mitä lämpimämpi pinta, sitä pidempään kerros on ollut
+     ja sitä varmemmin alusvesi on kulunut. */
+  return { max: termo + jousto,
+           syy: 'alusvesi kerrostunut, raja ' + (jousto ? 'joustaa' : 'pitää')
+                + ' (' + g.toFixed(2) + ' °C/m)' };
+}
+
+/* Rajaa yhden syvyysluvun vyöhykkeeseen. Palauttaa alkuperäisen jos rajaa ei ole. */
+function rajaaHarppauksella(d, v){
+  if(!v || (v.min == null && v.max == null)) return d;
+  let ulos = d;
+  if(v.min != null) ulos = Math.max(ulos, v.min);
+  if(v.max != null) ulos = Math.min(ulos, v.max);
+  return ulos;
+}
+
+/* ===== ULAPAN JA ASEMAN EROTUS =====
+   Lisätty 21.9.2026. SYKEn Halkosaari mittaa 30 cm rantavettä 0,5 m
+   rantaviivasta, ja se sekoittuu heikosti (Laasanen 1982). Ulapan pintavesi on
+   eri. Kun DepthRider lasketaan ulapalla SAMANA PÄIVÄNÄ kun asemalta on
+   lukema, erotus tunnetaan — ja sen jälkeen aseman ilmainen päivittäinen
+   lukema kelpaa ulapalle.
+
+   Yksi mittaus ei siis kerro vain sen päivän tilaa: se kalibroi koko kauden
+   mittarin. Erotus tallennetaan ja sitä käytetään kunnes uusi mittaus tulee.
+   Vanhenemista ei arvioida, koska erotus on paikkaero eikä sääilmiö — mutta
+   ikä näytetään, koska rantaveden käytös muuttuu kauden mittaan. */
+const LS_ULAPPAKORJAUS = 'uistelututka_ulappakorjaus';
+
+function tallennaUlappakorjaus(ulapallaC, asemallaC, syvyysM, lat, lon){
+  if(ulapallaC == null || asemallaC == null) return null;
+  const k = { ero: +(ulapallaC - asemallaC).toFixed(2), ulappa: ulapallaC,
+              asema: asemallaC, syvyys: syvyysM || null,
+              lat: lat || null, lon: lon || null, aika: new Date().toISOString() };
+  try { localStorage.setItem(LS_ULAPPAKORJAUS, JSON.stringify(k)); } catch(e){}
+  return k;
+}
+function lueUlappakorjaus(){
+  try { const r = JSON.parse(localStorage.getItem(LS_ULAPPAKORJAUS)); 
+        return (r && typeof r.ero === 'number') ? r : null; } catch(e){ return null; }
+}
+/* Aseman lukema ulapaksi. Ilman kalibrointia palautetaan lukema sellaisenaan
+   ja kerrotaan ettei korjausta ole. */
+function ulapanPintalampo(asemanC){
+  if(asemanC == null || isNaN(asemanC)) return null;
+  const k = lueUlappakorjaus();
+  if(!k) return { c: asemanC, korjattu: false, syy: 'ei kalibrointia — aseman lukema sellaisenaan' };
+  const vrk = Math.round((Date.now() - new Date(k.aika).getTime()) / 86400000);
+  return { c: +(asemanC + k.ero).toFixed(1), korjattu: true, ero: k.ero, ika: vrk,
+           syy: 'ulappakorjaus ' + (k.ero >= 0 ? '+' : '') + k.ero.toFixed(1)
+                + ' °C, mitattu ' + vrk + ' vrk sitten' };
 }
 </script>
 

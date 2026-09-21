@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harppauskerroksen ennuste 2027 · Lappajärvi</title>
+<style>
+:root{--tausta:#070f16;--kortti:#0e1c26;--viiva:rgba(140,180,205,.22);
+ --teksti:#e9f2f8;--himmea:#8eaabc;--syan:#5ec8e5;--kulta:#f0b429;--ok:#2ea043;--vaara:#c9382e}
+*{box-sizing:border-box}
+body{margin:0;background:var(--tausta);color:var(--teksti);font-size:15px;line-height:1.5;
+ font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:10px;max-width:860px;margin:0 auto}
+h1{font-size:20px;margin:0 0 2px}
+h2{font-size:13px;letter-spacing:.09em;text-transform:uppercase;color:var(--himmea);margin:18px 0 6px}
+.alku{color:var(--himmea);font-size:13px;margin:0 0 12px;line-height:1.55}
+.kortti{background:var(--kortti);border:1px solid var(--viiva);border-radius:10px;padding:12px;margin-bottom:10px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:6px 4px;border-bottom:1px solid var(--viiva);vertical-align:top}
+th{color:var(--himmea);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;font-weight:600}
+td.n{font-family:ui-monospace,monospace}
+input{width:64px;padding:4px 5px;background:#0f1b24;color:var(--teksti);
+ border:1px solid var(--viiva);border-radius:5px;font-size:13px;font-family:ui-monospace,monospace}
+.osuma{font-family:ui-monospace,monospace;font-size:12px}
+.huom{font-size:11.5px;color:var(--himmea);line-height:1.5}
+button{background:#17384a;color:var(--teksti);border:1px solid var(--viiva);
+ border-radius:6px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer}
+.kulta{color:var(--kulta)} .ok{color:var(--ok)} .vaara{color:var(--vaara)}
+</style>
+</head>
+<body>
+
+<h1>Harppauskerroksen ennuste 2027</h1>
+<p class="alku">Lappajärvi, länsipuolen syvänne, mittaus yli 20 m vedestä.
+Kirjaa toteuma oikeanpuoleisiin kenttiin niin näet osuiko ennuste. Tallentuu selaimeen.</p>
+
+<div class="kortti">
+  <h2 style="margin-top:0">Mihin ennuste perustuu</h2>
+  <p class="huom">
+  <strong>Mitattuja vertailukohtia:</strong> Inari 30.8.2026 kerros 16,5 m / 1,00 °C/m ·
+  Pielinen 12.9.2026 kerros 21 m / 1,05 °C/m, päällysvesi tasainen 19 m asti ·
+  Näsijärvi 20.10.2013 sekoittunut 26 m asti · Päijänne 21.4.2026 sekoittunut 71 m asti.<br><br>
+  <strong>Lappajärven omat luvut:</strong> pinta-ala 141 km², suurin syvyys 38 m,
+  keskisyvyys 7,4 m (SY 566). Kuukausikeskiarvot rantavedestä: kesäkuu 15,4 °C,
+  heinäkuu 18,1 °C, elokuu 17,0 °C. Ulapalta mitattu 15.9.2026: 14,3 °C.<br><br>
+  <strong>Mitä ennusteessa on arvattu:</strong> kerroksen syvyys ja jyrkkyys.
+  Lappajärvelle ei ole yhtään luotausta — luvut on johdettu muiden järvien
+  käytöksestä ja Lappajärven omasta muodosta. Matala ja tuulelle avoin järvi
+  sekoittuu helpommin kuin Pielinen, joten kerros on <strong>todennäköisesti
+  matalampi ja kierto aikaisempi</strong> kuin vertailujärvillä.<br><br>
+  <strong>Tämä on ennuste testattavaksi, ei tieto.</strong> Jos se osuu, mallin
+  voi rakentaa sen varaan. Jos ei, tiedetään mistä suunnasta se on pielessä.</p>
+</div>
+
+<div class="kortti">
+  <h2 style="margin-top:0">Ennuste ja toteuma</h2>
+  <table id="taulu"></table>
+  <p class="huom" style="margin-top:10px">
+  Kolme mittausta kaudessa riittää: heti jäiden lähdön jälkeen, keskikesällä ja
+  syyskuun lopulla. Merkitse koordinaatit ja kokonaissyvyys muistiin —
+  sama piste joka kerta, muuten sarjasta tulee eri paikkojen vertailua.</p>
+  <button onclick="tyhjenna()">Tyhjennä toteumat</button>
+</div>
+
+<div class="kortti">
+  <h2 style="margin-top:0">Mitä toteumasta luetaan</h2>
+  <p class="huom">
+  <strong>Kerroksen syvyys</strong> — jos toteuma on systemaattisesti matalampi kuin
+  ennuste, Lappajärvi sekoittuu odotettua enemmän ja tuulimalli on tärkeämpi kuin
+  kausimalli.<br>
+  <strong>Kiertopäivä</strong> — se päivä jolloin pinnan ja 20 m ero alittaa 0,5 °C.
+  Tämä on koko taulukon tärkein yksittäinen luku: se korvaa sovelluksen
+  kalenterirajan Lappajärven omalla mittauksella.<br>
+  <strong>Jyrkkyys</strong> — ratkaisee onko kerros seinä vai vyöhyke, ja sitä sovellus
+  käyttää haarukan rajaamiseen. Alle 0,5 °C/m ei rajaa lainkaan.</p>
+</div>
+
+<script>
+"use strict";
+const ENNUSTE = [
+  { pvm:'1.5.', lampo:'4–6', termo:'ei vielä', jyrk:'—', huom:'kevätkierto kesken, vesi tasalämpöistä' },
+  { pvm:'15.5.', lampo:'8–11', termo:'3–5 m', jyrk:'0,8–1,5', huom:'kerros syntyy nopeasti ensimmäisillä helteillä' },
+  { pvm:'1.6.', lampo:'12–15', termo:'4–7 m', jyrk:'1,0–2,0', huom:'matala ja jyrkkä, myrsky voi hajottaa kokonaan' },
+  { pvm:'15.6.', lampo:'15–17', termo:'6–9 m', jyrk:'1,5–2,5', huom:'vakiintuu' },
+  { pvm:'1.7.', lampo:'17–19', termo:'8–11 m', jyrk:'2,0–3,0', huom:'jyrkin vaihe' },
+  { pvm:'15.7.', lampo:'18–20', termo:'9–12 m', jyrk:'2,0–3,0', huom:'lämpimin, alusvesi eristyy' },
+  { pvm:'1.8.', lampo:'18–20', termo:'10–13 m', jyrk:'1,5–2,5', huom:'syvenee hitaasti' },
+  { pvm:'15.8.', lampo:'16–18', termo:'12–15 m', jyrk:'1,2–2,0', huom:'jäähtyminen alkaa, kerros syvenee' },
+  { pvm:'1.9.', lampo:'14–16', termo:'14–18 m', jyrk:'1,0–1,5', huom:'syvenee nopeasti, jyrkkyys laskee' },
+  { pvm:'15.9.', lampo:'13–15', termo:'17–21 m', jyrk:'0,8–1,2', huom:'ohuenee — vrt. Pielinen 12.9. 21 m / 1,05' },
+  { pvm:'1.10.', lampo:'10–12', termo:'20–26 m tai poissa', jyrk:'0,5–0,8', huom:'KIERTO todennäköisin tässä ikkunassa' },
+  { pvm:'15.10.', lampo:'7–9', termo:'poissa', jyrk:'—', huom:'täyskierto, vrt. Näsijärvi 20.10. sekoittunut' },
+  { pvm:'1.11.', lampo:'5–7', termo:'poissa', jyrk:'—', huom:'sekoittunut pohjaan asti' },
+  { pvm:'15.11.', lampo:'3–5', termo:'poissa', jyrk:'—', huom:'jäähtyy kohti 4 °C' },
+  { pvm:'1.12.', lampo:'1–3', termo:'käänteinen alkaa', jyrk:'—', huom:'pinta kylmempi kuin pohja, jäätyminen lähellä' }
+];
+
+const LS = 'harppausennuste_2027_toteuma';
+function lue(){ try{ return JSON.parse(localStorage.getItem(LS)) || {}; }catch(e){ return {}; } }
+function talleta(t){ try{ localStorage.setItem(LS, JSON.stringify(t)); }catch(e){} }
+
+/* Osuma: onko toteuma ennustehaarukan sisällä. Haarukka luetaan tekstistä
+   ("14-18 m"), koska ennuste on kirjoitettu ihmisen luettavaksi eikä
+   koneelle — ja se on tässä oikea järjestys. */
+function haarukka(teksti){
+  const m = String(teksti).match(/(\d+(?:[.,]\d+)?)\s*[–-]\s*(\d+(?:[.,]\d+)?)/);
+  if(!m) return null;
+  return [parseFloat(m[1].replace(',','.')), parseFloat(m[2].replace(',','.'))];
+}
+function arvio(teksti, arvo){
+  const h = haarukka(teksti);
+  if(h === null || arvo === '' || arvo === null || isNaN(arvo)) return '';
+  const v = parseFloat(arvo);
+  if(v >= h[0] && v <= h[1]) return '<span class="ok">osui</span>';
+  const ero = v < h[0] ? (h[0]-v) : (v-h[1]);
+  return '<span class="vaara">' + (v < h[0] ? '−' : '+') + ero.toFixed(1) + '</span>';
+}
+
+function piirra(){
+  const t = lue();
+  let h = '<tr><th>pvm</th><th>pinta °C</th><th>kerros</th><th>°C/m</th>'
+        + '<th>toteuma pinta</th><th>toteuma 20 m</th><th>kerros</th><th>osuma</th></tr>';
+  ENNUSTE.forEach(function(r, i){
+    const x = t[i] || {};
+    h += '<tr>'
+      + '<td class="n kulta">' + r.pvm + '</td>'
+      + '<td class="n">' + r.lampo + '</td>'
+      + '<td class="n">' + r.termo + '</td>'
+      + '<td class="n">' + r.jyrk + '</td>'
+      + '<td><input data-i="' + i + '" data-k="pinta" value="' + (x.pinta||'') + '" inputmode="decimal"></td>'
+      + '<td><input data-i="' + i + '" data-k="syva" value="' + (x.syva||'') + '" inputmode="decimal"></td>'
+      + '<td><input data-i="' + i + '" data-k="kerros" value="' + (x.kerros||'') + '" inputmode="decimal"></td>'
+      + '<td class="osuma">' + arvio(r.termo, x.kerros)
+      + (x.pinta && x.syva ? '<br><span style="color:var(--himmea)">ero '
+          + (parseFloat(x.pinta)-parseFloat(x.syva)).toFixed(1) + ' °C'
+          + (Math.abs(parseFloat(x.pinta)-parseFloat(x.syva)) < 0.5
+             ? ' <span class="kulta">KIERTO</span>' : '') + '</span>' : '')
+      + '</td></tr>'
+      + '<tr><td colspan="8" class="huom" style="border:none;padding:0 4px 8px;">' + r.huom + '</td></tr>';
+  });
+  document.getElementById('taulu').innerHTML = h;
+  document.querySelectorAll('#taulu input').forEach(function(el){
+    el.addEventListener('change', function(){
+      const t2 = lue(), i = this.getAttribute('data-i'), k = this.getAttribute('data-k');
+      t2[i] = t2[i] || {}; t2[i][k] = this.value.replace(',','.');
+      talleta(t2); piirra();
+    });
+  });
+}
+function tyhjenna(){ if(confirm('Tyhjennetäänkö kaikki toteumat?')){ talleta({}); piirra(); } }
+piirra();
+</script>
+</body>
+</html>
