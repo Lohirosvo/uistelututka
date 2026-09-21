@@ -12284,9 +12284,27 @@ lataa(eka);
         sel.value = currentLocation.name;
       } else {
         currentLocation = locations.find(l => l.name === sel.value) || currentLocation;
-        /* Aallonkorkeuskartta seuraa mukana. Ilman tätä kartta jäisi edelliseen
-           järveen, ja sen lisäksi kumpuamisen pyyhkäisymatka ja aseman suuntima
-           laskettaisiin väärästä järvestä. */
+
+        /* ===== PAIKANVAIHTO MITÄTÖI KAIKEN PAIKKAKOHTAISEN — 21.9.2026 =====
+           VIKA: tämä haki uudelleen vain Open-Meteon ja SYKEn. FMI:n Harmonie-
+           ennuste jäi EDELLISEN JÄRVEN ennusteeksi, ja siitä syöttyvät 48 h
+           -ikkuna, sumuriski ja tuuliaikajana. Eli käyttäjä valitsi Hirvijärven
+           ja katsoi Lappajärven lukuja ilman että mikään kertoi siitä.
+
+           Se on pahin mahdollinen vikaluokka: väärä vastaus joka näyttää
+           oikealta. Siksi vanha data ei jää näkyviin odottamaan uutta, vaan
+           se NOLLATAAN ensin ja haetaan sitten. Tyhjä ruutu hetken on parempi
+           kuin väärä luku. */
+        fmiEnnuste = null;
+        fmiTuuli = null; fmiPaineSarja = []; fmiPaineTrendi = null;
+        sykeLampoSarja = []; sykeLampoTrendi = null; sykeAsema = null;
+        window.viimeisinJyrkkyys = null;
+        ['ikkuna48','sumuriski','tuuliEnnusteBox','luotausTulos'].forEach(function(id){
+          const el = document.getElementById(id);
+          if (el) el.innerHTML = '<p class="hint">Haetaan ' + currentLocation.name + '…</p>';
+        });
+        paivitaPaikkaLeima();
+
         if (typeof window.akPaivitaPaikka === 'function') {
           try { window.akPaivitaPaikka(); } catch(e){}
         }
@@ -12300,6 +12318,15 @@ lataa(eka);
           fetchOpenMeteo();
           fetchSykeData();
         }
+        /* Ennuste ja asemahavainto uudelleen. Ilman näitä koko 48 h -puoli
+           näyttäisi edellisen järven tietoja. */
+        if (typeof haeFmiEnnuste === 'function') {
+          Promise.resolve().then(haeFmiEnnuste).then(function(){
+            if (typeof piirra48 === 'function') piirra48();
+            if (typeof sumuriskiAlusta === 'function') sumuriskiAlusta();
+          }).catch(function(){});
+        }
+        if (typeof haeFmiTuuli === 'function') { try { haeFmiTuuli(); } catch(e){} }
       }
     }
 
@@ -13773,6 +13800,33 @@ function ulapanPintalampo(asemanC){
   return { c: +(asemanC + k.ero).toFixed(1), korjattu: true, ero: k.ero, ika: vrk,
            syy: 'ulappakorjaus ' + (k.ero >= 0 ? '+' : '') + k.ero.toFixed(1)
                 + ' °C, mitattu ' + vrk + ' vrk sitten' };
+}
+
+/* ===== PAIKKALEIMA =====
+   Lisätty 21.9.2026. Sovelluksessa on kuusi järveä ja moduuleja jotka hakevat
+   dataa eri aikaan. Käyttäjän on nähtävä yhdellä silmäyksellä MISTÄ JÄRVESTÄ
+   näkyvät luvut ovat — muuten jokainen luku pitää uskoa sokeasti, ja yksikin
+   vanhentunut moduuli vie luottamuksen koko sovellukselta. */
+function paivitaPaikkaLeima(){
+  let el = document.getElementById('paikkaLeima');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'paikkaLeima';
+    el.style.cssText = 'position:sticky;top:0;z-index:500;margin:-4px -2px 8px;'
+      + 'padding:6px 12px;border-radius:0 0 10px 10px;background:rgba(8,16,22,.96);'
+      + "border-bottom:1px solid var(--line);font-family:'Barlow Condensed',sans-serif;"
+      + 'font-size:15px;font-weight:700;letter-spacing:.06em;color:var(--cyan);'
+      + 'display:flex;justify-content:space-between;align-items:baseline;gap:8px';
+    const sailio = document.getElementById('ruutu-suunnittelu');
+    if(sailio) sailio.insertBefore(el, sailio.firstChild.nextSibling || sailio.firstChild);
+    else return;
+  }
+  const nimi = (currentLocation && currentLocation.name) || '—';
+  const onEnnuste = Array.isArray(fmiEnnuste) && fmiEnnuste.length;
+  el.innerHTML = '<span>' + nimi.toUpperCase() + '</span>'
+    + '<span style="font-size:11px;font-weight:400;letter-spacing:.04em;color:'
+    + (onEnnuste ? 'var(--muted)' : 'var(--amber)') + '">'
+    + (onEnnuste ? 'ennuste haettu' : 'ennustetta ei ole') + '</span>';
 }
 </script>
 
