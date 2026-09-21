@@ -1383,7 +1383,16 @@ body{padding-bottom:66px}
         </div>
         <div>
           <label style="display:block;color:var(--muted);font-size:13px;margin-bottom:4px;">Kalastuspaikka</label>
-          <select id="locationSelect" onchange="onLocationChange()"></select>
+          <!-- NAPIT SELECTIN TILALLE — 21.9.2026.
+               Androidilla <select> kaappaa pyyhkäisyn ja vaihtaa arvoa kun sivua
+               vieritetään. Käyttäjä valitsi Hirvijärven ja se palasi Lappajärveen
+               itsestään. Napissa ei ole sitä ongelmaa: se vaihtuu vain
+               painalluksesta. Select jää DOM:iin piiloon, koska moni funktio
+               lukee sen arvoa — se pidetään synkassa nappien kanssa. -->
+          <div id="paikkaNapit" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+          <select id="locationSelect" onchange="onLocationChange()"
+                  style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;"
+                  aria-hidden="true" tabindex="-1"></select>
         </div>
       </div>
       <div class="numfield" id="newLocationRow" style="display:none;margin-top:12px;">
@@ -12263,6 +12272,17 @@ lataa(eka);
     ];
     let currentLocation = locations[0];
 
+    /* Valittu paikka säilyy sovelluksen sulkemisen yli. Ilman tätä se palautui
+       listan ensimmäiseen eli Lappajärveen joka latauksella, ja käyttäjä joutui
+       valitsemaan järven uudelleen joka kerta. */
+    const LS_PAIKKA = 'uistelututka_valittu_paikka';
+    (function palautaPaikka(){
+      try {
+        const t = localStorage.getItem(LS_PAIKKA);
+        if(t){ const l = locations.find(x => x.name === t); if(l) currentLocation = l; }
+      } catch(e){}
+    })();
+
     function renderLocationSelect() {
       const sel = document.getElementById('locationSelect');
       sel.innerHTML = '';
@@ -12275,6 +12295,45 @@ lataa(eka);
       const optNew = document.createElement('option');
       optNew.value = '__new__'; optNew.textContent = '+ Lisää uusi paikka';
       sel.appendChild(optNew);
+      piirraPaikkaNapit();
+    }
+
+    function piirraPaikkaNapit(){
+      const el = document.getElementById('paikkaNapit');
+      if(!el) return;
+      el.innerHTML = '';
+      locations.forEach(function(loc){
+        const b = document.createElement('button');
+        const valittu = (loc.name === currentLocation.name);
+        b.type = 'button';
+        /* Lyhennä napin teksti luettavaksi. "Hirvijärven tekoallas" -> "Hirvijärvi":
+           pelkkä 'n tekoallas' -poisto jätti "Hirvijärve", joten pääte korjataan. */
+        b.textContent = loc.name
+          .replace(' (Karvala)','')
+          .replace(/en teko(allas|järvi)/, 'i');
+        b.style.cssText = 'padding:9px 13px;border-radius:18px;font-size:14px;cursor:pointer;'
+          + "font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.03em;"
+          + (valittu
+             ? 'background:var(--cyan);color:#062028;border:1px solid var(--cyan);'
+             : 'background:transparent;color:var(--muted);border:1px solid var(--line);');
+        b.onclick = function(){
+          if(loc.name === currentLocation.name) return;   // sama paikka: ei turhaa hakua
+          const sel = document.getElementById('locationSelect');
+          sel.value = loc.name;
+          onLocationChange();
+          try { localStorage.setItem(LS_PAIKKA, loc.name); } catch(e){}
+          piirraPaikkaNapit();
+        };
+        el.appendChild(b);
+      });
+      const uusi = document.createElement('button');
+      uusi.type = 'button'; uusi.textContent = '+';
+      uusi.style.cssText = 'padding:9px 13px;border-radius:18px;font-size:16px;cursor:pointer;'
+        + 'background:transparent;color:var(--muted);border:1px dashed var(--line);';
+      uusi.onclick = function(){
+        document.getElementById('newLocationRow').style.display = 'flex';
+      };
+      el.appendChild(uusi);
     }
 
     function onLocationChange() {
@@ -12308,6 +12367,8 @@ lataa(eka);
         if (typeof window.akPaivitaPaikka === 'function') {
           try { window.akPaivitaPaikka(); } catch(e){}
         }
+        try { localStorage.setItem(LS_PAIKKA, currentLocation.name); } catch(e){}
+        if (typeof piirraPaikkaNapit === 'function') piirraPaikkaNapit();
         document.getElementById('newLocationRow').style.display = 'none';
         document.getElementById('vedenkorkeusStatus').textContent = '';
         document.getElementById('vedenkorkeusRaja').value = '';
