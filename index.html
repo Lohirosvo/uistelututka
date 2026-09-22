@@ -846,6 +846,29 @@
     margin-top:1px}
 .ak-leima{box-shadow:0 1px 4px rgba(0,0,0,.28)}
 
+/* ---- AIKARULLA — siirretty erillisestä aaltokartasta 21.9.2026 ----
+   Yhdenmukaisuus: erillisellä sivulla oli vieritettävä pylväsrivi ja
+   sovelluksessa pelkkä liuku. Rulla on parempi kahdesta syystä: pylvään
+   korkeus kertoo tuulen määrän (väri kertoo vain kelpaako tunti), ja
+   sormella vieritettävä nauha ei lopu reunaan niin kuin liuku — siitä
+   pääsee alkuun ja loppuun ilman tarkkaa tökkimistä.
+   Pylvään korkeus on TUULESTA eikä aallosta: aalto lasketaan vain valitulle
+   tunnille maskin ja pyyhkäisykentän kautta, ja koko sarjan laskeminen
+   etukäteen olisi raskasta. Tuuli on sen paras ennakkokuva. */
+.ak-rulla{overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none;margin:10px 0 6px;
+  border:1px solid var(--line);border-radius:6px;background:rgba(255,255,255,.04)}
+.ak-rulla::-webkit-scrollbar{display:none}
+.ak-rullasisus{display:flex;height:56px;align-items:flex-end}
+.ak-tunti{flex:0 0 15px;scroll-snap-align:center;display:flex;flex-direction:column;
+  align-items:center;justify-content:flex-end;height:100%;cursor:pointer;
+  border-right:1px solid rgba(160,190,170,.08)}
+.ak-tunti b{display:block;width:9px;border-radius:2px 2px 0 0;background:#8cc63f}
+.ak-tunti span{font-size:8px;color:var(--muted);margin-top:2px;
+  font-variant-numeric:tabular-nums;line-height:1}
+.ak-tunti.vrk{border-right:2px solid var(--cyan)}
+.ak-tunti.valittu b{outline:2px solid var(--text);outline-offset:1px}
+.ak-tunti.valittu span{color:var(--text);font-weight:700}
 .ak-siirto{display:flex;gap:5px;margin:2px 0 4px}
 .ak-siirto button{flex:1;background:#12201c;border:1px solid rgba(160,190,170,.35);
     color:#cfe0e6;border-radius:6px;padding:7px 0;font-size:12.5px;cursor:pointer;
@@ -1244,6 +1267,29 @@ body{padding-bottom:66px}
         <!-- LÄHTÖAIKALASKURI — liitetty 18.9.2026. 48 h -ikkuna vastaa
              kysymykseen lähdenkö; laskuri vastaa siihen mitä lähdön jälkeen
              tehdään. Ne kuuluvat samaan kohtaan, koska päätös on sama. -->
+        <!-- HARPPAUSENNUSTE 2027 — liitetty 21.9.2026. Sijoitettu tähän koska
+             kausi ja harppauskerros ovat saman päätöksen osia: molemmat
+             vastaavat kysymykseen missä syvyydessä kala on tähän aikaan
+             vuodesta. Ennuste on testattavaksi, ei tiedoksi — sivulla voi
+             kirjata toteuman rinnalle. -->
+        <a href="./harppausennuste-2027.html"
+           style="display:block; margin-top:10px; padding:10px 12px; text-align:center;
+                  border:1px solid var(--amber); border-radius:10px; color:var(--amber);
+                  text-decoration:none; font-family:'Barlow Condensed',sans-serif;
+                  font-size:17px; font-weight:700; letter-spacing:.02em;">
+          🌡 HARPPAUSKERROKSEN ENNUSTE 2027
+        </a>
+        <!-- LÄHTIS — liitetty 21.9.2026. Vastaa eri kysymykseen kuin
+             Lähtöaikalaskuri: tämä laskee taaksepäin hämärästä eli mihin aikaan
+             lähdetään kotoa, toinen etsii parhaan kelin. Molemmat kuuluvat
+             lähtöpäätöksen viereen. -->
+        <a href="./Lahtis.html"
+           style="display:block; margin-top:10px; padding:10px 12px; text-align:center;
+                  border:1px solid var(--cyan); border-radius:10px; color:var(--cyan);
+                  text-decoration:none; font-family:'Barlow Condensed',sans-serif;
+                  font-size:17px; font-weight:700; letter-spacing:.02em;">
+          🌒 LÄHTIS — ehdinkö hämärään
+        </a>
         <a href="./Lahtoaikalaskuri.html"
            style="display:block; margin-top:10px; padding:10px 12px; text-align:center;
                   border:1px solid var(--cyan); border-radius:10px; color:var(--cyan);
@@ -1314,17 +1360,13 @@ body{padding-bottom:66px}
     <span id="akRajaL"></span>
   </div>
 
-  <input type="range" id="akLiuku" min="0" max="0" value="0" aria-label="Tunti">
-  <!-- SIIRTONAPIT — 21.9.2026. Liuku on 84 tuntia leveä, jolloin yksi tunti on
-       muutama pikseli eikä ensimmäistä tai viimeistä tuntia saa osumaan
-       sormella. Napit vievät tarkasti. -->
-  <div class="ak-siirto">
-    <button type="button" onclick="akSiirra('alku')">⏮</button>
-    <button type="button" onclick="akSiirra(-1)">−1 h</button>
-    <button type="button" onclick="akSiirra('nyt')">nyt</button>
-    <button type="button" onclick="akSiirra(1)">+1 h</button>
-    <button type="button" onclick="akSiirra('loppu')">⏭</button>
-  </div>
+  <!-- AIKARULLA korvaa liu'un ja siirtonapit 21.9.2026. Sama esitys kuin
+       erillisellä aaltokarttasivulla. Liuku jää piiloon, koska osa koodista
+       lukee sen arvoa; se pidetään synkassa rullan kanssa. -->
+  <div class="ak-rulla" id="akRulla"><div class="ak-rullasisus" id="akRullaSisus"></div></div>
+  <input type="range" id="akLiuku" min="0" max="0" value="0" aria-label="Tunti"
+         style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;"
+         aria-hidden="true" tabindex="-1">
   <!-- 48 H JANA — 15.9.2026. Liuku näyttää yhden tunnin kerrallaan, mutta
        lähtöpäätös tehdään koko jaksosta. Jana kertoo jokaisen tunnin
        uisteltavan osuuden yhtenä nauhana: vihreä yli neljännes, keltainen
@@ -4612,8 +4654,8 @@ function akPiirraJana(){
 /* Päivämerkit janan alle. Sijoitetaan suhteellisesti samalle kohdalle kuin
    vastaava palkki: palkin keskikohta on (i + 0.5)/n nauhan leveydestä. */
 
-/* Liu'un siirto napeilla. 'nyt' etsii lähimmän tunnin nykyhetkeen, koska
-   ennuste voi alkaa menneestä tunnista. */
+/* Jäänyt käyttöön ohjelmallisesti: rulla korvasi napit, mutta 'nyt' on
+   hyödyllinen kutsuttavaksi muualta. */
 function akSiirra(mihin){
   var el = $("akLiuku");
   if(!el || !data || !data.length) return;
@@ -4631,6 +4673,74 @@ function akSiirra(mihin){
   if(typeof akKorostaJana === 'function') akKorostaJana();
   piirra();
 }
+
+
+/* ===== AIKARULLA ===== */
+var akRullaOdottaa = false;
+
+function akPiirraRulla(){
+  var sis = $("akRullaSisus");
+  if (!sis || !data.length) return;
+  var korkein = 0;
+  for (var i = 0; i < data.length; i++) if (data[i].U > korkein) korkein = data[i].U;
+  if (korkein <= 0) korkein = 1;
+  var pad = function(n){ return ("0"+n).slice(-2); };
+  sis.innerHTML = data.map(function(d, i){
+    /* Korkeus tuulesta, ei aallosta — ks. CSS-kommentti. Aallon oma väri
+       näkyy alla janassa, joten kaksi eri suuretta ei sekoitu. */
+    var h = Math.max(4, Math.round(34 * d.U / korkein));
+    var vrk = (d.aika.getHours() === 0) ? " vrk" : "";
+    var nyt = (i === valittu) ? " valittu" : "";
+    return '<div class="ak-tunti' + vrk + nyt + '" data-i="' + i + '">'
+      + '<b style="height:' + h + 'px"></b>'
+      + '<span>' + (d.aika.getHours() % 6 === 0 ? pad(d.aika.getHours()) : '') + '</span></div>';
+  }).join("");
+}
+
+function akKeskitaRulla(i, pehmea){
+  var r = $("akRulla"), sis = $("akRullaSisus");
+  if (!r || !sis || !sis.children[i]) return;
+  var el = sis.children[i];
+  r.scrollTo({ left: el.offsetLeft - r.clientWidth/2 + el.offsetWidth/2,
+               behavior: pehmea ? "smooth" : "auto" });
+}
+
+function akValitseTunti(i){
+  if (i < 0 || i >= data.length || i === valittu) return;
+  valittu = i;
+  var liuku = $("akLiuku");
+  if (liuku) liuku.value = i;          // piilotettu liuku synkassa
+  var sis = $("akRullaSisus");
+  if (sis) for (var k = 0; k < sis.children.length; k++)
+    sis.children[k].classList.toggle("valittu", k === valittu);
+  akKorostaJana();
+  piirra();
+}
+
+(function akRullaKuuntelijat(){
+  var r = $("akRulla");
+  if (!r) return;
+  /* Vieritys valitsee keskimmäisen tunnin. requestAnimationFrame rajoittaa
+     laskennan yhteen kertaan ruudunpäivitystä kohti — muuten piirra() ajettaisiin
+     kymmeniä kertoja sekunnissa vierityksen aikana. */
+  r.addEventListener("scroll", function(){
+    if (akRullaOdottaa) return;
+    akRullaOdottaa = true;
+    requestAnimationFrame(function(){
+      akRullaOdottaa = false;
+      var sis = $("akRullaSisus");
+      if (!sis || !sis.children.length) return;
+      var leveys = sis.children[0].offsetWidth || 15;
+      var i = Math.round((r.scrollLeft + r.clientWidth/2 - leveys/2) / leveys);
+      akValitseTunti(Math.max(0, Math.min(data.length-1, i)));
+    });
+  }, { passive:true });
+
+  r.addEventListener("click", function(e){
+    var el = e.target.closest ? e.target.closest(".ak-tunti") : null;
+    if (el){ var i = +el.getAttribute("data-i"); akValitseTunti(i); akKeskitaRulla(i, true); }
+  });
+})();
 
 function akPiirraPaivat(){
   var el = $("akPaivat");
@@ -4846,13 +4956,12 @@ $("akLiuku").addEventListener("input", function(){
   piirra();
 });
 
+/* Jana on yleiskuva: napautus siitä siirtää myös rullan oikeaan kohtaan. */
 $("akJana").addEventListener("click", function(e){
   var i = e.target && e.target.getAttribute && e.target.getAttribute("data-i");
   if (i === null || i === undefined) return;
-  valittu = +i;
-  $("akLiuku").value = valittu;
-  akKorostaJana();
-  piirra();
+  akValitseTunti(+i);
+  akKeskitaRulla(+i, true);
 });
 
 /* Napautus. Canvasin näyttökoko ja sisäinen ruudukko ovat eri asia, joten
@@ -4961,6 +5070,8 @@ function lataa(avain){
       $("akLoppu").textContent = pv[v.getDay()] + " " + pad(v.getHours()) + ":00";
       piirra();
       akPiirraJana();
+      akPiirraRulla();
+      akKeskitaRulla(valittu, false);
     })
     .catch(function(e){
       $("akLeima").innerHTML = '<small>ei ennustetta</small>';
