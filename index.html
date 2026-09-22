@@ -6378,6 +6378,7 @@ lataa(eka);
       btn.classList.add('selected');
       statusEl.textContent = "Etsitään GPS-signaalia...";
       nopeusOtos = []; ylityksia = 0; alituksia = 0;
+      nopeusLahde = null; naytettyNopeus = null; lastTime = 0;
       vetoPuskuri = []; vetoEdellinen = null;
 
       speedWatchId = navigator.geolocation.watchPosition(
@@ -6395,6 +6396,10 @@ lataa(eka);
           var TARKKUUS_RAJA = 30;     // m — tätä huonompi mittaus ei kerro nopeudesta
           var VARA_MIN_S    = 3;      // s — lyhyemmästä välistä ei laskea nopeutta
           var VARA_MAX_KMH  = 25;     // km/h — tätä suurempi varalaskenta on hyppy
+          var VANHENTUU_MS  = 20000;  // ms — vanhempi otos ei kerro nykyvauhdista
+          var HIDAS_RAJA    = 6;      // km/h — tämän alle pidempi tasoitus
+          var IKKUNA_HIDAS  = 9, IKKUNA_NOPEA = 5;   // otosta mediaaniin
+          var NAYTTO_KYNNYS = 0.15;   // km/h — pienempi muutos ei liikuta näyttöä
 
           if (pos.coords.accuracy != null && pos.coords.accuracy > TARKKUUS_RAJA) {
             statusEl.textContent = 'GPS epätarkka (' + pos.coords.accuracy.toFixed(0)
@@ -6403,40 +6408,69 @@ lataa(eka);
           }
 
           let speedMs = pos.coords.speed;
-          let laskettu = false;
+          let lahde = 'doppler';
 
+          /* MIKSI LÄHDE MERKITÄÄN — 22.9.2026. Siru laskee nopeuden Doppler-
+             siirtymästä ja yltää muutaman cm/s tarkkuuteen. Kahden sijainnin
+             erotus perii koko paikannuksen virheen ja jää metri sekunnissa
+             -tasolle. Vetovauhti 3 km/h on 0,83 m/s, eli varalaskenta on
+             hitaassa vedossa samaa luokkaa kuin mitattava asia. Siksi se
+             vaatii nyt kunnon matkan, eikä sitä sekoiteta Doppler-otoksiin. */
           if (speedMs === null || isNaN(speedMs)) {
-            /* Varalaskenta vain riittävän pitkältä väliltä, ja tulos hylätään jos
-               se on epäuskottava. Aiemmin tämä oli yleisin väärän hälytyksen syy. */
+            lahde = 'laskettu';
+            speedMs = null;
             if (lastPos && lastTime) {
               const dist = haversineDistMeters(lastPos.lat, lastPos.lon,
                              pos.coords.latitude, pos.coords.longitude);
               const dt = (pos.timestamp - lastTime) / 1000;
-              if (dt >= VARA_MIN_S) {
+              const tark = (pos.coords.accuracy != null) ? pos.coords.accuracy : 10;
+              if (dt >= VARA_MIN_S && dist >= Math.max(10, 3 * tark)) {
                 const v = dist / dt;
-                if (v * 3.6 <= VARA_MAX_KMH) { speedMs = v; laskettu = true; }
+                if (v * 3.6 <= VARA_MAX_KMH) speedMs = v;
               }
             }
-            if (speedMs === null || isNaN(speedMs)) {
-              lastPos = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-              lastTime = pos.timestamp;
-              return;   // ei nopeutta tältä mittaukselta — ei myöskään hälytystä
-            }
           }
 
-          if (laskettu || !lastPos) {
-            lastPos = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-            lastTime = pos.timestamp;
+          /* Vertailupiste päivitetään AINA. Aiemmin se päivittyi vain kun
+             varalaskentaa käytettiin, joten Doppler-jakson jälkeen ensimmäinen
+             varalaskenta mittasi matkan minuuttien takaiseen pisteeseen. */
+          lastPos = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+          lastTime = pos.timestamp;
+
+          if (speedMs === null || isNaN(speedMs)) {
+            disp.innerHTML = '– <span style="font-size:16px; color:var(--muted)">km/h</span>';
+            statusEl.textContent = 'GPS ei anna nopeutta, eikä kuljettu matka riitä '
+              + 'laskettavaksi — ei lukemaa. Hälytys on vaiti.';
+            return;   // ei nopeutta tältä mittaukselta — ei myöskään hälytystä
           }
 
-          /* Mediaani viidestä: yksi kohinapiikki ei enää liikuta lukua lainkaan,
-             mutta todellinen muutos näkyy noin kolmessa sekunnissa. */
-          nopeusOtos.push(speedMs * 3.6);
-          if (nopeusOtos.length > 5) nopeusOtos.shift();
-          const jarj = nopeusOtos.slice().sort(function(a,b){ return a-b; });
-          let speedKmh = jarj[Math.floor(jarj.length/2)];
+          /* Lähteen vaihtuessa puskuri tyhjäksi: kaksi eri tarkkuutta samassa
+             mediaanissa on kaksi mallia samasta asiasta. */
+          if (nopeusLahde !== lahde) { nopeusOtos = []; nopeusLahde = lahde; }
+
+          /* TASOITUS VAUHDIN MUKAAN. Vedossa kaasuun ei kosketa, joten pidempi
+             ikkuna maksaa vasteessa vähän ja vie kohinaa pois. Yli 6 km/h
+             ajetaan paikasta toiseen, ja siellä vaste on tärkeämpi. */
+          nopeusOtos.push({ t: pos.timestamp, kmh: speedMs * 3.6 });
+          nopeusOtos = nopeusOtos.filter(function(o){ return pos.timestamp - o.t <= VANHENTUU_MS; });
+          const ikkuna = (naytettyNopeus !== null && naytettyNopeus < HIDAS_RAJA)
+                         ? IKKUNA_HIDAS : IKKUNA_NOPEA;
+          while (nopeusOtos.length > ikkuna) nopeusOtos.shift();
+          const jarj = nopeusOtos.map(function(o){ return o.kmh; }).sort(function(a,b){ return a-b; });
+          const mediaani = jarj[Math.floor(jarj.length/2)];
+
+          /* NÄYTÖN HYSTEREESI. Viimeinen desimaali vilkkui kohinan tahdissa ja
+             silmä seurasi vilkkumista. Sama luku menee hälytykseen, ettei
+             ruudulla lue eri asia kuin mistä hälytys huutaa. */
+          if (naytettyNopeus === null || Math.abs(mediaani - naytettyNopeus) >= NAYTTO_KYNNYS) {
+            naytettyNopeus = mediaani;
+          }
+          const speedKmh = naytettyNopeus;
           disp.innerHTML = `${speedKmh.toFixed(1)} <span style="font-size:16px; color:var(--muted)">km/h</span>`;
-          statusEl.textContent = `Päivitetty: ${new Date().toLocaleTimeString('fi-FI')} (Tarkkuus: ${pos.coords.accuracy.toFixed(0)}m)`;
+          statusEl.textContent = 'Päivitetty: ' + new Date().toLocaleTimeString('fi-FI')
+            + ' · tarkkuus ' + pos.coords.accuracy.toFixed(0) + ' m · '
+            + (lahde === 'doppler' ? 'Doppler' : 'laskettu sijainneista')
+            + ' · tasoitus ' + nopeusOtos.length + '/' + ikkuna;
 
           /* Suunta: laitteen oma kurssi jos se on saatavilla ja vene liikkuu,
              muuten laskettu kahden sijainnin välistä. Paikallaan GPS:n heading on
@@ -6561,8 +6595,12 @@ lataa(eka);
       el.textContent = txt;
     }
 
-    /* Nopeusotos mediaania varten ja peräkkäisten ylitysten laskuri. */
+    /* Nopeusotos mediaania varten ja peräkkäisten ylitysten laskuri.
+       Otos on nyt { t, kmh } eikä pelkkä luku: vanhentuneet mittaukset on
+       pystyttävä pudottamaan pois, kun watchPosition on ollut tauolla. */
     let nopeusOtos = [];
+    let nopeusLahde = null;       // 'doppler' | 'laskettu' — ei sekoiteta samaan mediaaniin
+    let naytettyNopeus = null;    // km/h — ruudulla näkyvä luku, oma hystereesi
     let ylityksia = 0, alituksia = 0;
     const HYSTEREESI = 0.3;   // km/h — rajan pitää ylittyä selvästi, ei 0,1:llä
     const PERAKKAIN  = 3;     // mittausta — kertapiikki ei riitä hälytykseen
