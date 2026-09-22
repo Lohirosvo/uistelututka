@@ -12,7 +12,7 @@ body{margin:0;background:var(--tausta);color:var(--teksti);font-size:15px;line-h
  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:10px;max-width:640px;margin:0 auto}
 h1{font-size:20px;margin:0 0 2px}
 h2{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--himmea);margin:14px 0 6px}
-.alku{color:var(--himmea);font-size:13px;margin:0 0 12px}
+.alku{color:var(--himmea);font-size:13.5px;margin:0 0 12px}
 .kortti{background:var(--kortti);border:1px solid var(--viiva);border-radius:10px;padding:12px;margin-bottom:10px}
 .napit{display:flex;gap:6px;flex-wrap:wrap}
 button{background:transparent;color:var(--himmea);border:1px solid var(--viiva);border-radius:18px;
@@ -38,7 +38,7 @@ td.v{text-align:right;color:var(--himmea);font-size:12px}
 <body>
 
 <h1>Lähtis</h1>
-<p class="alku">Mihin aikaan lähden kotoa että kattaus on vedessä kun hämärä alkaa.</p>
+<p class="alku">Aamulla laskuri kertoo mihin aikaan lähdetään kotoa. Illalla näet suoraan hämärän päättyessä alkavan kotimatkan aikataulun.</p>
 
 <div class="kortti">
   <h2 style="margin-top:0">Järvi</h2>
@@ -54,7 +54,7 @@ td.v{text-align:right;color:var(--himmea);font-size:12px}
 </div>
 
 <div class="kortti" id="tulosKortti">
-  <h2 style="margin-top:0">Lähtö kotoa</h2>
+  <h2 style="margin-top:0" id="tulosOtsikko">Lähtö kotoa</h2>
   <div class="iso-aika" id="lahtoaika">–</div>
   <div class="selite" id="lahtoSelite">Valitse järvi ja päivä.</div>
   <div class="ikkuna" id="aurinkoRivi" style="margin-top:10px"></div>
@@ -64,35 +64,19 @@ td.v{text-align:right;color:var(--himmea);font-size:12px}
 <div class="kortti">
   <h2 style="margin-top:0">Ajat minuutteina</h2>
   <div class="grid">
-    <div><label>Matka kotoa</label><input type="number" id="matka" min="0" step="5"></div>
-    <div><label>Tankkaus</label><input type="number" id="tankkaus" min="0" step="5"></div>
-    <div><label>Veneen lasku</label><input type="number" id="lasku" min="0" step="5"></div>
+    <div><label>Matka kotoa / kotiin</label><input type="number" id="matka" min="0" step="5"></div>
+    <div><label>Tankkaus (aamu)</label><input type="number" id="tankkaus" min="0" step="5"></div>
+    <div><label>Veneen lasku / nosto</label><input type="number" id="lasku" min="0" step="5"></div>
     <div><label>Valmistelu</label><input type="number" id="valmistelu" min="0" step="5"></div>
-    <div><label>Ajo vetopaikalle</label><input type="number" id="ajo" min="0" step="5"></div>
-    <div><label>Kattaus veteen</label><input type="number" id="kattaus" min="0" step="5"></div>
+    <div><label>Ajo vetopaikalle / rantaan</label><input type="number" id="ajo" min="0" step="5"></div>
+    <div><label>Kattaus veteen / ylös</label><input type="number" id="kattaus" min="0" step="5"></div>
   </div>
-  <p class="huom" style="margin-top:8px">Muistetaan järvikohtaisesti. Pimeässä laskeminen kestää
-  kauemmin kuin valoisassa — se on jo oletuksissa.</p>
+  <p class="huom" style="margin-top:8px">Muistetaan järvikohtaisesti. Pimeässä toimiminen kestää
+  kauemmin kuin valoisassa.</p>
 </div>
 
 <script>
 "use strict";
-/* ===== LÄHTIS — ehdinkö hämärään =====
-   Alkuperäinen laskuri laski taaksepäin oikein, mutta TAVOITEAIKA piti tietää
-   itse. Siinä oli se puuttuva pala: hämärän ja auringonnousun ajankohta
-   vaihtuu viikossa puoli tuntia, eikä sitä jaksa katsoa erikseen.
-
-   Nyt aurinko lasketaan paikallisesti NOAA:n kaavalla — ei rajapintaa, joten
-   tämä toimii ilman verkkoa myös laskupaikalla. Tarkistettu sovelluksen omaa
-   lukemaa vasten: Hirvijärvi 21.9.2026 nousu 07.08 (laskettu 07.08),
-   lasku 19.32 (laskettu 19.35; kolmen minuutin ero tulee taittumisoletuksesta).
-
-   KAKSI IKKUNAA, koska niin uistellaan loppukaudella:
-     AAMU — kattaus vedessä kun siviilihämärä alkaa, ennen auringonnousua.
-            Järvilohi nousee pintaan hämärässä, taimen aktivoituu pian perään.
-     ILTA — kattaus vedessä hyvissä ajoin ennen laskua, jolloin koko
-            iltahämärä ehditään vetää läpi. */
-
 const JARVET = [
   { nimi:'Lappajärvi · Karvala', lat:63.14378, lon:23.53885,
     oletus:{ matka:60, tankkaus:15, lasku:20, valmistelu:10, ajo:10, kattaus:10 } },
@@ -105,7 +89,6 @@ const KENTAT = ['matka','tankkaus','lasku','valmistelu','ajo','kattaus'];
 const LS = 'lahtis_asetukset';
 let jarvi = 0, ikkuna = 'aamu';
 
-/* ---------- AURINKO ---------- */
 function aurinkoAjat(lat, lon, d, korkeusAste){
   const rad = Math.PI/180;
   const v = d.getFullYear(), kk = d.getMonth()+1, pv = d.getDate();
@@ -121,7 +104,7 @@ function aurinkoAjat(lat, lon, d, korkeusAste){
   const dekl = Math.asin(Math.sin(lam*rad) * Math.sin(23.44*rad));
   const cosH = (Math.sin(korkeusAste*rad) - Math.sin(lat*rad)*Math.sin(dekl))
              / (Math.cos(lat*rad)*Math.cos(dekl));
-  if(cosH > 1) return null;                 // aurinko ei nouse
+  if(cosH > 1) return null;
   if(cosH < -1) return 'ei laske';
   const H = Math.acos(cosH)/rad;
   const pvm = j => new Date((j - 2440587.5) * 86400000);
@@ -129,8 +112,8 @@ function aurinkoAjat(lat, lon, d, korkeusAste){
 }
 const kello = d => d.toLocaleTimeString('fi-FI',{hour:'2-digit',minute:'2-digit'});
 const miinus = (d, min) => new Date(d.getTime() - min*60000);
+const plus = (d, min) => new Date(d.getTime() + min*60000);
 
-/* ---------- ASETUKSET ---------- */
 function lueAsetukset(){
   try { return JSON.parse(localStorage.getItem(LS)) || {}; } catch(e){ return {}; }
 }
@@ -148,20 +131,15 @@ function taytaKentat(){
   KENTAT.forEach(function(k){ document.getElementById(k).value = arvot[k]; });
 }
 
-/* ---------- LASKENTA ---------- */
 function laske(){
   const j = JARVET[jarvi];
   const pvmStr = document.getElementById('pvm').value;
   if(!pvmStr) return;
   const d = new Date(pvmStr + 'T12:00');
 
-  const perus  = aurinkoAjat(j.lat, j.lon, d, -0.833);   // yläreuna horisontissa
-  const hamara = aurinkoAjat(j.lat, j.lon, d, -6);       // siviilihämärä
-  /* KESÄLLÄ EI OLE HÄMÄRÄÄ. 63. leveysasteella aurinko ei laske kuutta astetta
-     horisontin alle touko-heinäkuussa, jolloin siviilihämärää ei ole lainkaan —
-     on vain valoisaa. Laskuri ei voi silloin sanoa "ei saada aikoja", koska
-     tieto ON olemassa: valoa riittää koko yön. Aamuikkunaa ei ole, mutta
-     iltaikkuna toimii yhä auringonlaskun ympärillä. */
+  const perus  = aurinkoAjat(j.lat, j.lon, d, -0.833);
+  const hamara = aurinkoAjat(j.lat, j.lon, d, -6);
+  
   if(!perus || perus === 'ei laske'){
     document.getElementById('lahtoaika').textContent = '–';
     document.getElementById('lahtoSelite').textContent =
@@ -185,40 +163,63 @@ function laske(){
     return;
   }
 
-  /* TAVOITE = hetki jolloin kattauksen pitää OLLA vedessä.
-     Aamulla siviilihämärän alkaessa: siitä on valoa sen verran että viehe
-     toimii, ja se on ennen nousua jolloin lohi on pinnassa.
-     Illalla 30 min ennen laskua, jotta koko hämärä ehditään vetää läpi eikä
-     vasta ehditä paikalle kun se alkaa. */
-  const tavoite = (ikkuna === 'aamu')
-    ? hamara.nousu
-    : miinus(perus.lasku, 30);
-  if(!tavoite || isNaN(tavoite.getTime())) return;
-
   const a = {};
   KENTAT.forEach(function(k){ a[k] = +document.getElementById(k).value || 0; });
 
-  /* Taaksepäin: kattaus → ajo → valmistelu → lasku → tankkaus → matka. */
-  const kattausAlku   = miinus(tavoite, a.kattaus);
-  const ajoAlku       = miinus(kattausAlku, a.ajo);
-  const valmisteluAlku= miinus(ajoAlku, a.valmistelu);
-  const laskuAlku     = miinus(valmisteluAlku, a.lasku);
-  const tankkausAlku  = miinus(laskuAlku, a.tankkaus);
-  const lahto         = miinus(tankkausAlku, a.matka);
+  let rivit = [];
 
-  const yht = KENTAT.reduce(function(s,k){ return s + a[k]; }, 0);
-  document.getElementById('lahtoaika').textContent = kello(lahto);
-  document.getElementById('lahtoSelite').innerHTML =
-    j.nimi + ' · ' + (ikkuna === 'aamu' ? 'aamuhämärä' : 'iltahämärä')
-    + ' · yhteensä <strong>' + yht + ' min</strong> ennen vetoa'
-    + (lahto.getDate() !== d.getDate()
-       ? ' <span style="color:var(--kulta)">· lähtö edellisenä iltana</span>' : '');
+  if(ikkuna === 'aamu'){
+    document.getElementById('tulosOtsikko').textContent = 'Lähtö kotoa';
+    const tavoite = hamara.nousu;
+    const kattausAlku   = miinus(tavoite, a.kattaus);
+    const ajoAlku       = miinus(kattausAlku, a.ajo);
+    const valmisteluAlku= miinus(ajoAlku, a.valmistelu);
+    const laskuAlku     = miinus(valmisteluAlku, a.lasku);
+    const tankkausAlku  = miinus(laskuAlku, a.tankkaus);
+    const lahto         = miinus(tankkausAlku, a.matka);
 
-  /* Ikkunan pituus: kuinka kauan hämärää on. Se kertoo montako tuntia se
-     paras aika oikeasti kestää — eri asia kuin milloin se alkaa. */
-  const ikkunaAlku = (ikkuna === 'aamu') ? hamara.nousu : miinus(perus.lasku, 30);
+    const yht = KENTAT.reduce(function(s,k){ return s + a[k]; }, 0);
+    document.getElementById('lahtoaika').textContent = kello(lahto);
+    document.getElementById('lahtoSelite').innerHTML =
+      j.nimi + ' · aamuhämärä · yhteensä <strong>' + yht + ' min</strong> ennen vetoa'
+      + (lahto.getDate() !== d.getDate() ? ' <span style="color:var(--kulta)">· lähtö edellisenä iltana</span>' : '');
+
+    rivit = [
+      [lahto,          'Lähtö kotoa',        a.matka + ' min matka'],
+      [tankkausAlku,   'Tankkaus',           a.tankkaus + ' min'],
+      [laskuAlku,      'Veneen lasku',       a.lasku + ' min'],
+      [valmisteluAlku, 'Valmistelu',         a.valmistelu + ' min'],
+      [ajoAlku,        'Ajo vetopaikalle',   a.ajo + ' min'],
+      [kattausAlku,    'Kattaus veteen',     a.kattaus + ' min'],
+      [tavoite,        'HÄMÄRÄ ALKAA — vedetään', '']
+    ];
+  } else {
+    document.getElementById('tulosOtsikko').textContent = 'Perillä kotona';
+    const tavoite = eiHamaraa ? perus.lasku : hamara.lasku; // Hämärän loppu / veto pois
+    
+    const kattausYlös = plus(tavoite, a.kattaus);
+    const rannassa    = plus(kattausYlös, a.ajo);
+    const nostettu    = plus(rannassa, a.lasku);
+    const valmPaluu   = plus(nostettu, a.valmistelu);
+    const kotona      = plus(valmPaluu, a.matka);
+
+    document.getElementById('lahtoaika').textContent = kello(kotona);
+    document.getElementById('lahtoSelite').innerHTML =
+      j.nimi + ' · iltahämärä päättyy · paluu järveltä alkaa klo <strong style="color:var(--syan)">' + kello(tavoite) + '</strong>';
+
+    rivit = [
+      [tavoite,     'HÄMÄRÄ LOPPUU — veto pois', ''],
+      [kattausYlös, 'Kattaus ylös',             a.kattaus + ' min'],
+      [rannassa,    'Ajo vetopaikalta rantaan', a.ajo + ' min'],
+      [nostettu,    'Veneen nosto',             a.lasku + ' min'],
+      [valmPaluu,   'Valmistelu / trailerointi', a.valmistelu + ' min'],
+      [kotona,      'Perillä kotona',           a.matka + ' min matka']
+    ];
+  }
+
+  const ikkunaAlku = (ikkuna === 'aamu') ? hamara.nousu : perus.lasku;
   const ikkunaLoppu = (ikkuna === 'aamu')
-    ? new Date(perus.nousu.getTime() + 90*60000)   // tunti ja puoli nousun jälkeen
+    ? new Date(perus.nousu.getTime() + 90*60000)
     : (eiHamaraa ? new Date(perus.lasku.getTime() + 90*60000) : hamara.lasku);
   const pituus = Math.round((ikkunaLoppu - ikkunaAlku) / 60000);
 
@@ -227,18 +228,8 @@ function laske(){
     + '<span>lasku ' + kello(perus.lasku) + '</span>'
     + (eiHamaraa ? '<span>ei hämärää</span>'
        : '<span>hämärä ' + kello(hamara.nousu) + ' ja ' + kello(hamara.lasku) + '</span>')
-    + '<span style="color:var(--kulta)">ikkuna ' + Math.floor(pituus/60) + ' h '
-      + (pituus%60) + ' min</span>';
-
-  const rivit = [
-    [lahto,          'Lähtö kotoa',        a.matka + ' min matka'],
-    [tankkausAlku,   'Tankkaus',           a.tankkaus + ' min'],
-    [laskuAlku,      'Veneen lasku',       a.lasku + ' min'],
-    [valmisteluAlku, 'Valmistelu',         a.valmistelu + ' min'],
-    [ajoAlku,        'Ajo vetopaikalle',   a.ajo + ' min'],
-    [kattausAlku,    'Kattaus veteen',     a.kattaus + ' min'],
-    [tavoite,        (ikkuna === 'aamu' ? 'HÄMÄRÄ ALKAA — vedetään' : 'VEDETÄÄN, lasku ' + kello(perus.lasku)), '']
-  ].filter(function(r, i){ return i === 0 || i === 6 || parseInt(r[2]) > 0; });
+    + '<span style="color:var(--kulta)">ikkuna ' + Math.floor(Math.abs(pituus)/60) + ' h '
+      + (Math.abs(pituus)%60) + ' min</span>';
 
   document.getElementById('vaiheet').innerHTML = rivit.map(function(r, i){
     const viim = (i === rivit.length - 1);
@@ -248,12 +239,11 @@ function laske(){
   }).join('');
 
   document.getElementById('ikkunaSelite').textContent = (ikkuna === 'aamu')
-    ? 'Kattaus vedessä kun siviilihämärä alkaa, ennen auringonnousua. Järvilohi pinnassa hämärässä, taimen aktivoituu pian perään.'
-    : 'Kattaus vedessä 30 min ennen laskua, jotta koko iltahämärä ehditään vetää läpi.';
+    ? 'Kattaus vedessä kun siviilihämärä alkaa, ennen auringonnousua.'
+    : 'Hämärän loppuessa veto loppuu ja lasketaan paluuaikataulu rannasta kotiin.';
   tallennaAsetukset();
 }
 
-/* ---------- KÄYTTÖLIITTYMÄ ---------- */
 function valitseJarvi(i){
   jarvi = i; taytaKentat(); piirraJarvet(); laske();
 }
@@ -288,7 +278,6 @@ function piirraJarvet(){
   });
   laske();
 })();
-
 </script>
 </body>
 </html>
