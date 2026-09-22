@@ -4282,7 +4282,11 @@ function sumuriskiAlusta(){
   }
 
   // --- Käynnistys --------------------------------------------------------
-  document.getElementById("srLegend").innerHTML = TASOT.map(function(t){
+  /* Vartioitu 22.9.2026: tämä oli ainoa kohta joka kirjoitti elementtiin
+     tarkistamatta sen olemassaoloa, ja kaatui koko alustuksen. */
+  var legend = document.getElementById("srLegend");
+  if (!chart || !verdict || !legend) return;
+  legend.innerHTML = TASOT.map(function(t){
     return '<span><i style="background:' + t.vari + '"></i>' + t.n + " " + t.nimi + '</span>';
   }).join("");
 
@@ -12244,9 +12248,21 @@ lataa(eka);
         fmiTuuli = null; fmiPaineSarja = []; fmiPaineTrendi = null;
         sykeLampoSarja = []; sykeLampoTrendi = null; sykeAsema = null;
         window.viimeisinJyrkkyys = null;
-        ['sumuriski','tuuliEnnusteBox','luotausTulos'].forEach(function(id){
+        /* KORJATTU 22.9.2026 — sumuriski jäi tilaan "Haetaan <järvi>…".
+           #sumuriski ei ole tyhjä laatikko vaan section, jonka sisällä ovat
+           srVerdict, srChart, srHours, srDetail ja srLegend. innerHTML-nollaus
+           tuhosi ne kaikki, ja sumuriskiAlusta kaatui heti kun se kirjoitti
+           srLegendiin — jolloin teksti jäi ruudulle pysyvästi. Nyt nollataan
+           vain verdict-rivi ja jätetään rakenne paikalleen. */
+        ['tuuliEnnusteBox','luotausTulos'].forEach(function(id){
           const el = document.getElementById(id);
           if (el) el.innerHTML = '<p class="hint">Haetaan ' + currentLocation.name + '…</p>';
+        });
+        const srV = document.getElementById('srVerdict');
+        if (srV) srV.textContent = 'Haetaan ' + currentLocation.name + '…';
+        ['srChart','srHours','srLegend'].forEach(function(id){
+          const el = document.getElementById(id);
+          if (el) el.innerHTML = '';
         });
         paivitaPaikkaLeima();
 
@@ -12265,12 +12281,16 @@ lataa(eka);
           fetchOpenMeteo();
           fetchSykeData();
         }
-        /* Ennuste ja asemahavainto uudelleen. Ilman näitä sumuriski ja
-           tuulijana näyttäisivät edellisen järven tietoja. */
+        /* Ennuste ja asemahavainto uudelleen. Ilman näitä tuulijana näyttäisi
+           edellisen järven tietoja. Sumuriski hakee oman datansa eikä käytä
+           fmiEnnustetta, joten se käynnistetään erikseen: aiemmin se oli
+           ketjutettu FMI-haun perään, ja FMI:n kaatuessa se ei käynnistynyt
+           lainkaan vaikka sen oma lähde olisi ollut pystyssä. */
+        if (typeof sumuriskiAlusta === 'function') {
+          try { sumuriskiAlusta(); } catch(e){}
+        }
         if (typeof haeFmiEnnuste === 'function') {
-          Promise.resolve().then(haeFmiEnnuste).then(function(){
-            if (typeof sumuriskiAlusta === 'function') sumuriskiAlusta();
-          }).catch(function(){});
+          Promise.resolve().then(haeFmiEnnuste).catch(function(){});
         }
         if (typeof haeFmiTuuli === 'function') { try { haeFmiTuuli(); } catch(e){} }
       }
