@@ -28,7 +28,7 @@ label{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase
 .selite{font-size:13px;color:var(--himmea)}
 table{width:100%;border-collapse:collapse;font-size:13.5px}
 td{padding:6px 2px;border-bottom:1px solid var(--viiva)}
-td.k{font-family:ui-monospace,monospace;color:var(--syan);width:64px;font-weight:700}
+td.k{font-family:ui-monospace,monospace;color:var(--syan);width:80px;font-weight:700;white-space:nowrap}
 td.v{text-align:right;color:var(--himmea);font-size:12px}
 .huom{font-size:12px;color:var(--himmea);line-height:1.5}
 .ikkuna{display:flex;gap:10px;font-family:ui-monospace,monospace;font-size:13px;flex-wrap:wrap}
@@ -203,12 +203,18 @@ function laske(){
     const valmPaluu   = plus(nostettu, a.valmistelu);
     const kotona      = plus(valmPaluu, a.matka);
 
+    // MIKSI: kesällä hämärää ei ole, jolloin tavoite on auringonlasku.
+    // Teksti sanoi silti "hämärä" ja väitti siis väärää asiaa.
+    const loppuTeksti = eiHamaraa ? 'aurinko laskee' : 'iltahämärä päättyy';
+    const loppuRivi   = eiHamaraa ? 'AURINKO LASKEE — veto pois' : 'HÄMÄRÄ LOPPUU — veto pois';
+
     document.getElementById('lahtoaika').textContent = kello(kotona);
     document.getElementById('lahtoSelite').innerHTML =
-      j.nimi + ' · iltahämärä päättyy · paluu järveltä alkaa klo <strong style="color:var(--syan)">' + kello(tavoite) + '</strong>';
+      j.nimi + ' · ' + loppuTeksti + ' · paluu järveltä alkaa klo <strong style="color:var(--syan)">' + kello(tavoite) + '</strong>'
+      + (kotona.getDate() !== tavoite.getDate() ? ' <span style="color:var(--kulta)">· kotona vasta seuraavana päivänä</span>' : '');
 
     rivit = [
-      [tavoite,     'HÄMÄRÄ LOPPUU — veto pois', ''],
+      [tavoite,     loppuRivi, ''],
       [kattausYlös, 'Kattaus ylös',             a.kattaus + ' min'],
       [rannassa,    'Ajo vetopaikalta rantaan', a.ajo + ' min'],
       [nostettu,    'Veneen nosto',             a.lasku + ' min'],
@@ -217,30 +223,37 @@ function laske(){
     ];
   }
 
-  const ikkunaAlku = (ikkuna === 'aamu') ? hamara.nousu : perus.lasku;
-  const ikkunaLoppu = (ikkuna === 'aamu')
-    ? new Date(perus.nousu.getTime() + 90*60000)
-    : (eiHamaraa ? new Date(perus.lasku.getTime() + 90*60000) : hamara.lasku);
-  const pituus = Math.round((ikkunaLoppu - ikkunaAlku) / 60000);
+  // MIKSI: aiempi "ikkuna" oli aamulla hämärän alku -> nousu + 90 min ja illalla
+  // pelkkä lasku -> hämärän loppu. Eri määritelmä molemmissa päissä, ja se 90 min
+  // oli keksitty luku. Nyt näytetään mitattu asia: hämärän kesto, sama kummassakin.
+  const hamaraMin = eiHamaraa ? null : Math.round(
+    (ikkuna === 'aamu' ? perus.nousu - hamara.nousu : hamara.lasku - perus.lasku) / 60000);
 
   document.getElementById('aurinkoRivi').innerHTML =
       '<span>nousu ' + kello(perus.nousu) + '</span>'
     + '<span>lasku ' + kello(perus.lasku) + '</span>'
     + (eiHamaraa ? '<span>ei hämärää</span>'
-       : '<span>hämärä ' + kello(hamara.nousu) + ' ja ' + kello(hamara.lasku) + '</span>')
-    + '<span style="color:var(--kulta)">ikkuna ' + Math.floor(Math.abs(pituus)/60) + ' h '
-      + (Math.abs(pituus)%60) + ' min</span>';
+       : '<span>hämärä ' + kello(hamara.nousu) + ' ja ' + kello(hamara.lasku) + '</span>'
+         + '<span style="color:var(--kulta)">hämärää ' + hamaraMin + ' min</span>');
 
+  // MIKSI: ilta-aikataulu menee usein yli puolenyön (touko-kesäkuussa aina).
+  // Pelkkä kellonaika näytti silloin samalta kuin 13 h aiemmin.
+  const ekaPaiva = rivit[0][0].getDate();
   document.getElementById('vaiheet').innerHTML = rivit.map(function(r, i){
     const viim = (i === rivit.length - 1);
+    const toinenPaiva = (r[0].getDate() !== ekaPaiva);
     return '<tr><td class="k"' + (viim ? ' style="color:var(--kulta)"' : '') + '>'
-      + kello(r[0]) + '</td><td' + (viim ? ' style="font-weight:700"' : '') + '>'
+      + kello(r[0])
+      + (toinenPaiva ? '<span style="color:var(--kulta);font-size:10px;vertical-align:super"> +1</span>' : '')
+      + '</td><td' + (viim ? ' style="font-weight:700"' : '') + '>'
       + r[1] + '</td><td class="v">' + r[2] + '</td></tr>';
   }).join('');
 
   document.getElementById('ikkunaSelite').textContent = (ikkuna === 'aamu')
     ? 'Kattaus vedessä kun siviilihämärä alkaa, ennen auringonnousua.'
-    : 'Hämärän loppuessa veto loppuu ja lasketaan paluuaikataulu rannasta kotiin.';
+    : (eiHamaraa
+        ? 'Hämärää ei tähän aikaan vuodesta ole. Veto loppuu auringonlaskuun ja siitä lasketaan paluuaikataulu kotiin.'
+        : 'Hämärän loppuessa veto loppuu ja lasketaan paluuaikataulu rannasta kotiin.');
   tallennaAsetukset();
 }
 
@@ -269,7 +282,10 @@ function piirraJarvet(){
   if(typeof t.__jarvi === 'number') jarvi = t.__jarvi;
   if(t.__ikkuna) ikkuna = t.__ikkuna;
   const nyt = new Date();
-  document.getElementById('pvm').value = nyt.toISOString().slice(0,10);
+  // MIKSI: toISOString on UTC. Klo 00-03 Suomen kesaaikaa se antoi eilisen paivan
+  // eli juuri silloin kun sovellus avataan aamulahtoa varten. Siirretaan paikalliseen.
+  const paikallinen = new Date(nyt.getTime() - nyt.getTimezoneOffset()*60000);
+  document.getElementById('pvm').value = paikallinen.toISOString().slice(0,10);
   piirraJarvet(); taytaKentat();
   document.getElementById('nAamu').classList.toggle('on', ikkuna === 'aamu');
   document.getElementById('nIlta').classList.toggle('on', ikkuna === 'ilta');
