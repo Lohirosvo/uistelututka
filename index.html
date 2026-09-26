@@ -1024,6 +1024,20 @@ body{padding-bottom:66px}
 
 
   <div class="wrap">
+<!-- WHATSAPP — lisätty 22.9.2026. Vesillä tulee viestejä. Nappi avaa
+     WhatsAppin sovelluksena (Androidin intent), ja jos sitä ei löydy,
+     selain avaa wa.me-osoitteen. HUOM: WhatsAppin ollessa edessä Android
+     pysäyttää tämän sivun paikannuksen. Mittari käynnistyy palattaessa
+     uudelleen ja kertoo katkon (ks. PALUU TAUSTALTA). Jaettu näyttö on
+     ainoa tapa pitää mittari käynnissä viestejä luettaessa. -->
+<a id="whatsappNappi"
+   href="intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.whatsapp;S.browser_fallback_url=https%3A%2F%2Fwa.me%2F;end"
+   style="display:block; margin:0 0 10px; padding:10px; text-align:center;
+          border:1px solid #25D366; border-radius:12px; color:#25D366;
+          text-decoration:none; font-family:'Barlow Condensed',sans-serif;
+          font-size:18px; font-weight:700; letter-spacing:.02em;">
+  💬 WHATSAPP
+</a>
 <!-- VESILLÄ-PANEELI. Sijoitetaan ruutujaossa vesillä-ruudun kärkeen. -->
 <div id="vesillaPaneeli" data-ruutu-kohde="vesilla">
   <div class="laji">
@@ -1321,7 +1335,14 @@ body{padding-bottom:66px}
   <div class="ak-asteikko" id="akAsteikko"></div>
   <div class="ak-alarivi">
     <label class="ak-kytkin"><input type="checkbox" id="akKorosta"> Korosta erot</label>
-    <span class="ak-yksikko">merkitsevä aallonkorkeus, m</span>
+    <select id="akNaytto" aria-label="Kartan suure"
+            style="font:inherit; font-size:.8rem; padding:3px 6px; border-radius:6px;
+                   border:1px solid #c4ccca; background:#fff; color:#16211f;">
+      <option value="aalto">Aallonkorkeus</option>
+      <option value="virtaus">Pintavirtaus</option>
+      <option value="syva">Syvempi vesi</option>
+    </select>
+    <span class="ak-yksikko" id="akYksikko">merkitsevä aallonkorkeus, m</span>
   </div>
 
   <!-- KALASTUSRAJA — liitetty 15.9.2026.
@@ -1366,6 +1387,10 @@ body{padding-bottom:66px}
         </div>
       </details>
 
+      <!-- VJAKumpu-linkki poistettu 22.9.2026: pintavirtaus on nyt aallonkorkeus-
+           kortin kytkimenä. VJAKumpu.html:n oma kartta luki maan vedeksi ja
+           mittakaava oli väärä, joten sitä ei kannata avata. -->
+
       <button onclick="avaaKarttaSovellus()" style="width:100%; margin-top:8px; background:transparent; color:var(--olive); border:1px solid var(--olive); border-radius:12px; font-family:'Barlow Condensed',sans-serif; font-size:20px; font-weight:700; letter-spacing:.02em; padding:14px; cursor:pointer;">
         🗺 AVAA KARTTASOVELLUKSESSA
       </button>
@@ -1381,33 +1406,10 @@ body{padding-bottom:66px}
         📐 TROLLINGPRO — syvyyslaskin
       </button>
 
-
-    <!-- TUULIHÄLYTYS JA NÄYTTÖTILA -->
-    <div id="tuuliHalytysBox" style="display:none; margin-bottom:12px;"></div>
-    <div style="margin-bottom:12px;">
-      <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
-        <span style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;">Tuuli</span>
-        <div class="chip" onclick="piirraTuuliEnnuste(3)" style="padding:3px 10px; font-size:13px;">3 h</div>
-        <div class="chip" onclick="piirraTuuliEnnuste(24)" style="padding:3px 10px; font-size:13px;">24 h</div>
-      </div>
-      <div id="tuuliEnnusteBox"></div>
-    </div>
-    <div style="margin-bottom:14px;">
-      <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
-        <span style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;">Näyttö</span>
-        <div class="chip" data-tilanappi="auto"   onclick="asetaNaytto('auto')">Auto</div>
-        <div class="chip" data-tilanappi="hamara" onclick="asetaNaytto('hamara')">◐ Normaali</div>
-        <div class="chip" data-tilanappi="yo"     onclick="asetaNaytto('yo')">☾ Yö</div>
-        <div class="chip" onclick="paivitaTiedot(true)" style="border-color:var(--cyan); color:var(--cyan);">↻ Päivitä</div>
-      </div>
-      <p class="hint" style="margin-top:2px; opacity:.75;">Versio <strong id="versioNro">—</strong> · <span id="swTila">tarkistetaan…</span></p>
-      <p class="hint" id="paivitysStatus" style="margin-top:2px;"></p>
-    </div>
-
-    <!-- SADETUTKA — nappi nopeusnäytön yläpuolella -->
-    </div>
-
-
+      <!-- REISSU siirretty tähän 22.9.2026. Päivä ja paikka määrittävät mitä
+           kaikki muut kortit hakevat, joten se on nyt työkalujen yläosassa
+           eikä tuulijanan ja versiorivin alla. Lohko on sama, vain paikka
+           vaihtui: mikään koodi ei viittaa tripinfo-tunnukseen. -->
     <div class="q" id="tripinfo">
       <div class="idx">Reissu</div>
       <h2>Päivä ja paikka</h2>
@@ -1436,6 +1438,34 @@ body{padding-bottom:66px}
         <button class="chip" onclick="addNewLocation()">Lisää</button>
       </div>
     </div>
+
+
+    <!-- TUULIHÄLYTYS JA NÄYTTÖTILA -->
+    <div id="tuuliHalytysBox" style="display:none; margin-bottom:12px;"></div>
+    <div style="margin-bottom:12px;">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+        <span style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;">Tuuli</span>
+        <div class="chip" onclick="piirraTuuliEnnuste(3)" style="padding:3px 10px; font-size:13px;">3 h</div>
+        <div class="chip" onclick="piirraTuuliEnnuste(24)" style="padding:3px 10px; font-size:13px;">24 h</div>
+      </div>
+      <div id="tuuliEnnusteBox"></div>
+    </div>
+    <div style="margin-bottom:14px;">
+      <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+        <span style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;">Näyttö</span>
+        <div class="chip" data-tilanappi="auto"   onclick="asetaNaytto('auto')">Auto</div>
+        <div class="chip" data-tilanappi="hamara" onclick="asetaNaytto('hamara')">◐ Normaali</div>
+        <div class="chip" data-tilanappi="yo"     onclick="asetaNaytto('yo')">☾ Yö</div>
+        <div class="chip" onclick="paivitaTiedot(true)" style="border-color:var(--cyan); color:var(--cyan);">↻ Päivitä</div>
+      </div>
+      <p class="hint" style="margin-top:2px; opacity:.75;">Versio <strong id="versioNro">—</strong> · <span id="swTila">tarkistetaan…</span></p>
+      <p class="hint" id="paivitysStatus" style="margin-top:2px;"></p>
+    </div>
+
+    <!-- SADETUTKA — nappi nopeusnäytön yläpuolella -->
+    </div>
+
+
 
     <div class="q" id="openmeteosection">
       <div class="idx">Säädata & Aurinko</div>
@@ -4337,7 +4367,13 @@ var JARVET = {
     kartta: {
       ruutu: 100, W: 127, H: 241,
       pohjoisLat: 63.26435, lansiLon: 23.54408,
-      maski: "AAAAAAAAAAAAAAAAAAAAAAAAAAADAAAAAAAAAAAAAAAAAAAAA4AAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAAAAAAABIAAAAAAAAAAAAAAAAAAAB0AAAAAAAAAAAAAAAAAAAA7AAAAAAAAAAAAAAAAAAAAJAAAAAAAAAAAAAAAAAAAAH2AAAAAAAAAAAAAAAAAAAA/gAAAAAAAAAAAAAAAAAABP4AAAAAAAAAAAAAAAAAAAf8AAAAAAAAAAAAAAAAAAAM+AAAAAAAAAAAAAAAAAAAMH4AAAAAAAAAAAAAAAAAADD+AAAAAAAAAAAAAAAAAABg/gAAAAAAAAAAAAAAAAAA4f4AAAAAAAAAAAAAAAAAAcP8AAAAAAAAAAAAAAAAAAPH+AAAAAAAAAAAAAAAAAADn+AAAAAAAAAAAAAAAAAABz+AAAAAAAAAAAAAAAAAAAZ/AAAAAAAAAAAAAAAAAAAM/wAAAAAAAAAAAAAAAAAAEf4AAAAAAAAAAAAAAAAAAAP+AAAAAAAAAAAAAAAAAAAH/gAAAAAAAAAAAAAAAAAAD/wAAAAAAAAAAAAAAAAAAL/8AAAAAAAAAAAAAAAAAAO//AAAAAAAAAAAAAAAAAAD//gAAAAAAAAAAAAAAAAAB//+AAAAAAAAAAAAAAAAAA///wAAAAAAAAAAAAAAAAAP//4AAAAAAAAAAAAAAAAAH5/8AAAAAAAAAAAAAAAAAD+f/AAAAAAAAAAAAAAAAAB/H/gAAAAAAAAAAAAAAAAA/h/4AAAAAAAAAAAAAAAAAfw//4AAAAAAAAAAAAAAAAP8f/8AAAAAAAAAAAAAAAAD+P//AAAAAAAAAAAAAAAAB/H//+AAAAAAAAAAAAAAAA/h///gAAAAAAAAAAAAAAA/9///4AAAAAAAAAAAAAAA/+////AAAAAAAAAAAAAAA//////gAAAAAAAAAAAAAAf/////wAAAAAAAAAAAAAAP/////4AAAAAAAAAAAAAAHf/////8AAAAAAAAAAAAAD3////7/AAAAAAAAAAAAABt//////4AAAAAAAAAAAAA///////+AAAAAAAAAAAAAf///////AAAAAAAAAAAAAH///////gAAAAAAAAAAAAB//8f///wAAAAAAAAAAAAAf/+P///4AAAAAAAADAAAAH//H///8AAAAAAAAF4AAAI//jv//+AAAAAAAAC+AAAAH/x5///AAAAAAAAAfgAAAD///f//YAAAAAAAAPwAAAD//////tAAAAAAAAD8AAAH//////nwAAAAAAAB+AAAD////////gAAAAAAA/AAAD//////+/+AAAAAAAYAAAB/////////AAAAAAAMAAAAf////////gAAAAAAHBAAC/////////wAAAAAADxwAA/////////8AAAAAGA/4AAf///////+/gAAAAHgD8AA////////9/4AAAADwB8AAP/////////8AAAAB4B8ADD//////////gAAAB8A8AJA//v///////8AAAA+AfAHAG/3///////+AAAAfgfIPAA////v/////AAAAPwf+PAAPv//n/////gAAAH4f//gADz//7/////4AAAD+P//wAB5////////+AAAA/n+f4AAIf///////8AAAB///n8AAAf////////AAAA///wMAAAP////////AAAA///8AAAAf///P////wAAAf///AAAAP///n////gAAAP///AAAAD///7////wAAAH///gAAAB////////4AAAB///gAAAA////////8AAAA///gAAAAff//////8AAAAP//AAAAAP/vf////8AAAAD//AAAAA3/wP////+AAAAD//AAAAAf/8H/////AAAAB/8AAAAAf/+D/////wAAAA//AAAAAH//g/////8AAAA//gAAAAB//w//////AAAA//4AAAAAf/+//////wAAH//+AAAAAH////////4AAD///gAAAAH////////+AAB///wAAAAH/////////AAA///8AAAAD/////////gAAf///gAAAD/////////gAAf///4AAAB/////////gAA////8AAAA/////////wAA////8AAAAf////////wAAf////AAAAO////////wAAP////gAAAHP///////wAAH////4AAAD3+//////wAAD////8AAAA////////4AAB////+AAAAfz//////8AAAf////gAAAP5//////+AAAP////8AAAH////////AAAH////+AAAD////////wAAD/////wAAB////////8AAB/////+AAH/////////gAA//////gAD/////////4AA//////wAD/////////8AAf/////8ABf+///////+AAP//////AA//P///////AAH//////gAf/v///////gAB//////4AP/////////wAA//////8AD/////////4AAf//////AB/////////4AAP//////gA/H///////+AAH//////wAfD////////AAD//////4AHz////////gAD//////8AAH////////+AD///////ADn/////////AB///////gB3/////////4Af//////4A//////////+AP//////8Af/////////8AP//////+AP/////////4AH//////+GH/////////8AD///////DD/////////+AD///////xx//////////gB///////94//////////wAf///////+f/////////wAH////////v/////////4AD//////////////////QAB//////////////////gAA//////////////////gAAf/////////////////4AAP/////////////////8AAH//////////////////gAD//////////////////wAB//////////////////4AAf/////////////////8AAf/////////////////+AAH/////////////////+AAB//////////////////AAA//////////////////wAAf/////////////////8OAP//////////////////3AH///////////////////gB///////////////////4AP//////////////////8AD//////////////////+gB///////////////////YAf//////////////////8AP//////////////////+AD///////////////////AA///////////////////AAP//////////////////AAD//////////////////gAB//////////////////wAB//////////////////8AA//////////////////8AAP//////////////////gAD//////////////////wAA//////////////////wAAf/////////////////8AAP/////////////////8AAD//////8//////////+AAA/////////////////6AAAf////////////////4AAAA////////////////8AAAAP///////////////+AAAAH/////////////v/+AAAAAP//////////////+AAAAAH////////v+/////AAAAAD////////z+/////gAAAAB////////5+f////AAAAAAf///////+/H////gAAAAAP/////////n////4AAAAAH/////////j//3/8AAAAAD/////////x//5/8AAAAAB////////////4/+AAAAAAP///////////8P/AAAAAAH///////////8D/gAAAAAH///////////wA/gAAAAAB///////////4APAAAAAAAP//////////8AAAAAAAAAH//////////+AAAAAAAAABf/////////+AAAAAAAAAAH////P////+AAAAAAAAAAD////n////OAAAAAAAAAAB///////f/gAAAAAAAAAAA///////P4gAAAAAAAAAAAf/////+DwAAAAAAAAAAAAP//////hgAAAAAAAAAAAAD//////wAAAAAAAAAAAAAAf/////wAAAAAAAAAAAAAAP/////4AAAAAAAAAAAAAAH/////+AAAAAAAAAAAAAAH/////+AAAAAAAAAAAAAAB/////AAAAAAAAAAAAAAAA////xgAAAAAAAAAAAAAAAf///4AAAAAAAAAAAAAAAAP///4AAAAAAAAAAAAAAAAH///8AAAAAAAAAAAAAAAAD///+AAAAAAAAAAAAAAAAB////gAAAAAAAAAAAAAAAA////wAAAAAAAAAAAAAAAAf///8AAAAAAAAAAAAAAAAf///wAAAAAAAAAAAAAAAAH///8AAAAAAAAAAAAAAAAD///+AAAAAAAAAAAAAAAAB///7AAAAAAAAAAAAAAAAA///8gAAAAAAAAAAAAAAAAf//+AAAAAAAAAAAAAAAAAH///AAAAAAAAAAAAAAAAAH///wAAAAAAAAAAAAAAAAB///4AAAAAAAAAAAAAAAAB//+wAAAAAAAAAAAAAAAAA///IAAAAAAAAAAAAAAAAAf//4AAAAAAAAAAAAAAAAAP///AAAAAAAAAAAAAAAAAH//+gAAAAAAAAAAAAAAAAB///gAAAAAAAAAAAAAAAAAf//4AAAAAAAAAAAAAAAAAf//+AAAAAAAAAAAAAAAAAP//+AAAAAAAAAAAAAAAAAD///AAAAAAAAAAAAAAAAAB///AAAAAAAAAAAAAAAAAA///gAAAAAAAAAAAAAAAAAf//wAAAAAAAAAAAAAAAAAP//4AAAAAAAAAAAAAAAAAH//+AAAAAAAAAAAAAAAAAB//8AAAAAAAAAAAAAAAAAA//8AAAAAAAAAAAAAAAAAAf/+AAAAAAAAAAAAAAAAAAP/+AAAAAAAAAAAAAAAAAAD/+AAAAAAAAAAAAAAAAAAA/IgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      maski: "AAAAAAAAAAAAAAAAAAAAAAAAAAADAAAAAAAAAAAAAAAAAAAAA4AAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAAAAAAABIAAAAAAAAAAAAAAAAAAAB0AAAAAAAAAAAAAAAAAAAA7AAAAAAAAAAAAAAAAAAAAJAAAAAAAAAAAAAAAAAAAAH2AAAAAAAAAAAAAAAAAAAA/gAAAAAAAAAAAAAAAAAABP4AAAAAAAAAAAAAAAAAAAf8AAAAAAAAAAAAAAAAAAAM+AAAAAAAAAAAAAAAAAAAMH4AAAAAAAAAAAAAAAAAADD+AAAAAAAAAAAAAAAAAABg/gAAAAAAAAAAAAAAAAAA4f4AAAAAAAAAAAAAAAAAAcP8AAAAAAAAAAAAAAAAAAPH+AAAAAAAAAAAAAAAAAADn+AAAAAAAAAAAAAAAAAABz+AAAAAAAAAAAAAAAAAAAZ/AAAAAAAAAAAAAAAAAAAM/wAAAAAAAAAAAAAAAAAAEf4AAAAAAAAAAAAAAAAAAAP+AAAAAAAAAAAAAAAAAAAH/gAAAAAAAAAAAAAAAAAAD/wAAAAAAAAAAAAAAAAAAL/8AAAAAAAAAAAAAAAAAAO//AAAAAAAAAAAAAAAAAAD//gAAAAAAAAAAAAAAAAAB//+AAAAAAAAAAAAAAAAAA///wAAAAAAAAAAAAAAAAAP//4AAAAAAAAAAAAAAAAAH5/8AAAAAAAAAAAAAAAAAD+f/AAAAAAAAAAAAAAAAAB/H/gAAAAAAAAAAAAAAAAA/h/4AAAAAAAAAAAAAAAAAfw//4AAAAAAAAAAAAAAAAP8f/8AAAAAAAAAAAAAAAAD+P//AAAAAAAAAAAAAAAAB/H//+AAAAAAAAAAAAAAAA/h///gAAAAAAAAAAAAAAA/9///4AAAAAAAAAAAAAAA/+////AAAAAAAAAAAAAAA//////gAAAAAAAAAAAAAAf/////wAAAAAAAAAAAAAAP/////4AAAAAAAAAAAAAAHf/////8AAAAAAAAAAAAAD3////7/AAAAAAAAAAAAABt//////4AAAAAAAAAAAAA///////+AAAAAAAAAAAAAf///////AAAAAAAAAAAAAH///////gAAAAAAAAAAAAB//8f///wAAAAAAAAAAAAAf/+P///4AAAAAAAADAAAAH//H///8AAAAAAAAF4AAAI//jv//+AAAAAAAAC+AAAAH/x5///AAAAAAAAAfgAAAD///f//YAAAAAAAAPwAAAD//////tAAAAAAAAD8AAAH//////nwAAAAAAAB+AAAD////////gAAAAAAA/AAAD//////+/+AAAAAAAYAAAB/////////AAAAAAAMAAAAf////////gAAAAAAHBAAC/////////wAAAAAADxwAA/////////8AAAAAGA/4AAf///////+/gAAAAHgD8AA////////9/4AAAADwB8AAP/////////8AAAAB4B8ADD//////////gAAAB8A8AJA//v///////8AAAA+AfAHAG/3///////+AAAAfgfIPAA////v/////AAAAPwf+PAAPv//n/////gAAAH4f//gADz//7/////4AAAD+P//wAB5////////+AAAA/n+f4AAIf///////8AAAB///n8AAAf////////AAAA///wMAAAP////////AAAA///8AAAAf///P////wAAAf///AAAAP///n////gAAAP///AAAAD///7////wAAAH///gAAAB////////4AAAB///gAAAA////////8AAAA///gAAAAff//////8AAAAP//AAAAAP/vf////8AAAAD//AAAAA3/wP////+AAAAD//AAAAAf/8H/////AAAAB/8AAAAAf/+D/////wAAAA//AAAAAH//g/////8AAAA//gAAAAB//w//////AAAA//4AAAAAf/+//////wAAH//+AAAAAH////////4AAD///gAAAAH////////+AAB///wAAAAH/////////AAA///8AAAAD/////////gAAf///gAAAD/////////gAAf///4AAAB/////////gAA////8AAAA/////////wAA////8AAAAf////////wAAf////AAAAO////////wAAP////gAAAHP///////wAAH////4AAAD3+//////wAAD////8AAAA////////4AAB////+AAAAfz//////8AAAf////gAAAP5//////+AAAP////8AAAH////////AAAH////+AAAD////////wAAD/////wAAB////////8AAB/////+AAH/////////gAA//////gAD/////////4AA//////wAD/////////8AAf/////8ABf+///////+AAP//////AA//P///////AAH//////gAf/v///////gAB//////4AP/////////wAA//////8AD/////////4AAf//////AB/////////4AAP//////gA/H///////+AAH//////wAfD////////AAD//////4AHz////////gAD//////8AAH////////+AD///////ADn/////////AB///////gB3/////////4Af//////4A//////////+AP//////8Af/////////8AP//////+AP/////////4AH//////+GH/////////8AD///////DD/////////+AD///////xx//////////gB///////94//////////wAf///////+f/////////wAH////////v/////////4AD//////////////////QAB//////////////////gAA//////////////////gAAf/////////////////4AAP/////////////////8AAH//////////////////gAD//////////////////wAB//////////////////4AAf/////////////////8AAf/////////////////+AAH/////////////////+AAB//////////////////AAA//////////////////wAAf/////////////////8OAP//////////////////3AH///////////////////gB///////////////////4AP//////////////////8AD//////////////////+gB///////////////////YAf//////////////////8AP//////////////////+AD///////////////////AA///////////////////AAP//////////////////AAD//////////////////gAB//////////////////wAB//////////////////8AA//////////////////8AAP//////////////////gAD//////////////////wAA//////////////////wAAf/////////////////8AAP/////////////////8AAD//////8//////////+AAA/////////////////6AAAf////////////////4AAAA////////////////8AAAAP///////////////+AAAAH/////////////v/+AAAAAP//////////////+AAAAAH////////v+/////AAAAAD////////z+/////gAAAAB////////5+f////AAAAAAf///////+/H////gAAAAAP/////////n////4AAAAAH/////////j//3/8AAAAAD/////////x//5/8AAAAAB////////////4/+AAAAAAP///////////8P/AAAAAAH///////////8D/gAAAAAH///////////wA/gAAAAAB///////////4APAAAAAAAP//////////8AAAAAAAAAH//////////+AAAAAAAAABf/////////+AAAAAAAAAAH////P////+AAAAAAAAAAD////n////OAAAAAAAAAAB///////f/gAAAAAAAAAAA///////P4gAAAAAAAAAAAf/////+DwAAAAAAAAAAAAP//////hgAAAAAAAAAAAAD//////wAAAAAAAAAAAAAAf/////wAAAAAAAAAAAAAAP/////4AAAAAAAAAAAAAAH/////+AAAAAAAAAAAAAAH/////+AAAAAAAAAAAAAAB/////AAAAAAAAAAAAAAAA////xgAAAAAAAAAAAAAAAf///4AAAAAAAAAAAAAAAAP///4AAAAAAAAAAAAAAAAH///8AAAAAAAAAAAAAAAAD///+AAAAAAAAAAAAAAAAB////gAAAAAAAAAAAAAAAA////wAAAAAAAAAAAAAAAAf///8AAAAAAAAAAAAAAAAf///wAAAAAAAAAAAAAAAAH///8AAAAAAAAAAAAAAAAD///+AAAAAAAAAAAAAAAAB///7AAAAAAAAAAAAAAAAA///8gAAAAAAAAAAAAAAAAf//+AAAAAAAAAAAAAAAAAH///AAAAAAAAAAAAAAAAAH///wAAAAAAAAAAAAAAAAB///4AAAAAAAAAAAAAAAAB//+wAAAAAAAAAAAAAAAAA///IAAAAAAAAAAAAAAAAAf//4AAAAAAAAAAAAAAAAAP///AAAAAAAAAAAAAAAAAH//+gAAAAAAAAAAAAAAAAB///gAAAAAAAAAAAAAAAAAf//4AAAAAAAAAAAAAAAAAf//+AAAAAAAAAAAAAAAAAP//+AAAAAAAAAAAAAAAAAD///AAAAAAAAAAAAAAAAAB///AAAAAAAAAAAAAAAAAA///gAAAAAAAAAAAAAAAAAf//wAAAAAAAAAAAAAAAAAP//4AAAAAAAAAAAAAAAAAH//+AAAAAAAAAAAAAAAAAB//8AAAAAAAAAAAAAAAAAA//8AAAAAAAAAAAAAAAAAAf/+AAAAAAAAAAAAAAAAAAP/+AAAAAAAAAAAAAAAAAAD/+AAAAAAAAAAAAAAAAAAA/IgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      /* SYVYYSLUOKAT — 22.9.2026. Lähde: DataDeck-kartta · © MML · © Väylävirasto ·
+         © Suomen ympäristökeskus. 8 väriluokkaa (0 = matalin … 7 = syvin, 15 = maa),
+         4 bittiä ruutua kohden, kohdistettu tähän maskiin (8,73 px / 100 m,
+         kierto 0,1°). Luokkarajat luettu zoomatuista kuvista syvyyskäyrien
+         kohdalta; ks. SYV_LUOKKA_M. */
+      syvyysLuokat: "//////////////////////////////////////////////////////////////////////////////////////////////////////////////8A////////////////////////////////////////////////////////////////////////////////////AA///////////////////////////////////////////////////////////////////////////////////wD////////////////////////////////////////////////////////////////////////////////////w/x/////////////////////////////////////////////////////////////////////////////////wAPX/////////////////////////////////////////////////////////////////////////////////AA9V/////////////////////////////////////////////////////////////////////////////////w/w//////////////////////////////////////////////////////////////////////////////////AAAPAv////////////////////////////////////////////////////////////////////////////////BwAAL//////////////////////////////////////////////////////////////////////////////w/wcAAi//////////////////////////////////////////////////////////////////////////////8AAAABX//////////////////////////////////////////////////////////////////////////////wD/AAFf/////////////////////////////////////////////////////////////////////////////wD///AVVV////////////////////////////////////////////////////////////////////////////8A//8RZVU////////////////////////////////////////////////////////////////////////////wH///JmUyD///////////////////////////////////////////////////////////////////////////EB//8mZTIA//////////////////////////////////////////////////////////////////////////8QD//2ZlIAD//////////////////////////////////////////////////////////////////////////wAA//JnYyAP//////////////////////////////////////////////////////////////////////////8AD/JVdlMP///////////////////////////////////////////////////////////////////////////wAP8iV2Zf////////////////////////////////////////////////////////////////////////////8A/yJmZm/////////////////////////////////////////////////////////////////////////////wD/AmZ2Zf////////////////////////////////////////////////////////////////////////////D/8CVmdl///////////////////////////////////////////////////////////////////////////////wJWZ3Zv//////////////////////////////////////////////////////////////////////////////ElZnd2b/////////////////////////////////////////////////////////////////////////////8SVWd3dv///////////////////////////////////////////////////////////////////////////w8SJVZnd2b//////////////////////////////////////////////////////////////////////////wAfIlVWZ3Zm//////////////////////////////////////////////////////////////////////////8CIiVQVWZ2b//////////////////////////////////////////////////////////////////////////wIiJSARVndmIP////////////////////////////////////////////////////////////////////////IiI1IAEFZ2YhAP///////////////////////////////////////////////////////////////////////yIjMgABFndmIQ////////////////////////////////////////////////////////////////////////IiIi/wARZ3ZiH///////////////////////////////////////////////////////////////////////8CIiIf8AFnd3ch///////////////////////////////////////////////////////////////////////wIiIh//ABZ3d3L///////////////////////////////////////////////////////////////////////AiIiL//wEXd3di//////////////////////////////////////////////////////////////////////8iIiIv//AAZ3d3ZiEA///////////////////////////////////////////////////////////////////yIiIiL/8AFWd3d3YhH///////////////////////////////////////////////////////////////////8iIiIv/wASVnd3d3cR///////////////////////////////////////////////////////////////////xIiIi//AAIlZ3d3d3YREf////////////////////////////////////////////////////////////////EiIiL//wASVmd3d3d2ESD///////////////////////////////////////////////////////////////ESIiIiLwAAElZmVnd3cRIA//////////////////////////////////////////////////////////////ARESIiIvEAASJVVVZ3dxEQAA////////////////////////////////////////////////////////////ABAREiIiIREREiJVVnd3cRAAD///////////////////////////////////////////////////////////8AAAARIkQiIhIREiImd3dREQAP///////////////////////////////////////////////////////////wAAAAERJEIiIhEREiVnd3UREA////////////////////////////////////////////////////////////AA8AARIkRCIhEQARJWd3dSIhERAAD///////////////////////////////////////////////////////8AAPAREiREIiEQAAAVV3d3Zm9mURAA///////////////////////////////////////////////////////wDwDxESIkQiIRAAABImd3d3d3dlIQAA//////////////////////////////////////////////////////AAAAESIkRCIiAAAAASJnd3d3d2UhEAAP////////////////////////////////////////////////////8AAAAREiREQiIAABAAElZ3d3d3UiERAA//////////////////////////////////////////////////////AAAAESIiIiIgAAEAABJWZmZndSIREAD//////////////////////////////////////////////////////wAAARJCIiIiD/8AAAASVWZmdyIREQAP//////////////////////////////////////////////////////8AAAEkIiIiEP/wAAAAIjVmZ3ISERAA////////////////////////////////////8B//////////////////ABECQiEREQ//AAABECI1Z3diIREAD///////////////////////////////////DwAQ///////////////w//EQQiERERD/8ADwAAAiVnd2MhEQAP//////////////////////////////////8fABEP//////////////////IiEBEREP/wAA/wABImd3YyIRAA////////////////////////////////////8AAAD/////////////////8iIgARERAAAAAA8AESV3dlIhEA8A///////////////////////////////////wAAAP////////////////8CIiEAEREQAAAAAAERJXd2UiIRDwDw//////////////////////////////////8AAAD///////////////AAEiIhEREREAAAAAEREVd3VSIhH/AAAP/////////////////////////////////wAAAP//////////////8AASIiIiEREQAAAAABERF3ciIiERAAAAAAD///////////////////////////////AAAA//////////////8AABIiUiIiERAAAAAAEREXdyEiIREfAAAAAAAP////////////////////////////8A/////////////////wAAESJVIiIhEQAAAAARERd3ISIhERERAAAAAA/////////////////////////////wD/////////////////8AARIiIiIiIhERAAERERJ3ZSIiERERAAAAAAD/////////////////////////////AA///w//////////8PAAABESERESIiIREAARERImd2VSIhEREAAQAAAP////////////////////////////8AAP/wAP//////////AAAAEREQERIiIiERABEREiZ3ZVUiIiERARAAAAD///////////////////////AP////AAAAAA//////////8AAAAREREBEiIiIhERERERInd2ZVIiIhEREPAAAAD/////////////////////EAH/////8RAAD/////////EAAAABERERERIhIiERERERESZnd2ZTIiIRHxAAABER////////////////////8hAf/////xAAD//////////wAAAAARERERASESIRERERARElZmd2UzIiEREREAERH////////////////////yIA/////wEAD///////8A//8AAAABERERAQERIiERERAAESVVVmZmMyIREREQERERH//////////////////xERD/////AAD//////w/w////AAAAARERHwARIiIRERAAABElVVZmZTMiERERERERERH/////////////////EREP////8AAA//////AA//////APABEREfABESIiEREAEQARJVVWZmVSIRERAREREREf////////////////8REQD///8AAA/w///wAA////////AAAQAREAERIiIRERDxABESVVZnZVUiEREAERERER/////////////////xEhEP//8AAAAAAP/wAA/////////wAADxEREREiIhERH/AAERJVVWd2VSIhEQERERERH/////////////////EiEQ//8AAAAAAAAAAAD/////////8AAP8RERESIiIRER8QAAElVVZ3ZVIiEREREREREQ////////////////8SIhEP/wAQAAAAAAAAAP/////////wAA/xERERIiIiIRERAAABJVVnd2UiIhERERERERAP////////////////IiERD/ARAAAP8AAAAA///////////w//8BERESIiIiIREAAAAlVmZ3ZTIiIRERERERH////////////////xIiIiERERAAAAD/AAAAD/////////////8AABERESIiIiEQAAACVVZnZmMiIhEREREREQ////////////////EiMiIiIRAAAAAP///wD//////////////wAAAREREiIiIhEAAAElVmZmYyIiIREREREQ////////////////ESIyIiIREQAAAAD/////////////////8AAAAAAREREiIiER/wESNVZmd2IiIiERERERAP//////////////8RIzIiIRERAAAAAA/////////////////wAAAAAAEBEREiIhH/ABIjNnd3YiIiIRERERH////////////////wEjQiIhEQEQAAAA//////////////////8AAAAAAAARERIiER8REiM1Z3djIiIhEREREP////////////////ASNDIiIRARAAAAH//////////////////wAAAAAAAAERERIhERESIjVnd3YyIiEREREA/////////////////yRDMiIhEQEAAAH///////////////////AAAAAAAAAAAAEiIRESIjNWdndjIiIhEREQD/////////////////I0MyIiEQEAAAH///////////////////8AAA8AAAAAAAACIiIiIiM1dmZ2MyIiERERD//////////////////0MzIiIQAQAA/////////////////////xEAAAAADwAA8AAiIiIiMzZmZndjIiIRERH///////////////////8zMiIhABAA////////////////////APEAAAAAAP///wACIiIiMzZmZmZ2MiIhEREf//////////////////9DMyIiIAEQ////////////////////8AERAAAAAAD///AAEjMzMzVmZmZmZSIiIRER///////////////////0QzMiIhH/////////////////////8AABEAAAAAAP//8AASVTMzVXZmZmZlIiIiEREf//////////////////RDMyIiER//////////////////////AAERAAAAAAD///ASJVVVVVdmZmZmUiIiIRERH/////////////////JEMzMiIhH//////////////////////wAREAAAAAAf//ABIlVVVVZ2ZmZnZTIiIhERER////////////////JEQzMzIiEA//////////////////////8BEQAAAAABEfABEjVVVVVnZmZmdlMiIiIREREf////////////ERIkRDMzMiIRAP//////////////////////ARAAAAABEREREiI1VVVWdmZmZ2UyIiIhERER////////////8RIkREMzMzIhEAD/////////////////////ABEAAAABEREREiIjVVVVZ2ZmZ3ZTIiIiEREREP///////////xIkREQzM0MiERAP////////////////////ABERAAABERERESIiNVVVVnZmZ3djIiIiIREREQ////////////IlRURTM0QiEREgD///////////////////8AERERARERERESIiI1VVVWdmd3dlMiIiIhERERD///////////8iVUVUVVUyIRESAQD/////////////////8AARERERERERESIjMzVVVWZ3d3d2UyIiIhERERD///////////8jVmVUVVVTIREREhAA/////////////////wAREREREQEAERIiVVVVVVZnd3d3YzIiIiERERD///////////ESNGZEREREMhERESAQD/////////////////AAERERERARERIiVWZVVVVmd3d3dTIiIiIREREP//////////ERJEZkREREQyERERECD/////////////////8AEREREREBEBEiJmZlVVVWZ3d3Z1MiIiIREREP//////////8RI0RmZERERDIREREQIA/////////////////wAfEREREQAQEiJmZVVVVVZnd3dnUyIiEREREP///////////xEjRGZmZEREQiEREREgD/////////////////AQ/xIhERERESJWZVVVVVVWZ3d2djIiEREREf////////////ESNERmZmRERDIiERESAA////////////////8BEPEREREfESJWZVVVVVVVVnd3Z2MiIREREf////////////8SI0RGZmZEREQyIiEREgD/////////////////ERERERERERJWZVVVRVVVVWd3d3UiIREBEA/////////////xIiNEZmREREREMiIhERAP////////////////8BEREf8RESJWZlVUREREVVZnd3dlIREQAAD/////////////8RJEZmZEREMzMzIiEREAD////////////////wERER/yEiJWZlVVVERERFVmd3d2UiEREQAP/////////////xIkRmZkREMzMzMiIREQAAD///////////////ABESISEiJWZlVVVUREREVVZnd3ZiIhEREA//////////////EkRGZmREMzIiMyIiERAAAP//////////////8AERIiEiVWZlVVVUREVVVVVmd3d2YiEREQAP////////////8iREZmREQzIiIiIiIhEQARAP/////////////wAREiIiJVZlVVVVRERVVVVVZnd3ZiIREQAAD////////////yVURmREUzIiISIiIiEREREAAP//////////AAABESIiI1VmVVVVRERFVVVVVWZ3dmUiIRAAAAD///////////JUVGVEVTIiIhEiIiIhEREREAD/////////8AAAAREiIjVVVVVVVCIkRVVVVVVmd3ZVIhEAABEA//////////EjRUVURVIiIiIiIiIiIRERERAP////////8AAAARERERJVVVVVVVJSRFVVVVVWZndmUiIRABERD/////////8SNEVEREMiIiIiIiEiMyEREREAD////////w8AABEAEfESVVVVVVQlJEVVVVVVVWZ3ZlIhEREREf/////////xIjREREQyESIiIiESIzMhERESIA////////AAABAAAB/xJVVVVVVFVSRFVTMzNVVmdmZSIREREQ//////////EiNERERCIRIiIiIhIiMyIRERIiD///////8AARAAARHxElVVVVVUQiIiMzIiIjVVZ3ZmIiIRERD//////////xIjRDREIhEiIjMiIiMzIhERESIA///////xABEBAAERESVlVVVVRCIiIjMiIiI1Vmd2ZjIiERAP//////////EiNDNEQiISIiMzIjMzMiIREREgD///////8QAQEAARESVWVVVVIiIiIiMyIiIjNVZmZmUzIhEA//////////8iI0RERDIiIiMzMiMzMzIhERESIA///////wEAARERERJVZlVTIiIiIiIjIiIiI1VWZmZlUiEQ///////////yIzREREMiIiI0QyIzMzMyIRERIiL///////ABAR//ERIlVlVTIiIjMiIiMyIiIjNVZmZmZVIhEP//////////IjREREMyIiIzREMzMzMzIhEREiIP//////8AER//8RIlVmVVMiIjESIiIiIiIiI1VmZmZmVSEQ//////////8jREZEQyIhIjNENDMzRDMiIRESIA////////AAAP8REiVmVVIiIiMREiIiIiIiIjVWZmZmZlIRH/////////8RJERkQyIhEiNEREMzREMyIhEREAD///////////ABEiVWZVUiIiIxEiIiIiIiIiNVZmZmZ2UiEQAP//////8RI0RGZCIhERIjREQzM0QzIiERESAA//////8AD/EBEjVWZlVSIiIzERIiIiIiIiI1VmZnZ3ZlIREA///////xEjREZkIREQEiMzNDMzRUMiIREREgD//////xAPABEjVWZmVTIiIREREiIiIiIiIjVWZ3d3d2UhEQAA//////8SNEZmQhERACIzMzQ0REVTIhERESAA//////EAABIjVWZmVVMiIhERERIiIiIiIiI1Znd3d3ZSIRAAAP/////xI0RmZEIRERIjMzNDM0VVQyIRERIAD/////8QAAIjNVZmZVUiIiIREREiIiIiIiIjVmd3d3d2IhEAD//////xEjRmZmQyEREiMzM0MzREREMhEREQAP/////xAQEiNVVmZVUyIiIiERESIiIiIiIiI1Znd3d3YiER////////EiNGZmZEMhEiI0NEQzM0REQyIRERAP//AP//EREiM1VmZlVTIiIiIQABIiIiIiIiIiNWZ3d3diIRH///////8SI0RmZkRDIiIzRERDMzRERDIhEREQ//8A//8REiM1VWZlVTMiIiIhAAIiIiIiIiIiIiVWZ3d2IhEP//////8BIkRGZkRERDMzREREMzNEREMiIREREP/wAP/yESI1VWZlVVMyIiIiEAEiIiIiIiIiIiIiJmZ3YiEAD//////wEjRERmREREQzREREQzMzREQyIhEREQDwAA//IRI1VWZlVVMzMiIiEQEiIiIiIiIiIiIiIiVndjIRAP//////8SNERERERERERERERDMzNERDIhERERAAAAAP8hETVmZmVVUzMiIiIRESIiIiIiIiIiIiIiJWd2MhEP////////I0REREREREREREREQzM0REQyEREREQAAEQDwERNWZmZlVTMzIiIiEBEiIiIiIiIiIiIiIiV3ZiEA////////8SREREREREREREREREMzM0RDIhERERAAEREAEiJWZmZlVTMzMiIiIQESIiIiIiIiIiIiIiI3dm8f/////////xIzRERmZmZkRERGRERDMzREMiERERERERERASI1ZmZmVVMzMyIiIhARIiIiIiIiIiIiIiIjd2b///////////EjRERGZmZmZmRGZEREQzM0RDIRERERERERERIzZmZmZVUzMzIiIiEBEiIiIiIiIiIiIiIiVnb///////////8SNEREZmZmZmZERmRERDMzREIhEREREREAEREjVmZlZlUzMzMiIiIQEiIiIiIiIiIiIiEiJWdl///////////xIkRERERERmZmRGZEREQzRERCEREREREAAREjNWZmVlVTMzMyIiIhASIiIiIiIiIiIiIRIjZ2X///////////ESNEREREREZmZmZkREREREREIREQAREQAAESNVZmZVVVMzMzIiIiEBIiIiIiIiIiIiIhEiNXdhH/////////8BIzREREREREZmZmREREREREQiERABEREAARI1ZmZVVVUzMzMiIiIRIiIiIiIiIiIiIiERIlZ2Uf/////////wASMzREREREREREZmREREREREIhEAERERABElVmZlVVUzMzMzIiIiEiIiIiIiIiIiIiEREiJnZR//////////8AIjM0RERERERERGZkREREMzMyEREREREAESVWZlVVVTMzMzMzIiIiIiIiIiIiIiIiIRESImd1H/////////8AEiIzNEREREREREREZEREQzMzIRERERERERJVVlVVVVMzMzMzMiIiIiIiIiIiIiIiIhEREiJncf//////////ARIiMzNERERERERERERERDMzIiERERERERElVWVVM1MzMzMzMyIiIiIiIiIiIiIiIiIRERIld////////////xEiIiIzNEREREREREREREQzMyIRERERERESVVZVIiMzMzMzMyIiIiIiIiIiIiIiIiIhEREiV3////////////ESIiIiMzREREREREM0REZDMzIhERERERERJVZlMiIzMzMzMyIiIiIiIiIiIiIiIiIiERESJVdv//////////8RIiIiIiMzRERkREQzNERkMzIiIRERERAAElVlUyIzMzMzMyIiIiIiIiIiIiIiIiIiIRERIlV2b//xAP/////xEiIiERIiMzREZERDMzRGRDMiIhERERAAASVVVTIzMzMzMzMiIiIiIiIiIiIiIiIiIgARESVmZlUfEQ//////ERIiIRARIiNERmREQzNEZkMzMiEREREQARJVVVMzMzMzMiMyIiIiIiIiIiIiIiIiIiEQERJWZlZSEAD//////xEiIhAAEiIjREZkRERERmRDMyIhERERERESVVUzMzMzMyMjIiIiIiIiIiIiIiIiIiIhEBElZmVVUhAA///////xIhEAARIiM0RmRERERmZEMzMiERERERERI1VTMzMzMyIyIiIiIiIiIiIiIiIiIiIiERESVmZlVVIRD///////8iERARIiIjNGZmREZmZkRDMyIRERERERIjNVMzMzMyIjIiIiIiIiIiIiIiIiIiIiEAABJWZmZVVSEPD//////xIREREiIiM0RmZmZmZmZEQzIiEREREREiM1MzIjMzIiIiIiIiIiIiIiIiIiIiIiIQAAElVmZmZVIh8A//////8REREiIiMzRERmZmZmZkREMyIRERERESIjMzMjIzMzIiIiIiIiIiIiIRIiIiIiIhAAARVWZmZlUiEAD//////xESIiIiIzQzNEZmZmZmREQzIhERERERIiMzMyMSMzMiIiIiIiIiIiIRESIiIiIiEQAAFVZmZmVTIQAP//////8SIiIiMzQzMzNEZmZmZkRDMiIREREREiIzMzIxEzMiIiIiIiIiIiIhERIiIiIiIRAAAFVmZmVVMhAA////////IiIiMzQzMiIzRmZmdmZEMzIhERERESIjMzMzEyMiIiIiIiIiIiIiEREiIhEiIhEREAFWZmZVUyEQ/////////yIjMzQzMiIiM0ZmZ3ZkRDMiIRERESIjMzMyMzIyIiIiIiIiIiIiERERIhERIhERERE1ZmZlVTIR//////////8iMzMzMiIiIjNGZmd2ZEMyIiERERIiIiMzIzMiIiIiIiIiIiIiIREREhERERERERETVWZmVVIhH//////////xIjMzMyIRIiI0Rnd3ZkQzMyIiIRESIiEjMiMyIiIiIiIiIiIiIiIREiEQERERERERFVVmZVMiEf/////////wEiIzUzIhERIiNEZ3d2ZEMzMiIhERIiIRMzIiIiIiIiIiIiIiIiIiIiIRARERERERE1VVVVMyIRH/////////ARIjNTMiERESIjRGd3ZkQzMzIiIREiIhMzMzIiIiIiIiIiIiIiIiIRIhEREREREREjVVVVUzIhH//////////wEiIzMzIhEREiIhR3d2ZEMzMyIiIRIiIiIzMiIiIiIiIiIiIiIiIiERIRERERERESNVVVVTMhEQD/////////8SIiMzMyIREiIhEkd3dmQzMzMyIiIiIiIiMiIiIiIiIiIiIiIiIiERERERESIiERI1VVVTMiERAP//////////EiIjMzIiIiIRERJ3d2ZEMzMzMiIiIhEiIyIiIiIiIiIiIiIiISERERERERIiIREjNTMzMyIREf//////////8RIiIyIyIiIhEREid3dmRDMzMyIiIhEBIjMiIiIiIiIiIiIiIRERERERERIiIRESMzMzMiIhERH//////////xESIiIjIiIiIRERJnd2ZEMzMyIiIiEQMTMyIiIiIiIiIiIiIiEREREREREiIiERIjIiMyIhERH///////////8REREiMzIiIiEREmd3dkRDMzMiEiL/AzMzIiIiIiIhESIiIiIiIRERESIiIiERIiIiIiIhEREf////////////EAESIjMyIiIiESNnd3ZEMzMyISIgAAMzIiIiIiIiABIiIiIiIiEREiIiIhEREiIiIiIhER8f////////////8AAREiMzMzIiIiI2d3dkQzMzIiIiAAIzMyIiIiIiEQEiIiIiIiIREiIiIiERESIiIiIiER//////////////////ESIzMzMzIiIjZnd2ZDMzMyIiIAEjMzIiIiIiIRERIiIiIiEREiIiIiIRERIiIiIiERH//////////////////xEiMzMzMiMzNmd3ZmQzMzMzIhEiMzMiIiIiIhERESIiIiIRESIiIiIhERESIiIiIREf//////////////////ERJEMzMyIjM0Z3ZmZEMzMzMiESIzMzIiIiIiERERESIiIRERIiIiIiHxABIiIiIREf/////////////////////0QzMzIiMzRndmZmRENEQzIiIjMzMiIiIiEREREREiIhEREiIiIiIRAAEiIhEREf//////////////////////JEMzMiIiNGZ2ZmZkREREQzMzMzMyIiIiIRHxERERIfAREiIiIiIRAAARIhERER//////////////////////8jMzMzIiI0ZndmZmREREREMzMjMzIiIiIhEf8BEREfEAESIiIiIhEQABERERERH//////////////////////yIzMzMiIjRmd3dmZEREQzMzMiMzMiIiIiER/wAREf8AARIiIiIhEREAARERER////////////////////////8iIiIiIiNGZ3d3ZkRDMzMzMyIjMzIiIiIREPABEh//ABEiIiIiEREQABERERH////////////////////////yIiIiIiM0Rmd3dmRDMzMzMiIiMzMiIiIhEQAAESH/EQERIiIiEREQAAERERER////////////////////////EiIiIiIzNGZnd3ZEMzMzMiIiIzMyIiIiERAAARL/8BARESIhEREfAAABERERH///////////////////////8SIiIiIzM0RmZ3dkMzMzMyIiIjMzIiIiIREQAAEf/wEBEREhERER/wAAERERH////////////////////////xEiIiIjMzNEZnd2QzMzMzIiIiIiIiIiIhEREQEREAAAERERERER//AAABEREf/////////////////////////yIiESMzM0Rmd3ZCIiMzMiIiIiIiIiIiEREREREQAAARERERERH//wAAERER//////////////////////////EiERIyJFRGZndiIiIjMiIiIiIiIiIiIRERERERAAABERERERH///8AABERD/////////////////////////ARESIiIkVURmd2QiIjMyIiIiIiIiIiIhERERERAAAREREREf//////AAAAD//////////////////////////wARIiIiRVRGZ3ZCIiMzMiIhEiIiIiIhERERERABERERERER///////wAA/////////////////////////////xIiMzNEREZmdkIiIzMyIiISIiIiIiERERERERERERERERH///////////////////////////////////////EiIiM0RERmZmRCIjMzIiIiIiIiIiEREREREQAREREREREP///////////////////////////////////////x8iIkRERGZmZEIiIzMiIiEiIiIiIRERERERARERERABEP//////////////////////////////////////////IiNEREZmREQiIjMzIi/xIiIiIREREREREREREQAAAP//////////////////////////////////////////8iI0RERGZERDIzMzMiL/ASIiIhEREREREAEREQ/wAP///////////////////////////////////////////yIzMzREZkRDMzMzMyIgABEiIhERER8REAABEAD///////////////////////////////////////////////AkRDM0RGREMzMzIiIiEAASIhERER/xEQAA//D///////////////////////////////////////////////8CREMzREZEQzMzMiIiIQAREREREf//8AAP///////////////////////////////////////////////////wI0QzNERERDMzMyIiIhARERERERH//wD/////////////////////////////////////////////////////8iMzM0REREQzMzIiIiEBEREREREf//////////////////////////////////////////////////////////8zIzRERERERDMiIiIQEREREREf///////////////////////////////////////////////////////////yMiNEREREREMzIiIhABERERER////////////////////////////////////////////////////////////IzI0RERERTNDMyIiEAEREREREf//////////////////////////////////////////////////////////ESM0RERERFMzMzIiIQAREREREf///////////////////////////////////////////////////////////xIzRERERDMzRDIiIhERER////////////////////////////////////////////////////////////////EjM0REREMzRDMiIiEf/xH///////////////////////////////////////////////////////////////8SIzREREQzREMiIiIR///////////////////////////////////////////////////////////////////xEiNENEREREMyIiIh////////////////////////////////////////////////////////////////////ESI0M0REVEQyIiIiH///////////////////////////////////////////////////////////////////8BIjQzNERUQyIiIiEf///////////////////////////////////////////////////////////////////wEiNEM2RERDIiIiIRD///////////////////////////////////////////////////////////////////ASI0RERmREMiIiIhEP//////////////////////////////////////////////////////////////////8BIjNERGZEQyIiIiEQD/////////////////////////////////////////////////////////////////8AESI0RERkRDIiIiIf////////////////////////////////////////////////////////////////////ARIjNERERDMiIiIRH///////////////////////////////////////////////////////////////////8BESIzNERDMiIiIhEf///////////////////////////////////////////////////////////////////wERIiIzRDMyIiIi8R////////////////////////////////////////////////////////////////////AREiIiNUMzIiIiL/H///////////////////////////////////////////////////////////////////8BEREiI1MzMiIiIf//////////////////////////////////////////////////////////////////////EREiIjRDMiIiIh//////////////////////////////////////////////////////////////////////ABESIiM0MyIiIiEf/////////////////////////////////////////////////////////////////////wERIiIjMzIiIhER/////////////////////////////////////////////////////////////////////wARIiIiIiIiIvEf//////////////////////////////////////////////////////////////////////ABEiIiIiIiIh/x//////////////////////////////////////////////////////////////////////8AERIiIiIiIiER///////////////////////////////////////////////////////////////////////wAREiIiIiIiIRAA//////////////////////////////////////////////////////////////////////ABERIiIiIiIREPD//////////////////////////////////////////////////////////////////////wEREiIiIiIhEQD///////////////////////////////////////////////////////////////////////8BERIiIiIiERAA//////////////////////////////////////////////////////////////////////8AEREiIiIiIREAAP/////////////////////////////////////////////////////////////////////wARERIiERERERAP//////////////////////////////////////////////////////////////////////8BEREiIREREREA///////////////////////////////////////////////////////////////////////wEREREhEREREQ////////////////////////////////////////////////////////////////////////ARERERERERERH///////////////////////////////////////////////////////////////////////8BEREREREREREf///////////////////////////////////////////////////////////////////////wAREREREREREQ////////////////////////////////////////////////////////////////////////ABERERERERERAP///////////////////////////////////////////////////////////////////////wERERERERERD/////////////////////////////////////////////////////////////////////////ABERERERERH/////////////////////////////////////////////////////////////////////////8AERERERAAAP/////////////////////////////////////////////////////////////////////////wAREREQAAAP//////////////////////////////////////////////////////////////////////////8BEREQAAAP////////////////////////////////////////////////////////////////////////////AREA/w//D////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////w=="
     }
   },
 
@@ -4363,6 +4399,157 @@ var VARIT = ["#cfe0e6","#7fc6a0","#3faa62","#8cc63f","#c8d422","#f2c200",
 // Korostustilassa asteikko venytetään tunnin omaan huippuun, jolloin
 // erot näkyvät myös tyynenä päivänä.
 var korosta = false, venytys = 1;
+
+/* PINTAVIRTAUS — siirretty VJAKumpu.html:stä 22.9.2026. Sama kartta, sama
+   pyyhkäisykenttä ja sama tuuli; vain laskettava suure vaihtuu. Kaava on
+   VJAKumpun: 2 % tuulesta (pintavirran tavallinen nyrkkisääntö on 2–3 %),
+   kerrottuna syvyydellä (matala nopeuttaa, enintään 1,75×) ja pyyhkäisyllä.
+   Tämä on ARVIO, ei mittaus: se ei tunne paluuvirtausta syvänteissä eikä
+   rantojen ohjaamaa kiertoa. Tarkennus on tulossa. */
+var akTila = 'aalto', akSyvyys = null;
+var RAJAT_V = [0, .05, .10, .15, .20, .25, .30, .40, .50, .65, .80, 1.00]; // km/h
+
+/* SYVYYSLUOKAT METREIKSI — päivitetty 22.9.2026 DataDeck-kartan zoomatuista
+   kuvista. Syvät rajat on luettu nimetyiltä syvyyskäyriltä (10 / 15 / 20 /
+   25 m), ja 9 syvän kohdan luotauslukua kymmenestä osui omaan luokkaansa.
+   Matalat rajat tarkistettu Meri-tilan luotauksilla Kotikarin kohdalta
+   (kuvat kohdistettu väyläviivan ja rannan avulla; Meri-tilan 3, 6 ja 10 m
+   käyrät osuivat Järvi-tilan käyrien päälle). 21 luotausta, ei yhtään
+   ristiriitaa:
+     luokka 0: 0,7–2,1 m    luokka 1: 3,8–4,7 m    luokka 2: 7,4–8,0 m
+     luokka 3: 8,6–9,0 m    luokka 4: 10,5–11,0 m
+   => raja 2/3 on 8 m (8,0 m luotauksia on kummallakin puolella).
+   Raja 0/1 on jossain 2,1–3,8 m:n välillä ja raja 1/2 välillä 4,7–7,4 m;
+   tarkkaa arvoa ei vielä ole. Arvo on luokan keskikohta; syvin luokka
+   (25–36 m) 29 m. Virtaukseen vaikuttaa vain se, mitkä luokat ovat alle 5 m
+   (luokat 0–1), ja se pysyy samana kummalla tahansa rajojen tulkinnalla.
+   AUKI: näillä järven keskisyvyys on noin 8,6 m, Luken mukaan noin 6,9 m.
+   Matalat rajat eivät selitä eroa (ne nostivat keskisyvyyttä).
+
+   KORJATTU 22.9.2026 — yleiskuvan luokat 5 ja 6 olivat pykälän liian syviä.
+   Ruudukko on luettu koko järven yleiskuvasta, jonka värit ovat haaleampia
+   kuin zoomatuissa. Paikansin kolme zoomikuvaa yleiskuvasta ja vertasin
+   samoja kohtia (noin 36 000 näytettä):
+     yleisluokat 0–4 = zoomin luokat 0–4 (selvä lävistäjä)
+     yleisluokka 5   = zoomin luokka 4 (385 / 444) -> 10–15 m, ei 15–20
+     yleisluokka 6   = zoomin 5 ja 6 puoliksi (2152 / 2145) -> 15–25 m
+     yleisluokka 7   = zoomin luokka 7 (2750 / 2841) -> yli 25 m
+   Yleiskuvassa 15–20 ja 20–25 m eivät siis erotu toisistaan. Korjauksen
+   jälkeen keskisyvyys on noin 8,1 m; ero Luken 6,9 metriin on pienempi
+   mutta ei poistunut. Luokkien sisäiset arvot (keskikohdat) ja kaksi
+   varmistamatonta matalaa rajaa ovat todennäköisimmät jäljellä olevat syyt. */
+var SYV_LUOKKA_M = [1.5, 4.25, 6.75, 9, 12.5, 12.5, 20, 29];
+
+/* SYVEMPI VESI — tuulen ajama kierto, lisätty 22.9.2026.
+   Pintavirtaus kertoo vain ylimmän kerroksen, joka kulkee aina tuulen mukana.
+   Järvi ei kuitenkaan voi kasata vettä loputtomasti tuulen alapuolelle:
+   pinta kallistuu, ja vesi palaa takaisin. Tämä malli laskee sen paluun.
+   Pysyvä tila, syvyyskeskiarvoinen, lineaarinen pohjakitka r:
+       ∇·( (r/h²) ∇ψ ) = ∇×( τ/(ρ h) ),   U = (−∂ψ/∂y, ∂ψ/∂x),  ψ = 0 rannalla
+   Tuloksena matalikoilla vesi kulkee tuulen mukana ja syvänteissä vastatuuleen
+   (Lappajärvellä testattuna: syvänteistä 68–75 % vastatuuleen, matalikoista
+   78–86 % myötätuuleen, kaikilla tuulensuunnilla). Suunnat ovat mallin vahvin
+   osa, koska ne riippuvat vain pohjan muodosta. Nopeus skaalautuu kitkan r
+   mukaan, joka on arvio (1e-3 m/s) — se voi olla 2–3 kertaa kumpaan suuntaan.
+   Yksinkertaistukset: saarten ympäri ei kulje nettovirtaa (ψ = 0 kaikella
+   maalla), maapallon pyörimistä ei ole mukana.
+   Malli on lineaarinen, joten kaksi pohjatapausta (itä- ja pohjoistuuli)
+   ratkaistaan kerran järveä kohden, ja muut suunnat ovat niiden yhdistelmiä. */
+var AK_KITKA_R = 1e-3, AK_CD = 1.3e-3, AK_ILMA = 1.2, AK_VESI = 1000;
+var akKiertoData = null;
+function akKiertoPohjat(mask, h, W, H, dx, r){
+  // vesiruudut ja naapurit kerran; operaattori riippuu vain syvyydestä
+  var vesi = [], idx = new Int32Array(W*H).fill(-1);
+  for (var q = 0; q < W*H; q++) if (mask[q]){ idx[q] = vesi.length; vesi.push(q); }
+  var N = vesi.length, nb = new Int32Array(N*4).fill(-1), af = new Float64Array(N*4), sum = new Float64Array(N);
+  var A = function(q){ return r/(h[q]*h[q]); };
+  for (var p = 0; p < N; p++){
+    var q = vesi[p], i = q % W, j = (q/W)|0;
+    var nn = [[i+1,j],[i-1,j],[i,j+1],[i,j-1]];
+    for (var k = 0; k < 4; k++){
+      var ii = nn[k][0], jj = nn[k][1], qq = jj*W+ii;
+      if (ii<0||ii>=W||jj<0||jj>=H||!mask[qq]){ af[p*4+k] = A(q); }
+      else { nb[p*4+k] = idx[qq]; af[p*4+k] = 0.5*(A(q)+A(qq)); }
+      sum[p] += af[p*4+k];
+    }
+  }
+  // 1/h:n gradientti (x itään, y pohjoiseen; j kasvaa etelään)
+  var gx = new Float64Array(N), gy = new Float64Array(N);
+  for (var p = 0; p < N; p++){
+    var q = vesi[p], c = 1/h[q];
+    var v = function(k){ var n2 = nb[p*4+k]; return n2 >= 0 ? 1/h[vesi[n2]] : null; };
+    var e = v(0), w = v(1), s = v(2), n = v(3);
+    gx[p] = (e!==null&&w!==null) ? (e-w)/(2*dx) : e!==null ? (e-c)/dx : w!==null ? (c-w)/dx : 0;
+    gy[p] = (n!==null&&s!==null) ? (n-s)/(2*dx) : n!==null ? (n-c)/dx : s!==null ? (c-s)/dx : 0;
+  }
+  function ratkaise(tx, ty){
+    var psi = new Float64Array(N), rhs = new Float64Array(N);
+    for (var p = 0; p < N; p++) rhs[p] = (ty*gx[p] - tx*gy[p])*dx*dx;
+    for (var it = 0; it < 4000; it++){
+      var muutos = 0, suurin = 1e-30;
+      for (var p = 0; p < N; p++){
+        var o = p*4, s2 = 0;
+        for (var k = 0; k < 4; k++){ var n2 = nb[o+k]; if (n2 >= 0) s2 += af[o+k]*psi[n2]; }
+        var d = (s2 - rhs[p])/sum[p] - psi[p];
+        psi[p] += 1.9*d;
+        var ad = d < 0 ? -d : d; if (ad > muutos) muutos = ad;
+        var ap = psi[p] < 0 ? -psi[p] : psi[p]; if (ap > suurin) suurin = ap;
+      }
+      if (muutos < 1e-6*suurin) break;
+    }
+    // u = U/h, U = (−∂ψ/∂y, ∂ψ/∂x)
+    var ue = new Float32Array(W*H), un = new Float32Array(W*H);
+    for (var p = 0; p < N; p++){
+      var P = function(k){ var n2 = nb[p*4+k]; return n2 >= 0 ? psi[n2] : 0; };
+      var q = vesi[p];
+      var dPx = (P(0)-P(1))/(2*dx), dPy = (P(3)-P(2))/(2*dx);
+      ue[q] = -dPy/h[q]; un[q] = dPx/h[q];
+    }
+    return { ue: ue, un: un, iter: it };
+  }
+  return { ita: ratkaise(1,0), pohjoinen: ratkaise(0,1) };
+}
+
+function akKierto(){
+  if (akKiertoData) return akKiertoData;
+  if (!akSyvyys || !mask || !jarvi || !jarvi.kartta) return null;
+  var k = jarvi.kartta, W = k.W, H = k.H, h = new Float64Array(W*H), summa = 0, n = 0;
+  // 3x3-pehmennys vesiruutujen yli: syvyysluokkien porrastus tekisi muuten
+  // luokkarajoille keinotekoisia virtapiikkejä
+  for (var j = 0; j < H; j++) for (var i = 0; i < W; i++){
+    var q = j*W+i; if (!mask[q]) continue;
+    var s = 0, c = 0;
+    for (var dj = -1; dj <= 1; dj++) for (var di = -1; di <= 1; di++){
+      var ii = i+di, jj = j+dj, qq = jj*W+ii;
+      if (ii>=0 && ii<W && jj>=0 && jj<H && mask[qq]){ s += akSyvyys[qq]; c++; }
+    }
+    h[q] = Math.max(1, s/c); summa += h[q]; n++;
+  }
+  akKiertoData = { pohjat: akKiertoPohjat(mask, h, W, H, k.ruutu, AK_KITKA_R),
+                   h: h, hKesk: n ? summa/n : 7 };
+  return akKiertoData;
+}
+
+function puraSyvyysLuokat(k){
+  if (!k || !k.syvyysLuokat) return null;
+  var raaka = atob(k.syvyysLuokat), n = k.W*k.H, s = new Float32Array(n);
+  for (var i = 0; i < n; i++){
+    var tavu = raaka.charCodeAt(i >> 1);
+    var l = (i & 1) ? (tavu & 15) : (tavu >> 4);
+    s[i] = l < SYV_LUOKKA_M.length ? SYV_LUOKKA_M[l] : 0;
+  }
+  return s;
+}
+
+/* Virtaus kulkee tuulen alapuolelle, ja maapallon pyöriminen kääntää sitä
+   oikealle; VJAKumpun +15° säilytetty. Suunta kerrotaan KOHTI-muodossa,
+   koska veneessä kysytään mihin vesi vie, ei mistä se tulee. */
+function akVirtausSuunta(tuuliDir){ return ((tuuliDir + 180 + 15) % 360 + 360) % 360; }
+function akKohti(deg){
+  var n = ["pohjoiseen","koilliseen","itään","kaakkoon","etelään",
+           "lounaaseen","länteen","luoteeseen"];
+  return n[Math.round(((deg%360)+360)%360/45)%8];
+}
 
 /* Veneet ja kalastusrajat. turva = kestääkö runko. kalaOletus = se aalto jossa
    uistelu on vielä kalastusta eikä työtä; varovainen arvio pyytävän alueen
@@ -4391,8 +4578,8 @@ function akKalaRaja(){
 }
 
 function vari(h){
-  var x = h*venytys;
-  for (var i = RAJAT.length-1; i >= 0; i--) if (x >= RAJAT[i]) return VARIT[i];
+  var x = h*venytys, R = (akTila === 'virtaus' || akTila === 'syva') ? RAJAT_V : RAJAT;
+  for (var i = R.length-1; i >= 0; i--) if (x >= R[i]) return VARIT[i];
   return VARIT[0];
 }
 
@@ -4495,6 +4682,7 @@ function piirra(){
   // asteikko siihen, muuten käytetään kiinteää järviasteikkoa.
   // Aallonkorkeus jokaiselle ruudulle
   var hs = new Float32Array(mask.length), korkein = 0;
+  var vir = akSyvyys ? new Float32Array(mask.length) : null, virMax = 0;   // km/h
   var kalaRaja = akKalaRaja(), kelpaa = 0, vesiruutuja = 0;
   for (var q = 0; q < mask.length; q++){
     if (!mask[q]) continue;
@@ -4503,11 +4691,49 @@ function piirra(){
     if (hs[q] > korkein) korkein = hs[q];
     vesiruutuja++;
     if (hs[q] <= kalaRaja) kelpaa++;
+    if (vir){
+      var syvK = 1.0 + (5.0 - Math.min(akSyvyys[q], 5.0)) * 0.15;
+      var pyyK = 0.4 + 0.6 * Math.min(1, Fq/3000);
+      vir[q] = U * 2 * syvK * pyyK * 0.036;        // cm/s -> km/h
+      if (vir[q] > virMax) virMax = vir[q];
+    }
   }
   d.osuus = vesiruutuja ? kelpaa/vesiruutuja : 0;
+  d.virMax = virMax;
+
+  /* SYVEMPI VESI: pohjaratkaisut yhdistetään tämän tunnin tuulen suuntaan ja
+     skaalataan tuulijännityksellä τ/ρ = ρa·Cd·U²/ρ. Kierto kehittyy tuntien
+     mittaan: kitkan aikavakio on keskisyvyys / r (Lappajärvellä noin 2 h),
+     joten lyhyt tuuli saa vain osan pysyvän tilan virrasta. */
+  var syva = false, kue = null, kun = null, kv = null, kvMax = 0, vastaan = 0, kvN = 0;
+  if (akTila === 'syva' && akSyvyys){
+    var kd = akKierto();
+    if (kd){
+      syva = true;
+      var ta = (d.dir + 180)*Math.PI/180, tx = Math.sin(ta), ty = Math.cos(ta);
+      var tau = AK_ILMA*AK_CD*U*U/AK_VESI;
+      var kehitys = 1 - Math.exp(-d.tunteja*3600*AK_KITKA_R/kd.hKesk);
+      var P = kd.pohjat, kerroin = tau*kehitys;
+      kue = new Float32Array(mask.length); kun = new Float32Array(mask.length); kv = new Float32Array(mask.length);
+      for (var q2 = 0; q2 < mask.length; q2++){
+        if (!mask[q2]) continue;
+        kue[q2] = (tx*P.ita.ue[q2] + ty*P.pohjoinen.ue[q2])*kerroin;
+        kun[q2] = (tx*P.ita.un[q2] + ty*P.pohjoinen.un[q2])*kerroin;
+        kv[q2] = Math.sqrt(kue[q2]*kue[q2] + kun[q2]*kun[q2])*3.6;       // km/h
+        if (kv[q2] > kvMax) kvMax = kv[q2];
+        kvN++; if (kue[q2]*tx + kun[q2]*ty < 0) vastaan++;
+      }
+      d.kvMax = kvMax; d.vastaOsuus = kvN ? vastaan/kvN : 0; d.kehitys = kehitys;
+    }
+  }
+
+  var virtaus = (akTila === 'virtaus' && vir);
+  var arvot = syva ? kv : virtaus ? vir : hs;
+  var huippu = syva ? kvMax : virtaus ? virMax : korkein;
+  var R = (virtaus || syva) ? RAJAT_V : RAJAT;
 
   venytys = 1;
-  if (korosta && korkein > 0.02) venytys = RAJAT[RAJAT.length-1]/(korkein*1.02);
+  if (korosta && huippu > 0.02) venytys = R[R.length-1]/(huippu*1.02);
   piirraAsteikko();
 
   // Piirretään moninkertaisella tarkkuudella ja pehmennetään aallonkorkeus
@@ -4548,12 +4774,12 @@ function piirra(){
           var kk = jj*k.W + ii;
           if (!mask[kk]) continue;            // maa ei osallistu pehmennykseen
           var p = (dx ? fx : 1-fx) * (dy ? fy : 1-fy);
-          summa += hs[kk]*p; paino += p;
+          summa += arvot[kk]*p; paino += p;
         }
       }
-      var arvo = paino > 0 ? summa/paino : hs[nj*k.W + ni];
+      var arvo = paino > 0 ? summa/paino : arvot[nj*k.W + ni];
       var t = rgb(arvo);
-      if (arvo > kalaRaja){
+      if (!virtaus && !syva && arvo > kalaRaja){
         /* Rajan yli: himmennetään kohti tummaa. Väri jää luettavaksi mutta
            kelvollinen alue hyppää esiin. Turvarajan yli vielä enemmän. */
         var kerroin = arvo > akVene().turva ? 0.30 : 0.55;
@@ -4568,8 +4794,8 @@ function piirra(){
   }
   ctx.putImageData(kuva, 0, 0);
 
-  // Nuolet: mihin aalto kulkee
-  var rad = (d.dir + 180)*Math.PI/180;
+  // Nuolet: mihin aalto (tai virtaus) kulkee
+  var rad = (virtaus ? akVirtausSuunta(d.dir) : d.dir + 180)*Math.PI/180;
   var ax = Math.sin(rad), ay = -Math.cos(rad);
   var vali = Math.max(6, Math.round(k.W/13))*S, pit = vali*0.40;
   ctx.strokeStyle = "rgba(16,24,22,.55)";
@@ -4580,6 +4806,13 @@ function piirra(){
     for (var jx = vali; jx < LW; jx += vali){
       var mi = Math.min(k.W-1, Math.floor(jx/S)), mj = Math.min(k.H-1, Math.floor(jy/S));
       if (!mask[mj*k.W + mi]) continue;
+      if (syva){
+        /* Syvemmässä vedessä suunta vaihtelee paikasta toiseen, joten nuoli
+           piirretään ruudun omaan suuntaan. Lähes seisova vesi jää ilman. */
+        var mq = mj*k.W + mi, ve = kue[mq], vn = kun[mq], vv = Math.sqrt(ve*ve + vn*vn);
+        if (vv*3.6 < 0.01) continue;
+        ax = ve/vv; ay = -vn/vv;
+      }
       var x1 = jx - ax*pit, y1 = jy - ay*pit, x2 = jx + ax*pit, y2 = jy + ay*pit;
       ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
       ctx.moveTo(x2, y2); ctx.lineTo(x2 - ax*pit*0.45 - ay*pit*0.28, y2 - ay*pit*0.45 + ax*pit*0.28);
@@ -4590,7 +4823,7 @@ function piirra(){
 
   /* Talteen napautusta varten: nämä ovat piirron paikallisia, mutta napautus
      tarvitsee ne piirron jälkeen. */
-  akViime = { hs:hs, kentta:kentta, k:k, S:S, kalaRaja:kalaRaja, turva:akVene().turva };
+  akViime = { hs:hs, vir:vir, kue:kue, kun:kun, kv:kv, kentta:kentta, k:k, S:S, kalaRaja:kalaRaja, turva:akVene().turva, dir:d.dir };
   akPiirraMerkki(ctx, S);
 
   d.korkein = korkein;
@@ -4880,10 +5113,30 @@ function akNaytaPiste(){
   var el = $("akPiste");
   if (!el) return;
   if (!akValittu || !akViime){
-    el.textContent = "Napauta karttaa: kertoo sen kohdan aallon"; return;
+    el.textContent = akTila === 'aalto' ? "Napauta karttaa: kertoo sen kohdan aallon"
+                                        : "Napauta karttaa: kertoo sen kohdan virtauksen"; return;
   }
   var k = akViime.k, q = akValittu.j*k.W + akValittu.i;
   if (!mask[q]){ el.textContent = "Maata — napauta vesialuetta"; return; }
+  if (akTila === 'syva' && akViime.kv){
+    var ve = akViime.kue[q], vn = akViime.kun[q], kk2 = akViime.kv[q];
+    var suunta = (Math.atan2(ve, vn)*180/Math.PI + 360) % 360;
+    var ta2 = (akViime.dir + 180)*Math.PI/180;
+    var myota = ve*Math.sin(ta2) + vn*Math.cos(ta2) >= 0;
+    var sy2 = akKiertoData ? akKiertoData.h[q] : null;
+    el.innerHTML = "Syvemmässä vedessä noin <b>" + kk2.toFixed(2).replace(".", ",")
+      + " km/h</b> " + akKohti(suunta) + " · <b>" + (myota ? "tuulen mukana" : "vastatuuleen") + "</b>"
+      + "<br>vesipatsaan keskiarvo" + (sy2 !== null ? ", syvyys noin " + Math.round(sy2) + " m" : "")
+      + " · pinta kulkee silti tuulen mukana";
+    return;
+  }
+  if (akTila === 'virtaus' && akViime.vir){
+    var vv = akViime.vir[q], sy = akSyvyys ? akSyvyys[q] : null;
+    el.innerHTML = "Tässä kohdassa pintavirtaus noin <b>" + vv.toFixed(2).replace(".", ",")
+      + " km/h</b> " + akKohti(akVirtausSuunta(akViime.dir))
+      + "<br>arvio tuulesta" + (sy !== null && sy < 5 ? " · matalikko nopeuttaa" : "");
+    return;
+  }
   var h = akViime.hs[q], F = akViime.kentta[q];
   var tila = h <= akViime.kalaRaja ? "uisteltavissa"
            : h <= akViime.turva ? "vain kuljettavissa" : "yli turvarajan";
@@ -4931,6 +5184,36 @@ function naytaTiedot(d){
     + '<div><span>Tuuli</span><b>' + d.U.toFixed(1) + ' m/s, '
         + Math.round(d.dir) + '°</b></div>'
     + '<div><span>Tuullut</span><b>' + d.tunteja + ' h samasta suunnasta</b></div>';
+
+  /* VIRTAUSTILA: leimaan virtauksen huippu ja suunta, taulukon alkuun sama.
+     Aallon rivit jäävät alle, koska aalto on yhä se mikä ratkaisee lähdön. */
+  if (akTila === 'syva' && typeof d.kvMax === 'number'){
+    var vpros = Math.round((d.vastaOsuus || 0)*100);
+    $("akLeima").innerHTML = '<span>' + vpros + ' %</span>'
+      + '<small>vastatuuleen</small>'
+      + '<span class="aika">' + pv[d.aika.getDay()] + ' klo ' + pad(d.aika.getHours()) + '</span>'
+      + '<small>huippu ' + d.kvMax.toFixed(2).replace('.', ',') + ' km/h</small>';
+    $("akTaulu").innerHTML =
+        '<div><span>Syvempi vesi, huippu</span><b>' + d.kvMax.toFixed(2) + ' km/h</b></div>'
+      + '<div><span>Järvestä vastatuuleen</span><b>' + vpros + ' % · lähinnä syvänteet</b></div>'
+      + '<div><span>Kierron kehitys</span><b>' + Math.round((d.kehitys || 0)*100) + ' % pysyvästä · tuullut ' + d.tunteja + ' h</b></div>'
+      + '<div><span>Laskenta</span><b>kiertomalli, ei mittaus · nopeus ±2–3×</b></div>'
+      + '<div><span>Syvyydet</span><b>DataDeck-kartta · © MML · © Väylävirasto · © SYKE</b></div>'
+      + $("akTaulu").innerHTML;
+  }
+  if (akTila === 'virtaus' && typeof d.virMax === 'number'){
+    var vs = akVirtausSuunta(d.dir);
+    $("akLeima").innerHTML = '<span>' + d.virMax.toFixed(2).replace('.', ',') + '</span>'
+      + '<small>km/h huippu</small>'
+      + '<span class="aika">' + pv[d.aika.getDay()] + ' klo ' + pad(d.aika.getHours()) + '</span>'
+      + '<small>' + akKohti(vs) + '</small>';
+    $("akTaulu").innerHTML =
+        '<div><span>Pintavirtaus, huippu</span><b>' + d.virMax.toFixed(2) + ' km/h</b></div>'
+      + '<div><span>Suunta</span><b>' + akKohti(vs) + ' (' + Math.round(vs) + '°)</b></div>'
+      + '<div><span>Laskenta</span><b>arvio tuulesta, ei mittaus</b></div>'
+      + '<div><span>Syvyydet</span><b>DataDeck-kartta · © MML · © Väylävirasto · © SYKE</b></div>'
+      + $("akTaulu").innerHTML;
+  }
 }
 
 $("akLiuku").addEventListener("input", function(){
@@ -5015,6 +5298,9 @@ function lataa(avain){
     return;
   }
   mask = puraMaski(jarvi.kartta);
+  akSyvyys = puraSyvyysLuokat(jarvi.kartta);
+  akKiertoData = null;      // lasketaan vasta kun Syvempi vesi valitaan
+  akPaivitaVirtausKytkin();
   $("akLeima").innerHTML = '<small>haetaan…</small>';
 
   fetch(fmiUrl(jarvi.lat, jarvi.lon))
@@ -5065,13 +5351,38 @@ function lataa(avain){
 
 // ---- Käynnistys --------------------------------------------------------
 function piirraAsteikko(){
-  $("akAsteikko").innerHTML = RAJAT.map(function(raja, i){
+  var R = (akTila === 'virtaus' || akTila === 'syva') ? RAJAT_V : RAJAT;
+  $("akAsteikko").innerHTML = R.map(function(raja, i){
     var n = raja/venytys;
     return '<div style="background:' + VARIT[i] + '">'
          + (n >= 1 ? n.toFixed(1) : n.toFixed(2).replace(/^0/,"")) + '</div>';
   }).join("");
+  var yk = $("akYksikko");
+  if (yk) yk.textContent = akTila === 'virtaus' ? "pintavirtausarvio, km/h"
+                         : akTila === 'syva'    ? "syvemmän veden kierto, km/h"
+                         : "merkitsevä aallonkorkeus, m";
 }
 piirraAsteikko();
+
+/* Virtausvalinnat ovat käytössä vain järvellä, jolla on syvyysluokat. */
+function akPaivitaVirtausKytkin(){
+  var sel = $("akNaytto");
+  if (!sel) return;
+  for (var i = 0; i < sel.options.length; i++){
+    var o = sel.options[i];
+    if (o.value === 'aalto') continue;
+    o.disabled = !akSyvyys;
+    o.textContent = (o.value === 'virtaus' ? "Pintavirtaus" : "Syvempi vesi")
+                  + (akSyvyys ? "" : " (vain Lappajärvi)");
+  }
+  if (!akSyvyys){ akTila = 'aalto'; sel.value = 'aalto'; }
+}
+if ($("akNaytto")) $("akNaytto").addEventListener("change", function(){
+  akTila = akSyvyys ? this.value : 'aalto';
+  if (akTila === 'syva' && !akKiertoData) $("akLeima").innerHTML = '<small>lasketaan kiertoa…</small>';
+  // annetaan leiman piirtyä ennen raskasta laskentaa
+  setTimeout(piirra, 30);
+});
 
 $("akKorosta").addEventListener("change", function(){
   korosta = this.checked;
@@ -6211,6 +6522,8 @@ lataa(eka);
 
     // --- UUSI: GPS NOPEUSMITTARI & WEB AUDIO API LOGIIKKA ---
     let speedWatchId = null;
+    let paluuIlmoitus = '';       // teksti joka kerrotaan taustalta palattua
+    let paluuIlmoitusAsti = 0;    // ms — näytetään tilarivillä minuutin ajan
     let lastAlertTime = 0;
     let alertCooldown = 11000; // Dynaaminen jäähdyttely riippuen soivan äänen pituudesta
     let lastPos = null;
@@ -6474,7 +6787,8 @@ lataa(eka);
           statusEl.textContent = 'Päivitetty: ' + new Date().toLocaleTimeString('fi-FI')
             + ' · tarkkuus ' + pos.coords.accuracy.toFixed(0) + ' m · '
             + (lahde === 'doppler' ? 'Doppler' : 'laskettu sijainneista')
-            + ' · tasoitus ' + nopeusOtos.length + '/' + ikkuna;
+            + ' · tasoitus ' + nopeusOtos.length + '/' + ikkuna
+            + (Date.now() < paluuIlmoitusAsti ? ' · ' + paluuIlmoitus : '');
 
           /* Suunta: laitteen oma kurssi jos se on saatavilla ja vene liikkuu,
              muuten laskettu kahden sijainnin välistä. Paikallaan GPS:n heading on
@@ -6564,6 +6878,36 @@ lataa(eka);
     let vetoPuskuri = [];             // {t, kmh, dir}
     let vetoEdellinen = null;         // sijainti josta suunta lasketaan
     const VETO_IKKUNA_MS = 5*60*1000;
+
+    /* PALUU TAUSTALTA — lisätty 22.9.2026 (WhatsApp-nappi).
+       Kun toinen sovellus avataan, Android pysäyttää selaimen paikannuksen.
+       Mittari ei tiennyt tästä: palattua se jatkoi kuin katkoa ei olisi ollut,
+       ja vedon 5 min keskiarvo laski kestoksi ajan ensimmäisestä viimeiseen
+       mittaukseen — eli väitti mitanneensa myös taustalla olon ajan.
+       Nyt yli 20 s katkon jälkeen mittari käynnistetään puhtaalta pöydältä
+       ja katko kerrotaan tilarivillä. Lyhyemmän katkon hoitaa nopeuspuskurin
+       oma 20 s vanhenemisraja. */
+    (function(){
+      var piiloAlku = null;
+      var KATKO_RAJA_MS = 20000;
+      document.addEventListener('visibilitychange', function(){
+        if (document.visibilityState === 'hidden') { piiloAlku = Date.now(); return; }
+        if (piiloAlku === null) return;
+        var katko = Date.now() - piiloAlku;
+        piiloAlku = null;
+        if (speedWatchId === null || katko < KATKO_RAJA_MS) return;
+        try {
+          toggleSpeedMonitor();   // pysäyttää ja tyhjentää
+          toggleSpeedMonitor();   // käynnistää uudelleen
+        } catch(e){}
+        var kesto = katko < 60000 ? Math.round(katko/1000) + ' s'
+                                  : Math.round(katko/60000) + ' min';
+        paluuIlmoitus = 'oli taustalla ' + kesto + ', mittaus ja vetokeskiarvo alusta';
+        paluuIlmoitusAsti = Date.now() + 60000;
+        const st = document.getElementById('speedStatus');
+        if (st) st.textContent = 'Sovellus ' + paluuIlmoitus + ' — etsitään GPS-signaalia…';
+      });
+    })();
 
     function paivitaVetoKeskiarvo(){
       const el = document.getElementById('vetoKeskiarvo');
@@ -12577,7 +12921,7 @@ lataa(eka);
   if(!wrap || document.getElementById('ruutuNavi')) return;
 
   var JAKO = {
-    vesilla:   ['vesillaPaneeli','speedMonitorSection'],
+    vesilla:   ['whatsappNappi','vesillaPaneeli','speedMonitorSection'],
     raportit:  ['result','malliOsuvuus']
     /* loput -> suunnittelu */
   };
