@@ -845,6 +845,12 @@
 .ak-tuuli small{display:block;font-weight:500;font-size:.72rem;color:var(--harmaa);
     margin-top:1px}
 .ak-leima{box-shadow:0 1px 4px rgba(0,0,0,.28)}
+/* LÄPIKUULTAVAT — 22.9.2026. Tausta 72 %, jolloin kartta näkyy läpi mutta
+   tumma teksti erottuu yhä; reunus pienempi. Muoto ja koko pidetään ennallaan:
+   kokeiltu kahden rivin leveä malli peitti mitattuna enemmän järveä
+   (0,30 % vs 0,06 %), koska nämä kapeat laatikot osuvat maakulmiin. */
+.ak-leima, .ak-tuuli{background:rgba(255,255,255,.72);padding:4px 8px;
+    box-shadow:0 1px 3px rgba(0,0,0,.18)}
 
 /* ---- AIKARULLA — siirretty erillisestä aaltokartasta 21.9.2026 ----
    Yhdenmukaisuus: erillisellä sivulla oli vieritettävä pylväsrivi ja
@@ -1177,7 +1183,8 @@ body{padding-bottom:66px}
             <div>
               <label style="display:block;color:var(--muted);font-size:13px;">Pyyntisyvyys (m)</label>
               <input type="number" step="0.1" id="kalaSyvyys" style="width:90px;"
-                     oninput="paivitaVapautusOhje()">
+                     oninput="this.dataset.lahde='mitattu'; paivitaVapautusOhje()">
+              <div id="kalaSyvyysVihje" style="margin-top:4px;"></div>
             </div>
           </div>
           <div id="vapautusOhje" style="font-size:13px; line-height:1.4; margin-top:10px;"></div>
@@ -1438,6 +1445,33 @@ body{padding-bottom:66px}
         <button class="chip" onclick="addNewLocation()">Lisää</button>
       </div>
     </div>
+
+    <!-- SAALISKOOSTE — lisätty 22.9.2026. Suunnittelu-ruudulla, Reissu-kortin
+         alla. Päivän ja neljän vuorokauden kooste kirjatuista saaliista,
+         luettavissa ääneen. "Lue jokaisen saaliin jälkeen" jättää äänen päälle. -->
+    <div class="q" id="saalisKooste">
+      <div class="idx">Saaliit</div>
+      <h2>Kooste</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button id="koostePaivaBtn" onclick="naytaKooste('paiva', true)"
+          style="flex:1;min-width:130px;background:transparent;color:var(--cyan);border:1px solid var(--cyan);
+                 border-radius:10px;font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;padding:9px;cursor:pointer;">▶ Päivän kooste</button>
+        <button id="kooste4Btn" onclick="naytaKooste('4vrk', true)"
+          style="flex:1;min-width:130px;background:transparent;color:var(--cyan);border:1px solid var(--cyan);
+                 border-radius:10px;font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;padding:9px;cursor:pointer;">▶ 4 vrk kooste</button>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:10px;color:var(--muted);font-size:14px;">
+        <input type="checkbox" id="koosteAuto" onchange="asetaKoosteAuto(this.checked)">
+        Lue päivän kooste jokaisen saaliin jälkeen
+      </label>
+      <div id="koosteStatus" style="margin-top:6px;font-size:13px;"></div>
+      <div id="koosteTeksti" style="margin-top:8px;font-size:14px;line-height:1.5;"></div>
+      <details style="margin-top:10px;">
+        <summary style="color:var(--muted);font-size:13px;cursor:pointer;">Tallennetut koosteet</summary>
+        <div id="koosteTallennetut"></div>
+      </details>
+    </div>
+
 
 
     <!-- TUULIHÄLYTYS JA NÄYTTÖTILA -->
@@ -4409,36 +4443,25 @@ var korosta = false, venytys = 1;
 var akTila = 'aalto', akSyvyys = null;
 var RAJAT_V = [0, .05, .10, .15, .20, .25, .30, .40, .50, .65, .80, 1.00]; // km/h
 
-/* SYVYYSLUOKAT METREIKSI — päivitetty 22.9.2026 DataDeck-kartan zoomatuista
-   kuvista. Syvät rajat on luettu nimetyiltä syvyyskäyriltä (10 / 15 / 20 /
-   25 m), ja 9 syvän kohdan luotauslukua kymmenestä osui omaan luokkaansa.
-   Matalat rajat tarkistettu Meri-tilan luotauksilla Kotikarin kohdalta
-   (kuvat kohdistettu väyläviivan ja rannan avulla; Meri-tilan 3, 6 ja 10 m
-   käyrät osuivat Järvi-tilan käyrien päälle). 21 luotausta, ei yhtään
-   ristiriitaa:
-     luokka 0: 0,7–2,1 m    luokka 1: 3,8–4,7 m    luokka 2: 7,4–8,0 m
-     luokka 3: 8,6–9,0 m    luokka 4: 10,5–11,0 m
-   => raja 2/3 on 8 m (8,0 m luotauksia on kummallakin puolella).
-   Raja 0/1 on jossain 2,1–3,8 m:n välillä ja raja 1/2 välillä 4,7–7,4 m;
-   tarkkaa arvoa ei vielä ole. Arvo on luokan keskikohta; syvin luokka
-   (25–36 m) 29 m. Virtaukseen vaikuttaa vain se, mitkä luokat ovat alle 5 m
-   (luokat 0–1), ja se pysyy samana kummalla tahansa rajojen tulkinnalla.
-   AUKI: näillä järven keskisyvyys on noin 8,6 m, Luken mukaan noin 6,9 m.
-   Matalat rajat eivät selitä eroa (ne nostivat keskisyvyyttä).
-
-   KORJATTU 22.9.2026 — yleiskuvan luokat 5 ja 6 olivat pykälän liian syviä.
-   Ruudukko on luettu koko järven yleiskuvasta, jonka värit ovat haaleampia
-   kuin zoomatuissa. Paikansin kolme zoomikuvaa yleiskuvasta ja vertasin
-   samoja kohtia (noin 36 000 näytettä):
-     yleisluokat 0–4 = zoomin luokat 0–4 (selvä lävistäjä)
-     yleisluokka 5   = zoomin luokka 4 (385 / 444) -> 10–15 m, ei 15–20
-     yleisluokka 6   = zoomin 5 ja 6 puoliksi (2152 / 2145) -> 15–25 m
-     yleisluokka 7   = zoomin luokka 7 (2750 / 2841) -> yli 25 m
-   Yleiskuvassa 15–20 ja 20–25 m eivät siis erotu toisistaan. Korjauksen
-   jälkeen keskisyvyys on noin 8,1 m; ero Luken 6,9 metriin on pienempi
-   mutta ei poistunut. Luokkien sisäiset arvot (keskikohdat) ja kaksi
-   varmistamatonta matalaa rajaa ovat todennäköisimmät jäljellä olevat syyt. */
-var SYV_LUOKKA_M = [1.5, 4.25, 6.75, 9, 12.5, 12.5, 20, 29];
+/* SYVYYSLUOKAT METREIKSI — kaikki rajat varmistettu 22.9.2026.
+   DataDeck-kartan väriasteikko: 2,5 / 5 / 8 / 10 / 15 / 20 / 25 m.
+   Todisteet (luotaukset värin päällä, kuvat kohdistettu käyrien, rannan ja
+   väyläviivan avulla):
+     raja 2,5 m: Kiipiska 2,0 alla, 2,3 täsmälleen rajalla, 3,1 yli;
+                 Karppa 0,9–1,9 alla, 2,8 yli
+     raja 5 m:   Karppa 2,8–4,9 alla (4,8 ja 4,9 rajalla), 5,3–7,4 yli
+     raja 8 m:   Kotikari 7,4–8,0 alla, 8,6–9,0 yli (8,0 kummallakin puolella)
+     rajat 10 / 15 / 20 / 25 m: nimetyt syvyyskäyrät, 9/10 syvää luotausta osui
+   Yhteensä noin 55 luotausta, ei yhtään ristiriitaa.
+   Ruudukko on luettu koko järven yleiskuvasta, jonka värit ovat haaleampia.
+   Paikansin zoomikuvat siitä ja vertasin samoja kohtia (~36 000 näytettä):
+     yleisluokat 0–4 = zoomin 0–4, yleisluokka 5 = 10–15 m (385/444),
+     yleisluokka 6 = 15–25 m (15–20 ja 20–25 puoliksi), yleisluokka 7 = yli 25.
+   Arvo on luokan keskikohta; syvin (25–36 m) 29 m.
+   AUKI: keskisyvyys näillä noin 7,9 m, Luken mukaan noin 6,9 m. Rajat eivät
+   enää selitä eroa; jäljellä luokkien sisäinen jakauma (keskikohta on karkea
+   oletus) ja se, mistä luotauksista Luken luku on laskettu. */
+var SYV_LUOKKA_M = [1.25, 3.75, 6.5, 9, 12.5, 12.5, 20, 29];
 
 /* SYVEMPI VESI — tuulen ajama kierto, lisätty 22.9.2026.
    Pintavirtaus kertoo vain ylimmän kerroksen, joka kulkee aina tuulen mukana.
@@ -4650,6 +4673,7 @@ function pyyhkaisyKentta(mask, W, H, ruutu, suunta){
 
 // ---- Piirto ------------------------------------------------------------
 var data = [], valittu = 0, jarvi = null, mask = null, kentta = null, viimeSuunta = null;
+var akLatausLupaus = null;   // saaliin kirjaus odottaa tätä, jos kortti käynnistettiin hiljaa
 
 /* Pyyhkäisykenttien välimuisti suunnittain. Jana tarvitsee kentän jokaiselle
    tunnille, ja ilman välimuistia sama suunta laskettaisiin uudestaan joka
@@ -5161,12 +5185,14 @@ function naytaTiedot(d){
     + '<small>huippu ' + d.korkein.toFixed(2).replace('.', ',') + ' m</small>';
   /* Nopeus isolla, suunta omalle riville: "8 m/s" ja alle "lounaasta".
      Yhtenä rivinä se katkesi kapealla ruudulla kesken sanan. */
+  /* 22.9.2026: korjausrivi lyhyeksi ("korj. −1,9 m/s"). Pitkä "korjattu
+     havainnolla" levensi laatikon järven päälle; selitys on taulukossa. */
   $("akTuuli").innerHTML = d.U.toFixed(0) + " m/s"
     + (d.puuska != null ? '<small>puuskat ' + d.puuska.toFixed(0) + ' m/s</small>' : "")
     + "<small>" + kompassi(d.dir) + "</small>"
     + (akKorjaus && Math.abs(akKorjaus.erotus) >= 0.5
-        ? '<small style="color:#8a5a00">korjattu havainnolla '
-          + (akKorjaus.erotus > 0 ? "+" : "") + akKorjaus.erotus.toFixed(1) + " m/s</small>"
+        ? '<small style="color:#7a4d00">korj. '
+          + (akKorjaus.erotus > 0 ? "+" : "") + akKorjaus.erotus.toFixed(1).replace('.', ',') + " m/s</small>"
         : "");
 
   var pros = Math.round((d.osuus || 0)*100);
@@ -5189,7 +5215,7 @@ function naytaTiedot(d){
      Aallon rivit jäävät alle, koska aalto on yhä se mikä ratkaisee lähdön. */
   if (akTila === 'syva' && typeof d.kvMax === 'number'){
     var vpros = Math.round((d.vastaOsuus || 0)*100);
-    $("akLeima").innerHTML = '<span>' + vpros + ' %</span>'
+    $("akLeima").innerHTML = '<span style="color:#17457d">' + vpros + ' %</span>'
       + '<small>vastatuuleen</small>'
       + '<span class="aika">' + pv[d.aika.getDay()] + ' klo ' + pad(d.aika.getHours()) + '</span>'
       + '<small>huippu ' + d.kvMax.toFixed(2).replace('.', ',') + ' km/h</small>';
@@ -5203,7 +5229,7 @@ function naytaTiedot(d){
   }
   if (akTila === 'virtaus' && typeof d.virMax === 'number'){
     var vs = akVirtausSuunta(d.dir);
-    $("akLeima").innerHTML = '<span>' + d.virMax.toFixed(2).replace('.', ',') + '</span>'
+    $("akLeima").innerHTML = '<span style="color:#17457d">' + d.virMax.toFixed(2).replace('.', ',') + '</span>'
       + '<small>km/h huippu</small>'
       + '<span class="aika">' + pv[d.aika.getDay()] + ' klo ' + pad(d.aika.getHours()) + '</span>'
       + '<small>' + akKohti(vs) + '</small>';
@@ -5285,6 +5311,62 @@ function parsi(txt){
   return ulos;
 }
 
+/* SAALIIN KOHDAN MALLIARVOT — lisätty 22.9.2026. Saaliskirjaus kysyy tältä
+   aallonkorkeuden, pintavirtauksen ja syvemmän veden kierron saaliin
+   koordinaateissa, lähimmältä ennustetunnilta. Kaavat ovat täsmälleen samat
+   kuin kartan piirrossa — erillinen laskenta olisi kaksi mallia samasta asiasta.
+   Palauttaa null, jos piste ei ole ladatun järven ruudukossa tai lähin
+   ennustetunti on yli 3 h päässä. */
+function akRuutuPisteelle(k, lat, lon){
+  var i = Math.floor((lon - k.lansiLon)*111320*Math.cos(lat*Math.PI/180)/k.ruutu);
+  var j = Math.floor((k.pohjoisLat - lat)*111320/k.ruutu);
+  var paras = -1, pd = 1e9;
+  // lähin vesiruutu enintään 2 ruudun (200 m) päästä: GPS ja rantaviiva
+  for (var dj = -2; dj <= 2; dj++) for (var di = -2; di <= 2; di++){
+    var ii = i+di, jj = j+dj;
+    if (ii < 0 || jj < 0 || ii >= k.W || jj >= k.H) continue;
+    var q = jj*k.W + ii;
+    if (!mask[q]) continue;
+    if (di*di + dj*dj < pd){ pd = di*di + dj*dj; paras = q; }
+  }
+  return paras;
+}
+function akMalliLaske(lat, lon, aikaMs){
+  if (!jarvi || !jarvi.kartta || !mask || !data.length || lat == null || lon == null) return null;
+  var k = jarvi.kartta, q = akRuutuPisteelle(k, lat, lon);
+  if (q < 0) return null;
+  var idx = 0, pe = Infinity;
+  for (var n = 0; n < data.length; n++){
+    var e = Math.abs(data[n].aika.getTime() - aikaMs);
+    if (e < pe){ pe = e; idx = n; }
+  }
+  if (pe > 3*3600e3) return null;
+  var d = data[idx], U = Math.max(0.5, d.U);
+  var ke = akKentta(Math.round(d.dir/5)*5);
+  var Fq = Math.min(ke[q], kestonPyyhkaisy(d.tunteja*3600, U));
+  var t = { jarvi: jarvi.nimi,
+            aaltoM: Math.min(jonswapHs(Math.max(Fq, 50), U), syvyysKatto(jarvi.syvyys, U)) };
+  if (akSyvyys){
+    var syvK = 1 + (5 - Math.min(akSyvyys[q], 5))*0.15, pyyK = 0.4 + 0.6*Math.min(1, Fq/3000);
+    t.pintaKmh = U*2*syvK*pyyK*0.036;
+    t.pintaSuunta = akVirtausSuunta(d.dir);
+    var kd = akKierto();
+    if (kd){
+      var ta = (d.dir + 180)*Math.PI/180, tx = Math.sin(ta), ty = Math.cos(ta);
+      var ker = AK_ILMA*AK_CD*U*U/AK_VESI*(1 - Math.exp(-d.tunteja*3600*AK_KITKA_R/kd.hKesk));
+      var P = kd.pohjat;
+      var ue = (tx*P.ita.ue[q] + ty*P.pohjoinen.ue[q])*ker, un = (tx*P.ita.un[q] + ty*P.pohjoinen.un[q])*ker;
+      t.syvaKmh = Math.sqrt(ue*ue + un*un)*3.6;
+      t.syvaSuunta = (Math.atan2(ue, un)*180/Math.PI + 360) % 360;
+      t.syvaTuuleen = (ue*tx + un*ty) >= 0 ? 'mukana' : 'vastaan';
+    }
+  }
+  return t;
+}
+window.akMalliPisteessa = function(lat, lon, aikaMs){
+  return Promise.resolve(akLatausLupaus).then(function(){ return akMalliLaske(lat, lon, aikaMs); });
+};
+
 function lataa(avain){
   jarvi = JARVET[avain];
   viimeSuunta = null;
@@ -5303,7 +5385,7 @@ function lataa(avain){
   akPaivitaVirtausKytkin();
   $("akLeima").innerHTML = '<small>haetaan…</small>';
 
-  fetch(fmiUrl(jarvi.lat, jarvi.lon))
+  akLatausLupaus = fetch(fmiUrl(jarvi.lat, jarvi.lon))
     .then(function(r){ return r.ok ? r.text() : Promise.reject(new Error("palvelin " + r.status)); })
     .then(function(txt){
       var s = parsi(txt);
@@ -5471,6 +5553,13 @@ lataa(eka);
        ovat raskaita, eikä niitä kannata ajaa jos laatikkoa ei avata. */
     (function(){
       var akAjettu = false;
+      /* Saaliin kirjaus tarvitsee mallin arvot, vaikka korttia ei olisi avattu.
+         Käynnistys on sama kuin avattaessa, vain ilman laatikon aukeamista. */
+      window.akKaynnistaHiljaa = function(){
+        if (akAjettu) return;
+        akAjettu = true;
+        try { aaltokarttaAlusta(); } catch(e){}
+      };
       window.addEventListener('load', function(){
         var box = document.getElementById('aaltokarttaBox');
         if(!box) return;
@@ -5823,6 +5912,249 @@ lataa(eka);
       catch (e) { console.error(e); return false; }
     }
 
+    /* ===== SAALISKOOSTE: PÄIVÄ JA 4 VRK — lisätty 22.9.2026 =====
+       Kuvaa mitä saaliit kertovat, ei ennusta. Kolmesta kalasta ei voi
+       päätellä sääntöä, ja koosteen pitää sanoa se ääneen eikä peittää sitä.
+       Syvyydet: vain itse mitatut (ennusteesta otettu syvyys ei kerro mallin
+       osumasta mitään). Mallin arviot (aalto, virtaus) ovat merkittyjä arvioita.
+       Puhe: lyhyet lauseet pisteillä erotettuina, koska tuuli ja moottori
+       peittävät pitkät. Kirjoitettu versio on tarkempi. */
+    const KOOSTE_LAJI = {
+      taimen:['taimen','taimenta'], jarvilohi:['järvilohi','järvilohta'], kuha:['kuha','kuhaa'],
+      hauki:['hauki','haukea'], ahven:['ahven','ahventa'], muu:['muu kala','muuta kalaa']
+    };
+    const KOOSTE_LS = 'saalisKoosteet', KOOSTE_AUTO_LS = 'saalisKoosteAuto';
+    const kNro = (x, n = 1) => Number(x).toFixed(n).replace('.', ',');
+    // Puheeseen: ",0" pois ja väli sanoina, koska puhemoottori lukee viivan "viivaksi"
+    const pNro = x => kNro(x).replace(/,0$/, '');
+    const pVali = (lo, hi) => lo === hi ? pNro(lo) : pNro(lo) + ' ja ' + pNro(hi) + ' välillä';
+    const ELATIIVI = [null,'yhdestä','kahdesta','kolmesta','neljästä','viidestä','kuudesta',
+                      'seitsemästä','kahdeksasta','yhdeksästä','kymmenestä'];
+    function kMediaani(a) { const b = a.slice().sort((x, y) => x - y), m = b.length >> 1;
+      return b.length % 2 ? b[m] : (b[m-1] + b[m]) / 2; }
+    function kMista(deg) {
+      return ['pohjoisesta','koillisesta','idästä','kaakosta','etelästä','lounaasta','lännestä','luoteesta']
+        [Math.round((((deg % 360) + 360) % 360) / 45) % 8];
+    }
+    function saalisKooste(tyyppi) {
+      const nyt = new Date();
+      const alku = tyyppi === 'paiva'
+        ? new Date(nyt.getFullYear(), nyt.getMonth(), nyt.getDate()).getTime()
+        : nyt.getTime() - 96 * 3600e3;
+      const otsikko = tyyppi === 'paiva' ? 'Tänään' : 'Neljä vuorokautta';
+      const kaikki = lataaSaaliit().filter(x => new Date(x.aika).getTime() >= alku);
+      const kalat = kaikki.filter(x => !x.nollareissu && x.laji);
+      const nollat = kaikki.filter(x => x.nollareissu).length;
+      const k = [], p = [];       // kirjoitettu, puhe
+
+      if (!kalat.length) {
+        const t = otsikko + ' ei saaliita' + (nollat ? ', ' + nollat + ' nollareissua kirjattu' : '') + '.';
+        return { kirjoitettu: t, puhe: t, n: 0 };
+      }
+      // lajit
+      const lkm = {};
+      kalat.forEach(x => { lkm[x.laji] = (lkm[x.laji] || 0) + 1; });
+      const lajit = Object.keys(lkm).sort((a, b) => lkm[b] - lkm[a])
+        .map(l => { const n = lkm[l], nm = KOOSTE_LAJI[l] || [l, l]; return n + ' ' + (n === 1 ? nm[0] : nm[1]); });
+      const kaloja = kalat.length === 1 ? '1 kala' : kalat.length + ' kalaa';
+      p.push(otsikko + ' ' + kaloja + ': ' + lajit.join(', ') + '.');
+      k.push('<b>' + otsikko + ': ' + kaloja + '</b> — ' + lajit.join(', ')
+        + (nollat ? ' · nollareissuja ' + nollat : ''));
+      // aika
+      const ajat = kalat.map(x => new Date(x.aika)).sort((a, b) => a - b);
+      const hm = d => d.toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' });
+      if (tyyppi === 'paiva') {
+        k.push('Kalat klo ' + hm(ajat[0]) + (ajat.length > 1 ? '–' + hm(ajat[ajat.length-1]) : ''));
+      } else {
+        const pv = ['su','ma','ti','ke','to','pe','la'], paivat = {};
+        ajat.forEach(d => { const a = pv[d.getDay()] + ' ' + d.getDate() + '.' + (d.getMonth()+1) + '.';
+                            paivat[a] = (paivat[a] || 0) + 1; });
+        k.push('Päivittäin: ' + Object.keys(paivat).map(a => a + ' ' + paivat[a]).join(' · '));
+      }
+      // syvyys: vain mitatut
+      const mit = kalat.filter(x => typeof x.syvyysM === 'number' && x.syvyysLahde !== 'ennuste');
+      if (mit.length) {
+        const sy = mit.map(x => x.syvyysM), lo = Math.min(...sy), hi = Math.max(...sy);
+        const vali = lo === hi ? kNro(lo) : kNro(lo) + '–' + kNro(hi);
+        p.push(lo === hi ? 'Syvyys ' + pNro(lo) + ' metriä.'
+                         : 'Syvyys ' + pNro(lo) + ' ja ' + pNro(hi) + ' metrin välillä.');
+        k.push('Syvyys ' + vali + ' m, mediaani ' + kNro(kMediaani(sy)) + ' m (' + mit.length + ' mitattua'
+          + (mit.length < kalat.length ? ', ' + (kalat.length - mit.length) + ' ilman mitattua syvyyttä' : '') + ')');
+        // mallin osuma
+        const erot = mit.map(x => { const e = lajinEnnuste(x, x.laji); return e === null ? null : x.syvyysM - e; })
+                        .filter(e => e !== null);
+        if (erot.length >= 2) {
+          const ka = erot.reduce((a, b) => a + b, 0) / erot.length;
+          const suunta = ka > 0 ? 'syvemmältä' : 'matalammalta';
+          if (Math.abs(ka) >= 0.5) p.push('Kalat keskimäärin ' + kNro(Math.abs(ka)) + ' metriä ' + suunta + ' kuin malli.');
+          k.push('Mallin ennusteeseen nähden ' + (ka >= 0 ? '+' : '−') + kNro(Math.abs(ka)) + ' m keskimäärin'
+            + (Math.abs(ka) >= 0.5 ? ' — kalat ' + (ka > 0 ? 'syvemmällä' : 'matalammalla') : '')
+            + ' (' + erot.length + ' vertailua)');
+        }
+      } else {
+        k.push('Ei mitattuja syvyyksiä');
+      }
+      // vauhti
+      const nop = kalat.map(x => x.nopeusKmh).filter(v => typeof v === 'number' && v > 0.5);
+      if (nop.length) {
+        const lo = Math.min(...nop), hi = Math.max(...nop);
+        const v = lo === hi ? kNro(lo) : kNro(lo) + '–' + kNro(hi);
+        p.push('Vauhti ' + pVali(lo, hi) + '.');
+        k.push('Vauhti ' + v + ' km/h');
+      }
+      // tuuli kirjaushetkillä
+      const tu = kalat.filter(x => typeof x.tuuliMs === 'number');
+      if (tu.length) {
+        const ms = tu.map(x => x.tuuliMs), lo = Math.min(...ms), hi = Math.max(...ms);
+        const su = tu.filter(x => typeof x.tuuliSuunta === 'number');
+        let mista = '';
+        if (su.length) {
+          const sx = su.reduce((a, x) => a + Math.sin(x.tuuliSuunta*Math.PI/180), 0);
+          const cx = su.reduce((a, x) => a + Math.cos(x.tuuliSuunta*Math.PI/180), 0);
+          mista = ' ' + kMista(Math.atan2(sx, cx)*180/Math.PI);
+        }
+        k.push('Tuuli ' + (Math.round(lo) === Math.round(hi) ? Math.round(lo) : Math.round(lo) + '–' + Math.round(hi)) + ' m/s' + mista);
+      }
+      // mallin arviot saaliin kohdalta
+      const sv = kalat.filter(x => x.malliSyvaTuuleen);
+      if (sv.length) {
+        const vastaan = sv.filter(x => x.malliSyvaTuuleen === 'vastaan').length;
+        p.push(sv.length <= 10
+          ? vastaan + ' ' + ELATIIVI[sv.length] + ' paluuvirran alueelta.'
+          : vastaan + ' kalaa ' + sv.length + ':stä paluuvirran alueelta.');
+        k.push('Syvempi vesi (malli): ' + vastaan + '/' + sv.length + ' vastatuuleen virtaavalta alueelta');
+      }
+      const aa = kalat.map(x => x.malliAaltoM).filter(v => typeof v === 'number');
+      if (aa.length) k.push('Aalto (malli) enintään ' + kNro(Math.max(...aa), 2) + ' m');
+      // viehe
+      const vh = {};
+      kalat.forEach(x => { if (x.viehe) { const a = x.viehe + (x.vari ? ' ' + x.vari : ''); vh[a] = (vh[a] || 0) + 1; } });
+      const vk = Object.keys(vh).sort((a, b) => vh[b] - vh[a]);
+      if (vk.length) {
+        k.push('Vieheet: ' + vk.map(a => a + ' ' + vh[a]).join(' · '));
+        if (vh[vk[0]] >= 2) p.push('Eniten ' + vk[0] + '.');
+      }
+      if (kalat.length < 5) k.push('<i>Vähän kaloja — tämä kuvaa mitä tapahtui, ei vielä sääntöä.</i>');
+      return { kirjoitettu: k.join('<br>'), puhe: p.join(' '), n: kalat.length };
+    }
+
+    function naytaKooste(tyyppi, puhu) {
+      const r = saalisKooste(tyyppi);
+      const el = document.getElementById('koosteTeksti');
+      if (el) el.innerHTML = r.kirjoitettu;
+      // talteen: viimeiset 30
+      try {
+        const t = JSON.parse(localStorage.getItem(KOOSTE_LS)) || [];
+        t.push({ aika: new Date().toISOString(), tyyppi: tyyppi, teksti: r.kirjoitettu });
+        localStorage.setItem(KOOSTE_LS, JSON.stringify(t.slice(-30)));
+      } catch (e) {}
+      naytaTallennetutKoosteet();
+      if (puhu) toistaPuhe(r.puhe, { nappiId: tyyppi === 'paiva' ? 'koostePaivaBtn' : 'kooste4Btn',
+        nappiTeksti: tyyppi === 'paiva' ? '▶ Päivän kooste' : '▶ 4 vrk kooste',
+        statusId: 'koosteStatus', nopeus: 0.9 });
+    }
+    function naytaTallennetutKoosteet() {
+      const el = document.getElementById('koosteTallennetut');
+      if (!el) return;
+      let t = [];
+      try { t = JSON.parse(localStorage.getItem(KOOSTE_LS)) || []; } catch (e) {}
+      el.innerHTML = t.length ? t.slice(-8).reverse().map(x => {
+        const d = new Date(x.aika);
+        return '<div style="padding:6px 0;border-bottom:1px solid rgba(30,51,80,.5);font-size:13px;">'
+          + '<span style="color:var(--muted);">' + d.toLocaleDateString('fi-FI', { day:'numeric', month:'numeric' }) + ' '
+          + d.toLocaleTimeString('fi-FI', { hour:'2-digit', minute:'2-digit' }) + ' · '
+          + (x.tyyppi === 'paiva' ? 'päivä' : '4 vrk') + '</span><br>' + x.teksti + '</div>';
+      }).join('') : '<p class="hint">Ei vielä tallennettuja koosteita.</p>';
+    }
+    // "Jätä päälle": päivän kooste luetaan jokaisen tallennetun saaliin jälkeen
+    function koosteAutomaatti() {
+      let paalla = false;
+      try { paalla = localStorage.getItem(KOOSTE_AUTO_LS) === '1'; } catch (e) {}
+      if (paalla) naytaKooste('paiva', true);
+    }
+    function asetaKoosteAuto(p) {
+      try { localStorage.setItem(KOOSTE_AUTO_LS, p ? '1' : '0'); } catch (e) {}
+    }
+    window.addEventListener('load', function () {
+      const c = document.getElementById('koosteAuto');
+      try { if (c) c.checked = localStorage.getItem(KOOSTE_AUTO_LS) === '1'; } catch (e) {}
+      naytaTallennetutKoosteet();
+    });
+
+    /* HARPPAUSKERROKSEN ENNUSTE SAALIILLE — lisätty 22.9.2026.
+       Kopio harppausennuste-2027.html:n ENNUSTE-taulukon päivämääristä ja
+       kerrossyvyyksistä. HUOM: jos muutat sitä taulukkoa, muuta tämä samoin.
+       Oma toteumamittaus menee ennusteen edelle: se luetaan samasta selaimen
+       tallennuksesta johon ennustesivu sen kirjoittaa (sama osoite, sama avain). */
+    const HARPPAUS_TAULUKKO = [
+      ['1.5.','ei vielä'],['15.5.','3–5 m'],['1.6.','4–7 m'],['15.6.','6–9 m'],
+      ['1.7.','8–11 m'],['15.7.','9–12 m'],['1.8.','10–13 m'],['15.8.','12–15 m'],
+      ['1.9.','14–18 m'],['15.9.','17–21 m'],['1.10.','20–26 m tai poissa'],
+      ['15.10.','poissa'],['1.11.','poissa'],['15.11.','poissa'],['1.12.','käänteinen alkaa']
+    ];
+    function harppausSaaliille(aika) {
+      const vp = pvm => { const [d, m] = pvm.split('.').map(Number); return new Date(aika.getFullYear(), m-1, d); };
+      const vali = t => { const m = String(t).match(/(\d+(?:[.,]\d+)?)\s*[–-]\s*(\d+(?:[.,]\d+)?)/);
+                          return m ? [parseFloat(m[1].replace(',','.')), parseFloat(m[2].replace(',','.'))] : null; };
+      // lähin rivi ja sen toteuma (±8 vrk)
+      let lahin = 0, pe = Infinity;
+      HARPPAUS_TAULUKKO.forEach((r, i) => { const e = Math.abs(vp(r[0]) - aika); if (e < pe) { pe = e; lahin = i; } });
+      try {
+        const tot = JSON.parse(localStorage.getItem('harppausennuste_2027_toteuma')) || {};
+        const x = tot[lahin];
+        if (x && x.kerros !== undefined && x.kerros !== '' && pe <= 8*86400e3)
+          return { arvo: String(x.kerros).replace('.', ',') + ' m', lahde: 'toteuma ' + HARPPAUS_TAULUKKO[lahin][0] };
+      } catch (e) {}
+      // muuten ennuste: lineaarinen väli kahden rivin välillä, jos molemmat ovat lukuja
+      let i0 = -1;
+      for (let i = 0; i < HARPPAUS_TAULUKKO.length - 1; i++)
+        if (aika >= vp(HARPPAUS_TAULUKKO[i][0]) && aika < vp(HARPPAUS_TAULUKKO[i+1][0])) i0 = i;
+      if (i0 >= 0) {
+        const a = vali(HARPPAUS_TAULUKKO[i0][1]), b = vali(HARPPAUS_TAULUKKO[i0+1][1]);
+        if (a && b) {
+          const f = (aika - vp(HARPPAUS_TAULUKKO[i0][0])) / (vp(HARPPAUS_TAULUKKO[i0+1][0]) - vp(HARPPAUS_TAULUKKO[i0][0]));
+          const lo = Math.round((a[0] + (b[0]-a[0])*f)*2)/2, hi = Math.round((a[1] + (b[1]-a[1])*f)*2)/2;
+          // "tai poissa" -tyyppinen varaus säilyy: se on osa ennustetta, ei koristetta
+          const varaus = /poissa/.test(HARPPAUS_TAULUKKO[i0][1] + HARPPAUS_TAULUKKO[i0+1][1]) ? ' tai poissa' : '';
+          return { arvo: String(lo).replace('.', ',') + '–' + String(hi).replace('.', ',') + ' m' + varaus, lahde: 'ennuste' };
+        }
+      }
+      return { arvo: HARPPAUS_TAULUKKO[lahin][1], lahde: 'ennuste' };
+    }
+
+    /* LAJIN ENNUSTE SYVYYSKENTÄN VIHJEEKSI — 22.9.2026.
+       Aiemmin kenttään esitäytettiin taimenen ennuste, ja koskematon kenttä
+       tallensi mallin oman luvun: osuvuusvertailu vertasi mallia itseensä.
+       Nyt ennuste näkyy harmaana vihjeenä kiinni saadun lajin mukaan, ja sen
+       saa käyttöön napautuksella. Jos ennuste on väli, vihjeeksi otetaan pinnan
+       puoleinen pää: mahdollinen virhe menee ylöspäin. Lähde tallentuu
+       (mitattu / ennuste), ja vertailu ohittaa ennusteesta otetut syvyydet. */
+    function lajinEnnuste(saalis, laji) {
+      if (!saalis) return null;
+      const k = { taimen:'ennusteTaimen', jarvilohi:'ennusteJarvilohi', kuha:'ennusteKuha',
+                  hauki:'ennusteHauki', ahven:'ennusteAhven' }[laji];
+      const e = k ? saalis[k] : null;
+      if (Array.isArray(e)) return Math.min(e[0], e[1]);
+      return (typeof e === 'number' && !isNaN(e)) ? e : null;
+    }
+    function paivitaSyvyysVihje() {
+      const el = document.getElementById('kalaSyvyys'), v = document.getElementById('kalaSyvyysVihje');
+      if (!el || !v) return;
+      const e = lajinEnnuste(keskenerainenSaalis, kalaLaji);
+      el.placeholder = e !== null ? e.toFixed(1).replace('.', ',') : '';
+      v.innerHTML = (e !== null && !el.value)
+        ? '<span class="chip" style="padding:4px 10px;font-size:12px;" onclick="kaytaSyvyysEnnuste()">käytä ennustetta '
+          + e.toFixed(1).replace('.', ',') + ' m</span>'
+        : '';
+    }
+    function kaytaSyvyysEnnuste() {
+      const el = document.getElementById('kalaSyvyys');
+      const e = lajinEnnuste(keskenerainenSaalis, kalaLaji);
+      if (!el || e === null) return;
+      el.value = e.toFixed(1); el.dataset.lahde = 'ennuste';
+      paivitaSyvyysVihje(); paivitaVapautusOhje();
+    }
+
     // Kaappaa hetken tilanteen. nollareissu=true merkitsee reissun ilman saalista.
     function kalaKiinni(nollareissu) {
       const nyt = new Date();
@@ -5863,9 +6195,17 @@ lataa(eka);
         ennusteKuha: viimeisinEnnuste.kuha,
         ennusteMuikku: viimeisinEnnuste.muikku,
         taimenkeli: viimeisinEnnuste.taimenkeli,
+        ennusteHauki: viimeisinEnnuste.hauki !== undefined ? viimeisinEnnuste.hauki : null,
+        ennusteAhven: viimeisinEnnuste.ahven !== undefined ? viimeisinEnnuste.ahven : null,
         // Täydennettävät
-        laji: null, pituusCm: null, syvyysM: null,
+        laji: null, pituusCm: null, syvyysM: null, syvyysLahde: null,
+        // Mallin arviot saaliin kohdalta (täydentyvät hetken päästä, ks. alla)
+        malliAaltoM: null, malliPintavirtausKmh: null, malliPintavirtausSuunta: null,
+        malliSyvaKmh: null, malliSyvaSuunta: null, malliSyvaTuuleen: null,
+        harppausEnnuste: null, harppausLahde: null,
       };
+      const hp = harppausSaaliille(nyt);
+      snap.harppausEnnuste = hp.arvo; snap.harppausLahde = hp.lahde;
 
       if (nollareissu) {
         const lista = lataaSaaliit();
@@ -5896,7 +6236,24 @@ lataa(eka);
       renderSaalisVieheet();
       // Esitäytetään syvyysarvio mallin ennusteella — helpompi korjata kuin kirjoittaa.
       const el = document.getElementById('kalaSyvyys');
-      if (el && !el.value && snap.ennusteTaimen !== null) el.value = snap.ennusteTaimen.toFixed(1);
+      if (el) { el.value = ''; el.dataset.lahde = ''; }
+      paivitaSyvyysVihje();
+      /* Mallin arviot saaliin kohdalta. Aaltokortti käynnistetään hiljaa, jos
+         sitä ei ole avattu; arvot täydentyvät tähän samaan saaliiseen, kun
+         ennuste on haettu. Jos tallennat ennen sitä, kentät jäävät tyhjiksi. */
+      if (typeof window.akKaynnistaHiljaa === 'function') window.akKaynnistaHiljaa();
+      if (typeof window.akMalliPisteessa === 'function' && snap.lat !== null) {
+        window.akMalliPisteessa(snap.lat, snap.lon, new Date(snap.aika).getTime()).then(function (m) {
+          if (!m) return;
+          const pyor = (x, n) => (typeof x === 'number' && isFinite(x)) ? Number(x.toFixed(n)) : null;
+          snap.malliAaltoM = pyor(m.aaltoM, 2);
+          snap.malliPintavirtausKmh = pyor(m.pintaKmh, 2);
+          snap.malliPintavirtausSuunta = pyor(m.pintaSuunta, 0);
+          snap.malliSyvaKmh = pyor(m.syvaKmh, 2);
+          snap.malliSyvaSuunta = pyor(m.syvaSuunta, 0);
+          snap.malliSyvaTuuleen = m.syvaTuuleen || null;
+        }).catch(function () {});
+      }
     }
 
     function renderKalaLajit() {
@@ -5909,6 +6266,7 @@ lataa(eka);
         chip.textContent = o.l;
         chip.onclick = () => {
           kalaLaji = o.v;
+          paivitaSyvyysVihje();
           paivitaVapautusOhje();
           el.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
           chip.classList.add('selected');
@@ -5940,6 +6298,8 @@ lataa(eka);
       const s = parseFloat((document.getElementById('kalaSyvyys') || {}).value);
       keskenerainenSaalis.pituusCm = isNaN(p) ? null : p;
       keskenerainenSaalis.syvyysM = isNaN(s) ? null : s;
+      const sEl = document.getElementById('kalaSyvyys');
+      keskenerainenSaalis.syvyysLahde = isNaN(s) ? null : ((sEl && sEl.dataset.lahde) || 'mitattu');
 
       // Viehe ja väri. Tyhjä kenttä tallentuu nulliksi eikä tyhjänä merkkijonona,
       // jotta CSV:ssä erottuu "ei kirjattu" ja "kirjattu tyhjäksi".
@@ -5976,6 +6336,7 @@ lataa(eka);
       // kattauksella, ja uudelleen näpyttely veneessä on juuri se este joka
       // saa kirjaamisen jäämään väliin.
       paivitaSaalisLista();
+      if (typeof koosteAutomaatti === 'function') koosteAutomaatti();
     }
 
     function peruSaalis() {
@@ -6000,12 +6361,16 @@ lataa(eka);
         if (s.nollareissu) {
           return `<div style="padding:6px 0;border-bottom:1px solid rgba(30,51,80,0.5);font-size:13px;color:var(--muted);">${pvm} — nollareissu${typeof s.vesiC === 'number' ? ' · vesi ' + s.vesiC.toFixed(1) + ' °C' : ''}</div>`;
         }
-        const ennuste = s.laji === 'jarvilohi' ? s.ennusteJarvilohi : (s.laji === 'kuha' ? s.ennusteKuha : s.ennusteTaimen);
+        /* 22.9.2026: lajin oma ennuste (ennen hauki ja ahven vertautuivat
+           taimeneen), eikä vertailua tehdä jos syvyys on otettu ennusteesta. */
+        const ennuste = lajinEnnuste(s, s.laji);
         let osuma = '';
         // KORJATTU 5.9.2026: aiemmin tarkistettiin vain !== null, jolloin puuttuva
         // (undefined) kenttä läpäisi tarkistuksen ja kaatoi koko listan renderöinnin.
         // Yksi vaillinainen kirjaus olisi vienyt mukanaan kaikki muutkin.
-        if (typeof s.syvyysM === 'number' && typeof ennuste === 'number') {
+        if (s.syvyysLahde === 'ennuste') {
+          osuma = ' <span style="color:var(--muted);">(syvyys ennusteesta, ei vertailua)</span>';
+        } else if (typeof s.syvyysM === 'number' && typeof ennuste === 'number') {
           const ero = s.syvyysM - ennuste;
           osuma = ` <span style="color:${Math.abs(ero) <= 1.5 ? 'var(--cyan)' : 'var(--amber)'};">(malli ${ennuste.toFixed(1)} m, ero ${ero >= 0 ? '+' : ''}${ero.toFixed(1)})</span>`;
         }
@@ -6019,7 +6384,12 @@ lataa(eka);
 
     // Muodostaa CSV:n kaikista kirjauksista. Yhteinen sekä automaattiselle
     // tiedostovarmuuskopiolle että käsin tehtävälle viennille.
-    const SAALIS_KENTAT = ['aika','nollareissu','paikka','lat','lon','laji','pituusCm','syvyysM','ennusteTaimen','ennusteJarvilohi','ennusteKuha','ennusteMuikku','taimenkeli','vesiC','vesiLahde','vedenkorkeusCm','nopeusKmh','ilmaC','tuuliMs','tuuliSuunta','pilvisyysPros','paineHpa','painetrendi','kausi','kirkkaus','termokliini','tuuliLuokka','valo','pohja','tuulenPuoli','kattaus','viehe','vari','pinta','viehesyvyysM','esitystapa'];
+    const SAALIS_KENTAT = ['aika','nollareissu','paikka','lat','lon','laji','pituusCm','syvyysM','ennusteTaimen','ennusteJarvilohi','ennusteKuha','ennusteMuikku','taimenkeli','vesiC','vesiLahde','vedenkorkeusCm','nopeusKmh','ilmaC','tuuliMs','tuuliSuunta','pilvisyysPros','paineHpa','painetrendi','kausi','kirkkaus','termokliini','tuuliLuokka','valo','pohja','tuulenPuoli','kattaus','viehe','vari','pinta','viehesyvyysM','esitystapa',
+      // 22.9.2026: uudet sarakkeet LOPPUUN, jotta vanhat taulukot lukevat yhä samat sarakkeet
+      'ennusteHauki','ennusteAhven','syvyysLahde',
+      'malliAaltoM','malliPintavirtausKmh','malliPintavirtausSuunta',
+      'malliSyvaKmh','malliSyvaSuunta','malliSyvaTuuleen',
+      'harppausEnnuste','harppausLahde'];
 
     function saaliitCsv(lista) {
       return [SAALIS_KENTAT.join(';')].concat(
@@ -8404,19 +8774,26 @@ lataa(eka);
       return osat.join(' ');
     }
 
-    function toistaPuhe() {
-      const st = document.getElementById('puheStatus');
+    /* 22.9.2026: sama puhetoiminto lukee nyt myös saaliskoosteen. Ilman
+       parametreja toimii kuten ennen (päivän tilanne). Annettu teksti,
+       oma nappi ja tila, ja hitaampi tahti tuulta ja moottoria varten. */
+    function toistaPuhe(tekstiAnnettu, as) {
+      as = as || {};
+      const nappiId = as.nappiId || 'puheBtn';
+      const nappiTeksti = as.nappiTeksti || '▶ Kuuntele päivän tilanne';
+      const naytaVara = tekstiAnnettu ? function () {} : naytaPuheteksti;   // kooste on jo ruudulla
+      const st = document.getElementById(as.statusId || 'puheStatus');
       if (!puheTuettu()) {
         // Chrome Androidilla puhesynteesi ON tuettu, joten tämä viesti tarkoittaa
         // käytännössä aina jotain muuta: selain on hyvin vanha, sivu on rajoitetussa
         // kehyksessä, tai laitteelta puuttuu puhemoottori kokonaan.
         if (st) st.innerHTML = '<span style="color:var(--amber);">Puhetoiminto ei ole käytettävissä tässä selaimessa. Näytetään selostus tekstinä.</span>';
-        naytaPuheteksti();
+        naytaVara();
         return;
       }
       if (puheKaynnissa) { pysaytaPuhe(); return; }
 
-      const teksti = puheteksti();
+      const teksti = tekstiAnnettu || puheteksti();
       if (!teksti) {
         if (st) st.innerHTML = '<span style="color:var(--amber);">Aja ensin analyysi.</span>';
         return;
@@ -8430,12 +8807,12 @@ lataa(eka);
         const aani = suomiAani();
         if (aani) u.voice = aani;
         u.lang = 'fi-FI';
-        u.rate = 0.95;   // hieman hitaampi, jotta luvut ehtii kuulla ajaessa
+        u.rate = as.nopeus || 0.95;   // hieman hitaampi, jotta luvut ehtii kuulla ajaessa
         u.pitch = 1.05;
 
         u.onstart = () => {
           puheKaynnissa = true;
-          const b = document.getElementById('puheBtn');
+          const b = document.getElementById(nappiId);
           if (b) b.textContent = '⏹ Pysäytä';
           if (st) st.innerHTML = aani
             ? `<span style="color:var(--cyan);">Toistetaan äänellä ${aani.name}.</span>`
@@ -8443,15 +8820,15 @@ lataa(eka);
         };
         u.onend = () => {
           puheKaynnissa = false;
-          const b = document.getElementById('puheBtn');
-          if (b) b.textContent = '▶ Kuuntele päivän tilanne';
+          const b = document.getElementById(nappiId);
+          if (b) b.textContent = nappiTeksti;
         };
         u.onerror = (ev) => {
           puheKaynnissa = false;
-          const b = document.getElementById('puheBtn');
-          if (b) b.textContent = '▶ Kuuntele päivän tilanne';
+          const b = document.getElementById(nappiId);
+          if (b) b.textContent = nappiTeksti;
           if (st) st.innerHTML = `<span style="color:var(--hard-red);">Puhe ei onnistunut (${ev && ev.error ? ev.error : 'tuntematon syy'}). Näytetään teksti.</span>`;
-          naytaPuheteksti();
+          naytaVara();
         };
 
         try {
@@ -8461,12 +8838,12 @@ lataa(eka);
           setTimeout(() => {
             if (!puheKaynnissa) {
               if (st) st.innerHTML = '<span style="color:var(--amber);">Ääni ei käynnistynyt. Tarkista laitteen puhemoottori ja mediaäänenvoimakkuus. Selostus näkyy alla tekstinä.</span>';
-              naytaPuheteksti();
+              naytaVara();
             }
           }, 2000);
         } catch (e) {
           if (st) st.innerHTML = '<span style="color:var(--hard-red);">Puhe epäonnistui: ' + e.message + '. Näytetään teksti.</span>';
-          naytaPuheteksti();
+          naytaVara();
         }
       };
 
