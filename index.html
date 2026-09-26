@@ -1427,6 +1427,8 @@ body{padding-bottom:66px}
           <div style="display:flex;gap:8px;margin-top:8px;">
             <button class="chip" onclick="asetaAnalyysiPaiva(paikallinenPvm(0))" style="padding:6px 14px;">Tänään</button>
             <button class="chip" onclick="asetaAnalyysiPaiva(paikallinenPvm(1))" style="padding:6px 14px;">Huomenna</button>
+            <input type="time" id="analyysiKlo" step="900" title="Kellonaika valitulle päivälle"
+                   style="display:none;width:96px;" onchange="asetaAnalyysiPaiva(document.getElementById('tripDate').value)">
           </div>
           <div id="analyysiPaivaTila" class="hint" style="margin-top:6px;font-size:12px;"></div>
         </div>
@@ -2063,6 +2065,20 @@ body{padding-bottom:66px}
     let viimeisinGps = null;      // { lat, lon }
     let viimeisinNopeus = null;   // km/h
     let viimeisinEnnuste = { taimen: null, jarvilohi: null, kuha: null, muikku: null, taimenkeli: null };
+
+    /* ANALYYSIN HETKI — 22.9.2026. Kun analyysi katsoo toiseen päivään (Huomenna-nappi
+       tai päivämäärä), kaikki analyysin osat — viehevalinta, valoporras, valovyöhykkeet,
+       lajien järjestys, järven tila, päivän puhe — laskevat valitulle päivälle ja
+       kellonajalle. Tänään palautetaan tasan kellonaika kuten ennen, joten nykyinen
+       toiminta ei muutu. Aikaleimat, mittarit, hälytykset ja näyttötila käyttävät
+       edelleen oikeaa kelloa. Muuttujat ovat tässä skriptin alussa, koska
+       viehevalinta voidaan piirtää ennen kuin ennustepäivän koodi on luettu. */
+    let ennusteTila = null, omLatestNyt = null, fmiTuuliNyt = null, fmiPaineTrendiNyt = null;
+    function analyysiHetki() {
+      if (!ennusteTila) return new Date();
+      const [y, m, d] = ennusteTila.pvm.split('-').map(Number);
+      return new Date(y, m - 1, d, ennusteTila.tunti, ennusteTila.minuutti);
+    }
     let viimeisinOttipaikka = null;   // puheselostusta varten
 
     // ===== SYKE: JÄRVIEN SYVYYSAINEISTO =====
@@ -3010,7 +3026,7 @@ body{padding-bottom:66px}
     // jolloin peilistä ei tule välähdystä vaan tasainen harmaa.
     function vvValonSuunta() {
       try {
-        const nyt = new Date();
+        const nyt = analyysiHetki();
         const doy = Math.floor((nyt - new Date(nyt.getFullYear(), 0, 0)) / 86400000);
         const tz = -nyt.getTimezoneOffset() / 60;
         const kork = auringonKorkeus(nyt.getHours() + nyt.getMinutes() / 60, doy,
@@ -3136,7 +3152,7 @@ body{padding-bottom:66px}
       const valoAuto = answers.light === 'sun' ? 'aurinko' : (answers.light ? 'pilvi' : null);
       // Hämärä auringon mukaan: sovellus tietää nousun ja laskun, joten sitä ei
       // tarvitse kysyä. Kaksi tuntia laskun jälkeen ja ennen nousua = hämärä.
-      const h = new Date().getHours() + new Date().getMinutes() / 60;
+      const h = analyysiHetki().getHours() + analyysiHetki().getMinutes() / 60;
       const hamaraNyt = (typeof cachedSunData === 'object' && cachedSunData)
         ? (h < cachedSunData.rise + 1 || h > cachedSunData.set - 1) : false;
       return {
@@ -3155,7 +3171,7 @@ body{padding-bottom:66px}
           try {
             const th = (answers.thermo === 'known')
               ? (parseFloat((document.getElementById('thermoDepth') || {}).value) || null) : null;
-            const h = new Date().getHours() + new Date().getMinutes() / 60;
+            const h = analyysiHetki().getHours() + analyysiHetki().getMinutes() / 60;
             return estimateSyottikalaDepth(h, answers.light, answers.wind, answers.temp, th, answers.season);
           } catch (e) { return null; }
         })(),
@@ -3189,7 +3205,7 @@ body{padding-bottom:66px}
     // Tämä osuus on FYSIIKKAA. Se mitä väriä siitä seuraa, on päättelyä.
     function vvValoSyvyydella(secchi, syvyysM) {
       try {
-        const nyt = new Date();
+        const nyt = analyysiHetki();
         const doy = Math.floor((nyt - new Date(nyt.getFullYear(), 0, 0)) / 86400000);
         const tz = -nyt.getTimezoneOffset() / 60;
         const h = auringonKorkeus(nyt.getHours() + nyt.getMinutes() / 60, doy,
@@ -3460,7 +3476,7 @@ body{padding-bottom:66px}
     // Päivän tunnit: valoisat + aamu- ja iltahämärä. Raja on siviilihämärä
     // (aurinko yli -6°), koska sen alapuolella näkösaalistus käytännössä loppuu.
     function vvPaivanTunnit() {
-      const nyt = new Date();
+      const nyt = analyysiHetki();
       const doy = Math.floor((nyt - new Date(nyt.getFullYear(), 0, 0)) / 86400000);
       const tz = -nyt.getTimezoneOffset() / 60;
       const ulos = [];
@@ -3487,7 +3503,7 @@ body{padding-bottom:66px}
        (keltainen-punainen) ja syö siniset ensin, kirkas vesi päinvastoin.
        Tämä on se fysiikka joka tekee kultaväreistä toimivia ruskeassa vedessä. */
     function vvValoSelostus(syvyys, secchi) {
-      const nyt = new Date();
+      const nyt = analyysiHetki();
       const doy = Math.floor((nyt - new Date(nyt.getFullYear(), 0, 0)) / 86400000);
       const tz = -nyt.getTimezoneOffset() / 60;
       const saa = saaNyt();
@@ -3712,7 +3728,7 @@ body{padding-bottom:66px}
       if (!tunnit.length) return '<p class="hint">Aurinko ei nouse siviilihämärän yläpuolelle tänään.</p>';
       const haarukka = VV_LAJI[kala] ? VV_LAJI[kala].nopeus : [3.5, 5.5];
       const kmh = (haarukka[0] + haarukka[1]) / 2;
-      const nytTunti = new Date().getHours();
+      const nytTunti = analyysiHetki().getHours();
 
       const rivit = tunnit.map(t => {
         const d = vvLajinSyvyys(kala, t);
@@ -3826,7 +3842,7 @@ body{padding-bottom:66px}
       if (!ov || ov.style.display === 'none') return;
       const P = vvPeritty();
       // Syvyyden lähde: mallin arvio oletuksena, luotainhavainto käsin.
-      const mallinD = vvLajinSyvyys(vvTila.kala, new Date().getHours());
+      const mallinD = vvLajinSyvyys(vvTila.kala, analyysiHetki().getHours());
       const liukuEl = document.getElementById('vvSyvyys');
       let d = parseFloat(liukuEl.value);
       if (vvSyvyysLahde === 'malli' && mallinD !== null && !isNaN(mallinD)) {
@@ -8656,7 +8672,7 @@ lataa(eka);
       if (!e || e.taimen === null) return null;
 
       const osat = [];
-      const kello = new Date().toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' });
+      const kello = analyysiHetki().toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' });
       const jarvi = currentLocation ? currentLocation.name.replace(/\s*\(.*\)/, '') : 'järvellä';
 
       // Suomen sijataivutus ei onnistu luotettavasti ohjelmallisesti (Lappajärvi ->
@@ -8771,7 +8787,7 @@ lataa(eka);
       // ei ole. Pinnan valaistus jaetaan portaisiin logaritmisesti, koska ihmisen
       // valohavainto ja veden vaimennus ovat molemmat logaritmisia.
       {
-        const nyt = new Date();
+        const nyt = analyysiHetki();
         const doy = Math.floor((nyt - new Date(nyt.getFullYear(), 0, 0)) / 86400000);
         const tz = -nyt.getTimezoneOffset() / 60;
         // Kaksi muotoa, jotta lauseet taipuvat luontevasti puheessa:
@@ -9534,7 +9550,7 @@ lataa(eka);
     // Asteikko on logaritminen, koska sekä ihmisen valohavainto että veden
     // vaimennus ovat logaritmisia: 0,001 lx = porras 1, 100 000 lx = porras 10.
     function valoPorras(tunti) {
-      const nyt = new Date();
+      const nyt = analyysiHetki();
       const doy = Math.floor((nyt - new Date(nyt.getFullYear(), 0, 0)) / 86400000);
       const tz = -nyt.getTimezoneOffset() / 60;
       const saa = saaNyt();
@@ -11739,7 +11755,7 @@ lataa(eka);
        kohtaa muutetaan erikseen. Tänään-nappi palauttaa talteen otetut.
        Saaliskirjaus ja tuulihälytys lukevat aina TALTEEN OTETTUA nykyhetkeä:
        kala ja tuuli ovat tätä hetkeä, vaikka analyysi katsoisi huomiseen. */
-    let ennusteTila = null, omLatestNyt = null, fmiTuuliNyt = null, fmiPaineTrendiNyt = null;
+    // (ennusteTila ym. on määritelty skriptin alussa, ks. analyysiHetki)
     const nykyOm = () => ennusteTila ? omLatestNyt : omLatest;
     const nykyFmi = () => ennusteTila ? fmiTuuliNyt : fmiTuuli;
     function paikallinenPvm(lisays) {
@@ -11764,12 +11780,20 @@ lataa(eka);
       autoFillSeason();
       try { await fetchOpenMeteo(); } catch (e) {}     // auringonnousu ja -lasku valitulle päivälle
       try { fetchSykeData(); } catch (e) {}
+      const kloEl = document.getElementById('analyysiKlo');
       if (pvm === tanaan) {
+        if (kloEl) { kloEl.style.display = 'none'; kloEl.value = ''; }
         if (st) st.textContent = 'Analyysi: tänään, mitattu ja nykyinen sää.';
+        if (typeof piirraViehevalinta === 'function') piirraViehevalinta();
         return;
       }
+      /* Kellonaika: kentästä, jos se on asetettu. Muuten sama kuin analyysissä
+         (nyt + 30 min) — illalla aamun vieheitä varten kenttään valitaan aamu. */
       const c = parseCoords((document.getElementById('omCoords') || {}).value || '');
-      const n = new Date(Date.now() + 30*60000), h = n.getHours(), mi = n.getMinutes();
+      const n = new Date(Date.now() + 30*60000);
+      if (kloEl && !kloEl.value) kloEl.value = String(n.getHours()).padStart(2, '0') + ':' + String(n.getMinutes()).padStart(2, '0');
+      if (kloEl) kloEl.style.display = '';
+      const [h, mi] = (kloEl && kloEl.value ? kloEl.value : n.getHours() + ':' + n.getMinutes()).split(':').map(Number);
       const t = new Date(pvm + 'T' + String(h).padStart(2, '0') + ':00');
       if (st) st.textContent = 'Haetaan ennustetta…';
       let fmi = {}, om = {};
@@ -11806,7 +11830,9 @@ lataa(eka);
       const suunta = wd === null ? '' : ' ' + ['pohjoisesta','koillisesta','idästä','kaakosta','etelästä','lounaasta','lännestä','luoteesta'][Math.round(((wd % 360) + 360) % 360 / 45) % 8];
       if (st) st.innerHTML = 'Analyysi: <b>' + pv + ' ' + t.getDate() + '.' + (t.getMonth()+1) + '. klo ' + String(h).padStart(2, '0') + '</b> — ennuste '
         + Math.round(ws) + ' m/s' + suunta + (cl !== null ? ', pilvisyys ' + Math.round(cl) + ' %' : '')
-        + '. Lähde: ' + (varalla ? 'Open-Meteo (FMI ei vastannut kaikkeen)' : 'FMI') + '. Paina Analysoi.';
+        + '. Lähde: ' + (varalla ? 'Open-Meteo (FMI ei vastannut kaikkeen)' : 'FMI')
+        + '. Viehevalinta seuraa. Paina Analysoi. Kellonajan voi vaihtaa.';
+      if (typeof piirraViehevalinta === 'function') piirraViehevalinta();
     }
     // Jos sovellus on auki yli puolenyön, huominen muuttuu tämäksi päiväksi:
     // silloin palataan mitattuun säähän.
@@ -11895,7 +11921,7 @@ lataa(eka);
       // Keränen & Lind -syöntiaktiivisuus omana kohtanaan, koska se on ajoituskysymys
       // eikä syvyyskysymys — eri asia kuin muut kohdat.
       let klTxt2 = '';
-      const klLake = keranenLindStatus(new Date(), targetHour);
+      const klLake = keranenLindStatus(analyysiHetki(), targetHour);
       if (klLake) {
         klTxt2 = klLake.active
           ? `<h3>5. Syöntiaktiivisuus (Keränen &amp; Lind)</h3><p style="color:var(--cyan);"><strong>✓ Taimen on tutkimuskuvaajan mukaan syöntiaktiivisuusikkunassa ${klLake.currentWindow}.</strong> Kuukauden ikkunat: ${klLake.allWindows}.${klLake.dst ? ' Kellonajat on muunnettu kesäaikaan (kuvaaja on normaaliaikaa).' : ''}</p>`
@@ -12637,7 +12663,7 @@ lataa(eka);
     function valoVyohykkeet(laji, tunti) {
       const ik = VALO_IKKUNAT[laji];
       if (!ik || !currentLocation) return null;
-      const nyt = new Date();
+      const nyt = analyysiHetki();
       const doy = Math.floor((nyt - new Date(nyt.getFullYear(), 0, 0)) / 86400000);
       const tz = -nyt.getTimezoneOffset() / 60;
       const h = auringonKorkeus(tunti, doy, currentLocation.lat, currentLocation.lon, tz);
@@ -12898,7 +12924,7 @@ lataa(eka);
 
     function lajiPrioriteetit(tkScore, jlKausi) {
       const a = answers;
-      const kk = new Date().getMonth() + 1;   // 1-12
+      const kk = analyysiHetki().getMonth() + 1;   // 1-12
       const p = {};
 
       // Kuha: oletusykkönen, mutta kiinnostus loppuu elokuun lopussa.
