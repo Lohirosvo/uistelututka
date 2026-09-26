@@ -1423,7 +1423,12 @@ body{padding-bottom:66px}
       <div style="display:flex;gap:16px;flex-wrap:wrap;">
         <div>
           <label style="display:block;color:var(--muted);font-size:13px;margin-bottom:4px;">Kalastuspäivä</label>
-          <input type="date" id="tripDate" onchange="fetchOpenMeteo(); fetchSykeData(); autoFillSeason();">
+          <input type="date" id="tripDate" onchange="asetaAnalyysiPaiva(this.value)">
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button class="chip" onclick="asetaAnalyysiPaiva(paikallinenPvm(0))" style="padding:6px 14px;">Tänään</button>
+            <button class="chip" onclick="asetaAnalyysiPaiva(paikallinenPvm(1))" style="padding:6px 14px;">Huomenna</button>
+          </div>
+          <div id="analyysiPaivaTila" class="hint" style="margin-top:6px;font-size:12px;"></div>
         </div>
         <div>
           <label style="display:block;color:var(--muted);font-size:13px;margin-bottom:4px;">Kalastuspaikka</label>
@@ -1997,6 +2002,7 @@ body{padding-bottom:66px}
         itse mitatut syvyydet: ennusteesta otetut ja vanhat esitäytetyt jätetään pois.</p>
       <div id="osuvuusTila" style="font-size:14px;line-height:1.5;"></div>
       <div id="osuvuusTaulu" style="margin-top:8px;overflow-x:auto;"></div>
+      <div id="lahdeVertailuTila" class="hint" style="margin-top:10px;font-size:13px;"></div>
     </div>
 
     <footer>
@@ -6214,11 +6220,12 @@ lataa(eka);
         vesiLahde: (latestSykeTemp !== null && latestSykeTemp !== undefined) ? 'SYKE' : 'valinta',
         vedenkorkeusCm: latestVedenkorkeus !== null ? latestVedenkorkeus : null,
         // Sää
-        ilmaC: omLatest ? omLatest.temp : null,
-        tuuliMs: omLatest ? omLatest.wind : null,
-        tuuliSuunta: omLatest ? omLatest.windDir : null,
-        pilvisyysPros: omLatest ? omLatest.cloud : null,
-        paineHpa: omLatest ? omLatest.pressure : null,
+        // Sää kirjaushetkeltä, vaikka analyysi katsoisi toiseen päivään
+        ilmaC: nykyOm() ? nykyOm().temp : null,
+        tuuliMs: nykyOm() ? nykyOm().wind : null,
+        tuuliSuunta: nykyOm() ? nykyOm().windDir : null,
+        pilvisyysPros: nykyOm() ? nykyOm().cloud : null,
+        paineHpa: nykyOm() ? nykyOm().pressure : null,
         painetrendi: a.pressure || null,
         // Valinnat
         kausi: a.season || null,
@@ -8032,6 +8039,7 @@ lataa(eka);
           asemia: kelvot.length
         };
         fmiVirhe = null;
+        if (typeof kirjaaLahdevertailu === 'function') kirjaaLahdevertailu(fmiTuuli);
         /* Kartalle: mitattu tuuli havaintokorjausta varten. Kartta on eri
            lohkossa, joten tieto välitetään globaalin kautta. */
         /* MITATTU ILMANPAINE — lisätty 18.9.2026.
@@ -8061,6 +8069,12 @@ lataa(eka);
           return fmiTuuli ? { ws:fmiTuuli.ws, wg:fmiTuuli.wg, wd:fmiTuuli.wd,
                               aika:fmiTuuli.aika, asema:fmiTuuli.asema } : null;
         };
+        /* Ennustepäivä: mittaus on tätä hetkeä, ei valittua päivää — talteen */
+        if (ennusteTila) {
+          fmiTuuliNyt = fmiTuuli; fmiPaineTrendiNyt = fmiPaineTrendi;
+          fmiTuuli = null; fmiPaineTrendi = null;
+          return fmiTuuliNyt;
+        }
         return fmiTuuli;
       } catch (e) {
         // Virhe näkyviin, jotta syy voidaan päätellä. "Failed to fetch" samaan aikaan
@@ -8130,11 +8144,11 @@ lataa(eka);
 
     function tuuliHalytysTila() {
       // Mitattu asemahavainto voittaa mallin ennusteen.
-      const ws = fmiTuuli && fmiTuuli.ws !== undefined ? fmiTuuli.ws
-               : (omLatest ? omLatest.wind : null);
-      const wg = fmiTuuli && fmiTuuli.wg !== undefined ? fmiTuuli.wg
-               : (omLatest ? omLatest.gust : null);
-      const lahde = (fmiTuuli && fmiTuuli.ws !== undefined) ? ('mitattu, ' + fmiTuuli.asema) : 'ennuste';
+      // Aina nykyhetki, myös kun analyysi katsoo toiseen päivään
+      const ft = nykyFmi(), om = nykyOm();
+      const ws = ft && ft.ws !== undefined ? ft.ws : (om ? om.wind : null);
+      const wg = ft && ft.wg !== undefined ? ft.wg : (om ? om.gust : null);
+      const lahde = (ft && ft.ws !== undefined) ? ('mitattu, ' + ft.asema) : 'ennuste';
       if (ws === null && wg === null) return null;
       const puuskaYli = (wg !== null && wg !== undefined && wg >= TUULI_PUUSKA_RAJA);
       const jatkuvaYli = (ws !== null && ws !== undefined && ws >= TUULI_JATKUVA_RAJA);
@@ -11593,6 +11607,8 @@ lataa(eka);
         }
 
         omLatest = { temp: c.temperature_2m, wind: c.wind_speed_10m, gust: c.wind_gusts_10m, windDir: c.wind_direction_10m, pressure: c.surface_pressure, cloud: c.cloud_cover, trend, time: c.time };
+        /* Ennustepäivä: nykysää talteen, analyysi jatkaa valitun päivän ennusteella */
+        if (ennusteTila) { omLatestNyt = omLatest; omLatest = Object.assign({}, omLatestNyt, ennusteTila.om); }
 
         const moon = getMoonPhase(now2);
         statusEl.innerHTML = `${c.temperature_2m.toFixed(1)} °C · tuuli ${c.wind_speed_10m.toFixed(1)} m/s · pilvisyys ${c.cloud_cover.toFixed(0)}% · paine ${c.surface_pressure.toFixed(0)} hPa · ☀ Nousee ${cachedSunData.riseStr} · Laskee ${cachedSunData.setStr}<br>🌙 ${moon.name} (${(moon.illumination * 100).toFixed(0)}% valaistu)`;
@@ -11618,6 +11634,192 @@ lataa(eka);
       return Math.max(0, Math.min(1, (mitattuTuuliMs - 2) / 4));
     }
 
+    /* ===== ANALYYSI VALITULLE PÄIVÄLLE JA LÄHTEIDEN VERTAILU — 22.9.2026 =====
+       Ennusteen lähde: FMI:n editoitu ennuste (sama kuin aaltokartalla, joten
+       sovellus puhuu yhdestä tuulesta), Open-Meteo varalla muuttuja kerrallaan.
+
+       TUULILUOKKA: yksi sääntö koko sovellukselle, painikkeiden tekstin mukaan
+       ("Tyyni 0–2 m/s", "Kova > 6 m/s"): 2,0 on tyyni, 6,0 ei vielä kova.
+       Ennen applyOpenMeteo käytti rajoja < 2 ja < 6 ja tuuliLuokkaMitatusta
+       rajoja <= 2 ja > 6, eli tasan 2 ja 6 m/s saivat eri luokan lähteestä riippuen. */
+    function tuuliLuokkaMs(ms) { return ms <= 2 ? 'calm' : (ms > 6 ? 'hard' : 'foam'); }
+    function valoLuokkaPilvi(p) { return p < 30 ? 'sun' : (p < 70 ? 'partly' : 'cloudy'); }
+    function paineTrendiLuokka(m3) { return m3 <= -1.5 ? 'falling' : (m3 >= 1.5 ? 'rising' : 'stable'); }
+
+    const LAHDE_VARASTO_LS = 'ennusteVarasto', LAHDE_VERTAILU_LS = 'lahdeVertailu';
+    const tuntiAvain = d => new Date(d).toISOString().slice(0, 13);     // UTC-tunti
+    function lsLue(k, oletus) { try { return JSON.parse(localStorage.getItem(k)) || oletus; } catch (e) { return oletus; } }
+    function lsTalleta(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+
+    async function haeFmiTunnit(lat, lon, alku, loppu) {
+      const url = 'https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature'
+        + '&storedquery_id=fmi::forecast::edited::weather::scandinavia::point::timevaluepair'
+        + '&latlon=' + lat + ',' + lon
+        + '&parameters=WindSpeedMS,WindDirection,TotalCloudCover,Pressure,Temperature'
+        + '&starttime=' + alku.toISOString() + '&endtime=' + loppu.toISOString() + '&timestep=60';
+      const r = await fetch(url);
+      if (!r.ok) throw new Error('FMI ' + r.status);
+      const doc = new DOMParser().parseFromString(await r.text(), 'text/xml');
+      const nimet = { windspeedms: 'ws', winddirection: 'wd', totalcloudcover: 'cl', pressure: 'p', temperature: 't' };
+      const out = {};
+      Array.from(doc.getElementsByTagNameNS('*', 'MeasurementTimeseries')).forEach(ts => {
+        const k = nimet[(ts.getAttribute('gml:id') || '').toLowerCase().split('-').pop()];
+        if (!k) return;
+        Array.from(ts.getElementsByTagNameNS('*', 'MeasurementTVP')).forEach(tvp => {
+          const t = (tvp.getElementsByTagNameNS('*', 'time')[0] || {}).textContent;
+          const v = parseFloat((tvp.getElementsByTagNameNS('*', 'value')[0] || {}).textContent);
+          if (!t || isNaN(v)) return;                       // FMI merkitsee puuttuvan NaN:ksi
+          (out[tuntiAvain(t)] = out[tuntiAvain(t)] || {})[k] = v;
+        });
+      });
+      if (!Object.keys(out).length) throw new Error('FMI: tyhjä vastaus');
+      return out;
+    }
+    async function haeOmTunnit(lat, lon, alku, loppu) {
+      const pv = d => d.toISOString().slice(0, 10);
+      const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon
+        + '&hourly=wind_speed_10m,wind_direction_10m,cloud_cover,surface_pressure,temperature_2m'
+        + '&wind_speed_unit=ms&timezone=UTC&start_date=' + pv(alku) + '&end_date=' + pv(loppu);
+      const r = await fetch(url);
+      if (!r.ok) throw new Error('Open-Meteo ' + r.status);
+      const d = await r.json(), h = d.hourly || {}, out = {};
+      (h.time || []).forEach((t, i) => {
+        out[tuntiAvain(t + ':00Z')] = { ws: h.wind_speed_10m[i], wd: h.wind_direction_10m[i],
+                                        cl: h.cloud_cover[i], p: h.surface_pressure[i],
+                                        t: h.temperature_2m ? h.temperature_2m[i] : undefined };
+      });
+      return out;
+    }
+    // Ennusteet talteen vertailua varten: haettu-aika mukaan, 4 vrk historiaa
+    function varastoiEnnusteet(lahde, tunnit) {
+      const v = lsLue(LAHDE_VARASTO_LS, {}), nyt = Date.now(), raja = tuntiAvain(nyt - 4*86400e3);
+      v[lahde] = v[lahde] || {};
+      Object.keys(tunnit).forEach(k => {
+        const x = tunnit[k];
+        // säilytetään ensimmäinen ennen tuntia haettu arvo: se on se jota vertaillaan
+        if (!v[lahde][k] && typeof x.ws === 'number') v[lahde][k] = { ws: x.ws, wd: x.wd, haettu: nyt };
+      });
+      Object.keys(v[lahde]).forEach(k => { if (k < raja) delete v[lahde][k]; });
+      lsTalleta(LAHDE_VARASTO_LS, v);
+    }
+    async function paivitaLahdeVarasto() {
+      const c = parseCoords((document.getElementById('omCoords') || {}).value || '');
+      if (!c) return;
+      const alku = new Date(), loppu = new Date(Date.now() + 36*3600e3);
+      try { varastoiEnnusteet('fmi', await haeFmiTunnit(c.lat, c.lon, alku, loppu)); } catch (e) {}
+      try { varastoiEnnusteet('om', await haeOmTunnit(c.lat, c.lon, alku, loppu)); } catch (e) {}
+    }
+    /* Kun asemahavainto saapuu, verrataan sitä molempien lähteiden ENNEN tuntia
+       haettuun ennusteeseen. Asema on eri paikassa kuin järvi, joten tämä kertoo
+       kumpi lähde osuu paremmin alueen tuuleen — sama epätarkkuus kummallekin. */
+    function kirjaaLahdevertailu(ft) {
+      if (!ft || typeof ft.ws !== 'number' || !ft.aika) return;
+      const k = tuntiAvain(ft.aika), v = lsLue(LAHDE_VARASTO_LS, {});
+      const f = (v.fmi || {})[k], o = (v.om || {})[k], t = new Date(ft.aika).getTime();
+      if (!f || !o || f.haettu > t || o.haettu > t) return;
+      const loki = lsLue(LAHDE_VERTAILU_LS, []);
+      if (loki.some(x => x.t === k)) return;              // yksi rivi tuntia kohden
+      loki.push({ t: k, havainto: +ft.ws.toFixed(1), fmi: +f.ws.toFixed(1), om: +o.ws.toFixed(1) });
+      lsTalleta(LAHDE_VERTAILU_LS, loki.slice(-500));
+    }
+    function lahdeVertailuTeksti() {
+      const loki = lsLue(LAHDE_VERTAILU_LS, []);
+      if (!loki.length) return 'Lähteiden vertailu: ei vielä havaintoja. Kertyy itsestään, kun sovellus on auki.';
+      const ka = f => loki.reduce((a, x) => a + Math.abs(x[f] - x.havainto), 0) / loki.length;
+      const kf = ka('fmi'), ko = ka('om');
+      return 'Lähteiden vertailu ' + loki.length + ' tuntia: keskivirhe FMI ' + kNro(kf) + ' m/s · Open-Meteo '
+        + kNro(ko) + ' m/s' + (loki.length < 48 ? ' — vielä vähän, suuntaa antava.' : '.');
+    }
+
+    /* ENNUSTEPÄIVÄ. Kun analyysi ajetaan muulle päivälle kuin tänään, nykyhetken
+       sää (omLatest, asemahavainto fmiTuuli, mitattu painetrendi) otetaan talteen ja
+       niiden paikalle asetetaan valitun päivän ennuste samalle kellonajalle kuin
+       analyysi muutenkin käyttää (nyt + 30 min). Näin KAIKKI analyysin osat —
+       valo, syvyydet, ottipisteet, puhe — lukevat samaa päivää ilman että jokaista
+       kohtaa muutetaan erikseen. Tänään-nappi palauttaa talteen otetut.
+       Saaliskirjaus ja tuulihälytys lukevat aina TALTEEN OTETTUA nykyhetkeä:
+       kala ja tuuli ovat tätä hetkeä, vaikka analyysi katsoisi huomiseen. */
+    let ennusteTila = null, omLatestNyt = null, fmiTuuliNyt = null, fmiPaineTrendiNyt = null;
+    const nykyOm = () => ennusteTila ? omLatestNyt : omLatest;
+    const nykyFmi = () => ennusteTila ? fmiTuuliNyt : fmiTuuli;
+    function paikallinenPvm(lisays) {
+      const n = new Date(Date.now() + (lisays || 0)*86400e3);
+      return new Date(n.getTime() - n.getTimezoneOffset()*60000).toISOString().slice(0, 10);
+    }
+    function palautaNykyhetki() {
+      if (!ennusteTila) return;
+      ennusteTila = null;
+      // Myös tyhjä palautetaan: jos nykysää ei ollut vielä latautunut, ennuste ei
+      // saa jäädä voimaan "nykyhetkenä". fetchOpenMeteo hakee sen heti perään.
+      omLatest = omLatestNyt;
+      fmiTuuli = fmiTuuliNyt; fmiPaineTrendi = fmiPaineTrendiNyt;
+      omLatestNyt = fmiTuuliNyt = fmiPaineTrendiNyt = null;
+    }
+    async function asetaAnalyysiPaiva(pvm) {
+      const d = document.getElementById('tripDate'), st = document.getElementById('analyysiPaivaTila');
+      const tanaan = paikallinenPvm(0);
+      if (!pvm) pvm = tanaan;
+      d.value = pvm;
+      palautaNykyhetki();
+      autoFillSeason();
+      try { await fetchOpenMeteo(); } catch (e) {}     // auringonnousu ja -lasku valitulle päivälle
+      try { fetchSykeData(); } catch (e) {}
+      if (pvm === tanaan) {
+        if (st) st.textContent = 'Analyysi: tänään, mitattu ja nykyinen sää.';
+        return;
+      }
+      const c = parseCoords((document.getElementById('omCoords') || {}).value || '');
+      const n = new Date(Date.now() + 30*60000), h = n.getHours(), mi = n.getMinutes();
+      const t = new Date(pvm + 'T' + String(h).padStart(2, '0') + ':00');
+      if (st) st.textContent = 'Haetaan ennustetta…';
+      let fmi = {}, om = {};
+      if (c) await Promise.all([
+        haeFmiTunnit(c.lat, c.lon, new Date(t.getTime() - 3*3600e3), t).then(x => { fmi = x; }).catch(() => {}),
+        haeOmTunnit(c.lat, c.lon, new Date(t.getTime() - 3*3600e3), t).then(x => { om = x; }).catch(() => {})
+      ]);
+      varastoiEnnusteet('fmi', fmi); varastoiEnnusteet('om', om);
+      const k = tuntiAvain(t), k3 = tuntiAvain(t.getTime() - 3*3600e3);
+      let varalla = false;
+      const arvo = (kk, m) => {
+        if (fmi[kk] && typeof fmi[kk][m] === 'number') return fmi[kk][m];
+        if (om[kk] && typeof om[kk][m] === 'number') { varalla = true; return om[kk][m]; }
+        return null;
+      };
+      const ws = arvo(k, 'ws');
+      if (ws === null) {
+        if (st) st.innerHTML = '<span style="color:var(--amber);">Ennustetta ei saatu valitulle päivälle. Analyysi pysyy tämän päivän säässä.</span>';
+        d.value = tanaan;
+        try { await fetchOpenMeteo(); } catch (e) {}
+        return;
+      }
+      const wd = arvo(k, 'wd'), cl = arvo(k, 'cl'), p = arvo(k, 'p'), p3 = arvo(k3, 'p'), ta = arvo(k, 't');
+      const trendi = (p !== null && p3 !== null) ? paineTrendiLuokka(p - p3) : 'stable';
+      omLatestNyt = omLatest; fmiTuuliNyt = fmiTuuli; fmiPaineTrendiNyt = fmiPaineTrendi;
+      ennusteTila = { pvm: pvm, tunti: h, minuutti: mi, varalla: varalla,
+        om: { wind: ws, windDir: wd, cloud: cl, trend: trendi, gust: null,
+              pressure: p, temp: ta !== null ? ta : (omLatestNyt ? omLatestNyt.temp : null) } };
+      omLatest = Object.assign({}, omLatestNyt || {}, ennusteTila.om);
+      fmiTuuli = null; fmiPaineTrendi = null;
+      applyOpenMeteo();                                  // tuuli-, valo- ja paineluokka ennusteesta
+      if (typeof autoFillTuuli === 'function') autoFillTuuli();
+      const pv = ['su','ma','ti','ke','to','pe','la'][t.getDay()];
+      const suunta = wd === null ? '' : ' ' + ['pohjoisesta','koillisesta','idästä','kaakosta','etelästä','lounaasta','lännestä','luoteesta'][Math.round(((wd % 360) + 360) % 360 / 45) % 8];
+      if (st) st.innerHTML = 'Analyysi: <b>' + pv + ' ' + t.getDate() + '.' + (t.getMonth()+1) + '. klo ' + String(h).padStart(2, '0') + '</b> — ennuste '
+        + Math.round(ws) + ' m/s' + suunta + (cl !== null ? ', pilvisyys ' + Math.round(cl) + ' %' : '')
+        + '. Lähde: ' + (varalla ? 'Open-Meteo (FMI ei vastannut kaikkeen)' : 'FMI') + '. Paina Analysoi.';
+    }
+    // Jos sovellus on auki yli puolenyön, huominen muuttuu tämäksi päiväksi:
+    // silloin palataan mitattuun säähän.
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible' && ennusteTila && ennusteTila.pvm <= paikallinenPvm(0))
+        asetaAnalyysiPaiva(paikallinenPvm(0));
+    });
+
+    window.addEventListener('load', function () {
+      setTimeout(paivitaLahdeVarasto, 8000);
+      setInterval(function () { if (document.visibilityState === 'visible') paivitaLahdeVarasto(); }, 3*3600e3);
+    });
+
     function applyOpenMeteo() {
       if (!omLatest) return;
       // KORJATTU 15.9.2026. Rajat olivat 3 ja 7 m/s, mutta painikkeiden omat
@@ -11625,7 +11827,7 @@ lataa(eka);
       // painikkeen teksti olivat siis eri mieltä, ja 3,1 m/s luiskahti
       // keskiluokkaan jonka nimi on "vaahtolinjoja näkyy". Rajat siirretään
       // vastaamaan sitä mitä painikkeissa lukee.
-      const windVal = omLatest.wind < 2 ? 'calm' : (omLatest.wind < 6 ? 'foam' : 'hard');
+      const windVal = tuuliLuokkaMs(omLatest.wind);       // yhteinen tuntiennusteen kanssa
       /* Paine: mitattu voittaa mallin, kuten tuulessakin. */
       if (fmiPaineTrendi) omLatest.trend = fmiPaineTrendi.luokka;
       // Mitattu tuuli talteen, jotta biasia ei tarvitse antaa koko 2–6 m/s
@@ -11636,7 +11838,7 @@ lataa(eka);
       const o2 = document.getElementById('opts-wind');
       if (o2 && o2.children[wi]) o2.children[wi].click();
 
-      const lightVal = omLatest.cloud < 30 ? 'sun' : (omLatest.cloud < 70 ? 'partly' : 'cloudy');
+      const lightVal = valoLuokkaPilvi(omLatest.cloud);   // yhteinen tuntiennusteen kanssa
       const q3 = questions.find(x => x.id === 'light');
       const li = q3.options.findIndex(o => o.v === lightVal);
       const o3 = document.getElementById('opts-light');
@@ -11863,11 +12065,17 @@ lataa(eka);
 
       const now = new Date();
       now.setMinutes(now.getMinutes() + 30);
+      // Ennustepäivä: sama kellonaika valittuna päivänä, sille jolle sää haettiin
+      if (ennusteTila) {
+        const [yy, mm, dd] = ennusteTila.pvm.split('-').map(Number);
+        now.setFullYear(yy, mm - 1, dd); now.setHours(ennusteTila.tunti, ennusteTila.minuutti);
+      }
       const targetHour = now.getHours();
       const targetFractional = targetHour + (now.getMinutes() / 60);
       const timeStr = now.toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' });
+      const paivaStr = ennusteTila ? ['su','ma','ti','ke','to','pe','la'][now.getDay()] + ' ' + now.getDate() + '.' + (now.getMonth()+1) + '. ' : '';
 
-      document.querySelectorAll('.tgtTime').forEach(el => el.textContent = `(klo ${timeStr})`);
+      document.querySelectorAll('.tgtTime').forEach(el => el.textContent = `(${paivaStr}klo ${timeStr})`);
       document.getElementById('sunTimesInfo').textContent = `☀ Auringonnousu klo ${cachedSunData.riseStr}  |  🌙 Auringonlasku klo ${cachedSunData.setStr}`;
 
       const reasonsKuha = [];
@@ -13267,7 +13475,7 @@ lataa(eka);
       const saa = saaNyt();
       if (saa.tuuli === null) return null;
       const ms = saa.tuuli;
-      return { v: ms <= 2 ? 'calm' : (ms > 6 ? 'hard' : 'foam'), ms: ms, lahde: saa.tuuliLahde };
+      return { v: tuuliLuokkaMs(ms), ms: ms, lahde: saa.tuuliLahde };
     }
 
     function autoFillTuuli() {
@@ -13330,7 +13538,12 @@ lataa(eka);
     renderLocationSelect();
     (function () {
       const d = document.getElementById('tripDate');
-      if (d && !d.value) d.value = new Date().toISOString().slice(0, 10);
+      // 22.9.2026: paikallinen päivä. toISOString on UTC, joten klo 00–03
+      // kesäaikaa kenttä näytti eilistä — juuri aamulähdön aikaan.
+      if (d && !d.value) {
+        const nyt = new Date();
+        d.value = new Date(nyt.getTime() - nyt.getTimezoneOffset()*60000).toISOString().slice(0, 10);
+      }
       autoFillSeason();
       applyLocationDefaults();
       fetchOpenMeteo();
@@ -13604,6 +13817,8 @@ async function haeSalamat(){
              on silloinkin kun harha on korjattu.
    Harha on se joka kannattaa korjata; hajonta on se jota ei voi. */
 function laskeOsuvuus(){
+  const lv = document.getElementById('lahdeVertailuTila');
+  if (lv && typeof lahdeVertailuTeksti === 'function') lv.textContent = lahdeVertailuTeksti();
   const tila = document.getElementById('osuvuusTila');
   const taulu = document.getElementById('osuvuusTaulu');
   if(!tila || !taulu) return;
