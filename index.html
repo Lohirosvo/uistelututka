@@ -3063,6 +3063,54 @@ body{padding-bottom:66px}
       kirjolohi: { nimi: 'Kirjolohi', nopeus: [2.5, 4.0] }
     };
 
+    /* ===== UISTELUNOPEUS — YHTEINEN MALLI (22.9.2026) =====
+       Mahdollinen alue lohikaloille 3,2–7,0 km/h on käyttäjän asettama: suositus
+       ei mene sen ulkopuolelle. Lajin haarukka (VV_LAJI) ja veden lämmön säädöt
+       ovat samat kuin ennen, nyt yhdessä funktiossa, jota sekä viehevalinta että
+       ottipaikkapaneeli käyttävät. Ennen paneelissa oli kovakoodattu 4,0–4,8. */
+    const LOHI_NOPEUS_ALUE = [3.2, 7.0];
+    function lajinNopeus(kala, t) {
+      const L = VV_LAJI[kala] || VV_LAJI.taimen, perustelut = [], alaviitteet = [];
+      let mn = L.nopeus[0], mx = L.nopeus[1];
+      if (t !== null && t < 6) { mn -= 0.5; mx -= 0.5; perustelut.push(['arvio', 'Alle 6 °C vedessä hidastettu veto on yleensä tuottavampi.']); }
+      if (t !== null && t > 16 && kala !== 'kuha') { mn += 0.3; mx += 0.3; }
+      if (vvRajanTuntumassa(t, 6, 1)) alaviitteet.push(
+        `Vesi ${vvNro(t)} °C on 6 °C:n rajan tuntumassa. Sen ylitys hidastaa suositusta `
+        + '0,5 km/h — raja on valittu luku, joten kokeile molempia puolia.');
+      if (vvRajanTuntumassa(t, 16, 1) && kala !== 'kuha') alaviitteet.push(
+        `Vesi ${vvNro(t)} °C on 16 °C:n rajan tuntumassa. Sen ylitys nopeuttaa suositusta `
+        + '0,3 km/h — raja on valittu luku.');
+      if (kala === 'taimen' || kala === 'jarvilohi') {
+        mn = Math.max(mn, LOHI_NOPEUS_ALUE[0]); mx = Math.min(mx, LOHI_NOPEUS_ALUE[1]);
+      }
+      return { min: mn, max: mx, perustelut, alaviitteet };
+    }
+    /* Tyypillinen nopeutesi: omat taimen- ja lohisaaliit (25.–75. persentiili),
+       kun nopeus on kirjattu vähintään kolmesti; muuten nopeushälytyksen rajasi. */
+    function tyypillinenNopeus() {
+      let v = [];
+      try { v = lataaSaaliit().filter(x => !x.nollareissu && (x.laji === 'taimen' || x.laji === 'jarvilohi')
+                                        && typeof x.nopeusKmh === 'number' && x.nopeusKmh > 1)
+                              .map(x => x.nopeusKmh).sort((a, b) => a - b); } catch (e) {}
+      if (v.length >= 3) {
+        const q = f => v[Math.min(v.length - 1, Math.round(f * (v.length - 1)))];
+        return { min: q(0.25), max: q(0.75), lahde: 'omat taimen- ja lohisaaliit, ' + v.length + ' kpl', n: v.length };
+      }
+      const a = parseFloat((document.getElementById('minSpeedLimit') || {}).value);
+      const b = parseFloat((document.getElementById('maxSpeedLimit') || {}).value);
+      if (isFinite(a) && isFinite(b) && a < b) return { min: a, max: b, lahde: 'nopeushälytyksen rajasi', n: 0 };
+      return null;
+    }
+    function nopeusSuhteessa(sMin, sMax, ty) {
+      if (!ty) return '';
+      const ero = (sMin + sMax) / 2 - (ty.min + ty.max) / 2;
+      const vali = vvNro(ty.min) + '–' + vvNro(ty.max) + ' km/h (' + ty.lahde + ')';
+      if (Math.abs(ero) < 0.3) return 'Tavallinen nopeutesi on ' + vali + ' — suositus osuu samaan. Aja kuten yleensäkin.';
+      return 'Tavallinen nopeutesi on ' + vali + '. Suositus on noin ' + vvNro(Math.abs(ero)) + ' km/h '
+        + (ero > 0 ? 'nopeampi: kaasua vähän lisää, lohikala ei ehdi tutkia viehettä liian tarkkaan.'
+                   : 'hitaampi: anna vieheen roikkua kalan edessä pidempään.');
+    }
+
     const vvTila = { kala: 'taimen', tapa: 'plaanari', valo: null };
 
     // Viimeisin viehevalinnan suosittelema malli. Käytetään saaliskirjauksen
@@ -3673,16 +3721,21 @@ body{padding-bottom:66px}
                tuuli: saa.tuuli, lahde: saa.tuuliLahde, h1: h1, L: L, Llahde: Llahde };
     }
 
+    /* Kerrostuneisuus: DepthRider-profiili ensin, sitten syötetty harppauskerros.
+       true = kerrostunut, false = mitattu tasalämpöiseksi, null = ei tiedossa.
+       Yksi funktio, jota kumpuamisselostus ja ottipaikkojen pisteytys käyttävät. */
+    function kerrostuneisuus() {
+      try {
+        if (drProfiili) return !drProfiili.tasalampoinen;
+        const t = parseFloat((document.getElementById('thermoDepth') || {}).value);
+        if (!isNaN(t) && t > 0) return true;
+      } catch (e) {}
+      return null;
+    }
+
     function vvKumpuaminenSelostus() {
       const saa = saaNyt();
-      let kerrostunut = null;
-      try {
-        if (drProfiili) kerrostunut = !drProfiili.tasalampoinen;
-        else {
-          const t = parseFloat((document.getElementById('thermoDepth') || {}).value);
-          if (!isNaN(t) && t > 0) kerrostunut = true;
-        }
-      } catch (e) { /* jää epävarmaksi */ }
+      const kerrostunut = kerrostuneisuus();
 
       let txt = '<p class="hint" style="margin-top:8px;"><strong>Kumpuaminen.</strong> ';
       if (kerrostunut === false) {
@@ -3896,15 +3949,11 @@ body{padding-bottom:66px}
       let viehe, asetusrivi, dipsyTiedot = null;
 
       // Nopeus lasketaan ENNEN esitystapaa, koska Dipsyn siima riippuu siitä.
-      let nMin = VV_LAJI[kala].nopeus[0], nMax = VV_LAJI[kala].nopeus[1];
-      if (t !== null && t < 6) { nMin -= 0.5; nMax -= 0.5; perustelut.push(['arvio', 'Alle 6 °C vedessä hidastettu veto on yleensä tuottavampi.']); }
-      if (t !== null && t > 16 && kala !== 'kuha') { nMin += 0.3; nMax += 0.3; }
-      if (vvRajanTuntumassa(t, 6, 1)) alaviitteet.push(
-        `Vesi ${vvNro(t)} °C on 6 °C:n rajan tuntumassa. Sen ylitys hidastaa suositusta `
-        + '0,5 km/h — raja on valittu luku, joten kokeile molempia puolia.');
-      if (vvRajanTuntumassa(t, 16, 1) && kala !== 'kuha') alaviitteet.push(
-        `Vesi ${vvNro(t)} °C on 16 °C:n rajan tuntumassa. Sen ylitys nopeuttaa suositusta `
-        + '0,3 km/h — raja on valittu luku.');
+      // 22.9.2026: yhteinen lajinNopeus() (sama kuin ottipaikkapaneelissa), alue 3,2–7,0
+      const LN = lajinNopeus(kala, t);
+      let nMin = LN.min, nMax = LN.max;
+      LN.perustelut.forEach(x => perustelut.push(x));
+      LN.alaviitteet.forEach(x => alaviitteet.push(x));
       const lajiMin = nMin, lajiMax = nMax;
 
       if (vvTila.tapa === 'downrigger') {
@@ -4046,6 +4095,7 @@ body{padding-bottom:66px}
       // Hälytysrajat vs. tämä suositus. Kerrotaan ristiriita, ei korjata itse:
       // rajat ovat turvatoiminto, eikä työkalu saa muuttaa niitä käyttäjän selän takana.
       vvViimeisinHaarukka = (raja[0] < raja[1]) ? [nMin, nMax] : null;
+      if (vvViimeisinHaarukka) { const ns = nopeusSuhteessa(nMin, nMax, tyypillinenNopeus()); if (ns) huomiot.push(ns); }
       if (vvViimeisinHaarukka) {
         const hMin = parseFloat((document.getElementById('minSpeedLimit') || {}).value);
         const hMax = parseFloat((document.getElementById('maxSpeedLimit') || {}).value);
@@ -5355,8 +5405,9 @@ function akRuutuPisteelle(k, lat, lon){
   var i = Math.floor((lon - k.lansiLon)*111320*Math.cos(lat*Math.PI/180)/k.ruutu);
   var j = Math.floor((k.pohjoisLat - lat)*111320/k.ruutu);
   var paras = -1, pd = 1e9;
-  // lähin vesiruutu enintään 2 ruudun (200 m) päästä: GPS ja rantaviiva
-  for (var dj = -2; dj <= 2; dj++) for (var di = -2; di <= 2; di++){
+  // lähin vesiruutu enintään 4 ruudun (400 m) päästä: GPS, rantaviiva ja
+  // rantaan merkityt paikat (esim. Karvala on 225 m ruudukon reunan ulkopuolella)
+  for (var dj = -4; dj <= 4; dj++) for (var di = -4; di <= 4; di++){
     var ii = i+di, jj = j+dj;
     if (ii < 0 || jj < 0 || ii >= k.W || jj >= k.H) continue;
     var q = jj*k.W + ii;
@@ -5378,7 +5429,7 @@ function akMalliLaske(lat, lon, aikaMs){
   var d = data[idx], U = Math.max(0.5, d.U);
   var ke = akKentta(Math.round(d.dir/5)*5);
   var Fq = Math.min(ke[q], kestonPyyhkaisy(d.tunteja*3600, U));
-  var t = { jarvi: jarvi.nimi,
+  var t = { jarvi: jarvi.nimi, raja: akKalaRaja(),
             // tuuli jolla malliarvot laskettiin (FMI:n editoitu ennuste, havaintokorjattu):
             // saalisrivin tuuliMs tulee Open-Meteosta, joten tämä tallennetaan erikseen
             tuuliMs: d.U, tuuliSuunta: d.dir,
@@ -5402,6 +5453,108 @@ function akMalliLaske(lat, lon, aikaMs){
 }
 window.akMalliPisteessa = function(lat, lon, aikaMs){
   return Promise.resolve(akLatausLupaus).then(function(){ return akMalliLaske(lat, lon, aikaMs); });
+};
+
+/* SYNKRONISET RAJAPINNAT OTTIPAIKKOJEN PISTEYTYKSELLE — 22.9.2026.
+   Pisteytys ajetaan analyysin sisällä, joka ei odota. Nämä palauttavat null,
+   jos kortin data ei ole vielä latautunut; pisteytys kertoo silloin sen. */
+window.akMalliSync = function(lat, lon, aikaMs){ return akMalliLaske(lat, lon, aikaMs); };
+window.akValmis = function(){ return !!(akSyvyys && mask && data.length); };
+window.akSyvyysPisteessa = function(lat, lon, sadeM){
+  if (!akSyvyys || !mask || !jarvi || !jarvi.kartta) return null;
+  var k = jarvi.kartta, r = Math.max(1, Math.round((sadeM || 300)/k.ruutu));
+  var i0 = Math.floor((lon - k.lansiLon)*111320*Math.cos(lat*Math.PI/180)/k.ruutu);
+  var j0 = Math.floor((k.pohjoisLat - lat)*111320/k.ruutu);
+  var mn = Infinity, mx = -Infinity, n = 0;
+  for (var dj = -r; dj <= r; dj++) for (var di = -r; di <= r; di++){
+    if (di*di + dj*dj > r*r) continue;
+    var i = i0+di, j = j0+dj;
+    if (i < 0 || j < 0 || i >= k.W || j >= k.H) continue;
+    var q = j*k.W + i;
+    if (!mask[q]) continue;
+    if (akSyvyys[q] < mn) mn = akSyvyys[q];
+    if (akSyvyys[q] > mx) mx = akSyvyys[q];
+    n++;
+  }
+  return n ? { min: mn, max: mx, n: n } : null;
+};
+
+/* YLEISVINKIT ILMAN NIMETTYÄ PAIKKAA — 22.9.2026. Kohdat lasketaan kartasta:
+   syvänteen reuna lajin syvyydellä, kumpuamisranta ja paluuvirran reuna.
+   Kukin palautetaan koordinaatteina; lähimmän nimetyn paikan etäisyys lasketaan
+   pääkoodissa. Palauttaa null, jos syvyyksiä tai ennustetta ei ole. */
+window.akYleisvinkit = function(o){
+  if (!akSyvyys || !mask || !jarvi || !jarvi.kartta) return null;
+  var k = jarvi.kartta, W = k.W, H = k.H, R = k.ruutu, vinkit = [];
+  function kohta(q){
+    var i = q % W, j = (q/W)|0;
+    var lat = k.pohjoisLat - (j + 0.5)*R/111320;
+    return { lat: lat, lon: k.lansiLon + (i + 0.5)*R/(111320*Math.cos(lat*Math.PI/180)) };
+  }
+  function etaisyys2(q){ var p = kohta(q), dy = (p.lat - o.lat)*111320, dx = (p.lon - o.lon)*111320*Math.cos(p.lat*Math.PI/180); return dx*dx + dy*dy; }
+  function naapuri(q, r, ehto){
+    var i = q % W, j = (q/W)|0;
+    for (var dj = -r; dj <= r; dj++) for (var di = -r; di <= r; di++){
+      var ii = i+di, jj = j+dj; if (ii < 0 || jj < 0 || ii >= W || jj >= H) { if (ehto(-1)) return true; continue; }
+      if (ehto(jj*W + ii)) return true;
+    }
+    return false;
+  }
+  // a) syvänteen reuna lajin syvyydellä, lähimpänä kärkipaikkaa
+  if (typeof o.kohdeSyvyys === 'number'){
+    var paras = -1, pd = Infinity;
+    for (var q = 0; q < mask.length; q++){
+      // matalampi ruutu, jonka vieressä pohja on vähintään 2 m vetosyvyyttä syvemmällä:
+      // tämän päivän vetosyvyyden käyrä kulkee niiden välissä
+      if (!mask[q] || akSyvyys[q] > o.kohdeSyvyys) continue;
+      if (!naapuri(q, 2, function(n){ return n >= 0 && mask[n] && akSyvyys[n] >= o.kohdeSyvyys + 2; })) continue;
+      var d = etaisyys2(q); if (d < pd){ pd = d; paras = q; }
+    }
+    if (paras >= 0){ var p = kohta(paras), syvin = 0;
+      naapuri(paras, 2, function(n){ if (n >= 0 && mask[n] && akSyvyys[n] > syvin) syvin = akSyvyys[n]; return false; });
+      vinkit.push({ laji: 'reuna', taso: 'Malli', lat: p.lat, lon: p.lon,
+        teksti: 'Tässä pohja laskee matalasta noin ' + Math.round(syvin) + ' metriin, ja tämän päivän ' + o.kohdeSyvyys.toFixed(1).replace('.', ',')
+          + ' metrin vetosyvyys kulkee reunassa. Reunaa pitkin vetäessä syvyys pysyy kohdallaan. Syvyysluokat ovat karkeita, joten tarkista kaikulla.' }); }
+  }
+  // b) kumpuamisranta: tuulen puoleinen jyrkkä ranta, kun maatuuli on kestänyt
+  if (o.luotettava && typeof o.tuuliSuunta === 'number'){
+    var kes = { lat: jarvi.lat, lon: jarvi.lon }, pb = -1, ps = -2;
+    for (var q2 = 0; q2 < mask.length; q2++){
+      if (!mask[q2] || akSyvyys[q2] < 5) continue;
+      if (!naapuri(q2, 2, function(n){ return n < 0 || !mask[n] || akSyvyys[n] < 2.5; })) continue;
+      var c = kohta(q2), dy2 = c.lat - kes.lat, dx2 = (c.lon - kes.lon)*Math.cos(c.lat*Math.PI/180);
+      var suunta = Math.atan2(dx2, dy2)*180/Math.PI, ero = Math.abs(((suunta - o.tuuliSuunta) % 360 + 540) % 360 - 180);
+      var arvo = Math.cos(ero*Math.PI/180);
+      if (arvo > ps){ ps = arvo; pb = q2; }
+    }
+    if (pb >= 0 && ps > 0.7){ var p2 = kohta(pb);
+      vinkit.push({ laji: 'kumpu', taso: o.kerrostunut === true ? 'Tutkittu' : 'Konsensus', lat: p2.lat, lon: p2.lon,
+        teksti: 'Tuulen puoleinen jyrkkä ranta: maatuuli on painanut pintavettä ulapalle ' + o.tunteja + ' tuntia. '
+          + (o.kerrostunut === true ? 'Järvi on kerrostunut, joten tilalle nousee kylmää alusvettä — kumpuaminen on mitattu ilmiö.'
+                                    : 'Kerrostuneisuutta ei ole varmistettu, joten kylmän veden noususta ei ole takeita. Tyynen rannan hyöty on silti uistelijoiden vanha tieto.') }); }
+  }
+  // c) paluuvirran reuna: syvempi vesi vaihtaa suuntaa, lähimpänä kärkipaikkaa
+  var kd = (typeof akKierto === 'function') ? akKierto() : null;
+  if (kd && data.length && typeof o.aikaMs === 'number'){
+    var idx = 0, pe = Infinity;
+    for (var n2 = 0; n2 < data.length; n2++){ var e = Math.abs(data[n2].aika.getTime() - o.aikaMs); if (e < pe){ pe = e; idx = n2; } }
+    var dd = data[idx], U = Math.max(0.5, dd.U), ta = (dd.dir + 180)*Math.PI/180, tx = Math.sin(ta), ty = Math.cos(ta);
+    var P = kd.pohjat, suu = new Int8Array(mask.length), nop = new Float32Array(mask.length), mxv = 0;
+    for (var q3 = 0; q3 < mask.length; q3++){ if (!mask[q3]) continue;
+      var ue = tx*P.ita.ue[q3] + ty*P.pohjoinen.ue[q3], un = tx*P.ita.un[q3] + ty*P.pohjoinen.un[q3];
+      nop[q3] = Math.sqrt(ue*ue + un*un); if (nop[q3] > mxv) mxv = nop[q3];
+      suu[q3] = (ue*tx + un*ty) >= 0 ? 1 : -1; }
+    var pr = -1, prd = Infinity;
+    for (var q4 = 0; q4 < mask.length; q4++){
+      if (!mask[q4] || suu[q4] !== -1 || nop[q4] < 0.6*mxv) continue;
+      if (!naapuri(q4, 1, function(n){ return n >= 0 && mask[n] && suu[n] === 1; })) continue;
+      var d4 = etaisyys2(q4); if (d4 < prd){ prd = d4; pr = q4; }
+    }
+    if (pr >= 0 && U >= 3){ var p4 = kohta(pr);
+      vinkit.push({ laji: 'virta', taso: 'Malli', lat: p4.lat, lon: p4.lon,
+        teksti: 'Paluuvirran reuna: täällä syvempi vesi kääntyy vastatuuleen, kun pinta menee myötätuuleen. Uistelijoiden konsensus on, että virtausreuna kerää syöttikalaa — mallin kohta on suuntaa-antava, nopeus voi heittää 2–3-kertaisesti.' }); }
+  }
+  return vinkit;
 };
 
 function lataa(avain){
@@ -6270,6 +6423,15 @@ lataa(eka);
       };
       const hp = harppausSaaliille(nyt);
       snap.harppausEnnuste = hp.arvo; snap.harppausLahde = hp.lahde;
+      /* 22.9.2026: suositus talteen, jotta lokista näkee myöhemmin osuiko se */
+      snap.suositeltuPaikka = null; snap.suositusPisteet = null; snap.etaisyysSuositukseenM = null; snap.suositusHetki = null;
+      if (viimeisinOttipaikka && viimeisinOttipaikka.topSpot && viimeisinOttipaikka.paras) {
+        const sp = viimeisinOttipaikka.topSpot;
+        snap.suositeltuPaikka = sp.name; snap.suositusPisteet = viimeisinOttipaikka.paras.pisteet;
+        snap.suositusHetki = viimeisinOttipaikka.hetki || null;
+        if (typeof snap.lat === 'number' && typeof sp.lat === 'number')
+          snap.etaisyysSuositukseenM = Math.round(haversineDistMeters(snap.lat, snap.lon, sp.lat, sp.lon));
+      }
 
       if (nollareissu) {
         const lista = lataaSaaliit();
@@ -6457,7 +6619,8 @@ lataa(eka);
       'ennusteHauki','ennusteAhven','syvyysLahde',
       'malliAaltoM','malliPintavirtausKmh','malliPintavirtausSuunta',
       'malliSyvaKmh','malliSyvaSuunta','malliSyvaTuuleen',
-      'harppausEnnuste','harppausLahde','malliTuuliMs','malliTuuliSuunta'];
+      'harppausEnnuste','harppausLahde','malliTuuliMs','malliTuuliSuunta',
+      'suositeltuPaikka','suositusPisteet','etaisyysSuositukseenM','suositusHetki'];
 
     function saaliitCsv(lista) {
       return [SAALIS_KENTAT.join(';')].concat(
@@ -7689,7 +7852,7 @@ lataa(eka);
         targetSpecies: "Järvilohi & Taimen",
         tactic: "Aja venettä tarkasti 10 m syvyyskäyrää. Laske takilat ja Dipsy Diverit 7–10 metriin kuoreparvien päälle.",
         idealWind: "Länsituuli (W/SW/NW) = Maatuuli",
-        reason: "Itätuulella Karvalan puoli on maatuulessa. Syvänteestä nouseva kylmä vesi osuu 10 metrin kovuusseinämään houkutellen lohet."
+        reason: "Länsituulella Karvalan puoli on maatuulessa (korjattu 22.9.2026: luki itätuuli, vaikka idealWind ja valinta ovat länsi). Syvänteestä nouseva kylmä vesi osuu 10 metrin kovuusseinämään houkutellen lohet."
       },
       taimen_a: {
         id: "taimen_a",
@@ -7882,41 +8045,197 @@ lataa(eka);
       { time: "17:00 – 22:00" },
     ];
 
-    function evaluateHotspots(targetHour, windDir, windSpeed, temp, season) {
-      const dir = (windDir !== null && windDir !== undefined) ? windDir : 270;
+    /* ===== OTTIPAIKKOJEN PISTEYTYS — 22.9.2026 =====
+       Korvaa sääntöketjun (pickSpotKey), jossa ensimmäinen täyttyvä sääntö voitti.
+       Nyt kaikki taimen- ja lohipaikat pisteytetään ja jokainen syy näytetään
+       todisteen tasolla. Vanhojen sääntöjen tieto on mukana pisteinä samassa
+       tärkeysjärjestyksessä, joten mikään aiempi peruste ei katoa.
+       Tasot: Tutkittu · Oma saalis · Rekisteri · Malli · Konsensus · Paikkatieto
+       (Paikkatieto = omat merkintäsi paikasta; ei varmennettu, mutta sinun).
+       Kuunvaihe, paine ja Keränen & Lind ovat samat koko järvellä, joten ne
+       kertovat MILLOIN, eivät MISSÄ: ne ovat aktiivisuusosiossa, eivät pisteissä.
+       Painot ovat harkintaa; siksi pisteet ja syyt näytetään, ei piiloteta. */
+    const PAIKKA_LISA = {
+      karna:        { maatuuli: null },
+      karnawest:    { maatuuli: 90 },
+      kuolio:       { maatuuli: 250 },
+      selkasaaret:  { maatuuli: null, suosiTuuli: 330 },
+      luodeisranta: { maatuuli: 250 },
+      karvala:      { maatuuli: 270 },
+      taimen_a:     { maatuuli: null },
+      taimen_b:     { maatuuli: null },
+      pihlajasaari: { maatuuli: null }
+      // kuha_a, kuha_b ja tarvolanniemi eivät ole taimen- ja lohipaikkoja: ne
+      // säilyvät kirjastossa, ja hauki-vaihtoehto näytetään edelleen erikseen.
+    };
+    const kulmaEro = (a, b) => { const e = Math.abs((((a - b) % 360) + 360) % 360); return e > 180 ? 360 - e : e; };
+    const n1 = x => Number(x).toFixed(1).replace('.', ',');
+    const n2 = x => Number(x).toFixed(2).replace('.', ',');
 
-      const topKey = pickSpotKey(targetHour, dir, temp, season);
-      const topSpot = lappajarviHotspots[topKey];
-      let whyChosen = hotspotWhy[topKey];
+    function harppausAlaraja(hetki) {
+      const h = harppausSaaliille(hetki);
+      const m = String(h.arvo).match(/(\d+(?:,\d+)?)/);
+      return { m: m ? parseFloat(m[1].replace(',', '.')) : null, teksti: h.arvo, lahde: h.lahde };
+    }
 
-      // TUULENALAINEN VAIHTOEHTO — uusi 30.8.2026.
-      // Ei ohita varsinaista valintaa, vaan lisätään perusteluun. Syy: tuulikertymän
-      // vaikutus on mitattu planktontasolla vahvasti mutta petokalatasolla vain
-      // yhdellä järvellä (Opeongo, kirkasvetinen), eikä Lappajärven humusvedessä
-      // lainkaan. Se ei siis ansaitse veto-oikeutta paikkavalintaan — vain äänen.
-      if (tuuliKertyma && tuuliKertyma.luotettava) {
-        const pisteet = Object.entries(lappajarviHotspots)
-          .map(([k, h]) => ({ k, h, ta: tuulenalaisuus(h) }))
-          .filter(x => x.ta !== null)
-          .sort((a, b) => b.ta - a.ta);
-        if (pisteet.length) {
-          const paras = pisteet[0];
-          const suuntaNimi = compassElatiivi(tuuliKertyma.suunta);
-          const kohdeNimi = compassOsa((tuuliKertyma.suunta + 180) % 360);
-          if (paras.ta > 0.4) {
-            whyChosen += ` Tuulikertymä: viimeisen ${tuuliKertyma.tunteja} tunnin aikana on tuullut ${suuntaNimi} keskimäärin ${tuuliKertyma.voimakkuus.toFixed(1)} m/s, joten plankton ja sen mukana syöttikala ovat todennäköisesti kasautuneet järven ${kohdeNimi}. Tuulenalaisin ottipaikka on ${paras.h.name.replace(/\s*\(.*\)/, '')}${paras.k === topKey ? ' — sama kuin yllä.' : ' — harkitse sitä vaihtoehtona.'} (Blukacz ym. 2009; de Kerckhove ym. 2015.)`;
+    function pisteytaPaikat(o) {
+      // o: { tunti, hetki, tuuliSuunta, tuuliMs, tuuliLahde, lampo, kausi, valoPorras, syvyysTaimen, syvyysLohi }
+      const kerr = kerrostuneisuus();
+      const harppaus = harppausAlaraja(o.hetki);
+      const ilta = o.tunti >= 15;
+      const kohde = [o.syvyysTaimen, o.syvyysLohi].filter(x => typeof x === 'number');
+      let saaliit = [];
+      try { saaliit = lataaSaaliit().filter(x => !x.nollareissu && (x.laji === 'taimen' || x.laji === 'jarvilohi')
+                                                && typeof x.lat === 'number' && typeof x.lon === 'number'); } catch (e) {}
+      const puuttuu = new Set();
+
+      return Object.keys(PAIKKA_LISA).map(key => {
+        const s = lappajarviHotspots[key], lisa = PAIKKA_LISA[key];
+        if (!s) return null;
+        const syyt = [], lisaa = (p, taso, teksti) => syyt.push({ p, taso, teksti });
+
+        // 1 Veden lämpö (Tutkittu: taimenen lämpöpreferenssi)
+        if (o.lampo > 17) {
+          if (key === 'selkasaaret') lisaa(40, 'Tutkittu', 'Pintavesi on ' + n1(o.lampo) + ' °C. Taimen ei viihdy lämpimässä pintakerroksessa, vaan hakeutuu ulommas — Selkäsaarten penkka on lähin karikko avoveden puolella.');
+          else if (lisa.maatuuli !== null || key === 'karna') lisaa(-10, 'Tutkittu', 'Yli 17 asteen vedessä rantaveto hiipuu. Lämmin pintavesi ajaa taimenen pois matalalta.');
+        }
+        // 2 Oma ennätys
+        if (key === 'pihlajasaari' && o.kausi === 'autumn' && o.lampo >= 4 && o.lampo <= 10 && ilta)
+          lisaa(35, 'Oma saalis', 'Oma ennätystaimen nousi täältä 2.11.2025 auringonlaskun aikaan, samanlaisessa kylmässä syysvedessä. Parempaa perustetta ei ole kuin oma kala.');
+        // 3 Maatuuli: suunta, voima ja kesto — ja onko kylmää vettä nousemassa
+        if (lisa.maatuuli !== null && typeof o.tuuliSuunta === 'number') {
+          if (kulmaEro(o.tuuliSuunta, lisa.maatuuli) <= 60) {
+            const voima = Math.max(0, Math.min(1, (o.tuuliMs - 1) / 3));      // 1 m/s → 0, 4 m/s → täysi
+            const pysyva = tuuliKertyma && tuuliKertyma.luotettava && kulmaEro(tuuliKertyma.suunta, lisa.maatuuli) <= 60;
+            const kesto = pysyva ? 1 : 0.6;
+            const perus = key === 'kuolio' ? (ilta ? 30 : 22) : (key === 'karvala' ? (ilta ? 22 : 30) : (key === 'luodeisranta' ? 24 : 30));
+            const pp = Math.round(perus * voima * kesto);
+            if (voima === 0)
+              lisaa(0, 'Konsensus', 'Maatuulen suunta on oikea, mutta ' + n1(o.tuuliMs) + ' m/s on liian heikko liikuttamaan vettä. Tästä ei tule pisteitä.');
+            else if (kerr === false)
+              lisaa(Math.round(pp * 0.5), 'Konsensus', 'Maatuuli ' + n1(o.tuuliMs) + ' m/s tasoittaa rannan, ja taimen tulee tyynessä rohkeammin matalalle. Kylmää vettä ei kuitenkaan nouse: patsas on mitattu tasalämpöiseksi.');
+            else
+              lisaa(pp, kerr === true ? 'Tutkittu' : 'Malli', 'Maatuuli ' + n1(o.tuuliMs) + ' m/s ' + (pysyva ? 'on puskenut samasta suunnasta jo ' + tuuliKertyma.tunteja + ' tuntia' : 'on vasta alkanut, joten täyttä vaikutusta ei vielä ole')
+                + ' — pintavesi työntyy ulapalle ja tilalle nousee ' + (kerr === true ? 'kylmää alusvettä. Kumpuaminen on mitattu ilmiö.' : 'syvempää vettä. Kerrostuneisuutta ei ole mitattu, joten kylmän veden noususta ei ole varmuutta.'));
           }
         }
-      }
+        // 4 Kärnänsaaren länsiranta syksyn kylmässä vedessä (Harri Hotti: syysikkuna)
+        if (key === 'karnawest' && o.kausi === 'autumn' && o.lampo >= 4 && o.lampo <= 10)
+          lisaa(20, 'Konsensus', 'Syksyn 4–10 asteen ikkunassa taimen partioi lähellä rantaa (Harri Hotti). Kärnänsaaren länsiranta on tähän ikkunaan merkitty paikkasi.');
+        // 5 Kärnänsaaren eteläkärki: yleispaikka
+        if (key === 'karna') {
+          lisaa(10, 'Paikkatieto', 'Kärki jakaa kraatterin päävirtaukset, joten se toimii tuulella kuin tuulella. Jos muuta perustetta ei ole, tästä on hyvä aloittaa.');
+          if (o.lampo > 8 && o.lampo <= 16) lisaa(10, 'Paikkatieto', '8–16 asteen vedessä iso kala nousee syvänteestä pöydän reunaan syömään.');
+        }
+        // 6 Selkäsaarten merkitty tuuli
+        if (lisa.suosiTuuli && typeof o.tuuliSuunta === 'number' && o.tuuliMs >= 3 && kulmaEro(o.tuuliSuunta, lisa.suosiTuuli) <= 45)
+          lisaa(8, 'Paikkatieto', 'Pohjois- tai luoteistuuli on merkitty tälle penkalle sopivaksi.');
+        // 7 Syvyyssopivuus (Malli): paikan syvyys 300 m säteellä vs lajien ennustesyvyys
+        const valmis = typeof window.akValmis === 'function' && window.akValmis();
+        if (!valmis) puuttuu.add('lataus');
+        const sy = valmis ? window.akSyvyysPisteessa(s.lat, s.lon, 500) : null;
+        if (valmis && !sy) lisaa(0, 'Malli', 'Paikka on järviruudukon ulkopuolella, joten syvyyttä ja aaltoa ei saada kartalta.');
+        if (sy && kohde.length) {
+          const osuu = kohde.filter(d => d >= sy.min - 0.5 && d <= sy.max + 0.5).length;
+          if (osuu) lisaa(10, 'Malli', 'Paikalla on syvyyttä ' + n1(sy.min) + '–' + n1(sy.max) + ' m, joten tämän päivän ' + kohde.map(n1).join(' ja ') + ' metrin vetosyvyys löytyy läheltä.');
+          else if (Math.max(...kohde) > sy.max + 3) lisaa(-5, 'Malli', 'Paikka on tälle päivälle matala: syvintä noin ' + n1(sy.max) + ' m, kun malli ajaa kalaa ' + n1(Math.max(...kohde)) + ' metrissä.');
+          // hämärä ja matala pöytä
+          if (typeof o.valoPorras === 'number' && o.valoPorras <= 3 && sy.min <= 4)
+            lisaa(6, 'Tutkittu', 'Hämärässä taimen syö aktiivisimmin (Keränen & Lind, Björnsson), ja silloin se uskaltaa nousta matalalle pöydälle. Tässä matalinta on ' + n1(sy.min) + ' m.');
+          // harppauskerros järvilohelle
+          if (harppaus.m && sy.max >= harppaus.m)
+            lisaa(5, 'Tutkittu', 'Pohja ulottuu harppauskerroksen alle (' + harppaus.teksti + ', ' + harppaus.lahde + '). Järvilohi viihtyy kerroksen tuntumassa, ja täällä se on ulottuvilla.');
+        }
+        // 8 Aallokko ja virtaus paikalla (Malli; hyöty Konsensus)
+        const m = (typeof window.akMalliSync === 'function') ? window.akMalliSync(s.lat, s.lon, o.hetki.getTime()) : null;
+        let suljettu = false;
+        if (m) {
+          if (typeof m.aaltoM === 'number' && typeof m.raja === 'number' && m.aaltoM > m.raja) {
+            suljettu = true;
+            lisaa(-100, 'Malli', 'Aalto noin ' + n2(m.aaltoM) + ' m ylittää veneesi rajan ' + n2(m.raja) + ' m. Jätä tämä toiseen päivään.');
+          } else if (m.aaltoM >= 0.10 && m.aaltoM <= 0.35)
+            lisaa(5, 'Konsensus', 'Aaltoa on noin ' + n2(m.aaltoM) + ' m. Pieni kuohu rikkoo pinnan ja himmentää valoa — vanha uistelijan viisaus sanoo, että tyrskyranta syöttää.');
+          if (typeof m.syvaKmh === 'number' && m.syvaKmh >= 0.1)
+            lisaa(3, 'Malli', 'Syvempi vesi virtaa noin ' + n2(m.syvaKmh) + ' km/h ' + (m.syvaTuuleen === 'vastaan' ? 'vastatuuleen (paluuvirta)' : 'tuulen mukana') + '. Konsensuksen mukaan virtausreuna kerää syöttikalaa. Mallin arvio, nopeus voi heittää 2–3-kertaisesti.');
+        }
+        // 9 Tuulikertymä: ääni, ei pisteitä (kuten ennenkin: petokalatason näyttö puuttuu)
+        if (tuuliKertyma && tuuliKertyma.luotettava && typeof tuulenalaisuus === 'function') {
+          const ta = tuulenalaisuus(s);
+          if (ta !== null && ta > 0.4) lisaa(0, 'Konsensus', 'Paikka on ' + tuuliKertyma.tunteja + ' tunnin tuulen alapuolella. Plankton kasautuu sinne mitatusti; petokalan perässä tulemisesta on vain uistelijoiden kokemus, joten tämä ei tuo pisteitä.');
+        }
+        // 10 Omat saaliit alle 500 m säteellä
+        const lahella = saaliit.filter(x => haversineDistMeters(x.lat, x.lon, s.lat, s.lon) <= 500);
+        if (lahella.length) {
+          const samat = lahella.filter(x => typeof x.tuuliSuunta === 'number' && typeof o.tuuliSuunta === 'number'
+              && kulmaEro(x.tuuliSuunta, o.tuuliSuunta) <= 60 && typeof x.vesiC === 'number' && Math.abs(x.vesiC - o.lampo) <= 3
+              && x.kausi === o.kausi).length;
+          const pp = Math.min(24, 8*samat) + Math.min(9, 3*(lahella.length - samat));
+          lisaa(pp, 'Oma saalis', lahella.length + ' omaa taimen- tai lohisaalista alle 500 metrin päässä'
+            + (samat ? ', niistä ' + samat + ' samankaltaisissa oloissa (tuulen suunta, veden lämpö, kausi).' : '. Olot olivat silloin toiset, joten paino on pienempi.')
+            + (lahella.length < 5 ? ' Aineistoa on vielä vähän.' : ''));
+        }
+        const pisteet = syyt.reduce((acc, x) => acc + x.p, 0);
+        return { key, spot: s, pisteet, syyt, suljettu, puuttuu };
+      }).filter(Boolean).sort((x, y) => (x.suljettu - y.suljettu) || (y.pisteet - x.pisteet));
+    }
 
+    /* Ennuste tunnille: FMI ensin, Open-Meteo varalla, muuten null.
+       Täytetään taustalla (paivitaLahdeVarasto) ja päivää vaihdettaessa. */
+    let tuoreEnnuste = { fmi: {}, om: {} };
+    function paivitaTuore(lahde, tunnit) { Object.assign(tuoreEnnuste[lahde], tunnit || {}); }
+    function ennusteTunnille(hetki) {
+      const k = new Date(hetki).toISOString().slice(0, 13);
+      const f = tuoreEnnuste.fmi[k], o = tuoreEnnuste.om[k];
+      if (f && typeof f.ws === 'number') return { ws: f.ws, wd: f.wd, lahde: 'FMI-ennuste' };
+      if (o && typeof o.ws === 'number') return { ws: o.ws, wd: o.wd, lahde: 'Open-Meteo-ennuste' };
+      return null;
+    }
+
+    function evaluateHotspots(o) {
+      const tulos = pisteytaPaikat(o);
+      const kaytossa = tulos.filter(x => !x.suljettu);
+      const paras = kaytossa[0] || tulos[0];
+      const topSpot = paras.spot;
+      // Aikataulu: jokainen jakso omalla tuulellaan (ennuste, muuten nykyinen)
       const repHours = [7, 12, 19];
       const timeline = hotspotTimeSlots.map((slot, i) => {
-        const key = pickSpotKey(repHours[i], dir, temp, season);
-        const spot = lappajarviHotspots[key];
-        return { time: slot.time, spot: spot.name, desc: spot.tactic };
+        const h = repHours[i], hetki = new Date(o.hetki); hetki.setHours(h, 0, 0, 0);
+        const e = ennusteTunnille(hetki);
+        const oo = Object.assign({}, o, { tunti: h, hetki,
+          tuuliMs: e ? e.ws : o.tuuliMs, tuuliSuunta: e && typeof e.wd === 'number' ? e.wd : o.tuuliSuunta,
+          valoPorras: (typeof valoPorras === 'function') ? valoPorras(h) : o.valoPorras });
+        const t = pisteytaPaikat(oo).filter(x => !x.suljettu)[0];
+        const syy = t ? t.syyt.filter(x => x.p > 0).sort((a, b) => b.p - a.p)[0] : null;
+        return { time: slot.time, spot: t ? t.spot.name : '—',
+          desc: 'Tuuli ' + Math.round(oo.tuuliMs) + ' m/s ' + kompassiMista(oo.tuuliSuunta) + ' (' + (e ? e.lahde : 'nykyinen, ennustetta ei vielä ladattu') + '). '
+              + (syy ? syy.teksti + ' <span class="hint">[' + syy.taso + ']</span>' : '') };
       });
+      return { topSpot, whyChosen: '', timeline, pisteytys: tulos, vaihtoehdot: kaytossa.slice(1, 3), paras,
+               hetki: new Date(o.hetki).toISOString() };
+    }
+    function kompassiMista(d) {
+      if (typeof d !== 'number') return '';
+      return ['pohjoisesta','koillisesta','idästä','kaakosta','etelästä','lounaasta','lännestä','luoteesta'][Math.round(((d % 360) + 360) % 360 / 45) % 8];
+    }
 
-      return { topSpot, whyChosen, timeline };
+    // Päivän aktiivisuus: kertoo MILLOIN, ei missä (sama koko järvellä)
+    function aktiivisuusHtml(hetki, tunti) {
+      const rivit = [];
+      try {
+        const kl = keranenLindStatus(hetki, tunti);
+        if (kl) rivit.push(['Tutkittu', kl.active
+          ? 'Taimenen syöntiikkuna on auki (' + kl.currentWindow + '). Nyt kannattaa pitää vieheet vedessä eikä keittää kahvia.'
+          : 'Seuraava syöntiikkuna ' + kl.nextWindow + (kl.hoursToNext != null ? ', noin ' + Math.round(kl.hoursToNext) + ' h päästä' : '') + '. Kellonajat ovat suuntaa-antavia (Keränen & Lind).']);
+      } catch (e) {}
+      try {
+        const kuu = getMoonPhase(hetki), nimi = kuu && kuu.name ? kuu.name : String(kuu);
+        rivit.push(['Konsensus', nimi + '. Moni uistelija vannoo uuden- ja täydenkuun nimeen. Tutkimusten tulokset ovat ristiriitaisia (solunaariteoria, Knight 1926), joten kuu ei vaikuta paikan valintaan.']);
+      } catch (e) {}
+      const pa = answers && answers.pressure;
+      if (pa) rivit.push(['Konsensus', pa === 'falling' ? 'Paine laskee. Vanha sääntö sanoo kalan syövän ennen säänmuutosta — tieteellistä näyttöä on vähän, kokemusta paljon.'
+        : pa === 'rising' ? 'Paine nousee. Moni kokee syönnin hiljenevän korkeapaineen tullessa.'
+        : 'Paine on vakaa. Siitä ei ole apua suuntaan eikä toiseen.']);
+      return rivit.map(r => '<div style="margin:3px 0;"><span class="chip" style="padding:1px 7px;font-size:11px;margin-right:6px;">' + r[0] + '</span>' + r[1] + '</div>').join('');
     }
 
     // ===== PÄIVÄN PUHESELOSTUS =====
@@ -11721,9 +12040,11 @@ lataa(eka);
     async function paivitaLahdeVarasto() {
       const c = parseCoords((document.getElementById('omCoords') || {}).value || '');
       if (!c) return;
-      const alku = new Date(), loppu = new Date(Date.now() + 36*3600e3);
-      try { varastoiEnnusteet('fmi', await haeFmiTunnit(c.lat, c.lon, alku, loppu)); } catch (e) {}
-      try { varastoiEnnusteet('om', await haeOmTunnit(c.lat, c.lon, alku, loppu)); } catch (e) {}
+      // tämän päivän alusta, jotta myös aamun jakso saa oman ennusteensa
+      const alku = new Date(); alku.setHours(0, 0, 0, 0);
+      const loppu = new Date(Date.now() + 36*3600e3);
+      try { const f = await haeFmiTunnit(c.lat, c.lon, alku, loppu); varastoiEnnusteet('fmi', f); paivitaTuore('fmi', f); } catch (e) {}
+      try { const o = await haeOmTunnit(c.lat, c.lon, alku, loppu); varastoiEnnusteet('om', o); paivitaTuore('om', o); } catch (e) {}
     }
     /* Kun asemahavainto saapuu, verrataan sitä molempien lähteiden ENNEN tuntia
        haettuun ennusteeseen. Asema on eri paikassa kuin järvi, joten tämä kertoo
@@ -11797,11 +12118,15 @@ lataa(eka);
       const t = new Date(pvm + 'T' + String(h).padStart(2, '0') + ':00');
       if (st) st.textContent = 'Haetaan ennustetta…';
       let fmi = {}, om = {};
+      // koko valittu päivä (aikataulun jaksot) + kolme tuntia ennen valittua hetkeä (painetrendi)
+      const pAlku = new Date(Math.min(new Date(pvm + 'T00:00').getTime(), t.getTime() - 3*3600e3));
+      const pLoppu = new Date(pvm + 'T23:00');
       if (c) await Promise.all([
-        haeFmiTunnit(c.lat, c.lon, new Date(t.getTime() - 3*3600e3), t).then(x => { fmi = x; }).catch(() => {}),
-        haeOmTunnit(c.lat, c.lon, new Date(t.getTime() - 3*3600e3), t).then(x => { om = x; }).catch(() => {})
+        haeFmiTunnit(c.lat, c.lon, pAlku, pLoppu).then(x => { fmi = x; }).catch(() => {}),
+        haeOmTunnit(c.lat, c.lon, pAlku, pLoppu).then(x => { om = x; }).catch(() => {})
       ]);
       varastoiEnnusteet('fmi', fmi); varastoiEnnusteet('om', om);
+      paivitaTuore('fmi', fmi); paivitaTuore('om', om);
       const k = tuntiAvain(t), k3 = tuntiAvain(t.getTime() - 3*3600e3);
       let varalla = false;
       const arvo = (kk, m) => {
@@ -11842,7 +12167,7 @@ lataa(eka);
     });
 
     window.addEventListener('load', function () {
-      setTimeout(paivitaLahdeVarasto, 8000);
+      setTimeout(paivitaLahdeVarasto, 3000);
       setInterval(function () { if (document.visibilityState === 'visible') paivitaLahdeVarasto(); }, 3*3600e3);
     });
 
@@ -12562,11 +12887,21 @@ lataa(eka);
 
       const svgGraph = generateForecastSVG(targetFractional, thermoVal, cachedSunData.rise, cachedSunData.set);
 
-      const wDir = omLatest ? omLatest.windDir : 270;
-      const wSpeed = omLatest ? omLatest.wind : 4.0;
+      /* 22.9.2026: mitattu tuuli ensin (FMI-asema), sitten ennuste — sama järjestys
+         kuin muualla sovelluksessa. Ennustepäivänä saaNyt() lukee valitun päivän
+         ennustetta, joten lähde nimetään sen mukaan. */
+      const saaP = saaNyt();
+      const wDir = saaP.tuuliSuunta !== null ? saaP.tuuliSuunta : (omLatest ? omLatest.windDir : 270);
+      const wSpeed = saaP.tuuli !== null ? saaP.tuuli : (omLatest ? omLatest.wind : 4.0);
+      const wLahde = ennusteTila ? (ennusteTila.varalla ? 'Open-Meteo-ennuste' : 'FMI-ennuste') : (saaP.tuuliLahde || 'Open-Meteo');
       const curTemp = latestSykeTemp !== null ? latestSykeTemp : (a.temp || 15);
+      const lampoLahde = latestSykeTemp !== null ? 'SYKE, mitattu' : (a.temp ? 'oma valinta' : 'oletus');
+      if (typeof window.akKaynnistaHiljaa === 'function') window.akKaynnistaHiljaa();   // aalto, virtaus, syvyys
+      if (!Object.keys(tuoreEnnuste.fmi).length && !Object.keys(tuoreEnnuste.om).length) paivitaLahdeVarasto();
       const hotspotResult = currentLocation.hasHotspotData
-        ? evaluateHotspots(targetHour, wDir, wSpeed, curTemp, a.season)
+        ? evaluateHotspots({ tunti: targetHour, hetki: now, tuuliSuunta: wDir, tuuliMs: wSpeed, tuuliLahde: wLahde,
+                             lampo: curTemp, kausi: a.season, valoPorras: valoPorras(targetFractional),
+                             syvyysTaimen: dTaimen, syvyysLohi: dJarvilohi })
         : genericLocationAdvice(targetHour, wDir, curTemp, a.season, currentLocation.name);
       viimeisinOttipaikka = hotspotResult;   // puheselostusta varten
       paivitaEarthNappi();                   // Earth-nappi vain Lappajärvellä
@@ -12579,7 +12914,7 @@ lataa(eka);
         <div class="stat-box"><div class="lbl">Pohjanmuoto</div><div class="val">${hotspotResult.topSpot.type}</div></div>
         <div class="stat-box"><div class="lbl">Pohjankovuus</div><div class="val" style="color:var(--hard-red)">${hotspotResult.topSpot.hardness}</div></div>
         <div class="stat-box"><div class="lbl">Ihannelämpö / Tuuli</div><div class="val" style="color:var(--amber)">${hotspotResult.topSpot.idealWind}</div></div>
-        <div class="stat-box"><div class="lbl">Uistelunopeus (GPS)</div><div class="val" style="color:var(--cyan)">4.0 – 4.8 km/h</div></div>
+        <div class="stat-box"><div class="lbl">Uistelunopeus (vedessä)</div><div class="val" style="color:var(--cyan)">${(() => { const n = lajinNopeus('taimen', curTemp); return vvNro(n.min) + '–' + vvNro(n.max) + ' km/h'; })()}</div></div>
       </div>
       ${(() => {
         // KOVAKOODATTU PAIKKAPERUSTELU POISTETTU KÄYTÖSTÄ 10.9.2026.
@@ -12606,20 +12941,67 @@ lataa(eka);
         if (!currentLocation.hasHotspotData) {
           return `<p style="font-size:14px;line-height:1.45;margin:10px 0 0;color:#BAC9DB;"><strong>Valintaperuste:</strong> ${hotspotResult.whyChosen}</p>`;
         }
-        const sp = hotspotResult.topSpot;
-        const tuuliTxt = (wDir !== null && wDir !== undefined)
-          ? `${wDir.toFixed(0)}° (${wSpeed.toFixed(1)} m/s)` : 'ei tiedossa';
+        /* 22.9.2026: perustelu rakennetaan pisteytyksestä joka kerta tämän päivän
+           datasta, ja jokainen syy kertoo todisteen tasonsa. */
+        const sp = hotspotResult.topSpot, par = hotspotResult.paras;
+        const chip = t => '<span class="chip" style="padding:1px 7px;font-size:11px;margin-right:6px;">' + t + '</span>';
+        const syyRivi = x => '<div style="margin:5px 0;">' + chip(x.taso) + x.teksti
+          + (x.p ? ' <span class="hint">(' + (x.p > 0 ? '+' : '') + x.p + ')</span>' : '') + '</div>';
+        const syyt = par.syyt.slice().sort((x, y) => y.p - x.p).map(syyRivi).join('');
+        const lataa = par.puuttuu && par.puuttuu.has('lataus')
+          ? '<p class="hint" style="margin:6px 0 0;">Aalto-, virtaus- ja syvyystiedot latautuvat vielä. Paina Analysoi uudelleen hetken päästä, niin ne tulevat mukaan.</p>' : '';
+        const vaihto = hotspotResult.vaihtoehdot.map(v => {
+          const paa = v.syyt.filter(x => x.p > 0).sort((x, y) => y.p - x.p)[0];
+          return '<div style="margin:5px 0;"><strong>' + v.spot.name + '</strong> <span class="hint">(' + v.pisteet + ' p)</span>'
+            + (paa ? '<br>' + chip(paa.taso) + paa.teksti : '') + '</div>';
+        }).join('');
+        const lahin = (lat, lon) => Object.values(lappajarviHotspots).reduce((acc, h) => {
+          const m = haversineDistMeters(lat, lon, h.lat, h.lon); return (!acc || m < acc.m) ? { nimi: h.name, m, h } : acc; }, null);
+        const vinkit = (typeof window.akYleisvinkit === 'function' ? window.akYleisvinkit({
+          lat: sp.lat, lon: sp.lon, kohdeSyvyys: dTaimen, aikaMs: now.getTime(), kerrostunut: kerrostuneisuus(),
+          luotettava: !!(tuuliKertyma && tuuliKertyma.luotettava), tuuliSuunta: tuuliKertyma ? tuuliKertyma.suunta : null,
+          tunteja: tuuliKertyma ? tuuliKertyma.tunteja : 0 }) : null) || [];
+        const vinkitHtml = vinkit.map(v => {
+          const l = lahin(v.lat, v.lon);
+          const suunta = l ? kompassiMista((Math.atan2((v.lon - l.h.lon) * Math.cos(v.lat*Math.PI/180), v.lat - l.h.lat) * 180 / Math.PI + 540) % 360) : '';
+          return '<div style="margin:5px 0;">' + chip(v.taso) + v.teksti + ' <span class="hint">(' + v.lat.toFixed(5) + ', ' + v.lon.toFixed(5)
+            + (l ? ' · lähin nimetty paikka ' + l.nimi + ', ' + Math.round(l.m) + ' m, se on kohdasta ' + suunta : '') + ')</span></div>';
+        }).join('');
         return `
       <p style="font-size:14px;line-height:1.45;margin:10px 0 0;color:#BAC9DB;">
-        <strong>Miksi tämä paikka:</strong> Valinta tehtiin tuulen suunnan ja pohjanmuodon perusteella.
-        Tuuli nyt ${tuuliTxt}, paikan ihannetuuli ${sp.idealWind}.
-        Pohjanmuoto ja kovuus ovat karttatietoa, eivät tämän päivän havaintoja —
-        malli ei tunne veden tilaa juuri tällä paikalla.
+        <strong>Miksi tämä paikka</strong> — ${par.pisteet} pistettä. Tuuli ${n1(wSpeed)} m/s ${kompassiMista(wDir)} (${wLahde}),
+        vesi ${n1(curTemp)} °C (${lampoLahde}).
       </p>
+      <div style="font-size:14px;line-height:1.45;color:var(--text);">${syyt}</div>${lataa}
+      ${vaihto ? '<p style="font-size:14px;margin:10px 0 0;"><strong>Seuraavat vaihtoehdot</strong></p><div style="font-size:13px;line-height:1.45;">' + vaihto + '</div>' : ''}
+      ${vinkitHtml ? '<p style="font-size:14px;margin:10px 0 0;"><strong>Yleisvinkit kartasta</strong> — ei nimettyä paikkaa, mutta peruste on</p><div style="font-size:13px;line-height:1.45;">' + vinkitHtml + '</div>' : ''}
+      <p style="font-size:14px;margin:10px 0 0;"><strong>Päivän aktiivisuus</strong> — kertoo milloin, ei missä</p>
+      <div style="font-size:13px;line-height:1.45;">${aktiivisuusHtml(now, targetHour)}</div>
       <p style="font-size:14px;line-height:1.45;margin:6px 0 0;color:var(--text);">
         <strong>Ajolinja:</strong> Aja pohjanmuodon mukaan: ${sp.type}.
         Vieheet mallin laskemiin syvyyksiin — taimen ${dTaimen.toFixed(1)} m, järvilohi ${dJarvilohi.toFixed(1)} m.
-      </p>`;
+      </p>
+      ${(() => {
+        /* NOPEUS — 22.9.2026: sama lajinNopeus() kuin viehevalinnassa, suhteessa
+           tavalliseen nopeuteesi, ja virtauskorjaus paikan kohdalta. */
+        const nt = lajinNopeus('taimen', curTemp), nl = lajinNopeus('jarvilohi', curTemp), ty = tyypillinenNopeus();
+        const kohti = d => ['pohjoiseen','koilliseen','itään','kaakkoon','etelään','lounaaseen','länteen','luoteeseen'][Math.round((((d % 360) + 360) % 360) / 45) % 8];
+        const m = (typeof window.akMalliSync === 'function') ? window.akMalliSync(sp.lat, sp.lon, now.getTime()) : null;
+        let virta = '';
+        if (m) {
+          const syva = dTaimen > 3;   // matalalla uiva viehe tuntee pintavirran, syvemmällä kierron
+          const v = syva ? m.syvaKmh : m.pintaKmh, suunta = syva ? m.syvaSuunta : m.pintaSuunta;
+          if (typeof v === 'number' && v >= 0.1 && typeof suunta === 'number')
+            virta = '<span class="chip" style="padding:1px 7px;font-size:11px;margin-right:6px;">Malli</span>'
+              + (syva ? 'Vetosyvyydellä' : 'Pinnassa') + ' vesi virtaa noin ' + vvNro(v) + ' km/h ' + kohti(suunta)
+              + '. Sinne ajaessa GPS näyttää noin ' + vvNro(v) + ' km/h enemmän kuin viehe oikeasti kulkee, vastakkaiseen suuntaan saman verran vähemmän. '
+              + 'Pidä vedessä sama nopeus, älä GPS:ssä. Mallin arvio — voi heittää 2–3-kertaisesti.';
+        }
+        return `<p style="font-size:14px;line-height:1.45;margin:6px 0 0;color:var(--text);">
+          <strong>Nopeus:</strong> taimen ${vvNro(nt.min)}–${vvNro(nt.max)}, järvilohi ${vvNro(nl.min)}–${vvNro(nl.max)} km/h vedessä
+          (mahdollinen alue ${vvNro(LOHI_NOPEUS_ALUE[0])}–${vvNro(LOHI_NOPEUS_ALUE[1])} km/h). ${nopeusSuhteessa(nt.min, nt.max, ty)}</p>`
+          + (virta ? `<p style="font-size:13px;line-height:1.45;margin:4px 0 0;color:var(--text);">${virta}</p>` : '');
+      })()}`;
       })()}
       ${(() => {
         if (!currentLocation.hasHotspotData) return '';
