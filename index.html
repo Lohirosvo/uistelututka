@@ -8243,6 +8243,7 @@ lataa(eka);
     // Teksti kirjoitetaan KUUNNELTAVAKSI, ei luetteloksi: kokonaisia lauseita, ei
     // lyhenteitä eikä sulkuja. Tarkoitus on että sen voi kuunnella ajaessa.
     let puheKaynnissa = false;
+    let puheSukupolvi = 0;   // kasvaa joka puheen alussa ja pysäytyksessä
 
     // ===== ILMATIETEEN LAITOKSEN ASEMAHAVAINTO =====
     // Open-Meteo antaa mallin ennusteen; tämä antaa LÄHIMMÄN ASEMAN MITATUN tuulen.
@@ -8935,7 +8936,7 @@ lataa(eka);
     // teksti kopioidaan leikepöydälle — ja jos sekään ei onnistu, se näytetään
     // ruudulla valittavaksi. Kolme porrasta, jotta jotain toimii aina.
     async function jaaPuhe() {
-      const t = puheteksti();
+      const t = (puheteksti() || '').replace(/\s*¶\s*/g, '\n\n') || null;
       const tila = document.getElementById('jakoTila');
       const kerro = (viesti, vari) => {
         if (!tila) return;
@@ -8977,7 +8978,7 @@ lataa(eka);
     // Näyttää selostuksen tekstinä. Tämä on varasuunnitelma jos puhe ei toimi, mutta
     // myös itsessään hyödyllinen: tekstin voi lukea nopeasti ennen vesille lähtöä.
     function naytaPuheteksti() {
-      const t = puheteksti();
+      const t = (puheteksti() || '').replace(/\s*¶\s*/g, '\n\n') || null;
       const el = document.getElementById('puheTekstiBox');
       if (!el) return;
       if (!t) { el.innerHTML = '<p class="hint">Aja ensin analyysi.</p>'; el.style.display = 'block'; return; }
@@ -8985,21 +8986,94 @@ lataa(eka);
       el.style.display = 'block';
     }
 
+    /* ===== PÄIVÄN SELOSTUS — uudistettu 22.9.2026 =====
+       Kuunneltavaksi matkalla, joten tärkein ensin: paikka, syvyys ja vauhti heti
+       alkuun, sitten perustelut todisteen tasoineen, päivän kulku, syöntiikkuna,
+       valo, sää ja lopetus. Osiot erotetaan merkillä ¶: puhe pitää niiden välissä
+       tauon, ja tekstinä ne näkyvät kappaleina. Luvut sanotaan niin kuin ne
+       kuullaan: "10 astetta", ei "10 pilkku 0 astetta". */
+    const TUULI_SANA = ['pohjoistuulta','koillistuulta','itätuulta','kaakkoistuulta',
+                        'etelätuulta','lounaistuulta','länsituulta','luoteistuulta'];
+    const tuuliSana = d => TUULI_SANA[Math.round((((d % 360) + 360) % 360) / 45) % 8];
+    function puheLuku(x, des) {
+      const r = Number(x).toFixed(des === undefined ? 1 : des);
+      return r.replace(/[.,]0+$/, '').replace('.', ' pilkku ');
+    }
+    const TASO_PUHE = { 'Tutkittu': 'Tämä on tutkittua tietoa.', 'Oma saalis': 'Tämä perustuu omiin saaliisiisi.',
+      'Konsensus': 'Tämä on uistelijoiden yleinen käsitys, ei tieteellistä näyttöä.', 'Malli': 'Tämä on mallin arvio.',
+      'Paikkatieto': 'Tämä on omista merkinnöistäsi.', 'Rekisteri': 'Tämä on Suurkalarekisteristä.' };
+    // "kello 6 05", ei "06.05": puhemoottori lukee välilyönnin luontevasti
+    const kelloPuhe = d => d.getHours() + (d.getMinutes() ? ' ' + String(d.getMinutes()).padStart(2, '0') : '');
+    function eroPuhe(x) {
+      const r = Math.round(x * 2) / 2;
+      if (r === 0.5) return 'puoli kilometriä tunnissa';
+      if (r === 1) return 'kilometrin tunnissa';
+      return puheLuku(r) + ' kilometriä tunnissa';
+    }
+    function puheSiisti(t) {
+      return String(t).replace(/<[^>]+>/g, '').replace(/\s*\([^)]*\)/g, '')
+        .replace(/°C/g, ' astetta').replace(/(\d),(\d)/g, '$1 pilkku $2').replace(/(\d)\s*km\/h/g, '$1 kilometriä tunnissa')
+        .replace(/(\d)\s*m\/s/g, '$1 metriä sekunnissa').replace(/(\d)\s*m\b/g, '$1 metriä').replace(/–/g, ' – ')
+        .replace(/\s+/g, ' ').trim();
+    }
+
     function puheteksti() {
       const e = viimeisinEnnuste;
       const a = answers;
       if (!e || e.taimen === null) return null;
-
       const osat = [];
-      const kello = analyysiHetki().toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' });
+      const hetki = analyysiHetki();
+      const kello = kelloPuhe(hetki);
       const jarvi = currentLocation ? currentLocation.name.replace(/\s*\(.*\)/, '') : 'järvellä';
+      const jl = m => Math.round(m * 3.28084);
+      const top = viimeisinOttipaikka;
 
-      // Suomen sijataivutus ei onnistu luotettavasti ohjelmallisesti (Lappajärvi ->
-      // Lappajärvellä, ei Lappajärvillä), joten muotoillaan lause niin ettei taivutusta
-      // tarvita. Kello luetaan pisteellä, jonka suomenkielinen puhesynteesi tulkitsee oikein.
-      osat.push(`Hei. Kello on ${kello}, ja kohteena on ${jarvi}.`);
+      // 1 Avaus
+      if (ennusteTila) {
+        const pv = ['sunnuntaille','maanantaille','tiistaille','keskiviikolle','torstaille','perjantaille','lauantaille'][hetki.getDay()];
+        const huomenna = ennusteTila.pvm === paikallinenPvm(1);
+        osat.push('Hei. Tässä suunnitelma ' + (huomenna ? 'huomiselle, ' : '') + pv + ' kello ' + kello + ', kohteena ' + jarvi + '. Sää on ennustetta, ei mittausta.');
+      } else {
+        const h = new Date().getHours();
+        const tervehdys = h < 10 ? 'Huomenta' : (h < 17 ? 'Päivää' : 'Iltaa');
+        osat.push(tervehdys + '. Kello on ' + kello + ', ja kohteena on ' + jarvi + '.');
+      }
 
-      // Vesi ja sää
+      // 2 Tärkein ensin: paikka, syvyys, vauhti
+      const paa = [];
+      if (top && top.topSpot) paa.push('Tärkein ensin. Aloita tästä: ' + top.topSpot.name.replace(/\s*\(.*\)/, '') + '.');
+      paa.push('Taimen noin ' + puheLuku(e.taimen) + ' metrissä, eli ' + jl(e.taimen) + ' jalassa. Järvilohi noin '
+        + puheLuku(e.jarvilohi) + ' metrissä, eli ' + jl(e.jarvilohi) + ' jalassa.');
+      try {
+        const vesiN = (latestSykeTemp !== null && latestSykeTemp !== undefined) ? latestSykeTemp : (a.temp !== undefined ? a.temp : null);
+        const nt = lajinNopeus('taimen', vesiN);
+        paa.push('Vauhti vedessä ' + puheLuku(nt.min) + ' ja ' + puheLuku(nt.max) + ' kilometrin välillä tunnissa.');
+        const ty = tyypillinenNopeus();
+        if (ty) {
+          const ero = (nt.min + nt.max) / 2 - (ty.min + ty.max) / 2;
+          paa.push(Math.abs(ero) < 0.3 ? 'Se on sama kuin tavallisesti ajat.'
+            : 'Se on noin ' + eroPuhe(Math.abs(ero)) + ' tavallista ' + (ero > 0 ? 'nopeampaa.' : 'hitaampaa.'));
+        }
+      } catch (err) {}
+      osat.push(paa.join(' '));
+
+      // 3 Miksi siellä: kaksi painavinta syytä todisteen tasoineen, vaihtoehto, suljetut
+      if (top && top.paras && top.paras.syyt) {
+        const syyt = top.paras.syyt.filter(x => x.p > 0).sort((x, y) => y.p - x.p).slice(0, 2);
+        const sama = syyt.length > 1 && syyt.every(x => x.taso === syyt[0].taso);
+        const miksi = sama ? syyt.map(x => puheSiisti(x.teksti)).concat(TASO_PUHE[syyt[0].taso] ? ['Molemmat perusteet: ' + TASO_PUHE[syyt[0].taso].replace('Tämä on ', '').replace('Tämä perustuu ', 'perustuvat ')] : [])
+                           : syyt.map(x => puheSiisti(x.teksti) + ' ' + (TASO_PUHE[x.taso] || ''));
+        if (miksi.length) osat.push('Miksi siellä. ' + miksi.join(' '));
+        const alt = (top.vaihtoehdot || [])[0];
+        const suljetut = (top.pisteytys || []).filter(x => x.suljettu).map(x => x.spot.name.replace(/\s*\(.*\)/, ''));
+        const lisa = [];
+        if (alt) lisa.push('Jos siellä on hiljaista, vaihtoehto on ' + alt.spot.name.replace(/\s*\(.*\)/, '') + '.');
+        if (suljetut.length) lisa.push('Aallokko sulkee pois: ' + suljetut.join(', ') + '. Älä mene sinne tällä veneellä.');
+        if (lisa.length) osat.push(lisa.join(' '));
+      }
+
+      // 4 Olosuhteet: vesi, tuuli (mitattu ensin), taimenkeli
+      const olo = [];
       const vesi = (latestSykeTemp !== null && latestSykeTemp !== undefined) ? latestSykeTemp : a.temp;
       if (vesi !== undefined && vesi !== null) {
         let kuvaus = '';
@@ -9008,103 +9082,58 @@ lataa(eka);
         else if (vesi >= 8) kuvaus = 'Vesi on viilenemässä, ja se on hyvä merkki.';
         else if (vesi >= 4) kuvaus = 'Tämä on taimenen parasta aikaa.';
         else kuvaus = 'Vesi on kylmää, ja kala on hidasliikkeistä.';
-        osat.push(`Pintavesi on ${vesi.toFixed(1).replace('.', ' pilkku ')} astetta. ${kuvaus}`);
+        olo.push('Pintavesi on ' + puheLuku(vesi) + ' astetta. ' + kuvaus);
       }
-      if (omLatest && omLatest.wind !== undefined && omLatest.wind !== null) {
-        const suunta = omLatest.windDir !== null && omLatest.windDir !== undefined
-          ? compassName(omLatest.windDir) : null;
-        osat.push(`Tuulee ${omLatest.wind.toFixed(0)} metriä sekunnissa${suunta ? ' ' + suunta.toLowerCase() + 'tuulta' : ''}.`);
+      {
+        const saa = saaNyt();
+        const ws = saa.tuuli, wd = saa.tuuliSuunta;
+        if (ws !== null && ws !== undefined) {
+          const mitattu = !ennusteTila && typeof fmiTuuli === 'object' && fmiTuuli && fmiTuuli.ws != null;
+          olo.push('Tuulee ' + Math.round(ws) + ' metriä sekunnissa' + (typeof wd === 'number' ? ' ' + tuuliSana(wd) : '')
+            + (mitattu ? ', mitattuna asemalta.' : '.'));
+        }
       }
-
-      // Taimenkeli
       if (e.taimenkeli !== null && e.taimenkeli !== undefined) {
-        osat.push(`Taimenkeli on ${e.taimenkeli} prosenttia, eli ${(e.tkLabel || '').toLowerCase()}.`);
-        // Kaksi merkittävintä tekijää, jotta kuulija ymmärtää MIKSI
+        olo.push('Taimenkeli on ' + e.taimenkeli + ' prosenttia, eli ' + (e.tkLabel || '').toLowerCase() + '.');
         if (Array.isArray(e.tkParts) && e.tkParts.length) {
-          const jarj = e.tkParts.slice()
-            .filter(p => p && typeof p.v === 'number' && p.t)
-            .sort((x, y) => Math.abs(y.v) - Math.abs(x.v));
-          const siisti = s => String(s).replace(/\s*\([^)]*\)/g, '')
-            .replace(/\bm\b/g, 'metrin').replace(/°C/g, ' astetta')
-            .replace(/\s+/g, ' ').trim();
-          const plussat = jarj.filter(p => p.v > 0).slice(0, 1).map(p => siisti(p.t));
-          const miinukset = jarj.filter(p => p.v < 0).slice(0, 1).map(p => siisti(p.t));
-          if (plussat.length) osat.push(`Puolesta puhuu ${plussat[0].toLowerCase()}.`);
-          if (miinukset.length) osat.push(`Vastaan puhuu ${miinukset[0].toLowerCase()}.`);
+          const jarj = e.tkParts.slice().filter(p => p && typeof p.v === 'number' && p.t).sort((x, y) => Math.abs(y.v) - Math.abs(x.v));
+          const plus = jarj.find(p => p.v > 0), miinus = jarj.find(p => p.v < 0);
+          if (plus) olo.push('Puolesta: ' + puheSiisti(plus.t).toLowerCase() + '.');
+          if (miinus) olo.push('Vastaan: ' + puheSiisti(miinus.t).toLowerCase() + '.');
         }
       }
+      if (olo.length) osat.push(olo.join(' '));
 
-      // Syvyydet — vain olennaiset, ei kaikkia kuutta
-      osat.push(`Syöttikala on noin ${e.muikku.toFixed(0)} metrissä, eli ${Math.round(e.muikku * 3.28084)} jalassa.`);
-      // Jalat mukaan puheeseen, koska takila on jalkamitoitettu.
-      const jl = m => Math.round(m * 3.28084);
-      osat.push(`Taimenelle suositus on ${e.taimen.toFixed(1).replace('.', ' pilkku ')} metriä, eli ${jl(e.taimen)} jalkaa.`);
-      osat.push(`Järvilohelle ${e.jarvilohi.toFixed(1).replace('.', ' pilkku ')} metriä, eli ${jl(e.jarvilohi)} jalkaa.`);
-      osat.push(`Kuhalle ${e.kuha.toFixed(1).replace('.', ' pilkku ')} metriä, eli ${jl(e.kuha)} jalkaa.`);
-
-      // Ottipaikka
-      if (viimeisinOttipaikka && viimeisinOttipaikka.topSpot) {
-        osat.push(`Paras paikka juuri nyt on ${viimeisinOttipaikka.topSpot.name.replace(/\s*\(.*\)/, '')}.`);
-        if (viimeisinOttipaikka.whyChosen) {
-          // Riisutaan lyhenteet ja asteet luettavaan muotoon
-          const syy = String(viimeisinOttipaikka.whyChosen)
-            .replace(/°C/g, ' astetta')
-            .replace(/(\d)\s*m\b/g, '$1 metrin')
-            .replace(/\s*\([^)]*\)/g, '')
-            .replace(/\s+/g, ' ')
-            .trim();
-          osat.push(syy);
+      // 5 Päivän kulku: aikataulun jaksot, peräkkäiset samat yhdistetään
+      if (top && Array.isArray(top.timeline) && top.timeline.length) {
+        const nimet = ['Aamulla', 'Päivällä', 'Illalla'];
+        const jaksot = top.timeline.map((t, i) => ({ nimi: nimet[i] || t.time, paikka: String(t.spot).replace(/\s*\(.*\)/, '') }));
+        const lauseet = [];
+        for (let i = 0; i < jaksot.length; i++) {
+          let j = i; while (j + 1 < jaksot.length && jaksot[j + 1].paikka === jaksot[i].paikka) j++;
+          lauseet.push((j > i ? jaksot[i].nimi + ' ja ' + jaksot[j].nimi.toLowerCase() : jaksot[i].nimi) + ' ' + jaksot[i].paikka + '.');
+          i = j;
         }
+        osat.push('Päivän kulku. ' + lauseet.join(' ') + ' Jaksot on laskettu kunkin ajan omalla tuuliennusteella.');
       }
 
-      // ===== SÄÄENNUSTE =====
-      // Tiivistetään FMI:n tuntiennusteesta kolme asiaa: mitä tulee, milloin tuuli
-      // muuttuu ja tuleeko sadetta. Ei tuntikohtaista luetteloa — sitä ei jaksa kuunnella.
-      if (fmiEnnuste && fmiEnnuste.length >= 4) {
-        const seuraavat = fmiEnnuste.slice(0, 8);
-        const tuulet = seuraavat.map(r => r.WindSpeedMS).filter(x => x != null);
-        const lampo = seuraavat.map(r => r.Temperature).filter(x => x != null);
-        const sateet = seuraavat.map(r => r.Precipitation1h || 0);
-        const saeOsat = [];
-
-        if (lampo.length) {
-          const alku = Math.round(lampo[0]), loppu = Math.round(lampo[lampo.length - 1]);
-          saeOsat.push(Math.abs(loppu - alku) < 2
-            ? `Ilma pysyy ${alku} asteen tuntumassa.`
-            : `Ilma ${alku} astetta, ${loppu > alku ? 'nousee' : 'laskee'} ${loppu} asteeseen.`);
-        }
-        if (tuulet.length) {
-          const nyt = tuulet[0], suurin = Math.max(...tuulet);
-          const huippuTunti = seuraavat[tuulet.indexOf(suurin)];
-          if (suurin >= nyt + 2 && huippuTunti) {
-            const klo = huippuTunti.aika.getHours();
-            saeOsat.push(`Tuuli voimistuu ${Math.round(nyt)} metristä ${Math.round(suurin)} metriin `
-              + `noin kello ${klo}.`);
-          } else if (Math.max(...tuulet) - Math.min(...tuulet) < 2) {
-            saeOsat.push(`Tuuli pysyy ${Math.round(nyt)} metrin tuntumassa.`);
-          } else {
-            saeOsat.push(`Tuuli ${Math.round(nyt)} metriä, tasaantuu illemmalla.`);
-          }
-          if (suurin >= TUULI_JATKUVA_RAJA) {
-            saeOsat.push('Huomaa että se ylittää turvarajan, joten pidä silmällä.');
-          }
-        }
-        const sadeIndeksi = sateet.findIndex(x => x >= 0.2);
-        if (sadeIndeksi >= 0) {
-          const klo = seuraavat[sadeIndeksi].aika.getHours();
-          saeOsat.push(sadeIndeksi === 0 ? 'Sade on jo alkanut.'
-                                         : `Sadetta odotettavissa noin kello ${klo}.`);
-        } else {
-          saeOsat.push('Sadetta ei ole luvassa.');
-        }
-        if (saeOsat.length) osat.push('Sää. ' + saeOsat.join(' '));
+      // 6 Syöntiikkuna, kuu ja paine
+      {
+        const akt = [];
+        try {
+          const kl = keranenLindStatus(hetki, hetki.getHours());
+          if (kl) akt.push(kl.active ? 'Taimenen syöntiikkuna on auki juuri nyt. Pidä vieheet vedessä.'
+            : 'Seuraava syöntiikkuna on kello ' + String(kl.nextWindow).replace(/\b0(\d)/g, '$1').replace(/\s*–\s*/, ' ja ') + ' välillä. Kellonajat ovat suuntaa-antavia.');
+        } catch (err) {}
+        try {
+          const kuu = getMoonPhase(hetki), nimi = kuu && kuu.name ? kuu.name : null;
+          if (nimi) akt.push(nimi + '. Uistelijoiden mukaan uusi- ja täysikuu piristävät syöntiä. Tutkimus ei ole asiasta yksimielinen.');
+        } catch (err) {}
+        if (a.pressure === 'falling') akt.push('Paine laskee. Vanha sääntö sanoo kalan syövän ennen säänmuutosta.');
+        else if (a.pressure === 'rising') akt.push('Paine nousee. Moni kokee syönnin hiljenevän korkeapaineen tullessa.');
+        if (akt.length) osat.push(akt.join(' '));
       }
 
-      // ===== VALO-OLOSUHTEET =====
-      // Kymmenportainen asteikko, ei metrejä. Tarkoitus on antaa tuntuma siitä
-      // milloin valoa on paljon ja milloin vähän — ei tarkkuutta, jota mallissa
-      // ei ole. Pinnan valaistus jaetaan portaisiin logaritmisesti, koska ihmisen
-      // valohavainto ja veden vaimennus ovat molemmat logaritmisia.
       {
         const nyt = analyysiHetki();
         const doy = Math.floor((nyt - new Date(nyt.getFullYear(), 0, 0)) / 86400000);
@@ -9147,10 +9176,68 @@ lataa(eka);
         osat.push('Valo. ' + valoOsat.join(' '));
       }
 
-      // ===== LOPPUKEVENNYS =====
-      // Vaihtelee päivän mukaan, jotta se ei ole sama joka kerta. Sidottu päivän
-      // numeroon eikä satunnaislukuun, jotta saman reissun aikana toistuva kuuntelu
-      // antaa saman lopun eikä kuulosta rikkinäiseltä.
+      // 8 Sää: tänään Harmonie-ennuste kuten ennen; ennustepäivänä valitun päivän ennuste
+      if (ennusteTila) {
+        const tunnit = [];
+        for (let i = 0; i < 8; i++) { const t = new Date(hetki.getTime() + i*3600e3); const k = t.toISOString().slice(0, 13);
+          const f = (tuoreEnnuste.fmi[k] || tuoreEnnuste.om[k]); if (f && typeof f.ws === 'number') tunnit.push({ h: t.getHours(), ws: f.ws, t: f.t }); }
+        if (tunnit.length >= 3) {
+          const ws = tunnit.map(x => x.ws), mx = Math.max(...ws), nyt = ws[0];
+          const saeOsat = [];
+          const lt = tunnit.map(x => x.t).filter(x => typeof x === 'number');
+          if (lt.length) saeOsat.push('Ilma ' + Math.round(lt[0]) + ' astetta' + (Math.abs(lt[lt.length-1] - lt[0]) >= 2 ? ', ' + (lt[lt.length-1] > lt[0] ? 'nousee ' : 'laskee ') + Math.round(lt[lt.length-1]) + ' asteeseen.' : '.'));
+          if (mx >= nyt + 2) saeOsat.push('Tuuli voimistuu ' + Math.round(nyt) + ' metristä ' + Math.round(mx) + ' metriin noin kello ' + tunnit[ws.indexOf(mx)].h + '.');
+          else saeOsat.push('Tuuli pysyy ' + Math.round(nyt) + ' metrin tuntumassa.');
+          if (mx >= TUULI_JATKUVA_RAJA) saeOsat.push('Se ylittää turvarajan, joten seuraa tilannetta.');
+          saeOsat.push('Sadetiedot eivät ole tässä ennusteessa mukana.');
+          osat.push('Sää. ' + saeOsat.join(' '));
+        }
+      } else {
+      if (fmiEnnuste && fmiEnnuste.length >= 4) {
+          const seuraavat = fmiEnnuste.slice(0, 8);
+          const tuulet = seuraavat.map(r => r.WindSpeedMS).filter(x => x != null);
+          const lampo = seuraavat.map(r => r.Temperature).filter(x => x != null);
+          const sateet = seuraavat.map(r => r.Precipitation1h || 0);
+          const saeOsat = [];
+
+          if (lampo.length) {
+            const alku = Math.round(lampo[0]), loppu = Math.round(lampo[lampo.length - 1]);
+            saeOsat.push(Math.abs(loppu - alku) < 2
+              ? `Ilma pysyy ${alku} asteen tuntumassa.`
+              : `Ilma ${alku} astetta, ${loppu > alku ? 'nousee' : 'laskee'} ${loppu} asteeseen.`);
+          }
+          if (tuulet.length) {
+            const nyt = tuulet[0], suurin = Math.max(...tuulet);
+            const huippuTunti = seuraavat[tuulet.indexOf(suurin)];
+            if (suurin >= nyt + 2 && huippuTunti) {
+              const klo = huippuTunti.aika.getHours();
+              saeOsat.push(`Tuuli voimistuu ${Math.round(nyt)} metristä ${Math.round(suurin)} metriin `
+                + `noin kello ${klo}.`);
+            } else if (Math.max(...tuulet) - Math.min(...tuulet) < 2) {
+              saeOsat.push(`Tuuli pysyy ${Math.round(nyt)} metrin tuntumassa.`);
+            } else {
+              saeOsat.push(`Tuuli ${Math.round(nyt)} metriä, tasaantuu illemmalla.`);
+            }
+            if (suurin >= TUULI_JATKUVA_RAJA) {
+              saeOsat.push('Huomaa että se ylittää turvarajan, joten pidä silmällä.');
+            }
+          }
+          const sadeIndeksi = sateet.findIndex(x => x >= 0.2);
+          if (sadeIndeksi >= 0) {
+            const klo = seuraavat[sadeIndeksi].aika.getHours();
+            saeOsat.push(sadeIndeksi === 0 ? 'Sade on jo alkanut.'
+                                           : `Sadetta odotettavissa noin kello ${klo}.`);
+          } else {
+            saeOsat.push('Sadetta ei ole luvassa.');
+          }
+          if (saeOsat.length) osat.push('Sää. ' + saeOsat.join(' '));
+        }
+      }
+
+      // 9 Muut syvyydet lyhyesti
+      osat.push('Syöttikala on noin ' + puheLuku(e.muikku, 0) + ' metrissä. Kuha, jos sitä kokeilet, noin ' + puheLuku(e.kuha) + ' metrissä.');
+
+      // 10 Lopetus
       const kevennykset = [
         'Kala on siellä missä se on, ei siellä missä malli sanoo. Mutta useammin sielläkin.',
         'Jos ei ota, syy on aina vieheessä. Niin sitä on aina sanottu.',
@@ -9161,11 +9248,8 @@ lataa(eka);
         'Kaikki mallit ovat vääriä. Jotkut niistä ovat kalaisia.'
       ];
       const pv = Math.floor(Date.now() / 86400000);
-
-      osat.push('Muista painaa kala kiinni kun tulee otti.');
-      osat.push(kevennykset[pv % kevennykset.length]);
-      osat.push('Hyvää reissua.');
-      return osat.join(' ');
+      osat.push('Kun tulee otti, paina Kala kiinni. ' + kevennykset[pv % kevennykset.length] + ' Kireitä siimoja.');
+      return osat.join(' ¶ ');
     }
 
     /* 22.9.2026: sama puhetoiminto lukee nyt myös saaliskoosteen. Ilman
@@ -9197,41 +9281,65 @@ lataa(eka);
       // palauttaa tyhjän taulukon, ja jos puhe käynnistetään silloin, kieli menee
       // väärin tai ääntä ei kuulu lainkaan. Odotetaan listaa lyhyesti ennen aloitusta.
       const aloita = () => {
-        const u = new SpeechSynthesisUtterance(teksti);
+        /* 22.9.2026: teksti puhutaan osina (erotin ¶), ja osien väliin jää lyhyt
+           tauko. Pitkä selostus ei ole yksi jättilausuma, jonka puhemoottori voisi
+           katkaista, ja kuulija erottaa osiot. Ilman erotinta toimii kuten ennen.
+           Sukupolvi estää ketjun jatkumisen, kun puhe pysäytetään. */
+        const palat = String(teksti).split('¶').map(x => x.trim()).filter(Boolean);
         const aani = suomiAani();
-        if (aani) u.voice = aani;
-        u.lang = 'fi-FI';
-        u.rate = as.nopeus || 0.95;   // hieman hitaampi, jotta luvut ehtii kuulla ajaessa
-        u.pitch = 1.05;
+        const suku = ++puheSukupolvi;
+        const teeLausuma = (txt) => {
+          const u = new SpeechSynthesisUtterance(txt);
+          if (aani) u.voice = aani;
+          u.lang = 'fi-FI';
+          u.rate = as.nopeus || 0.95;   // hieman hitaampi, jotta luvut ehtii kuulla ajaessa
+          u.pitch = 1.05;
+          return u;
+        };
+        const lopeta = () => {
+          puheKaynnissa = false;
+          const b = document.getElementById(nappiId);
+          if (b) b.textContent = nappiTeksti;
+        };
+        const puhuPala = (i) => {
+          if (suku !== puheSukupolvi) return;
+          const u = teeLausuma(palat[i]);
+          if (i === 0) {
+          u.onstart = () => {
+            puheKaynnissa = true;
+            const b = document.getElementById(nappiId);
+            if (b) b.textContent = '⏹ Pysäytä';
+            if (st) st.innerHTML = aani
+              ? `<span style="color:var(--cyan);">Toistetaan äänellä ${aani.name}.</span>`
+              : '<span style="color:var(--amber);">Suomenkielistä ääntä ei löytynyt — laite lukee oletusäänellä. Asenna suomen kielipaketti: Asetukset, Kieli ja syöttötapa, Tekstistä puheeksi.</span>';
+          };
 
-        u.onstart = () => {
-          puheKaynnissa = true;
-          const b = document.getElementById(nappiId);
-          if (b) b.textContent = '⏹ Pysäytä';
-          if (st) st.innerHTML = aani
-            ? `<span style="color:var(--cyan);">Toistetaan äänellä ${aani.name}.</span>`
-            : '<span style="color:var(--amber);">Suomenkielistä ääntä ei löytynyt — laite lukee oletusäänellä. Asenna suomen kielipaketti: Asetukset, Kieli ja syöttötapa, Tekstistä puheeksi.</span>';
-        };
-        u.onend = () => {
-          puheKaynnissa = false;
-          const b = document.getElementById(nappiId);
-          if (b) b.textContent = nappiTeksti;
-        };
-        u.onerror = (ev) => {
-          puheKaynnissa = false;
-          const b = document.getElementById(nappiId);
-          if (b) b.textContent = nappiTeksti;
-          if (st) st.innerHTML = `<span style="color:var(--hard-red);">Puhe ei onnistunut (${ev && ev.error ? ev.error : 'tuntematon syy'}). Näytetään teksti.</span>`;
-          naytaVara();
+          }
+          u.onend = () => {
+            if (suku !== puheSukupolvi) return;
+            if (i + 1 < palat.length) setTimeout(() => puhuPala(i + 1), 450);
+            else lopeta();
+          };
+          u.onerror = (ev) => {
+            if (suku !== puheSukupolvi) return;   // pysäytetty, ei virhe
+            puheKaynnissa = false;
+            const b = document.getElementById(nappiId);
+            if (b) b.textContent = nappiTeksti;
+            if (st) st.innerHTML = `<span style="color:var(--hard-red);">Puhe ei onnistunut (${ev && ev.error ? ev.error : 'tuntematon syy'}). Näytetään teksti.</span>`;
+            naytaVara();
+          };
+
+
+          window.speechSynthesis.speak(u);
         };
 
         try {
           window.speechSynthesis.cancel();
-          window.speechSynthesis.speak(u);
+          puhuPala(0);
           // Varmistus: jos puhe ei käynnisty kahdessa sekunnissa, näytetään teksti.
           setTimeout(() => {
-            if (!puheKaynnissa) {
-              if (st) st.innerHTML = '<span style="color:var(--amber);">Ääni ei käynnistynyt. Tarkista laitteen puhemoottori ja mediaäänenvoimakkuus. Selostus näkyy alla tekstinä.</span>';
+            if (!puheKaynnissa && suku === puheSukupolvi) {
+              if (st) st.innerHTML = '<span style="color:var(--amber);">Ääni ei käynnistynyt. Tarkista laitteen puhemoottori ja mediaäänenvoimakkuus. Näytetään teksti.</span>';
               naytaVara();
             }
           }, 2000);
@@ -9283,6 +9391,7 @@ lataa(eka);
     }
 
     function pysaytaPuhe() {
+      puheSukupolvi++;   // katkaisee osien ketjun
       if ('speechSynthesis' in window) window.speechSynthesis.cancel();
       puheKaynnissa = false;
       const b = document.getElementById('puheBtn');
