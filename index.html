@@ -8961,13 +8961,53 @@ lataa(eka);
       { nimi: 'jsDelivr', url: 'https://cdn.jsdelivr.net/npm/@mintplex-labs/piper-tts-web@1.0.5/+esm' }
     ];
     let piperToimiva = null;   // löydetty toimiva lähde, jotta seuraava kerta ei koesta turhaan
+    /* NÄKYVYYS — 22.9.2026: koepuhe jäi puhelimessa odottamaan ilman virhettä, eikä
+       ruudulta näkynyt, laskeeko moottori vai odottaako jokin haku. Nyt tilarivillä
+       juoksee sekuntilaskuri ja näkyy mitä tiedostoja haetaan ja kuinka isoja ne ovat.
+       Koepuheella on aikaraja; sen ylittyessä kokeillaan seuraavaa lähdettä. */
+    const PIPER_AIKARAJA_MS = () => window.PIPER_AIKARAJA_MS || 150000;
+    function aikaraja(lupaus, ms, nimi) {
+      let ajastin;
+      return Promise.race([lupaus, new Promise((_, hylkaa) => {
+        ajastin = setTimeout(() => hylkaa(new Error(nimi + ': aikakatkaisu ' + Math.round(ms / 1000) + ' s')), ms);
+      })]).finally(() => clearTimeout(ajastin));
+    }
+    function seuraaHakuja(naytto) {
+      const alkup = window.fetch, t0 = Date.now(), kesken = new Map(), valmiit = [];
+      let pohja = '';
+      const mb = x => x >= 1e6 ? Math.round(x / 1e6) + ' Mt' : Math.round(x / 1e3) + ' kt';
+      const paivita = () => {
+        const nyt = [...kesken.values()].map(a => a.nimi + (a.koko ? ' (' + mb(a.koko) + ')' : ''));
+        naytto(pohja + ' — ' + Math.round((Date.now() - t0) / 1000) + ' s'
+          + (nyt.length ? '<br><span class="hint">haetaan: ' + nyt.join(', ') + '</span>' : '')
+          + (valmiit.length ? '<br><span class="hint">haettu: ' + valmiit.slice(-4).join(', ') + '</span>' : ''));
+      };
+      window.fetch = async function (input, init) {
+        const url = typeof input === 'string' ? input : (input && input.url) || String(input);
+        // vain puheohjelmiston haut: ei introäänen data-osoitetta eikä sovelluksen säähakuja
+        if (url.startsWith('data:') || url.startsWith('blob:')
+            || !/huggingface|esm\.sh|jsdelivr|cdnjs|\.(wasm|data|onnx|mjs)(\?|$)/.test(url))
+          return alkup.call(this, input, init);
+        const nimi = url.split('?')[0].split('/').pop() || url, id = {};
+        kesken.set(id, { nimi, koko: 0 }); paivita();
+        try {
+          const r = await alkup.call(this, input, init);
+          const koko = +r.headers.get('content-length') || 0;
+          valmiit.push(nimi + (koko ? ' ' + mb(koko) : '') + (r.ok ? '' : ' VIRHE ' + r.status));
+          return r;
+        } catch (e) { valmiit.push(nimi + ' EPÄONNISTUI'); throw e; }
+        finally { kesken.delete(id); paivita(); }
+      };
+      const ajastin = setInterval(paivita, 1000);
+      return { aseta: t => { pohja = t; paivita(); }, lopeta: () => { clearInterval(ajastin); window.fetch = alkup; } };
+    }
     async function varmistaPiper(kerro) {
       if (piperToimiva) return piperToimiva;
       const virheet = [];
       for (const L of PIPER_LAHTEET) {
         try {
           kerro('Ladataan puheohjelmistoa (' + L.nimi + ')…');
-          const tts = await import(L.url);
+          const tts = await aikaraja(import(L.url), 60000, L.nimi + ' (lataus)');
           let tallessa = [];
           try { tallessa = await tts.stored(); } catch (e) {}
           if (!tallessa.includes(PIPER_AANI)) {
@@ -8976,8 +9016,8 @@ lataa(eka);
               if (p && p.total) kerro('Ladataan ääntä: ' + Math.round(p.loaded * 100 / p.total) + ' %');
             });
           }
-          kerro('Koestetaan puhemoottoria (' + L.nimi + ')…');
-          await tts.predict({ text: 'Hei.', voiceId: PIPER_AANI });
+          kerro('Koestetaan puhemoottoria (' + L.nimi + '). Ensimmäinen käynnistys voi kestää 1–2 min — älä sulje sovellusta');
+          await aikaraja(tts.predict({ text: 'Hei.', voiceId: PIPER_AANI }), PIPER_AIKARAJA_MS(), L.nimi);
           piperToimiva = tts;
           return tts;
         } catch (e) {
@@ -9027,7 +9067,8 @@ lataa(eka);
       const teksti = puheteksti();
       if (!teksti) { tila.textContent = 'Aja ensin analyysi, niin selostuksessa on sisältöä.'; return; }
       aaniKaynnissa = true; if (btn) btn.disabled = true; tulos.innerHTML = '';
-      const kerro = t => { tila.innerHTML = t; };
+      const seuranta = seuraaHakuja(t => { tila.innerHTML = t; });
+      let kerro = t => seuranta.aseta(t);
       try {
         // Lähde, ääni ja koepuhe: ks. varmistaPiper. Ääni ladataan vain kerran.
         const tts = await varmistaPiper(kerro);
@@ -9067,12 +9108,15 @@ lataa(eka);
           + '<a class="chip" href="' + url + '" download="' + aaniTiedosto.name + '" style="text-decoration:none;">Tallenna</a></div>'
           + '<p class="hint" style="margin-top:6px;font-size:11px;">Ääni: Piper fi_FI-harri-low. Aineisto: Finnish Single Speaker Speech Dataset (CC0); '
           + 'malli hienosäädetty RyanSpeech-äänestä (CC BY-NC-SA 4.0) — vain ei-kaupalliseen käyttöön.</p>';
+        seuranta.lopeta(); kerro = t => { tila.innerHTML = t; };
         kerro('Valmis: ' + Math.floor(kesto / 60) + ' min ' + Math.round(kesto % 60) + ' s, ' + Math.round(blob.size / 1024) + ' kt ('
           + paate.toUpperCase() + '). Tekeminen kesti ' + Math.round(teko) + ' s.'
           + (paate === 'wav' ? ' MP3-muunnin ei latautunut, joten tiedosto on WAV.' : ''));
       } catch (e) {
-        kerro('<span style="color:var(--amber);">' + (e && e.message ? e.message : 'Äänitiedoston teko epäonnistui.') + '</span>');
+        seuranta.lopeta();
+        tila.innerHTML = '<span style="color:var(--amber);">' + (e && e.message ? e.message : 'Äänitiedoston teko epäonnistui.') + '</span>';
       } finally {
+        seuranta.lopeta();
         aaniKaynnissa = false; if (btn) btn.disabled = false;
       }
     }
