@@ -1699,6 +1699,7 @@ body{padding-bottom:66px}
         </div>
 
         <div id="hotspotHeroContainer"></div>
+        <div id="kuhaPaneeli"></div>
 
         <div class="timeline">
           <h3
@@ -8322,6 +8323,164 @@ lataa(eka);
       }).filter(Boolean).sort((x, y) => (x.suljettu - y.suljettu) || (y.pisteet - x.pisteet));
     }
 
+
+    /* KUHAN OTTIPAIKAT — 28.9.2026. Rinnakkainen pisteytys taimen/lohi-paneelille,
+       samat periaatteet: jokainen syy kertoo todisteen tasonsa, painot näkyvät.
+       Lappajärvi: kuha-alueet A ja B (GPS-merkityt saaliit → Oma saalis).
+       Hirvijärvi: Hannun 13 nimettyä paikkaa (OziExplorer Kalapaikat2007.evt,
+       249 merkintää, rypästetty 120 m:n säteellä) + 96 hajamerkintää.
+       Merkinnät ovat hyviksi todettuja paikkoja, eivät yksittäisiä kaloja, eikä
+       niissä ole päivämääriä → Paikkatieto, ei Oma saalis.
+       vanhaRantaM = etäisyys vanhan Hirvijärven rantaviivaan (peruskartta 1969,
+       ennen tekojärveä). Merkinnöistä 45 % on alle 100 m päässä siitä, altaan
+       pinta-alasta 15 % → noin kolminkertainen osuus. Varaus: mökki on vanhan
+       järven rannalla, joten osa voi selittyä sillä, missä on kalastettu eniten. */
+    const HIRVI_KUHAPAIKAT = [
+      { id: 'h1', name: "Maanuksenniemi", lat: 62.83155, lon: 23.12063, merkintoja: 27, vanhaRantaM: 11 },
+      { id: 'h2', name: "Mökin pohjoispuoli", lat: 62.82897, lon: 23.11658, merkintoja: 6, vanhaRantaM: 14 },
+      { id: 'h3', name: "Mökin länsipuoli", lat: 62.82691, lon: 23.11557, merkintoja: 32, vanhaRantaM: 43 },
+      { id: 'h4', name: "Selkämatala Lapua", lat: 62.8261, lon: 23.10566, merkintoja: 6, vanhaRantaM: 122 },
+      { id: 'h5', name: "Selkäkari Lapua", lat: 62.8216, lon: 23.10757, merkintoja: 7, vanhaRantaM: 34 },
+      { id: 'h6', name: "Itäreuna pikkusaaren reunassa", lat: 62.8213, lon: 23.12031, merkintoja: 16, vanhaRantaM: 39 },
+      { id: 'h7', name: "Nurmon Satama", lat: 62.80809, lon: 23.04767, merkintoja: 7, vanhaRantaM: 3243 },
+      { id: 'h8', name: "1. Laiturin pää", lat: 62.80602, lon: 23.06212, merkintoja: 9, vanhaRantaM: 2736 },
+      { id: 'h9', name: "4 m kiirepaikka", lat: 62.80571, lon: 23.05318, merkintoja: 13, vanhaRantaM: 3134 },
+      { id: 'h10', name: "2. Laituri", lat: 62.8036, lon: 23.05752, merkintoja: 6, vanhaRantaM: 3077 },
+      { id: 'h11', name: "Penkalle nousun edusta", lat: 62.79571, lon: 23.07122, merkintoja: 7, vanhaRantaM: 3182 },
+      { id: 'h12', name: "Vanhan tien pää itä", lat: 62.7952, lon: 23.09738, merkintoja: 12, vanhaRantaM: 2502 },
+      { id: 'h13', name: "Kaakkois nurkka", lat: 62.79101, lon: 23.09899, merkintoja: 5, vanhaRantaM: 2902 }
+    ];
+    const HIRVI_KUHA_HAJA = [[62.82739,23.10959],[62.82726,23.10959],[62.80249,23.09765],[62.80234,23.09812],[62.80246,23.09799],[62.80234,23.09779],[62.79562,23.09054],[62.79562,23.09081],[62.83294,23.13086],[62.82932,23.13358],[62.82372,23.11882],[62.82363,23.11883],[62.80826,23.10046],[62.79557,23.10384],[62.79298,23.10381],[62.80544,23.06571],[62.80551,23.06633],[62.80556,23.0679],[62.80569,23.07072],[62.80732,23.06306],[62.80614,23.07416],[62.80659,23.07681],[62.80406,23.07956],[62.78987,23.09388],[62.78949,23.09185],[62.79918,23.10308],[62.80328,23.10311],[62.80399,23.10269],[62.80489,23.10251],[62.80738,23.09914],[62.80937,23.10167],[62.80956,23.10346],[62.79126,23.08168],[62.79076,23.08201],[62.78854,23.0889],[62.78961,23.09366],[62.78952,23.08574],[62.79932,23.10312],[62.80574,23.09837],[62.81638,23.11692],[62.81723,23.11739],[62.82041,23.11189],[62.83556,23.12451],[62.83533,23.13103],[62.83455,23.13248],[62.83022,23.12996],[62.83006,23.12668],[62.82944,23.1108],[62.83006,23.10969],[62.83036,23.11304],[62.8338,23.12216],[62.82371,23.11966],[62.81916,23.12203],[62.81896,23.12204],[62.81615,23.11961],[62.81593,23.11859],[62.82016,23.05112],[62.82017,23.10232],[62.81894,23.10077],[62.81831,23.09978],[62.81714,23.09935],[62.81113,23.11467],[62.81048,23.10857],[62.81037,23.10741],[62.80951,23.10362],[62.80915,23.10345],[62.81217,23.11652],[62.81275,23.122],[62.8125,23.12204],[62.81282,23.11979],[62.81141,23.09095],[62.80914,23.08466],[62.80971,23.08664],[62.80666,23.0766],[62.8062,23.07408],[62.80768,23.10183],[62.80798,23.10228],[62.78819,23.08762],[62.78946,23.08363],[62.79747,23.08888],[62.79785,23.08719],[62.7972,23.0825],[62.7992,23.0872],[62.80109,23.08612],[62.80194,23.08442],[62.80277,23.08445],[62.80389,23.0825],[62.80389,23.07972],[62.79306,23.10389],[62.80722,23.07444],[62.7922,23.08596],[62.81746,23.12377],[62.81714,23.12361],[62.8327,23.13366],[62.82938,23.12137],[62.82863,23.10104]];
+
+    function kuhaJarvi() {
+      const n = currentLocation && currentLocation.name ? currentLocation.name : '';
+      if (n.startsWith('Lappajärvi')) return 'lappajarvi';
+      if (n.startsWith('Hirvijärv')) return 'hirvijarvi';
+      return null;
+    }
+
+    function kuhaPaikkaLista(jarviAvain) {
+      if (jarviAvain === 'hirvijarvi') return HIRVI_KUHAPAIKAT.map(p => Object.assign({ taso: 'Paikkatieto' }, p));
+      if (jarviAvain === 'lappajarvi') return [
+        Object.assign({ taso: 'Oma saalis', merkintoja: 12 }, lappajarviHotspots.kuha_a),
+        Object.assign({ taso: 'Oma saalis', merkintoja: 5 }, lappajarviHotspots.kuha_b)
+      ].filter(p => p && typeof p.lat === 'number');
+      return [];
+    }
+
+    // Tuulenalaisuus kartan järven keskipisteestä (ei sijaintilistan pisteestä,
+    // joka voi olla rannalla). null jos tuulikertymää tai keskipistettä ei ole.
+    function kuhaTuulenalaisuus(p) {
+      if (!tuuliKertyma || !tuuliKertyma.luotettava) return null;
+      const kp = (typeof window.akJarvenKeskipiste === 'function') ? window.akJarvenKeskipiste() : null;
+      if (!kp) return null;
+      const dy = p.lat - kp.lat, dx = (p.lon - kp.lon) * Math.cos(kp.lat * Math.PI / 180);
+      if (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6) return null;
+      const ranta = (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
+      return Math.cos(kulmaEro(ranta, (tuuliKertyma.suunta + 180) % 360) * Math.PI / 180);
+    }
+
+    function pisteytaKuhapaikat(o) {
+      // o: { hetki, tunti, tuuliSuunta, tuuliMs, lampo, valoPorras, syvyysKuha }
+      const jarviAvain = kuhaJarvi();
+      const paikat = kuhaPaikkaLista(jarviAvain);
+      let saaliit = [];
+      try { saaliit = lataaSaaliit().filter(x => !x.nollareissu && x.laji === 'kuha'
+                                                && typeof x.lat === 'number' && typeof x.lon === 'number'); } catch (e) {}
+      const valmis = typeof window.akValmis === 'function' && window.akValmis();
+      const puuttuu = new Set();
+      if (!valmis) puuttuu.add('lataus');
+
+      return paikat.map(s => {
+        const syyt = [], lisaa = (p, taso, teksti) => syyt.push({ p, taso, teksti });
+        // 1 Omat merkinnät / omat saaliit paikan painopisteenä
+        if (s.taso === 'Oma saalis')
+          lisaa(Math.min(18, 6 + s.merkintoja), 'Oma saalis', 'Alueen painopisteenä on ' + s.merkintoja + ' GPS-merkittyä omaa kuhasaalista.');
+        else {
+          const haja = HIRVI_KUHA_HAJA.filter(h => haversineDistMeters(h[0], h[1], s.lat, s.lon) <= 300).length;
+          lisaa(Math.min(18, 6 + Math.round(s.merkintoja / 2)) + Math.min(4, haja), 'Paikkatieto',
+            s.merkintoja + ' omaa merkintääsi hyviksi todetuista kuhapaikoista' + (haja ? ' ja ' + haja + ' hajamerkintää 300 metrin sisällä' : '')
+            + '. Merkinnöissä ei ole päivämääriä, joten ne eivät kerro millä säällä paikka toimi.');
+        }
+        // 2 Vanha rantaviiva (Hirvijärvi): veden alla oleva pudotusreuna
+        if (typeof s.vanhaRantaM === 'number' && s.vanhaRantaM <= 150)
+          lisaa(8, 'Paikkatieto', 'Paikka on noin ' + s.vanhaRantaM + ' metrin päässä vanhan Hirvijärven rannasta, joka on nyt veden alla oleva reuna: pohja laskee entiseltä suolta vanhaan järvialtaaseen. '
+            + 'Merkinnöistäsi 45 % on alle 100 metrin päässä tästä reunasta, vaikka altaasta vain 15 % on niin lähellä. Osa voi selittyä sillä, että mökki on vanhan järven rannalla.');
+        // 3 Syvyys (Malli)
+        const sy = valmis ? window.akSyvyysPisteessa(s.lat, s.lon, 150) : null;
+        if (valmis && !sy) lisaa(0, 'Malli', 'Paikka on järviruudukon ulkopuolella, joten syvyyttä ja aaltoa ei saada kartalta.');
+        if (sy && typeof o.syvyysKuha === 'number') {
+          const d = o.syvyysKuha;
+          if (d >= sy.min - 0.5 && d <= sy.max + 0.5)
+            lisaa(10, 'Malli', 'Paikalla on syvyyttä ' + n1(sy.min) + '–' + n1(sy.max) + ' m, joten kuhan tämän hetken ' + n1(d) + ' metrin syvyys löytyy läheltä.');
+          else if (d > sy.max + 2)
+            lisaa(-5, 'Malli', 'Paikka on tälle hetkelle matala: syvintä noin ' + n1(sy.max) + ' m, kun malli ajaa kuhaa ' + n1(d) + ' metrissä.');
+          else if (d < sy.min - 1)
+            lisaa(0, 'Malli', 'Malli ajaa kuhaa ' + n1(d) + ' metrissä, mutta paikalla matalinta on noin ' + n1(sy.min) + ' m. '
+              + (s.taso === 'Oma saalis' ? 'Omat saaliit ovat tältä alueelta, joten ristiriita kertoo ennemmin mallin kuin paikan epävarmuudesta.' : 'Kuha voi olla reunan matalammalla puolella.'));
+          if (sy.max - sy.min >= 1.5)
+            lisaa(5, 'Malli', 'Pohja vaihtuu paikalla ' + n1(sy.min) + ' metristä ' + n1(sy.max) + ' metriin. Reunaa voi ajaa syvyyttä vaihtaen.');
+        }
+        // 4 Hämärä ja matala paikka (Tutkittu, nuorilla kaloilla)
+        if (sy && typeof o.valoPorras === 'number' && o.valoPorras <= 3 && sy.min <= 3)
+          lisaa(8, 'Tutkittu', 'Hämärässä kuha nousee saalistamaan matalalle. Kokeessa kuha valitsi aina heikoimman tarjolla olevan valon (Luchiari ym. 2006), ja sen silmässä on hämärään sopeutunut heijastava kerros. '
+            + 'Mittaukset on tehty nuorilla kaloilla. Tässä matalinta on ' + n1(sy.min) + ' m.');
+        // 5 Aalto: sulkee, samentaa; tuuliranta erikseen konsensuksena
+        const m = (typeof window.akMalliSync === 'function') ? window.akMalliSync(s.lat, s.lon, o.hetki.getTime()) : null;
+        let suljettu = false;
+        if (m && typeof m.aaltoM === 'number') {
+          if (typeof m.raja === 'number' && m.aaltoM > m.raja) {
+            suljettu = true;
+            lisaa(-100, 'Malli', 'Aalto noin ' + n2(m.aaltoM) + ' m ylittää veneesi rajan ' + n2(m.raja) + ' m. Jätä tämä toiseen päivään.');
+          } else if (m.aaltoM >= 0.10 && sy && sy.min <= 3)
+            lisaa(4, 'Tutkittu', 'Aaltoa on noin ' + n2(m.aaltoM) + ' m, ja matalalla se sekoittaa ja samentaa vettä. Sameus ei haittaa kuhan saalistusta, mutta heikentää saaliskalan näkemistä (Ljunggren & Sandström 2007).');
+        }
+        const ta = kuhaTuulenalaisuus(s);
+        if (ta !== null && ta > 0.4)
+          lisaa(3, 'Konsensus', 'Paikka on ' + tuuliKertyma.tunteja + ' tunnin tuulen alapuolella. Uistelijoiden kokemus on, että kuha tulee tuuliselle rannalle. Mekanismi (sameus) on tutkittu, tämä käytös ei.');
+        // 6 Omat kuhasaaliit saalislokista alle 500 m
+        const lahella = saaliit.filter(x => haversineDistMeters(x.lat, x.lon, s.lat, s.lon) <= 500);
+        if (lahella.length) {
+          const samat = lahella.filter(x => typeof x.tuuliSuunta === 'number' && typeof o.tuuliSuunta === 'number'
+              && kulmaEro(x.tuuliSuunta, o.tuuliSuunta) <= 60 && typeof x.vesiC === 'number' && Math.abs(x.vesiC - o.lampo) <= 3).length;
+          lisaa(Math.min(24, 8*samat) + Math.min(9, 3*(lahella.length - samat)), 'Oma saalis',
+            lahella.length + ' kirjattua kuhaa alle 500 metrin päässä' + (samat ? ', niistä ' + samat + ' samankaltaisella tuulella ja vedellä.' : '. Olot olivat silloin toiset, joten paino on pienempi.'));
+        }
+        const pisteet = syyt.reduce((acc, x) => acc + x.p, 0);
+        return { key: s.id, spot: s, pisteet, syyt, suljettu, puuttuu };
+      }).sort((x, y) => (x.suljettu - y.suljettu) || (y.pisteet - x.pisteet));
+    }
+
+    function kuhaPaneeliHtml(o) {
+      const jarviAvain = kuhaJarvi();
+      if (!jarviAvain) return '';
+      const tulos = pisteytaKuhapaikat(o);
+      if (!tulos.length) return '';
+      const auki = tulos.filter(x => !x.suljettu), par = auki[0] || tulos[0];
+      const chip = t => '<span class="chip" style="padding:1px 7px;font-size:11px;margin-right:6px;">' + t + '</span>';
+      const syyRivi = x => '<div style="margin:5px 0;">' + chip(x.taso) + x.teksti
+        + (x.p ? ' <span class="hint">(' + (x.p > 0 ? '+' : '') + x.p + ')</span>' : '') + '</div>';
+      const vaihto = auki.filter(x => x !== par).slice(0, 2).map(v => {
+        const paa = v.syyt.filter(x => x.p > 0).sort((a, b) => b.p - a.p)[0];
+        return '<div style="margin:5px 0;"><strong>' + v.spot.name + '</strong> <span class="hint">(' + v.pisteet + ' p)</span>'
+          + (paa ? '<br>' + chip(paa.taso) + paa.teksti : '') + '</div>';
+      }).join('');
+      const suljetut = tulos.filter(x => x.suljettu).map(x => x.spot.name);
+      const lataa = par.puuttuu.has('lataus')
+        ? '<p class="hint" style="margin:6px 0 0;">Syvyys-, aalto- ja virtaustiedot latautuvat vielä. Paina Analysoi uudelleen hetken päästä.</p>' : '';
+      const huom = jarviAvain === 'hirvijarvi'
+        ? '<p class="hint" style="margin:8px 0 0;">Hirvijärven syvyydet ovat omasta luotauskartastasi kesäpinnan tasolla. Vedenkorkeuskorjausta ei vielä ole: kun allasta lasketaan syksyllä, todellinen syvyys on pienempi.</p>' : '';
+      return '<div class="spot-hero" style="margin-top:14px;">'
+        + '<div class="spot-title">🐟 Kuha: ' + par.spot.name + '</div>'
+        + '<div class="spot-meta">' + par.pisteet + ' pistettä · kuhan syvyys nyt ' + n1(o.syvyysKuha) + ' m · vesi ' + n1(o.lampo) + ' °C</div>'
+        + '<div style="font-size:14px;line-height:1.45;color:var(--text);margin-top:8px;">' + par.syyt.slice().sort((a, b) => b.p - a.p).map(syyRivi).join('') + '</div>' + lataa
+        + (vaihto ? '<p style="font-size:14px;margin:10px 0 0;"><strong>Seuraavat kuhapaikat</strong></p><div style="font-size:13px;line-height:1.45;">' + vaihto + '</div>' : '')
+        + (suljetut.length ? '<p class="hint" style="margin:8px 0 0;">Aallon takia suljettu: ' + suljetut.join(', ') + '.</p>' : '')
+        + '<p style="font-size:13px;line-height:1.45;margin:8px 0 0;">' + chip('Tutkittu') + 'Kuhan aineenvaihdunta hidastuu veden viiletessä, joten kylmässä vedessä se syö harvemmin. '
+        + 'Tarkkaa lämpötilaa, jossa syönti luonnonvedessä loppuu, en löytänyt luotettavasta lähteestä, joten sitä ei tässä arvata.</p>'
+        + huom + '</div>';
+    }
+
     /* Ennuste tunnille: FMI ensin, Open-Meteo varalla, muuten null.
        Täytetään taustalla (paivitaLahdeVarasto) ja päivää vaihdettaessa. */
     let tuoreEnnuste = { fmi: {}, om: {} };
@@ -13687,6 +13846,11 @@ lataa(eka);
     `;
       });
       document.getElementById('hotspotTimelineContainer').innerHTML = timelineHtml;
+      try {
+        const kp = document.getElementById('kuhaPaneeli');
+        if (kp) kp.innerHTML = kuhaPaneeliHtml({ hetki: now, tunti: targetHour, tuuliSuunta: wDir, tuuliMs: wSpeed,
+          lampo: curTemp, valoPorras: valoPorras(targetFractional), syvyysKuha: dKuha });
+      } catch (e) { console.error('Kuhapaneeli epäonnistui:', e); }
 
       updateLakeStatus(targetHour, thermoVal, activeBaitDepth, dKuha, dHauki, dTaimen, dAhven, dJarvilohi, dKuore);
 
@@ -14179,7 +14343,8 @@ lataa(eka);
         // Koskee UISTELUN ISKUSYVYYTTÄ lohikaloilla — ei kuhaa, joka artikkelin mukaan ei
         // juuri iske uistelulle tässä järvessä.
         salmonidStrikeZone: { min: 2, max: 5, source: 'Kalastus-lehden Lappajärvi-artikkeli + oma jälkidata' } }, // vahvistettu käsin 22.8.2026: raaka 6955 cm vs. todellinen N60 69.68 m (6968 cm)
-      { name: 'Hirvijärven tekoallas', lat: 62.775, lon: 23.011, maxDepth: 7.5, areaKm2: 16.5, clarityClass: 2, sykeTerm: 'Hirvijärven tekojärvi', sykeTermVara: 'Hirvijärvi', waterLevelStationId: 2312,
+      { name: 'Hirvijärven tekoallas', lat: 62.8049, lon: 23.0947,   // 28.9.2026: oli 62.775/23.011, n. 1,8 km altaan länsipuolella maalla
+         maxDepth: 7.5, areaKm2: 16.5, clarityClass: 2, sykeTerm: 'Hirvijärven tekojärvi', sykeTermVara: 'Hirvijärvi', waterLevelStationId: 2312,
         // SYKEn virallinen havaintopiste (vesistöennustejärjestelmä, tunnus
         // l440922001y, Lapuanjoen vesistöalue 44). Se on 4,2 km kalastusalueesta,
         // mutta saman altaan sisällä. Käytetään aseman etäisyysvertailuun, jottei
