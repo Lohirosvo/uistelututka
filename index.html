@@ -4549,7 +4549,12 @@ var JARVET = {
          2 m:n käyrälle; 81 % omista kuhapaikoista 2–4 m:n luokassa.
          Syvyydet ovat kesäpinnan tasolla — vedenkorkeuskorjaus odottaa. */
       syvyysLuokat: "//////////////////////////D////////////////////////////////wD///////////////////////////////AA//////////////////////////////8AAA/wD/////////////////////////8AAAEREAAA////////////////////////AAABEQEAD///////////////////////AAAAEREBEA/////////////////////wAAAAARERERAA///////////////////wABEQAREREREQ8P////////////////8AABEREBERERERER///////////////wAAABERERESERERER8P/////////////wAAAAARERERIhERARER///////////////wAAABERERESERAAABH///////////////8AD/AREREREREAD/8AD///////////////AA/wARERESERAP//AP////////////////8A8AAREREiAR//////////////////////APAAAREREgEA/////////////////////wDwAAERERIhAP///////////////////w/wAAABERASIRD//////////////////wAP8AAAARERIiERAP////////////////8AAPAAAAERERIiEQ/////////////////wAAAAAAABERESIhEP////////////////AAAAAAAAABERERIREA////////////////8AAA/wAAEREBESERAP////////////////AAD/AAABERAAERERD////////////////wAA8AAAABEQAAEREA////////////////8AAPAAAAARAAABER//////////////////8AAAAAAAEAAAAREQ//////////////////AAAAAAAAAAAAEREP//////////////////AAAAAAAQAAABEREf/////////////////wAAABEQAAAAERER///////wAAAP///////wAAEREAAAABAAEP/////wAAAAD///AAAAAAAREQAREREP////////8AEREQAAAAAAAAABEREAEQAA//////////AREREQAAAAAAABERERAQD///////////8BEREREAAAAAAAEQAREREP////////////8RERERAAAAABEREBERARD/////////////8hESERAAAAERERARERERD/////////////ERIiIRAAEREREAEREREQ//////////////ESIiERERERERERERERAP//////////////IiIiEREREREREREREQD///////////////IiIiIiIhEREREREREA///////////////yIiMiIiIhEREREREREP////////////////IiIiIiIhERERERERD/////////////////IiIzIiIREREREREA//////////////////IiMzMyERERERERAP//////////////////IiIiIhEREREREQD///////////////////IyIiIRERERIREA////////////////////IiIiERERERERAA////////////////////IiIiARERERERAA////////////////////EiIiIRIRERERAA////////////////////IiIiIiEREREQ8AD//////////////////yIiIiIiEREREQD////////////////////yIiIiIhERERAA/////////////////////xIiIiEREREQAP/////////////////////xISIhERAAAA///////////////////////xEREREQAAD///////////////////////8RERERAAAAD///////////////////////8REQAAAAD/////////////////////////AAAAAA///////////////////////////wAAAAD///////////////////////////8AAAAP////////////////////////////8AAAD/////////////////////////////AAAAD////////////////////////////xAAAA////////////////////////////8RAAAP////////////////////////////EREAAP////////////////////////////EAAAAP///////////////////////////xEQAAD///////////////////////////8RAA8A////////////////////////////EQ//8P///////////////////////////xEP//////////////////////////////8RD///////////////////////////////AAD//////////////////////////////wAA//////////////////////////////8AAP//////////////////////////////AAAP//////////////////////////////8P////////////////",
-      luokkaM: [1.0, 3.0, 5.0, 7.0]
+      luokkaM: [1.0, 3.0, 5.0, 7.0],
+      /* 28.9.2026: luotaimen anturi on 25 cm pinnan alla. Näyttö korjaa sen, mutta
+         tallenteet (sl2) mittaavat anturista pohjaan, ja kartta on tehty
+         tallenteista → todellinen syvyys = kartta + 0,25 m. Vertailupäivän
+         (27.7.) tarkistus pysyy voimassa, koska loki ja kartta siirtyvät yhtä paljon. */
+      anturiM: 0.25
     }
   }
 };
@@ -4688,11 +4693,11 @@ function puraSyvyysLuokat(k){
   if (!k || !k.syvyysLuokat) return null;
   var raaka = atob(k.syvyysLuokat), n = k.W*k.H, s = new Float32Array(n);
   // järvikohtaiset luokkasyvyydet (Hirvijärvi), muuten Lappajärven SYV_LUOKKA_M
-  var luokat = k.luokkaM || SYV_LUOKKA_M;
+  var luokat = k.luokkaM || SYV_LUOKKA_M, anturi = k.anturiM || 0;
   for (var i = 0; i < n; i++){
     var tavu = raaka.charCodeAt(i >> 1);
     var l = (i & 1) ? (tavu & 15) : (tavu >> 4);
-    s[i] = l < luokat.length ? luokat[l] : 0;
+    s[i] = l < luokat.length ? luokat[l] + anturi : 0;
   }
   return s;
 }
@@ -8347,12 +8352,12 @@ lataa(eka);
        niissä ole päivämääriä → Paikkatieto, ei Oma saalis.
        vanhaRantaM = etäisyys vanhan Hirvijärven rantaviivaan (peruskartta 1969,
        ennen tekojärveä). Merkinnöistä 45 % on alle 100 m päässä siitä, altaan
-       pinta-alasta 15 % → noin kolminkertainen osuus. Varaus: mökki on vanhan
-       järven rannalla, joten osa voi selittyä sillä, missä on kalastettu eniten. */
+       pinta-alasta 15 % → noin kolminkertainen osuus. Varaus: osa voi selittyä sillä, missä on kalastettu
+       eniten. (Mökin länsipuolen "mökki" on saaren punainen maamerkkimökki.) */
     const HIRVI_KUHAPAIKAT = [
       { id: 'h1', name: "Maanuksenniemi", lat: 62.83155, lon: 23.12063, merkintoja: 27, vanhaRantaM: 11 },
       { id: 'h2', name: "Mökin pohjoispuoli", lat: 62.82897, lon: 23.11658, merkintoja: 6, vanhaRantaM: 14 },
-      { id: 'h3', name: "Mökin länsipuoli", lat: 62.82691, lon: 23.11557, merkintoja: 32, vanhaRantaM: 43 },
+      { id: 'h3', name: "Mökin länsipuoli", kuvaus: 'Saaressa punainen maamerkkimökki. Edustalla matalia kivikkoja ryppäänä ja uloimpana pieni kaksoispatti. Saaren rannassa jyrkät kalliot laskevat veteen; matalimmat kohdat ehkä metrissä.', pattiM: 2.0, lat: 62.82691, lon: 23.11557, merkintoja: 32, vanhaRantaM: 43 },
       { id: 'h4', name: "Selkämatala Lapua", lat: 62.8261, lon: 23.10566, merkintoja: 6, vanhaRantaM: 122 },
       { id: 'h5', name: "Selkäkari Lapua", lat: 62.8216, lon: 23.10757, merkintoja: 7, vanhaRantaM: 34 },
       { id: 'h6', name: "Itäreuna pikkusaaren reunassa", lat: 62.8213, lon: 23.12031, merkintoja: 16, vanhaRantaM: 39 },
@@ -8464,10 +8469,22 @@ lataa(eka);
             s.merkintoja + ' omaa merkintääsi hyviksi todetuista kuhapaikoista' + (haja ? ' ja ' + haja + ' hajamerkintää 300 metrin sisällä' : '')
             + '. Merkinnöissä ei ole päivämääriä, joten ne eivät kerro millä säällä paikka toimi.');
         }
+        // 1b Oma kuvaus paikasta (Paikkatieto, ei pisteitä: vain osalla paikoista on kuvaus)
+        if (s.kuvaus) {
+          let t = s.kuvaus;
+          if (typeof s.pattiM === 'number') {
+            // 28.9.2026: luotaimen näyttö korjaa anturin syvyyden itse (vain tallenteet
+            // mittaavat anturista), joten näytöltä luettuun 2 metriin ei lisätä mitään.
+            const k = jarviAvain === 'hirvijarvi' ? hirviKorjaus() : 0;
+            t += ' Kaksoispatti nousee normaalivedellä noin ' + n1(s.pattiM) + ' metriin pinnasta'
+              + (k ? '; tänään vedenkorkeus huomioiden noin ' + n1(s.pattiM + k) + ' m' : '') + '. Syvemmällä uiva viehe osuu siihen.';
+          }
+          lisaa(0, 'Paikkatieto', t);
+        }
         // 2 Vanha rantaviiva (Hirvijärvi): veden alla oleva pudotusreuna
         if (typeof s.vanhaRantaM === 'number' && s.vanhaRantaM <= 150)
           lisaa(8, 'Paikkatieto', 'Paikka on noin ' + s.vanhaRantaM + ' metrin päässä vanhan Hirvijärven rannasta, joka on nyt veden alla oleva reuna: pohja laskee entiseltä suolta vanhaan järvialtaaseen. '
-            + 'Merkinnöistäsi 45 % on alle 100 metrin päässä tästä reunasta, vaikka altaasta vain 15 % on niin lähellä. Osa voi selittyä sillä, että mökki on vanhan järven rannalla.');
+            + 'Merkinnöistäsi 45 % on alle 100 metrin päässä tästä reunasta, vaikka altaasta vain 15 % on niin lähellä. Osa voi selittyä myös sillä, että olet kalastanut siellä eniten.');
         // 3 Syvyys (Malli)
         let sy = valmis ? window.akSyvyysPisteessa(s.lat, s.lon, 150) : null;
         if (sy && jarviAvain === 'hirvijarvi' && hirviKorjaus())
