@@ -4537,7 +4537,17 @@ var JARVET = {
     kartta: {
       ruutu: 100, W: 50, H: 78,
       pohjoisLat: 62.84012, lansiLon: 23.04512,
-      maski: "AAAAAAEAAAAAAABgAAAAAAA4AAAAAAAfMAAAAAAf/4AAAAAH/8AAAAAH//AAAAAP//4AAAAP//6AAAAf///AAAB////QAAB////4AAAP///8AAADn//jgAAA5//wwAAADf/4AAAAA3//AAAAAN//wAAAAJ//8AAAAOf//wAAAD3//4AAAB///+AAAA////4AAAD5//+AAAA8///gAAAPf//4AAAD3//4AAAAf///AAAAH///wAAAA///+AAAAP///AB+AB///wB/g///+AAf/////AAH////8AAD////+AAAf////gAAD////8AAA/////AAAH////wAAA////8AAAH////AAAB////wAAAH///8AAAA////AAAAH///wAAAA///8AAAAH///AAAAA///4AAAAH///AAAAA///4AAAAH//7gAAAB///gAAAAP//4AAAAB//+AAAAAP//AAAAAB//gAAAAAf/8AAAAAD/8AAAAAA/4AAAAAAP8AAAAAAD+AAAAAAAfgAAAAAAH8AAAAAAB/AAAAAAAfwAAAAAAH+AAAAAAA/wAAAAAAP8AAAAAAD7AAAAAAA4QAAAAAAOAAAAAAADgAAAAAAA8AAAAAAAPAAAAAAADwAAAAAAA+AAAAAAACAAAAA="
+      maski: "AAAAAAEAAAAAAABgAAAAAAA4AAAAAAAfMAAAAAAf/4AAAAAH/8AAAAAH//AAAAAP//4AAAAP//6AAAAf///AAAB////QAAB////4AAAP///8AAADn//jgAAA5//wwAAADf/4AAAAA3//AAAAAN//wAAAAJ//8AAAAOf//wAAAD3//4AAAB///+AAAA////4AAAD5//+AAAA8///gAAAPf//4AAAD3//4AAAAf///AAAAH///wAAAA///+AAAAP///AB+AB///wB/g///+AAf/////AAH////8AAD////+AAAf////gAAD////8AAA/////AAAH////wAAA////8AAAH////AAAB////wAAAH///8AAAA////AAAAH///wAAAA///8AAAAH///AAAAA///4AAAAH///AAAAA///4AAAAH//7gAAAB///gAAAAP//4AAAAB//+AAAAAP//AAAAAB//gAAAAAf/8AAAAAD/8AAAAAA/4AAAAAAP8AAAAAAD+AAAAAAAfgAAAAAAH8AAAAAAB/AAAAAAAfwAAAAAAH+AAAAAAA/wAAAAAAP8AAAAAAD7AAAAAAA4QAAAAAAOAAAAAAADgAAAAAAA8AAAAAAAPAAAAAAADwAAAAAAA+AAAAAAACAAAAA=",
+      /* SYVYYSLUOKAT — 28.9.2026. Lähde: Hannun oma luotauskartta Hirvijärvestä
+         (omista lokeista, 2 m:n käyrät). 4 väriluokkaa: 0 = 0–2 m, 1 = 2–4 m,
+         2 = 4–6 m, 3 = yli 6 m (tummin väri; eteläselkä max n. 8 m, pohjoinen n. 5 m),
+         15 = maa. Kohdistus: muoto sovitettu tähän maskiin (4,76 m/px, kierto 0,0°,
+         rantaviivat täsmäävät n. 95 %). 40 maskiruutua jäi kartan ulkopuolelle →
+         lähimmän ruudun luokka. Tarkistettu: ahven-loki 27.7.2026 (1,9–2,1 m) osuu
+         2 m:n käyrälle; 81 % omista kuhapaikoista 2–4 m:n luokassa.
+         Syvyydet ovat kesäpinnan tasolla — vedenkorkeuskorjaus odottaa. */
+      syvyysLuokat: "//////////////////////////D////////////////////////////////wD///////////////////////////////AA//////////////////////////////8AAA/wD/////////////////////////8AAAEREAAA////////////////////////AAABEQEAD///////////////////////AAAAEREBEA/////////////////////wAAAAARERERAA///////////////////wABEQAREREREQ8P////////////////8AABEREBERERERER///////////////wAAABERERESERERER8P/////////////wAAAAARERERIhERARER///////////////wAAABERERESERAAABH///////////////8AD/AREREREREAD/8AD///////////////AA/wARERESERAP//AP////////////////8A8AAREREiAR//////////////////////APAAAREREgEA/////////////////////wDwAAERERIhAP///////////////////w/wAAABERASIRD//////////////////wAP8AAAARERIiERAP////////////////8AAPAAAAERERIiEQ/////////////////wAAAAAAABERESIhEP////////////////AAAAAAAAABERERIREA////////////////8AAA/wAAEREBESERAP////////////////AAD/AAABERAAERERD////////////////wAA8AAAABEQAAEREA////////////////8AAPAAAAARAAABER//////////////////8AAAAAAAEAAAAREQ//////////////////AAAAAAAAAAAAEREP//////////////////AAAAAAAQAAABEREf/////////////////wAAABEQAAAAERER///////wAAAP///////wAAEREAAAABAAEP/////wAAAAD///AAAAAAAREQAREREP////////8AEREQAAAAAAAAABEREAEQAA//////////AREREQAAAAAAABERERAQD///////////8BEREREAAAAAAAEQAREREP////////////8RERERAAAAABEREBERARD/////////////8hESERAAAAERERARERERD/////////////ERIiIRAAEREREAEREREQ//////////////ESIiERERERERERERERAP//////////////IiIiEREREREREREREQD///////////////IiIiIiIhEREREREREA///////////////yIiMiIiIhEREREREREP////////////////IiIiIiIhERERERERD/////////////////IiIzIiIREREREREA//////////////////IiMzMyERERERERAP//////////////////IiIiIhEREREREQD///////////////////IyIiIRERERIREA////////////////////IiIiERERERERAA////////////////////IiIiARERERERAA////////////////////EiIiIRIRERERAA////////////////////IiIiIiEREREQ8AD//////////////////yIiIiIiEREREQD////////////////////yIiIiIhERERAA/////////////////////xIiIiEREREQAP/////////////////////xISIhERAAAA///////////////////////xEREREQAAD///////////////////////8RERERAAAAD///////////////////////8REQAAAAD/////////////////////////AAAAAA///////////////////////////wAAAAD///////////////////////////8AAAAP////////////////////////////8AAAD/////////////////////////////AAAAD////////////////////////////xAAAA////////////////////////////8RAAAP////////////////////////////EREAAP////////////////////////////EAAAAP///////////////////////////xEQAAD///////////////////////////8RAA8A////////////////////////////EQ//8P///////////////////////////xEP//////////////////////////////8RD///////////////////////////////AAD//////////////////////////////wAA//////////////////////////////8AAP//////////////////////////////AAAP//////////////////////////////8P////////////////",
+      luokkaM: [1.0, 3.0, 5.0, 7.0]
     }
   }
 };
@@ -4675,10 +4685,12 @@ function akKierto(){
 function puraSyvyysLuokat(k){
   if (!k || !k.syvyysLuokat) return null;
   var raaka = atob(k.syvyysLuokat), n = k.W*k.H, s = new Float32Array(n);
+  // järvikohtaiset luokkasyvyydet (Hirvijärvi), muuten Lappajärven SYV_LUOKKA_M
+  var luokat = k.luokkaM || SYV_LUOKKA_M;
   for (var i = 0; i < n; i++){
     var tavu = raaka.charCodeAt(i >> 1);
     var l = (i & 1) ? (tavu & 15) : (tavu >> 4);
-    s[i] = l < SYV_LUOKKA_M.length ? SYV_LUOKKA_M[l] : 0;
+    s[i] = l < luokat.length ? luokat[l] : 0;
   }
   return s;
 }
@@ -5680,7 +5692,7 @@ function akPaivitaVirtausKytkin(){
     if (o.value === 'aalto') continue;
     o.disabled = !akSyvyys;
     o.textContent = (o.value === 'virtaus' ? "Pintavirtaus" : "Syvempi vesi")
-                  + (akSyvyys ? "" : " (vain Lappajärvi)");
+                  + (akSyvyys ? "" : " (ei syvyyskarttaa)");
   }
   if (!akSyvyys){ akTila = 'aalto'; sel.value = 'aalto'; }
 }
