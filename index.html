@@ -1234,6 +1234,26 @@ body{padding-bottom:66px}
         <details style="margin-top:12px;">
           <summary style="cursor:pointer; color:var(--cyan); font-size:15px;">Saaliskirjanpito (<span id="saalisMaara">0</span>)</summary>
           <div id="saalisLista" style="margin-top:10px;"></div>
+          <details style="margin-top:10px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;">
+            <summary style="cursor:pointer;color:var(--cyan);font-size:14px;">📜 Kirjaa vanha saalis</summary>
+            <p class="hint" style="margin:6px 0;">Sovellus hakee päivän veden lämmön SYKEltä ja tuulen säähistoriasta (ERA5-arkisto),
+              joten vanha kala saa samat olot kuin uudet ja tulee mukaan "Oma saalis" -perusteisiin.</p>
+            <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 8px;align-items:center;font-size:13px;">
+              <label>Päivä</label><input type="date" id="vsPaiva">
+              <label>Kello</label><input type="time" id="vsKello" value="12:00">
+              <label>Laji</label><select id="vsLaji"><option value="taimen">Taimen</option><option value="jarvilohi">Järvilohi</option>
+                <option value="kuha">Kuha</option><option value="hauki">Hauki</option><option value="ahven">Ahven</option><option value="muu">Muu</option></select>
+              <label>Pituudet cm</label><input type="text" id="vsPituudet" placeholder="esim. 62, 55, 48 — yksi per kala">
+              <label>Kpl</label><input type="number" id="vsKpl" min="1" placeholder="pituuksien määrä tai 1">
+              <label>Paikka</label><select id="vsPaikka"></select>
+              <label>tai koordinaatit</label><input type="text" id="vsKoord" placeholder="63.14, 23.54 (valinnainen)">
+              <label>Syvyys m</label><input type="number" step="0.1" id="vsSyvyys" placeholder="mitattu, valinnainen">
+              <label>Viehe</label><input type="text" id="vsViehe" placeholder="valinnainen">
+              <label>Vauhti km/h</label><input type="number" step="0.1" id="vsNopeus" placeholder="valinnainen">
+            </div>
+            <button class="chip" onclick="kirjaaVanhaSaalis()" style="margin-top:8px;border-color:var(--cyan);color:var(--cyan);">Hae olot ja tallenna</button>
+            <p class="hint" id="vsTila" style="margin-top:6px;"></p>
+          </details>
           <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
             <button class="chip" onclick="vieSaaliit()">Vie CSV (tiedosto + leikepöytä)</button>
             <button class="chip" onclick="kalaKiinni(true)" style="border-color:var(--muted);color:var(--muted);">Merkitse nollareissu</button>
@@ -1655,11 +1675,24 @@ body{padding-bottom:66px}
             <button class="chip" onclick="naytaPuheteksti()" style="border-color:var(--muted); color:var(--muted);">Näytä tekstinä</button>
             <button class="chip" onclick="jaaPuhe()" style="border-color:var(--cyan); color:var(--cyan);">Jaa kaverille</button>
             <button class="chip" id="aaniBtn" onclick="teeAanitiedosto()" style="border-color:var(--cyan); color:var(--cyan);">🎧 Äänitiedosto</button>
+            <button class="chip" onclick="vapautaPiperTila()" style="font-size:12px;">🗑 Vapauta ladattu Piper-ääni</button>
             <button class="chip" onclick="puheDiagnostiikka()" style="border-color:var(--muted); color:var(--muted);">Tarkista äänet</button>
             <button class="chip" id="earthBtn" onclick="avaaKartta()" style="display:none; border-color:var(--amber); color:var(--amber);">🗺 Syvyyskartta ja merkinnät</button>
             <button class="chip" id="earthKmzBtn" onclick="avaaGoogleEarth()" style="display:none; border-color:var(--muted); color:var(--muted);">Google Earthiin</button>
           </div>
           <p class="hint" id="jakoTila" style="margin-top:6px;"></p>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px;font-size:13px;">
+            <span class="hint">Robottiääni:</span>
+            <select id="espeakVariantti" onchange="talletaEspeakAsetukset()" style="font:inherit;padding:3px 6px;border-radius:6px;">
+              <option value="">Perus</option><option value="klatt">Klatt</option><option value="klatt2">Klatt 2</option>
+              <option value="klatt3">Klatt 3</option><option value="m3">Mies 3</option><option value="m7">Mies 7</option>
+              <option value="f2">Nainen 2</option>
+            </select>
+            <select id="espeakNopeus" onchange="talletaEspeakAsetukset()" style="font:inherit;padding:3px 6px;border-radius:6px;">
+              <option value="140">Hidas</option><option value="160" selected>Normaali</option><option value="180">Nopea</option>
+            </select>
+            <button class="chip" onclick="espeakNayte()" style="padding:3px 10px;font-size:12px;">▶ Näyte</button>
+          </div>
           <div id="aaniTulos" style="margin-top:8px;"></div>
           <div id="puheTekstiBox" style="display:none; margin-top:10px; background:var(--panel-alt); border-radius:10px; padding:12px;"></div>
           <p class="hint" id="puheStatus" style="margin-top:6px;">Selostus vedestä, kelistä, syvyyksistä ja parhaasta paikasta. Kuunneltavaksi matkalla.</p>
@@ -6575,6 +6608,98 @@ lataa(eka);
       document.getElementById('kalaStatus').innerHTML = '<span style="color:var(--muted);">Peruttu.</span>';
     }
 
+    /* ===== VANHA SAALIS JÄLKIKÄTEEN — 22.9.2026 =====
+       Saalis kirjataan päivämäärällä, ja olot haetaan sille päivälle: veden lämpö
+       SYKEn Halkosaaresta (sama asema kuin nykylukemassa) ja tuuli, ilma, pilvisyys
+       ja paine Open-Meteon säähistoriasta (ERA5, 0,25° ruudukko — karkea, mutta sama
+       kaikille vanhoille päiville). Kausi päätellään samalla funktiolla kuin muualla.
+       Rivi merkitään jälkikirjaukseksi ja lähteet kirjataan, joten sen erottaa
+       aina reaaliaikaisista kirjauksista. Ennustekenttiä ei ole, joten rivi ei sotke
+       mallin osuvuusvertailua — se näkyy vain "Oma saalis" -perusteissa. */
+    function vsTaytaPaikat() {
+      const el = document.getElementById('vsPaikka');
+      if (!el || el.options.length) return;
+      el.innerHTML = '<option value="">Ei tiedossa</option>' + Object.keys(lappajarviHotspots).map(k =>
+        '<option value="' + k + '">' + lappajarviHotspots[k].name.replace(/\s*\(.*\)/, '') + '</option>').join('');
+    }
+    window.addEventListener('load', vsTaytaPaikat);
+
+    async function kirjaaVanhaSaalis() {
+      const tila = document.getElementById('vsTila'), arvo = id => (document.getElementById(id) || {}).value;
+      vsTaytaPaikat();
+      const pvm = arvo('vsPaiva'), klo = arvo('vsKello') || '12:00';
+      if (!pvm) { tila.textContent = 'Valitse päivä.'; return; }
+      const hetki = new Date(pvm + 'T' + klo);
+      if (!(hetki < new Date())) { tila.textContent = 'Päivän pitää olla menneisyydessä — uudet kalat kirjataan Kala kiinni -napilla.'; return; }
+      const pituudet = String(arvo('vsPituudet') || '').split(/[,;\s]+/).map(x => parseFloat(x.replace(',', '.'))).filter(x => x > 0);
+      const kpl = Math.max(1, parseInt(arvo('vsKpl'), 10) || pituudet.length || 1);
+
+      // sijainti: nimetty paikka tai koordinaatit, muuten järven keskipiste vain säähakuun
+      let lat = null, lon = null, sijaintiLahde = null;
+      const pk = arvo('vsPaikka'), ko = String(arvo('vsKoord') || '').match(/(-?\d+(?:[.,]\d+)?)\s*[,;\s]\s*(-?\d+(?:[.,]\d+)?)/);
+      if (ko) { lat = parseFloat(ko[1].replace(',', '.')); lon = parseFloat(ko[2].replace(',', '.')); sijaintiLahde = 'koordinaatit'; }
+      else if (pk && lappajarviHotspots[pk]) { lat = lappajarviHotspots[pk].lat; lon = lappajarviHotspots[pk].lon; sijaintiLahde = 'nimetty paikka: ' + lappajarviHotspots[pk].name.replace(/\s*\(.*\)/, ''); }
+      const saaLat = lat !== null ? lat : (currentLocation && currentLocation.lat), saaLon = lon !== null ? lon : (currentLocation && currentLocation.lon);
+
+      tila.textContent = 'Haetaan päivän olot…';
+      const p2 = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      // veden lämpö: sama asema, sama päivä (lähin mittaus ±1 vrk)
+      let vesiC = null, vesiLahde = null;
+      if (sykePaikka) {
+        try {
+          const u = new URL('https://rajapinnat.ymparisto.fi/api/Hydrologiarajapinta/1.0/odata/LampoPintavesi');
+          const a = new Date(hetki.getTime() - 86400e3), b = new Date(hetki.getTime() + 86400e3);
+          u.searchParams.set('$filter', 'Paikka_Id eq ' + sykePaikka.id + " and Aika ge datetime'" + p2(a) + "T00:00:00' and Aika le datetime'" + p2(b) + "T23:59:59'");
+          u.searchParams.set('$top', '10');
+          const r = await fetch(u);
+          if (r.ok) {
+            const v = ((await r.json()).value || []).map(x => ({ t: new Date(x.Aika), a: Number(x.Arvo) })).filter(x => isFinite(x.a));
+            if (v.length) {
+              v.sort((x, y) => Math.abs(x.t - hetki) - Math.abs(y.t - hetki));
+              vesiC = v[0].a; vesiLahde = 'SYKE historia, ' + sykePaikka.nimi + ' ' + v[0].t.getDate() + '.' + (v[0].t.getMonth()+1) + '.';
+            }
+          }
+        } catch (e) {}
+      }
+      // tuuli, ilma, pilvet ja paine säähistoriasta
+      let tuuliMs = null, tuuliSuunta = null, ilmaC = null, pilvi = null, paine = null, tuuliLahde = null;
+      if (typeof saaLat === 'number' && typeof saaLon === 'number') {
+        try {
+          const url = 'https://archive-api.open-meteo.com/v1/archive?latitude=' + saaLat + '&longitude=' + saaLon
+            + '&start_date=' + pvm + '&end_date=' + pvm
+            + '&hourly=wind_speed_10m,wind_direction_10m,temperature_2m,cloud_cover,surface_pressure&wind_speed_unit=ms&timezone=auto';
+          const r = await fetch(url);
+          if (r.ok) {
+            const h = (await r.json()).hourly || {};
+            const i = (h.time || []).indexOf(pvm + 'T' + String(hetki.getHours()).padStart(2, '0') + ':00');
+            if (i >= 0) {
+              tuuliMs = h.wind_speed_10m[i]; tuuliSuunta = h.wind_direction_10m[i];
+              ilmaC = h.temperature_2m[i]; pilvi = h.cloud_cover[i]; paine = h.surface_pressure[i];
+              tuuliLahde = 'ERA5-arkisto (Open-Meteo)';
+            }
+          }
+        } catch (e) {}
+      }
+      const kausi = (typeof suggestSeasonForDate === 'function') ? suggestSeasonForDate(pvm) : null;
+      const syv = parseFloat(String(arvo('vsSyvyys') || '').replace(',', '.'));
+      const nop = parseFloat(String(arvo('vsNopeus') || '').replace(',', '.'));
+      const perus = {
+        aika: hetki.toISOString(), nollareissu: false, jalkikirjaus: true,
+        paikka: currentLocation ? currentLocation.name : null, lat, lon, sijaintiLahde,
+        laji: arvo('vsLaji'), syvyysM: isFinite(syv) ? syv : null, syvyysLahde: isFinite(syv) ? 'mitattu' : null,
+        vesiC, vesiLahde, tuuliMs, tuuliSuunta, tuuliLahde, ilmaC, pilvisyysPros: pilvi, paineHpa: paine,
+        kausi, viehe: arvo('vsViehe') || null, nopeusKmh: isFinite(nop) ? nop : null
+      };
+      const lista = lataaSaaliit();
+      for (let n = 0; n < kpl; n++) lista.push(Object.assign({}, perus, { pituusCm: pituudet[n] !== undefined ? pituudet[n] : null }));
+      tallennaSaaliit(lista);
+      paivitaSaalisLista();
+      tila.innerHTML = 'Tallennettu ' + kpl + ' kalaa (' + p2(hetki) + ').'
+        + '<br>Vesi: ' + (vesiC !== null ? vesiC.toFixed(1).replace('.', ',') + ' °C — ' + vesiLahde : 'ei saatu')
+        + '<br>Tuuli: ' + (tuuliMs !== null ? Math.round(tuuliMs) + ' m/s ' + kompassiMista(tuuliSuunta) + ' — ' + tuuliLahde : 'ei saatu')
+        + (sijaintiLahde ? '<br>Sijainti: ' + sijaintiLahde : '<br>Sijainti ei tiedossa: kala ei vaikuta paikkojen pisteisiin, vain tilastoihin.');
+    }
+
     function paivitaSaalisLista() {
       const lista = lataaSaaliit();
       const maaraEl = document.getElementById('saalisMaara');
@@ -6587,7 +6712,10 @@ lataa(eka);
       }
       el.innerHTML = lista.slice().reverse().slice(0, 20).map(s => {
         const d = new Date(s.aika);
-        const pvm = d.toLocaleDateString('fi-FI', {day:'numeric',month:'numeric'}) + ' ' + d.toLocaleTimeString('fi-FI', {hour:'2-digit',minute:'2-digit'});
+        // vuosi näkyviin, jos eri kuin nyt (jälkikirjaukset); 📜 = kirjattu jälkikäteen
+        const vuosiEri = d.getFullYear() !== new Date().getFullYear();
+        const pvm = (s.jalkikirjaus ? '📜 ' : '') + d.toLocaleDateString('fi-FI', vuosiEri ? {day:'numeric',month:'numeric',year:'numeric'} : {day:'numeric',month:'numeric'})
+          + ' ' + d.toLocaleTimeString('fi-FI', {hour:'2-digit',minute:'2-digit'});
         if (s.nollareissu) {
           return `<div style="padding:6px 0;border-bottom:1px solid rgba(30,51,80,0.5);font-size:13px;color:var(--muted);">${pvm} — nollareissu${typeof s.vesiC === 'number' ? ' · vesi ' + s.vesiC.toFixed(1) + ' °C' : ''}</div>`;
         }
@@ -6622,7 +6750,8 @@ lataa(eka);
       'malliAaltoM','malliPintavirtausKmh','malliPintavirtausSuunta',
       'malliSyvaKmh','malliSyvaSuunta','malliSyvaTuuleen',
       'harppausEnnuste','harppausLahde','malliTuuliMs','malliTuuliSuunta',
-      'suositeltuPaikka','suositusPisteet','etaisyysSuositukseenM','suositusHetki'];
+      'suositeltuPaikka','suositusPisteet','etaisyysSuositukseenM','suositusHetki',
+      'jalkikirjaus','tuuliLahde','sijaintiLahde'];
 
     function saaliitCsv(lista) {
       return [SAALIS_KENTAT.join(';')].concat(
@@ -8965,7 +9094,7 @@ lataa(eka);
        ruudulta näkynyt, laskeeko moottori vai odottaako jokin haku. Nyt tilarivillä
        juoksee sekuntilaskuri ja näkyy mitä tiedostoja haetaan ja kuinka isoja ne ovat.
        Koepuheella on aikaraja; sen ylittyessä kokeillaan seuraavaa lähdettä. */
-    const PIPER_AIKARAJA_MS = () => window.PIPER_AIKARAJA_MS || 150000;
+    const PIPER_AIKARAJA_MS = () => window.PIPER_AIKARAJA_MS || 300000;   // 5 min: erotetaan hitaus jumista
     function aikaraja(lupaus, ms, nimi) {
       let ajastin;
       return Promise.race([lupaus, new Promise((_, hylkaa) => {
@@ -8974,9 +9103,11 @@ lataa(eka);
     }
     function seuraaHakuja(naytto) {
       const alkup = window.fetch, t0 = Date.now(), kesken = new Map(), valmiit = [];
-      let pohja = '';
+      let pohja = '', lopetettu = false;
       const mb = x => x >= 1e6 ? Math.round(x / 1e6) + ' Mt' : Math.round(x / 1e3) + ' kt';
       const paivita = () => {
+        // lopetuksen jälkeen kesken olleet haut eivät saa kirjoittaa virheilmoituksen yli
+        if (lopetettu) return;
         const nyt = [...kesken.values()].map(a => a.nimi + (a.koko ? ' (' + mb(a.koko) + ')' : ''));
         naytto(pohja + ' — ' + Math.round((Date.now() - t0) / 1000) + ' s'
           + (nyt.length ? '<br><span class="hint">haetaan: ' + nyt.join(', ') + '</span>' : '')
@@ -8998,8 +9129,24 @@ lataa(eka);
         } catch (e) { valmiit.push(nimi + ' EPÄONNISTUI'); throw e; }
         finally { kesken.delete(id); paivita(); }
       };
+      /* 22.9.2026: ääntämistiedosto (Emscriptenin .data) ladataan XMLHttpRequestilla,
+         joka ei näy fetch-seurannassa. Seurataan myös sitä, etenemisen kanssa. */
+      const XO = XMLHttpRequest.prototype.open, XS = XMLHttpRequest.prototype.send;
+      XMLHttpRequest.prototype.open = function (m, url) { this.__url = String(url); return XO.apply(this, arguments); };
+      XMLHttpRequest.prototype.send = function () {
+        const url = this.__url || '';
+        if (/huggingface|esm\.sh|jsdelivr|cdnjs|\.(wasm|data|onnx|mjs)(\?|$)/.test(url) && !url.startsWith('data:')) {
+          const nimi = url.split('?')[0].split('/').pop() || url, id = {};
+          kesken.set(id, { nimi, koko: 0 }); paivita();
+          this.addEventListener('progress', e => { const a = kesken.get(id); if (a) { a.koko = e.total || 0; a.nimi = nimi + ' ' + mb(e.loaded) + (e.total ? '/' + mb(e.total) : ''); } });
+          this.addEventListener('loadend', () => { kesken.delete(id); valmiit.push(nimi + ' ' + (this.status >= 200 && this.status < 300 ? '' : 'VIRHE ' + this.status)); paivita(); });
+        }
+        return XS.apply(this, arguments);
+      };
       const ajastin = setInterval(paivita, 1000);
-      return { aseta: t => { pohja = t; paivita(); }, lopeta: () => { clearInterval(ajastin); window.fetch = alkup; } };
+      return { aseta: t => { pohja = t; paivita(); },
+               lopeta: () => { lopetettu = true; clearInterval(ajastin); window.fetch = alkup;
+                               XMLHttpRequest.prototype.open = XO; XMLHttpRequest.prototype.send = XS; } };
     }
     async function varmistaPiper(kerro) {
       if (piperToimiva) return piperToimiva;
@@ -9016,7 +9163,7 @@ lataa(eka);
               if (p && p.total) kerro('Ladataan ääntä: ' + Math.round(p.loaded * 100 / p.total) + ' %');
             });
           }
-          kerro('Koestetaan puhemoottoria (' + L.nimi + '). Ensimmäinen käynnistys voi kestää 1–2 min — älä sulje sovellusta');
+          kerro('Koestetaan puhemoottoria (' + L.nimi + '). Ensimmäinen käynnistys voi kestää useita minuutteja — älä sulje sovellusta');
           await aikaraja(tts.predict({ text: 'Hei.', voiceId: PIPER_AANI }), PIPER_AIKARAJA_MS(), L.nimi);
           piperToimiva = tts;
           return tts;
@@ -9060,6 +9207,131 @@ lataa(eka);
       return new Blob(osat, { type: 'audio/mpeg' });
     }
 
+    /* ===== ROBOTTIÄÄNI (eSpeak / meSpeak.js) — 22.9.2026 =====
+       Piper jäi puhelimessa jumiin sisäisesti (malli ja moottori latautuivat 13 s:ssa,
+       mutta ääntämisosaa ei koskaan pyydetty — todennäköisesti taustaprosessi, jonka
+       polkua ei löytynyt). Piper-koodi (varmistaPiper) jää tiedostoon odottamaan,
+       mutta äänitiedosto tehdään nyt eSpeakilla: ei laskentamoottoria, ei taustaprosesseja,
+       ei 70 Mt:n mallia. Ääni on selvästi koneellinen. Kirjasto GPL, tuotettu ääni vapaa.
+       Sama suojaus kuin Piperissä: kaksi lähdettä, koepuhe ja aikaraja. */
+    const ESPEAK_LAHTEET = [
+      { nimi: 'esm.sh', url: 'https://esm.sh/mespeak@2.0.2' },
+      { nimi: 'jsDelivr', url: 'https://cdn.jsdelivr.net/npm/mespeak@2.0.2/+esm' }
+    ];
+    const ESPEAK_DATA = 'https://cdn.jsdelivr.net/npm/mespeak@2.0.2/';
+    let espeakToimiva = null;
+    function espeakLataa(ms, tapa, url) {
+      return new Promise((ok, virhe) => {
+        try { ms[tapa](url, onnistui => onnistui === false ? virhe(new Error(tapa + ' epäonnistui')) : ok()); }
+        catch (e) { virhe(e); }
+      });
+    }
+    /* KORJATTU 22.9.2026: kirjaston oma URL-lataus (loadConfig(url, callback)) jäi
+       puhelimessa odottamaan molemmista lähteistä, vaikka polku oli oikea. Kirjasto
+       hyväksyy myös valmiin JSON-objektin, jonka se käsittelee heti. Haetaan tiedostot
+       siis itse fetchillä (joka on toiminut koko ajan) ja annetaan valmiina. Lopuksi
+       tarkistetaan, että kirjasto oikeasti otti ne vastaan — virhe ei jää hiljaiseksi. */
+    let espeakData = null;
+    async function haeEspeakData(kerro) {
+      if (espeakData) return espeakData;
+      const hae = async (osa, nimi) => {
+        const r = await aikaraja(fetch(ESPEAK_DATA + osa), 20000, nimi);
+        if (!r.ok) throw new Error(nimi + ': palvelin vastasi ' + r.status);
+        return await r.json();
+      };
+      kerro('Haetaan robottiäänen asetukset ja suomen ääni…');
+      const [config, fi] = await Promise.all([hae('src/mespeak_config.json', 'asetukset'), hae('voices/fi.json', 'suomen ääni')]);
+      espeakData = { config, fi };
+      return espeakData;
+    }
+    /* ÄÄNIVALITSIN — 22.9.2026. eSpeakin valmiit ääniversiot (Klatt-synteesi ja
+       mies-/naismuunnelmat) sekä nopeus. Valitaan korvakuulolla Näyte-napilla, ja
+       valinta muistetaan. Jos jokin versio ei toimi tässä kirjastoversiossa, näyte
+       kertoo sen eikä tiedosto kaadu. */
+    const ESPEAK_ASETUS_LS = 'espeakAani';
+    function espeakAsetukset() {
+      const v = document.getElementById('espeakVariantti'), n = document.getElementById('espeakNopeus');
+      return { variantti: v ? v.value : '', nopeus: n ? parseInt(n.value, 10) || 160 : 160 };
+    }
+    function talletaEspeakAsetukset() { try { localStorage.setItem(ESPEAK_ASETUS_LS, JSON.stringify(espeakAsetukset())); } catch (e) {} }
+    window.addEventListener('load', function () {
+      try {
+        const a = JSON.parse(localStorage.getItem(ESPEAK_ASETUS_LS));
+        if (a) {
+          const v = document.getElementById('espeakVariantti'), n = document.getElementById('espeakNopeus');
+          if (v && a.variantti !== undefined) v.value = a.variantti;
+          if (n && a.nopeus) n.value = String(a.nopeus);
+        }
+      } catch (e) {}
+    });
+    async function espeakNayte() {
+      const tila = document.getElementById('jakoTila');
+      try {
+        const aani = await varmistaEspeak(t => { tila.innerHTML = t; });
+        const wav = aani.puhu('Taimen noin kolme pilkku viisi metrissä. Aloita Kärnänsaaren eteläkärjestä. Kireitä siimoja.');
+        const url = URL.createObjectURL(wav), a = new Audio(url);
+        await a.play();
+        const as = espeakAsetukset();
+        tila.textContent = 'Näyte: ' + (document.getElementById('espeakVariantti').selectedOptions[0] || {}).textContent + ', ' + (document.getElementById('espeakNopeus').selectedOptions[0] || {}).textContent.toLowerCase() + '.';
+      } catch (e) {
+        tila.innerHTML = '<span style="color:var(--amber);">Näyte ei onnistunut' + (e && e.message ? ': ' + e.message : '') + '. Tämä versio ei ehkä toimi — kokeile toista.</span>';
+      }
+    }
+
+    async function varmistaEspeak(kerro) {
+      if (espeakToimiva) return espeakToimiva;
+      const data = await haeEspeakData(kerro);
+      const virheet = [];
+      for (const L of ESPEAK_LAHTEET) {
+        try {
+          kerro('Ladataan robottiääntä (' + L.nimi + ')…');
+          const m = await aikaraja(import(L.url), 60000, L.nimi + ' (lataus)');
+          const ms = (m && m.default && m.default.speak) ? m.default : m;
+          if (!ms || typeof ms.speak !== 'function') throw new Error('kirjastolla ei ole speak-funktiota');
+          // valmiit tiedot suoraan kirjastolle (asetukset kansiosta src/, ks. yllä)
+          if (typeof ms.isConfigLoaded !== 'function' || !ms.isConfigLoaded()) ms.loadConfig(data.config);
+          if (typeof ms.isConfigLoaded === 'function' && !ms.isConfigLoaded()) throw new Error('kirjasto ei ottanut asetuksia vastaan');
+          if (typeof ms.isVoiceLoaded !== 'function' || !ms.isVoiceLoaded('fi')) ms.loadVoice(data.fi);
+          if (typeof ms.isVoiceLoaded === 'function' && !ms.isVoiceLoaded('fi')) throw new Error('kirjasto ei ottanut suomen ääntä vastaan');
+          const puhu = txt => {
+            const as = espeakAsetukset(), o = { voice: 'fi', speed: as.nopeus, pitch: 45, rawdata: 'array' };
+            if (as.variantti) o.variant = as.variantti;
+            const a = ms.speak(txt, o);
+            if (!a || !a.length) throw new Error('puhe palautti tyhjän');
+            return new Blob([new Uint8Array(a)], { type: 'audio/wav' });
+          };
+          kerro('Koestetaan robottiääntä (' + L.nimi + ')…');
+          puhu('Hei.');
+          espeakToimiva = { puhu, nimi: L.nimi };
+          return espeakToimiva;
+        } catch (e) {
+          virheet.push(L.nimi + ': ' + (e && e.message ? e.message : e));
+        }
+      }
+      throw new Error('Robottiääni ei käynnistynyt kummastakaan lähteestä. ' + virheet.join(' | '));
+    }
+
+    /* Piperin tallentama ääni pois selaimen yksityisestä tiedostojärjestelmästä (OPFS).
+       Poistetaan vain Piperin tiedostot (harri / .onnx), ei mitään muuta. */
+    async function vapautaPiperTila() {
+      const tila = document.getElementById('jakoTila');
+      try {
+        if (!navigator.storage || !navigator.storage.getDirectory) { tila.textContent = 'Selain ei tue tätä toimintoa.'; return; }
+        const ennen = navigator.storage.estimate ? (await navigator.storage.estimate()).usage : null;
+        const juuri = await navigator.storage.getDirectory(), poistettu = [];
+        for await (const [nimi] of juuri.entries()) {
+          if (/harri|piper|\.onnx/i.test(nimi)) { await juuri.removeEntry(nimi, { recursive: true }); poistettu.push(nimi); }
+        }
+        const jalkeen = navigator.storage.estimate ? (await navigator.storage.estimate()).usage : null;
+        const mt = (ennen !== null && jalkeen !== null) ? Math.round((ennen - jalkeen) / 1e6) : null;
+        tila.textContent = poistettu.length
+          ? 'Poistettu ' + poistettu.length + ' tiedostoa' + (mt !== null ? ', vapautui noin ' + mt + ' Mt.' : '.')
+          : 'Piperin tiedostoja ei löytynyt — tila on jo vapaana.';
+      } catch (e) {
+        tila.textContent = 'Poisto ei onnistunut: ' + (e && e.message ? e.message : e);
+      }
+    }
+
     async function teeAanitiedosto() {
       const tila = document.getElementById('jakoTila'), tulos = document.getElementById('aaniTulos');
       const btn = document.getElementById('aaniBtn');
@@ -9070,8 +9342,8 @@ lataa(eka);
       const seuranta = seuraaHakuja(t => { tila.innerHTML = t; });
       let kerro = t => seuranta.aseta(t);
       try {
-        // Lähde, ääni ja koepuhe: ks. varmistaPiper. Ääni ladataan vain kerran.
-        const tts = await varmistaPiper(kerro);
+        // Robottiääni (eSpeak). Piper-polku (varmistaPiper) odottaa, ks. yllä.
+        const aani = await varmistaEspeak(kerro);
 
         // Puhe osina: sama jako kuin kuunneltaessa, osien väliin tauko
         const palat = teksti.split('¶').map(x => x.trim()).filter(Boolean);
@@ -9081,7 +9353,8 @@ lataa(eka);
         const alku = Date.now();
         for (let i = 0; i < palat.length; i++) {
           kerro('Puhutaan osa ' + (i + 1) + ' / ' + palat.length + '…');
-          const wav = await tts.predict({ text: palat[i], voiceId: PIPER_AANI });
+          await new Promise(r => setTimeout(r, 30));          // tilarivi ehtii päivittyä
+          const wav = aani.puhu(palat[i]);
           const ab = await puraAani(ctx, wav);                      // muunnetaan 22 050 Hz:iin
           osat.push(ab.getChannelData(0), new Float32Array(Math.round(SR * 0.45)));
         }
@@ -9106,8 +9379,7 @@ lataa(eka);
           + '<div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">'
           + '<button class="chip" onclick="jaaAanitiedosto()" style="border-color:var(--cyan);color:var(--cyan);">📤 Jaa (WhatsApp)</button>'
           + '<a class="chip" href="' + url + '" download="' + aaniTiedosto.name + '" style="text-decoration:none;">Tallenna</a></div>'
-          + '<p class="hint" style="margin-top:6px;font-size:11px;">Ääni: Piper fi_FI-harri-low. Aineisto: Finnish Single Speaker Speech Dataset (CC0); '
-          + 'malli hienosäädetty RyanSpeech-äänestä (CC BY-NC-SA 4.0) — vain ei-kaupalliseen käyttöön.</p>';
+          + '<p class="hint" style="margin-top:6px;font-size:11px;">Ääni: eSpeak (meSpeak.js, GPL), suomi. Koneellinen ääni — tiedosto on vapaasti jaettavissa.</p>';
         seuranta.lopeta(); kerro = t => { tila.innerHTML = t; };
         kerro('Valmis: ' + Math.floor(kesto / 60) + ' min ' + Math.round(kesto % 60) + ' s, ' + Math.round(blob.size / 1024) + ' kt ('
           + paate.toUpperCase() + '). Tekeminen kesti ' + Math.round(teko) + ' s.'
@@ -9676,7 +9948,13 @@ lataa(eka);
       <div class="idx">${String(i + 1).padStart(2, '0')} / ${questions.length}</div>
       <h2>${q.title}</h2>
       ${q.hint ? `<p class="hint">${q.hint}</p>` : ''}
-      ${q.id === 'temp' ? `<p class="hint" id="sykeStatus" style="color:var(--cyan); margin-top:-6px; margin-bottom:12px;">Haetaan SYKE-dataa...</p>` : ''}
+      ${q.id === 'temp' ? `<p class="hint" id="sykeStatus" style="color:var(--cyan); margin-top:-6px; margin-bottom:12px;">Haetaan SYKE-dataa...</p>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:-4px 0 12px;font-size:13px;">
+          <span class="hint">Sama viikko vuonna</span>
+          <input type="number" id="historiaVuosi" min="1961" max="2100" style="width:78px;">
+          <button class="chip" type="button" onclick="haeSamaViikko()" style="padding:4px 10px;font-size:12px;">Hae</button>
+        </div>
+        <div id="historiaTulos" style="font-size:13px;margin:-4px 0 12px;"></div>` : ''}
       <div class="options" id="opts-${q.id}"></div>
       ${q.id === 'temp' ? `<div class="numfield" style="margin-top:10px">
         <label>Tarkka lämpötila (valinnainen)</label>
@@ -11675,6 +11953,68 @@ lataa(eka);
 
     let cachedSunData = { rise: 5.5, set: 21.5, riseStr: '05:30', setStr: '21:30' };
 
+    /* ===== SAMA VIIKKO VUOSIA SITTEN — 22.9.2026 =====
+       SYKEn Halkosaaren havaintopaikka: pintaveden lämpötila vuodesta 1961. Sama asema
+       ja sama rajapinta kuin nykyisellä lukemalla, vain aikarajaus lisätään. Viikko on
+       analyysin päivä ±3 vrk valittuna vuonna. HUOM: mittaus tehdään rannassa, 30 cm
+       syvyisessä vedessä aamulla klo 8 — se kertoo rannan vedestä, ei ulapasta. */
+    let sykePaikka = null;
+    async function haeSamaViikko() {
+      const tulos = document.getElementById('historiaTulos');
+      const vEl = document.getElementById('historiaVuosi');
+      const vuosi = parseInt(vEl && vEl.value, 10) || (new Date().getFullYear() - 13);
+      if (vEl && !vEl.value) vEl.value = String(vuosi);
+      if (!sykePaikka) { tulos.textContent = 'SYKEn asema ei ole vielä latautunut. Odota hetki ja kokeile uudelleen.'; return; }
+      if (!(vuosi >= 1961 && vuosi <= new Date().getFullYear())) { tulos.textContent = 'Anna vuosi 1961–' + new Date().getFullYear() + '.'; return; }
+      const h = analyysiHetki();
+      const keski = new Date(vuosi, h.getMonth(), h.getDate());
+      const alku = new Date(keski.getTime() - 3*86400e3), loppu = new Date(keski.getTime() + 3*86400e3);
+      const pv = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      const base = 'https://rajapinnat.ymparisto.fi/api/Hydrologiarajapinta/1.0/odata/LampoPintavesi';
+      const kysy = async (suodatin) => {
+        const u = new URL(base);
+        u.searchParams.set('$filter', 'Paikka_Id eq ' + sykePaikka.id + ' and ' + suodatin);
+        u.searchParams.set('$orderby', 'Aika asc');
+        u.searchParams.set('$top', '100');
+        const r = await fetch(u);
+        if (!r.ok) throw new Error('SYKE vastasi ' + r.status);
+        return ((await r.json()).value || []);
+      };
+      tulos.textContent = 'Haetaan ' + sykePaikka.nimi + ', ' + pv(alku) + ' – ' + pv(loppu) + '…';
+      let rivit;
+      try {
+        rivit = await kysy("Aika ge datetime'" + pv(alku) + "T00:00:00' and Aika le datetime'" + pv(loppu) + "T23:59:59'");
+      } catch (e1) {
+        try {   // varakysely, jos rajapinta ei hyväksy päivämäärärajausta
+          // kaikki kuukaudet, joihin viikko osuu (viikko voi ylittää kuun vaihteen)
+          const kk = [...new Set([alku.getMonth()+1, loppu.getMonth()+1])].map(m => 'month(Aika) eq ' + m).join(' or ');
+          rivit = await kysy('year(Aika) eq ' + vuosi + ' and (' + kk + ')');
+        } catch (e2) { tulos.textContent = 'Haku ei onnistunut: ' + e1.message + ' / ' + e2.message; return; }
+      }
+      // rajaus myös täällä: kumpikaan kysely ei saa tuoda viikon ulkopuolisia päiviä
+      const loppuPv = new Date(loppu.getTime() + 86400e3);
+      const arvot = rivit.map(x => ({ t: new Date(x.Aika), a: Number(x.Arvo) }))
+        .filter(x => isFinite(x.a) && x.t >= alku && x.t < loppuPv);
+      if (!arvot.length) { tulos.textContent = sykePaikka.nimi + ': vuodelta ' + vuosi + ' ei ole mittauksia tältä viikolta.'; return; }
+      const ka = arvot.reduce((s2, x) => s2 + x.a, 0) / arvot.length;
+      const nyt = (typeof latestSykeTemp === 'number') ? latestSykeTemp : null;
+      const vk = ['su','ma','ti','ke','to','pe','la'];
+      const valiTxt = alku.getMonth() === loppu.getMonth()
+        ? alku.getDate() + '.–' + loppu.getDate() + '.' + (loppu.getMonth()+1) + '.'
+        : alku.getDate() + '.' + (alku.getMonth()+1) + '.–' + loppu.getDate() + '.' + (loppu.getMonth()+1) + '.';
+      tulos.innerHTML = '<strong>' + sykePaikka.nimi + ' · ' + valiTxt + vuosi + '</strong><br>'
+        + arvot.map(x => vk[x.t.getDay()] + ' ' + x.t.getDate() + '.' + (x.t.getMonth()+1) + '. <b>' + x.a.toFixed(1).replace('.', ',') + ' °C</b>').join(' · ')
+        + '<br>Keskiarvo ' + ka.toFixed(1).replace('.', ',') + ' °C'
+        + (nyt === null ? '.' : ' · nyt ' + nyt.toFixed(1).replace('.', ',') + ' °C, eli '
+            + (Math.abs(nyt - ka) < 0.05 ? 'sama kuin silloin.'
+               : Math.abs(nyt - ka).toFixed(1).replace('.', ',') + ' astetta ' + (nyt > ka ? 'lämpimämpää' : 'kylmempää') + ' kuin silloin.'))
+        + '<br><span class="hint">Rantamittaus: 30 cm vettä, puolen metrin päässä rannasta, aamuisin klo 8. Kertoo rannan vedestä, ei ulapasta.</span>';
+    }
+    window.addEventListener('load', function () {
+      const v = document.getElementById('historiaVuosi');
+      if (v && !v.value) v.value = String(new Date().getFullYear() - 13);
+    });
+
     async function fetchSykeData() {
       const statusEl = document.getElementById('sykeStatus');
       if (!statusEl) return;
@@ -11772,6 +12112,7 @@ lataa(eka);
            siis laskea lämpötilaa toisella rannalla ja nostaa sitä toisella.
            Ilman aseman sijaintia lämpötilan muutosta ei voi tulkita oikein. */
         sykeAsema = null;
+        sykePaikka = { id: station.Paikka_Id, nimi: station.Nimi };   // historiahakua varten
         try {
           const E = station.KoordErTmIta ?? station.KoordItaEtrs ?? station.Ita ?? null;
           const N = station.KoordErTmPohj ?? station.KoordPohjEtrs ?? station.Pohjoinen ?? null;
