@@ -2116,6 +2116,7 @@ body{padding-bottom:66px}
       return new Date(y, m - 1, d, ennusteTila.tunti, ennusteTila.minuutti);
     }
     let viimeisinOttipaikka = null;   // puheselostusta varten
+    let viimeisinKuhapaikka = null;   // 28.9.2026: kuhapaneelin tulos puheelle ja saaliskirjaukselle
 
     // ===== SYKE: JÄRVIEN SYVYYSAINEISTO =====
     // Käyttölupa myönnetty 1.9.2026, tunniste "uistelututka". Aineisto on SYKEn
@@ -6480,6 +6481,17 @@ lataa(eka);
         if (typeof snap.lat === 'number' && typeof sp.lat === 'number')
           snap.etaisyysSuositukseenM = Math.round(haversineDistMeters(snap.lat, snap.lon, sp.lat, sp.lon));
       }
+      /* 28.9.2026: kuhan suositus omiin kenttiinsä. Laji täytetään vasta myöhemmin,
+         joten molemmat suositukset talteen; vertailussa valitaan lajin mukaan. */
+      snap.suositeltuKuhapaikka = null; snap.kuhaSuositusPisteet = null; snap.etaisyysKuhasuositukseenM = null; snap.kuhaVedenkorkeusKorjausM = null;
+      if (viimeisinKuhapaikka && viimeisinKuhapaikka.topSpot) {
+        const kp = viimeisinKuhapaikka.topSpot;
+        snap.suositeltuKuhapaikka = kp.name; snap.kuhaSuositusPisteet = viimeisinKuhapaikka.paras.pisteet;
+        if (typeof snap.lat === 'number' && typeof kp.lat === 'number')
+          snap.etaisyysKuhasuositukseenM = Math.round(haversineDistMeters(snap.lat, snap.lon, kp.lat, kp.lon));
+        if (viimeisinKuhapaikka.jarvi === 'hirvijarvi' && hirviTaso && typeof hirviTaso.eroM === 'number')
+          snap.kuhaVedenkorkeusKorjausM = Math.round(hirviTaso.eroM * 100) / 100;
+      }
 
       if (nollareissu) {
         const lista = lataaSaaliit();
@@ -6764,7 +6776,9 @@ lataa(eka);
       'malliSyvaKmh','malliSyvaSuunta','malliSyvaTuuleen',
       'harppausEnnuste','harppausLahde','malliTuuliMs','malliTuuliSuunta',
       'suositeltuPaikka','suositusPisteet','etaisyysSuositukseenM','suositusHetki',
-      'jalkikirjaus','tuuliLahde','sijaintiLahde'];
+      'jalkikirjaus','tuuliLahde','sijaintiLahde',
+      // 28.9.2026
+      'suositeltuKuhapaikka','kuhaSuositusPisteet','etaisyysKuhasuositukseenM','kuhaVedenkorkeusKorjausM'];
 
     function saaliitCsv(lista) {
       return [SAALIS_KENTAT.join(';')].concat(
@@ -8503,12 +8517,15 @@ lataa(eka);
 
     function kuhaPaneeliHtml(o) {
       const jarviAvain = kuhaJarvi();
-      if (!jarviAvain) return '';
+      if (!jarviAvain) { viimeisinKuhapaikka = null; return ''; }
       kuhaViimeArgs = o;
+      viimeisinKuhapaikka = null;
       if (jarviAvain === 'hirvijarvi' && !hirviTaso) haeHirviTasoero();
       const tulos = pisteytaKuhapaikat(o);
       if (!tulos.length) return '';
       const auki = tulos.filter(x => !x.suljettu), par = auki[0] || tulos[0];
+      viimeisinKuhapaikka = { topSpot: par.spot, paras: par, vaihtoehdot: auki.filter(x => x !== par).slice(0, 2),
+        pisteytys: tulos, hetki: new Date(o.hetki).toISOString(), syvyys: o.syvyysKuha, jarvi: jarviAvain };
       const chip = t => '<span class="chip" style="padding:1px 7px;font-size:11px;margin-right:6px;">' + t + '</span>';
       const syyRivi = x => '<div style="margin:5px 0;">' + chip(x.taso) + x.teksti
         + (x.p ? ' <span class="hint">(' + (x.p > 0 ? '+' : '') + x.p + ')</span>' : '') + '</div>';
@@ -9776,6 +9793,23 @@ lataa(eka);
         if (lisa.length) osat.push(lisa.join(' '));
       }
 
+      // 3b Kuha (28.9.2026): paikka, syvyys, painavin syy tasoineen, vaihtoehto
+      const kt = viimeisinKuhapaikka;
+      if (kt && kt.topSpot && kt.paras) {
+        const kk = ['Kuhalle paras paikka on ' + kt.topSpot.name + '.'];
+        if (typeof kt.syvyys === 'number') kk.push('Kuha noin ' + puheLuku(kt.syvyys) + ' metrissä, eli ' + jl(kt.syvyys) + ' jalassa.');
+        const ks = kt.paras.syyt.filter(x => x.p > 0).sort((x, y) => y.p - x.p)[0];
+        if (ks) kk.push('Peruste: ' + puheSiisti(ks.teksti) + ' ' + (TASO_PUHE[ks.taso] || ''));
+        if (kt.jarvi === 'hirvijarvi' && hirviTaso && typeof hirviTaso.eroM === 'number' && Math.abs(hirviTaso.eroM) >= 0.1)
+          kk.push('Vedenpinta on ' + Math.abs(Math.round(hirviTaso.eroM * 100)) + ' senttiä ' + (hirviTaso.eroM < 0 ? 'alempana' : 'ylempänä')
+            + ' kuin heinäkuun lopussa, ja syvyydet on korjattu sillä.');
+        const kalt = (kt.vaihtoehdot || [])[0];
+        if (kalt) kk.push('Kuhan vaihtoehto on ' + kalt.spot.name + '.');
+        const ksul = (kt.pisteytys || []).filter(x => x.suljettu).map(x => x.spot.name);
+        if (ksul.length) kk.push('Aallokko sulkee kuhapaikoista: ' + ksul.join(', ') + '.');
+        osat.push(kk.join(' '));
+      }
+
       // 4 Olosuhteet: vesi, tuuli (mitattu ensin), taimenkeli
       const olo = [];
       const vesi = (latestSykeTemp !== null && latestSykeTemp !== undefined) ? latestSykeTemp : a.temp;
@@ -9939,7 +9973,7 @@ lataa(eka);
       }
 
       // 9 Muut syvyydet lyhyesti
-      osat.push('Syöttikala on noin ' + puheLuku(e.muikku, 0) + ' metrissä. Kuha, jos sitä kokeilet, noin ' + puheLuku(e.kuha) + ' metrissä.');
+      osat.push('Syöttikala on noin ' + puheLuku(e.muikku, 0) + ' metrissä.' + (viimeisinKuhapaikka ? '' : ' Kuha, jos sitä kokeilet, noin ' + puheLuku(e.kuha) + ' metrissä.'));
 
       // 10 Lopetus
       const kevennykset = [
