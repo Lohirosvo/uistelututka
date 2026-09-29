@@ -1241,7 +1241,7 @@ body{padding-bottom:66px}
             <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 8px;align-items:center;font-size:13px;">
               <label>Päivä</label><input type="date" id="vsPaiva">
               <label>Kello</label><input type="time" id="vsKello" value="12:00">
-              <label>Laji</label><select id="vsLaji"><option value="taimen">Taimen</option><option value="jarvilohi">Järvilohi</option>
+              <label>Laji</label><select id="vsLaji"><option value="taimen">Taimen</option><option value="jarvilohi">Järvilohi</option><option value="kirjolohi">Kirjolohi</option>
                 <option value="kuha">Kuha</option><option value="hauki">Hauki</option><option value="ahven">Ahven</option><option value="muu">Muu</option></select>
               <label>Pituudet cm</label><input type="text" id="vsPituudet" placeholder="esim. 62, 55, 48 — yksi per kala">
               <label>Kpl</label><input type="number" id="vsKpl" min="1" placeholder="pituuksien määrä tai 1">
@@ -6164,7 +6164,7 @@ lataa(eka);
        Puhe: lyhyet lauseet pisteillä erotettuina, koska tuuli ja moottori
        peittävät pitkät. Kirjoitettu versio on tarkempi. */
     const KOOSTE_LAJI = {
-      taimen:['taimen','taimenta'], jarvilohi:['järvilohi','järvilohta'], kuha:['kuha','kuhaa'],
+      taimen:['taimen','taimenta'], jarvilohi:['järvilohi','järvilohta'], kirjolohi:['kirjolohi','kirjolohta'], kuha:['kuha','kuhaa'],
       hauki:['hauki','haukea'], ahven:['ahven','ahventa'], muu:['muu kala','muuta kalaa']
     };
     const KOOSTE_LS = 'saalisKoosteet', KOOSTE_AUTO_LS = 'saalisKoosteAuto';
@@ -6374,7 +6374,7 @@ lataa(eka);
        (mitattu / ennuste), ja vertailu ohittaa ennusteesta otetut syvyydet. */
     function lajinEnnuste(saalis, laji) {
       if (!saalis) return null;
-      const k = { taimen:'ennusteTaimen', jarvilohi:'ennusteJarvilohi', kuha:'ennusteKuha',
+      const k = { taimen:'ennusteTaimen', jarvilohi:'ennusteJarvilohi', kirjolohi:'ennusteKirjolohi', kuha:'ennusteKuha',
                   hauki:'ennusteHauki', ahven:'ennusteAhven', muikku:'ennusteMuikku' }[laji];
       const e = k ? saalis[k] : null;
       if (Array.isArray(e)) return Math.min(e[0], e[1]);
@@ -6462,8 +6462,10 @@ lataa(eka);
         // Mallin ennusteet vertailua varten
         ennusteTaimen: viimeisinEnnuste.taimen,
         ennusteJarvilohi: viimeisinEnnuste.jarvilohi,
+        ennusteKirjolohi: viimeisinEnnuste.kirjolohi,
         ennusteKuha: viimeisinEnnuste.kuha,
         ennusteMuikku: viimeisinEnnuste.muikku,
+        syottiLahde: viimeisinEnnuste.syottiLahde || null,
         taimenkeli: viimeisinEnnuste.taimenkeli,
         ennusteHauki: viimeisinEnnuste.hauki !== undefined ? viimeisinEnnuste.hauki : null,
         ennusteAhven: viimeisinEnnuste.ahven !== undefined ? viimeisinEnnuste.ahven : null,
@@ -6553,7 +6555,7 @@ lataa(eka);
       const el = document.getElementById('opts-kalaLaji');
       if (!el) return;
       el.innerHTML = '';
-      [{l:'Taimen',v:'taimen'},{l:'Järvilohi',v:'jarvilohi'},{l:'Kuha',v:'kuha'},{l:'Hauki',v:'hauki'},{l:'Ahven',v:'ahven'},{l:'Muu',v:'muu'}].forEach(o => {
+      [{l:'Taimen',v:'taimen'},{l:'Järvilohi',v:'jarvilohi'},{l:'Kirjolohi',v:'kirjolohi'},{l:'Kuha',v:'kuha'},{l:'Hauki',v:'hauki'},{l:'Ahven',v:'ahven'},{l:'Muu',v:'muu'}].forEach(o => {
         const chip = document.createElement('div');
         chip.className = 'chip' + (o.v === kalaLaji ? ' selected' : '');
         chip.textContent = o.l;
@@ -6783,7 +6785,8 @@ lataa(eka);
       'suositeltuPaikka','suositusPisteet','etaisyysSuositukseenM','suositusHetki',
       'jalkikirjaus','tuuliLahde','sijaintiLahde',
       // 28.9.2026
-      'suositeltuKuhapaikka','kuhaSuositusPisteet','etaisyysKuhasuositukseenM','kuhaVedenkorkeusKorjausM'];
+      'suositeltuKuhapaikka','kuhaSuositusPisteet','etaisyysKuhasuositukseenM','kuhaVedenkorkeusKorjausM',
+      'ennusteKirjolohi','syottiLahde'];
 
     function saaliitCsv(lista) {
       return [SAALIS_KENTAT.join(';')].concat(
@@ -13653,8 +13656,11 @@ lataa(eka);
       viimeisinEnnuste = {
         taimen: Number(dTaimen.toFixed(1)),
         jarvilohi: Number(dJarvilohi.toFixed(1)),
+        kirjolohi: Number(dKirjolohi.toFixed(1)),   // 28.9.2026
         kuha: Number(dKuha.toFixed(1)),
         muikku: Number(activeBaitDepth.toFixed(1)),
+        // 28.9.2026: havaittu parvi (Syöttikalaparven syvyys -kysymys) vai muikkumalli
+        syottiLahde: (a.bait !== null && a.bait !== undefined) ? 'havainto' : 'malli',
         taimenkeli: tk.score,
         // Puheselostusta varten
         tkLabel: tk.label,
