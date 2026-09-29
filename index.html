@@ -4689,6 +4689,96 @@ function akKierto(){
   return akKiertoData;
 }
 
+/* LÄPIVIRTAUS — 29.9.2026 (v98), vain Hirvijärvi.
+   Potentiaalivirtaus  ∇·(h²∇Φ) = lähde − nielu,  virtaus u = −h∇Φ.
+   Sama h²-painotus kuin Syvempi vesi -mallissa (käänteisluku r/h²), joten
+   kitka kumoutuu nopeudesta: virtaus riippuu vain vesimäärästä ja syvyydestä.
+   Jokaiselle tulolle ja otolle lasketaan kerran yksikkökenttä (1 m³/s). Kentässä
+   vesi jakautuu tasaisesti koko altaan pinnan nousuksi, joten jokainen kenttä on
+   yksinään tasapainossa ja ne voidaan summata:
+       kenttä = Q_kanava·F_kanava + Q_tausneva·F_tausneva + Q_varpula·F_varpula − Q_otto·F_otto
+   Tarkistettu Pythonilla 29.9.: 15 m³/s kanavalta ottoon → max 0,31 km/h, sama kuin
+   aiempi laskelma. Todellisilla luvuilla (tulo 5, otto 15) max noin 0,1 km/h: ajon
+   aikana vesi tulee pääosin altaan varastosta, ei eteläkanavasta.
+   Syvyys sama kuin akKierto (3x3-pehmennys, väh. 1 m). Rajat: 10 m kaivetut uomat
+   ovat alle ruudun, joten todellinen virta keskittyy niihin; ruutu näyttää keskiarvon.
+   Pisteet: kanava = eteläisin vesiruutu; otto = lähin vesiruutu Nurmon Satamaan;
+   Tausneva = Hannun piste (koilliskulma, uoma Tiisnevalta); Varpula = Hannun piste
+   29.9. (padon syöttö Hirvijärveen, 62°48'39.69" N 23°7'19.23" E; piste on rantaruudussa,
+   tulo sijoitetaan lähimpään vesiruutuun). */
+var HIRVI_LAPI_PISTEET = { otto: [62.80809, 23.04767], tausneva: [62.83226, 23.13712], varpula: [62.81102, 23.12201] };
+var akLapiData = null, akLapiValimuisti = null;
+function akLapiPohjat(){
+  if (akLapiData) return akLapiData;
+  if (!jarvi || jarvi !== JARVET.hirvijarvi || !mask || !akSyvyys) return null;
+  var kd = akKierto(); if (!kd) return null;
+  var k = jarvi.kartta, W = k.W, H = k.H, dx = k.ruutu, h = kd.h;
+  var vesi = [], idx = new Int32Array(W*H).fill(-1);
+  for (var q = 0; q < W*H; q++) if (mask[q]){ idx[q] = vesi.length; vesi.push(q); }
+  var N = vesi.length, nb = new Int32Array(N*4).fill(-1), af = new Float64Array(N*4), sum = new Float64Array(N);
+  for (var p = 0; p < N; p++){
+    var q0 = vesi[p], i = q0 % W, j = (q0/W)|0, nn = [[i+1,j],[i-1,j],[i,j+1],[i,j-1]];
+    for (var kk = 0; kk < 4; kk++){
+      var ii = nn[kk][0], jj = nn[kk][1], qq = jj*W+ii;
+      if (ii<0||ii>=W||jj<0||jj>=H||!mask[qq]) continue;      // ranta: ei virtaa läpi
+      nb[p*4+kk] = idx[qq]; af[p*4+kk] = 0.5*(h[q0]*h[q0] + h[qq]*h[qq]); sum[p] += af[p*4+kk];
+    }
+  }
+  function ratkaise(lahde){
+    var phi = new Float64Array(N), S = new Float64Array(N).fill(-1/N);
+    S[idx[lahde]] += 1;
+    for (var it = 0; it < 20000; it++){
+      var muutos = 0, suurin = 1e-30;
+      for (var p = 0; p < N; p++){
+        if (!sum[p]) continue;
+        var o = p*4, s2 = S[p];
+        for (var kk = 0; kk < 4; kk++){ var n2 = nb[o+kk]; if (n2 >= 0) s2 += af[o+kk]*phi[n2]; }
+        var dd = s2/sum[p] - phi[p]; phi[p] += 1.9*dd;
+        var ad = dd < 0 ? -dd : dd; if (ad > muutos) muutos = ad;
+        var ap = phi[p] < 0 ? -phi[p] : phi[p]; if (ap > suurin) suurin = ap;
+      }
+      if (muutos < 1e-7*suurin) break;
+    }
+    var ue = new Float32Array(W*H), un = new Float32Array(W*H);
+    for (var p = 0; p < N; p++){
+      var o = p*4, F = [0,0,0,0];
+      for (var kk = 0; kk < 4; kk++){ var n2 = nb[o+kk]; if (n2 >= 0) F[kk] = af[o+kk]*(phi[p] - phi[n2]); }
+      var q1 = vesi[p];
+      ue[q1] = (F[0] - F[1])/(2*dx)/h[q1];      // itään
+      un[q1] = (F[3] - F[2])/(2*dx)/h[q1];      // pohjoiseen (j kasvaa etelään)
+    }
+    return { ue: ue, un: un, iter: it };
+  }
+  var etela = vesi.reduce(function(a, q){ var ja = (a/W)|0, jq = (q/W)|0; return (jq > ja || (jq === ja && Math.abs(q%W-24) < Math.abs(a%W-24))) ? q : a; }, vesi[0]);
+  var piste = function(ll){ return ll ? akRuutuPisteelle(k, ll[0], ll[1]) : -1; };
+  var ruudut = { kanava: etela, otto: piste(HIRVI_LAPI_PISTEET.otto), tausneva: piste(HIRVI_LAPI_PISTEET.tausneva), varpula: piste(HIRVI_LAPI_PISTEET.varpula) };
+  var kentat = {};
+  Object.keys(ruudut).forEach(function(nimi){ if (ruudut[nimi] >= 0) kentat[nimi] = ratkaise(ruudut[nimi]); });
+  akLapiData = { kentat: kentat, ruudut: ruudut };
+  return akLapiData;
+}
+/* Nykyhetken läpivirtaus. Q tulee pääkoodin hirviLapiQ():sta (voimala, Varpula,
+   vesitase). Voimalan tila tiedetään vain nyt, joten kenttää ei lisätä yli 2 h
+   päähän nykyhetkestä. Palauttaa null, jos järvi ei ole Hirvijärvi tai dataa ei ole. */
+function akLapiNyt(aikaMs){
+  if (!jarvi || jarvi !== JARVET.hirvijarvi) return null;
+  if (aikaMs != null && Math.abs(aikaMs - Date.now()) > 2*3600e3) return null;
+  var Q = (typeof window.hirviLapiQ === 'function') ? window.hirviLapiQ() : null;
+  if (!Q) return null;
+  var pk = akLapiPohjat(); if (!pk) return null;
+  var avain = JSON.stringify(Q);
+  if (akLapiValimuisti && akLapiValimuisti.avain === avain) return akLapiValimuisti;
+  var n = mask.length, ue = new Float32Array(n), un = new Float32Array(n);
+  var kerroin = { kanava: Q.kanava, tausneva: Q.tausneva, varpula: Q.varpula, otto: Q.otto == null ? null : -Q.otto };
+  Object.keys(kerroin).forEach(function(nimi){
+    var c = kerroin[nimi], F = pk.kentat[nimi];
+    if (!c || !F) return;
+    for (var q = 0; q < n; q++){ ue[q] += c*F.ue[q]; un[q] += c*F.un[q]; }
+  });
+  akLapiValimuisti = { avain: avain, ue: ue, un: un, Q: Q, mukana: Object.keys(pk.kentat) };
+  return akLapiValimuisti;
+}
+
 function puraSyvyysLuokat(k){
   if (!k || !k.syvyysLuokat) return null;
   var raaka = atob(k.syvyysLuokat), n = k.W*k.H, s = new Float32Array(n);
@@ -4877,10 +4967,12 @@ function piirra(){
       var kehitys = 1 - Math.exp(-d.tunteja*3600*AK_KITKA_R/kd.hKesk);
       var P = kd.pohjat, kerroin = tau*kehitys;
       kue = new Float32Array(mask.length); kun = new Float32Array(mask.length); kv = new Float32Array(mask.length);
+      var lapi = akLapiNyt(d.aika ? d.aika.getTime() : null);   // 29.9.2026: Hirvijärven läpivirtaus
+      d.lapiMukana = !!lapi;
       for (var q2 = 0; q2 < mask.length; q2++){
         if (!mask[q2]) continue;
-        kue[q2] = (tx*P.ita.ue[q2] + ty*P.pohjoinen.ue[q2])*kerroin;
-        kun[q2] = (tx*P.ita.un[q2] + ty*P.pohjoinen.un[q2])*kerroin;
+        kue[q2] = (tx*P.ita.ue[q2] + ty*P.pohjoinen.ue[q2])*kerroin + (lapi ? lapi.ue[q2] : 0);
+        kun[q2] = (tx*P.ita.un[q2] + ty*P.pohjoinen.un[q2])*kerroin + (lapi ? lapi.un[q2] : 0);
         kv[q2] = Math.sqrt(kue[q2]*kue[q2] + kun[q2]*kun[q2])*3.6;       // km/h
         if (kv[q2] > kvMax) kvMax = kv[q2];
         kvN++; if (kue[q2]*tx + kun[q2]*ty < 0) vastaan++;
@@ -5360,9 +5452,12 @@ function naytaTiedot(d){
     $("akTaulu").innerHTML =
         '<div><span>Syvempi vesi, huippu</span><b>' + d.kvMax.toFixed(2) + ' km/h</b></div>'
       + '<div><span>Järvestä vastatuuleen</span><b>' + vpros + ' % · lähinnä syvänteet</b></div>'
+      + (d.lapiMukana && akLapiValimuisti ? '<div><span>Läpivirtaus (nyt)</span><b>voimala ' + (akLapiValimuisti.Q.otto || 0).toFixed(1).replace('.', ',') + ' m³/s'
+          + (akLapiValimuisti.Q.kanava != null ? ' · tulo ' + ((akLapiValimuisti.Q.kanava || 0) + (akLapiValimuisti.Q.tausneva || 0) + (akLapiValimuisti.Q.varpula || 0)).toFixed(1).replace('.', ',') + ' m³/s' : ' · tuloa ei saatu') + '</b></div>' : '')
       + '<div><span>Kierron kehitys</span><b>' + Math.round((d.kehitys || 0)*100) + ' % pysyvästä · tuullut ' + d.tunteja + ' h</b></div>'
       + '<div><span>Laskenta</span><b>kiertomalli, ei mittaus · nopeus ±2–3×</b></div>'
-      + '<div><span>Syvyydet</span><b>DataDeck-kartta · © MML · © Väylävirasto · © SYKE</b></div>'
+      + (jarvi === JARVET.hirvijarvi ? '<div><span>Syvyydet</span><b>oma luotauskartta (omat lokit)</b></div>'
+          : '<div><span>Syvyydet</span><b>DataDeck-kartta · © MML · © Väylävirasto · © SYKE</b></div>')
       + $("akTaulu").innerHTML;
   }
   if (akTila === 'virtaus' && typeof d.virMax === 'number'){
@@ -5375,7 +5470,8 @@ function naytaTiedot(d){
         '<div><span>Pintavirtaus, huippu</span><b>' + d.virMax.toFixed(2) + ' km/h</b></div>'
       + '<div><span>Suunta</span><b>' + akKohti(vs) + ' (' + Math.round(vs) + '°)</b></div>'
       + '<div><span>Laskenta</span><b>arvio tuulesta, ei mittaus</b></div>'
-      + '<div><span>Syvyydet</span><b>DataDeck-kartta · © MML · © Väylävirasto · © SYKE</b></div>'
+      + (jarvi === JARVET.hirvijarvi ? '<div><span>Syvyydet</span><b>oma luotauskartta (omat lokit)</b></div>'
+          : '<div><span>Syvyydet</span><b>DataDeck-kartta · © MML · © Väylävirasto · © SYKE</b></div>')
       + $("akTaulu").innerHTML;
   }
 }
@@ -5501,6 +5597,15 @@ function akMalliLaske(lat, lon, aikaMs){
       t.syvaKmh = Math.sqrt(ue*ue + un*un)*3.6;
       t.syvaSuunta = (Math.atan2(ue, un)*180/Math.PI + 360) % 360;
       t.syvaTuuleen = (ue*tx + un*ty) >= 0 ? 'mukana' : 'vastaan';
+      // 29.9.2026 (v98): Hirvijärven läpivirtaus erikseen; syvaKmh pysyy pelkkänä tuulikiertona
+      var lp = akLapiNyt(aikaMs);
+      if (lp){
+        t.lapiKmh = Math.sqrt(lp.ue[q]*lp.ue[q] + lp.un[q]*lp.un[q])*3.6;
+        t.lapiSuunta = (Math.atan2(lp.ue[q], lp.un[q])*180/Math.PI + 360) % 360;
+        var ye = ue + lp.ue[q], yn = un + lp.un[q];
+        t.yhteisKmh = Math.sqrt(ye*ye + yn*yn)*3.6;
+        t.lapiQ = lp.Q;
+      }
     }
   }
   return t;
@@ -5626,6 +5731,7 @@ function lataa(avain){
   mask = puraMaski(jarvi.kartta);
   akSyvyys = puraSyvyysLuokat(jarvi.kartta);
   akKiertoData = null;      // lasketaan vasta kun Syvempi vesi valitaan
+  akLapiData = null; akLapiValimuisti = null;
   akPaivitaVirtausKytkin();
   $("akLeima").innerHTML = '<small>haetaan…</small>';
 
@@ -6555,6 +6661,8 @@ lataa(eka);
           snap.malliSyvaKmh = pyor(m.syvaKmh, 2);
           snap.malliSyvaSuunta = pyor(m.syvaSuunta, 0);
           snap.malliSyvaTuuleen = m.syvaTuuleen || null;
+          snap.malliLapiKmh = pyor(m.lapiKmh, 3);        // 29.9.2026 (v98), Hirvijärvi
+          snap.malliLapiSuunta = pyor(m.lapiSuunta, 0);
           snap.malliTuuliMs = pyor(m.tuuliMs, 1);
           snap.malliTuuliSuunta = pyor(m.tuuliSuunta, 0);
         }).catch(function () {});
@@ -8578,6 +8686,20 @@ lataa(eka);
       });
       return hirviVirtaHaku;
     }
+    /* Läpivirtausmallin virtaamat (m³/s). Tausneva: Hannun arvio 29.9. "alle 1/10
+       täyttökanavasta" → 1/11 kanavasta = 1/12 yhteisosuudesta. Jos vesitase puuttuu,
+       tuloja ei lisätä kenttään (vain otto). */
+    const TAUSNEVA_OSUUS = 1 / 12;
+    window.hirviLapiQ = function () {
+      if (!hirviVirta) { haeHirviVirta(); return null; }
+      const v = hirviVirta.voimala;
+      if (!v) return null;
+      const qV = hirviVirta.varpula ? hirviVirta.varpula.q : 0;
+      const ts = hirviVirta.tase;
+      const muu = (ts && ts.qTulo >= 0) ? Math.max(0, ts.qTulo - (ts.qVarpula !== null ? ts.qVarpula : qV)) : null;
+      return { otto: v.ajaa ? v.q : 0, varpula: qV,
+        kanava: muu === null ? null : muu * (1 - TAUSNEVA_OSUUS), tausneva: muu === null ? null : muu * TAUSNEVA_OSUUS };
+    };
     function hirviVirtaHtml(chip) {
       const n1 = x => (Math.round(x * 10) / 10).toLocaleString('fi-FI');
       const p = t => '<p style="font-size:13px;line-height:1.45;margin:8px 0 0;">' + t + '</p>';
@@ -8695,6 +8817,13 @@ lataa(eka);
             lisaa(-100, 'Malli', 'Aalto noin ' + n2(m.aaltoM) + ' m ylittää veneesi rajan ' + n2(m.raja) + ' m. Jätä tämä toiseen päivään.');
           } else if (m.aaltoM >= 0.10 && sy && sy.min <= 3)
             lisaa(4, 'Tutkittu', 'Aaltoa on noin ' + n2(m.aaltoM) + ' m, ja matalalla se sekoittaa ja samentaa vettä. Sameus ei haittaa kuhan saalistusta, mutta heikentää saaliskalan näkemistä (Ljunggren & Sandström 2007).');
+        }
+        // 5b Läpivirtaus (Hirvijärvi, v98): tietorivi, ei pisteitä. Merkinnöissä ei ole
+        // päivämääriä, joten virran yhteyttä kuhaan ei voi testata niitä vasten.
+        if (m && typeof m.lapiKmh === 'number' && m.lapiKmh >= 0.01) {
+          const ilmat = ['pohjoiseen','koilliseen','itään','kaakkoon','etelään','lounaaseen','länteen','luoteeseen'];
+          lisaa(0, 'Malli', 'Läpivirtaus paikalla noin ' + (Math.round(m.lapiKmh * 100) / 100).toLocaleString('fi-FI') + ' km/h ' + ilmat[Math.round(m.lapiSuunta / 45) % 8]
+            + '. Todellinen virta keskittyy kaivettuihin uomiin, joten uoman kohdalla se on tätä kovempi ja sivuilla heikompi.');
         }
         const ta = kuhaTuulenalaisuus(s);
         if (ta !== null && ta > 0.4)
