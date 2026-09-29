@@ -6499,6 +6499,16 @@ lataa(eka);
         if (viimeisinKuhapaikka.jarvi === 'hirvijarvi' && hirviTaso && typeof hirviTaso.eroM === 'number')
           snap.kuhaVedenkorkeusKorjausM = Math.round(hirviTaso.eroM * 100) / 100;
       }
+      /* 29.9.2026 (v97): voimalan tila ja tulovirtaama talteen Hirvijärvellä,
+         jotta myöhemmin voi katsoa, syökö kuha tai kirjolohi ajon aikana. */
+      snap.hirviVoimalaM3s = null; snap.hirviVoimalaAjaa = null; snap.hirviVoimalaTilaLukemia = null;
+      snap.hirviVarpulaM3s = null; snap.hirviTuloM3s = null;
+      if (typeof kuhaJarvi === 'function' && kuhaJarvi() === 'hirvijarvi' && hirviVirta) {
+        const hv = hirviVirta;
+        if (hv.voimala) { snap.hirviVoimalaM3s = Math.round(hv.voimala.q * 100) / 100; snap.hirviVoimalaAjaa = hv.voimala.ajaa; snap.hirviVoimalaTilaLukemia = hv.voimala.lukemia; }
+        if (hv.varpula) snap.hirviVarpulaM3s = Math.round(hv.varpula.q * 100) / 100;
+        if (hv.tase && hv.tase.qTulo >= 0) snap.hirviTuloM3s = Math.round(hv.tase.qTulo * 10) / 10;
+      }
 
       if (nollareissu) {
         const lista = lataaSaaliit();
@@ -8387,12 +8397,20 @@ lataa(eka);
       { id: 'h5', name: "Selkäkari Lapua", lat: 62.8216, lon: 23.10757, merkintoja: 7, vanhaRantaM: 34, vanhaTieM: 1308, luomaM: 785 },
       { id: 'h6', name: "Itäreuna pikkusaaren reunassa", lat: 62.8213, lon: 23.12031, merkintoja: 16, vanhaRantaM: 39, vanhaTieM: 1242, luomaM: 483 },
       { id: 'h7', name: "Nurmon Satama", lat: 62.80809, lon: 23.04767, merkintoja: 7, vanhaRantaM: 3243, vanhaTieM: 398, luomaM: 1414 },
-      { id: 'h8', name: "1. Laiturin pää", lat: 62.80602, lon: 23.06212, merkintoja: 9, vanhaRantaM: 2736, vanhaTieM: 22, luomaM: 819 },
       { id: 'h9', name: "4 m kiirepaikka", lat: 62.80571, lon: 23.05318, merkintoja: 13, vanhaRantaM: 3134, vanhaTieM: 14, luomaM: 1029 },
-      { id: 'h10', name: "2. Laituri", lat: 62.8036, lon: 23.05752, merkintoja: 6, vanhaRantaM: 3077, vanhaTieM: 287, luomaM: 707 },
       { id: 'h11', name: "Penkalle nousun edusta", lat: 62.79571, lon: 23.07122, merkintoja: 7, vanhaRantaM: 3182, vanhaTieM: 87, luomaM: 210 },
       { id: 'h12', name: "Vanhan tien pää itä", lat: 62.7952, lon: 23.09738, merkintoja: 12, vanhaRantaM: 2502, vanhaTieM: 1, luomaM: 282 },
       { id: 'h13', name: "Kaakkois nurkka", lat: 62.79101, lon: 23.09899, merkintoja: 5, vanhaRantaM: 2902, vanhaTieM: 474, luomaM: 433 }
+    ];
+    /* KIRJOLOHIPAIKAT — 29.9.2026 (v97). "1. Laiturin pää" ja "2. Laituri" olivat
+       kuhalistalla, mutta Hannun mukaan ne ovat kirjolohipaikkoja, jotka tulivat
+       samassa tiedostossa. Poistettu kuhapisteytyksestä. Laiturikysymys (lähtöpaikka
+       vai rakenne?) samalla ratkaistu: ei lähtöpaikkoja. Tie-testi ilman näitä
+       (nimettyjen paikkojen merkinnät keskipisteessä, likiarvo): 100 m 48 % vs 13 %
+       altaasta, 50 m 32 % vs 7 % → tie-efekti pysyy. */
+    const HIRVI_KIRJOLOHIPAIKAT = [
+      { id: 'k1', name: "1. Laiturin pää", lat: 62.80602, lon: 23.06212, merkintoja: 9 },
+      { id: 'k2', name: "2. Laituri", lat: 62.8036, lon: 23.05752, merkintoja: 6 }
     ];
     const HIRVI_KUHA_HAJA = [[62.82739,23.10959],[62.82726,23.10959],[62.80249,23.09765],[62.80234,23.09812],[62.80246,23.09799],[62.80234,23.09779],[62.79562,23.09054],[62.79562,23.09081],[62.83294,23.13086],[62.82932,23.13358],[62.82372,23.11882],[62.82363,23.11883],[62.80826,23.10046],[62.79557,23.10384],[62.79298,23.10381],[62.80544,23.06571],[62.80551,23.06633],[62.80556,23.0679],[62.80569,23.07072],[62.80732,23.06306],[62.80614,23.07416],[62.80659,23.07681],[62.80406,23.07956],[62.78987,23.09388],[62.78949,23.09185],[62.79918,23.10308],[62.80328,23.10311],[62.80399,23.10269],[62.80489,23.10251],[62.80738,23.09914],[62.80937,23.10167],[62.80956,23.10346],[62.79126,23.08168],[62.79076,23.08201],[62.78854,23.0889],[62.78961,23.09366],[62.78952,23.08574],[62.79932,23.10312],[62.80574,23.09837],[62.81638,23.11692],[62.81723,23.11739],[62.82041,23.11189],[62.83556,23.12451],[62.83533,23.13103],[62.83455,23.13248],[62.83022,23.12996],[62.83006,23.12668],[62.82944,23.1108],[62.83006,23.10969],[62.83036,23.11304],[62.8338,23.12216],[62.82371,23.11966],[62.81916,23.12203],[62.81896,23.12204],[62.81615,23.11961],[62.81593,23.11859],[62.82016,23.05112],[62.82017,23.10232],[62.81894,23.10077],[62.81831,23.09978],[62.81714,23.09935],[62.81113,23.11467],[62.81048,23.10857],[62.81037,23.10741],[62.80951,23.10362],[62.80915,23.10345],[62.81217,23.11652],[62.81275,23.122],[62.8125,23.12204],[62.81282,23.11979],[62.81141,23.09095],[62.80914,23.08466],[62.80971,23.08664],[62.80666,23.0766],[62.8062,23.07408],[62.80768,23.10183],[62.80798,23.10228],[62.78819,23.08762],[62.78946,23.08363],[62.79747,23.08888],[62.79785,23.08719],[62.7972,23.0825],[62.7992,23.0872],[62.80109,23.08612],[62.80194,23.08442],[62.80277,23.08445],[62.80389,23.0825],[62.80389,23.07972],[62.79306,23.10389],[62.80722,23.07444],[62.7922,23.08596],[62.81746,23.12377],[62.81714,23.12361],[62.8327,23.13366],[62.82938,23.12137],[62.82863,23.10104]];
 
@@ -8472,6 +8490,123 @@ lataa(eka);
     }
     function hirviKorjaus() { return (hirviTaso && typeof hirviTaso.eroM === 'number') ? hirviTaso.eroM : 0; }
 
+    /* VOIMALA JA TULOVIRTAAMA — 29.9.2026 (v97).
+       Lähtö: SYKE realtime Q4400210 "Hirvijärvi" = Hirvikosken voimalan juoksutus
+       (tuntiarvo, tarkistamaton, uusin rivi ensin). Voimala ajaa pulsseina, joten
+       tila (ajaa/seis) ja sen kesto kerrotaan. Raja 0,5 m³/s: datassa on tasaisia
+       0,1 m³/s jaksoja, joita ei tulkita ajoksi. Vaihtotunnin välilukema (esim. 13,6)
+       viittaa tuntikeskiarvoon — päätelmä, ei varmistettu.
+       Aikaleimojen aikavyöhyke ei ole varmistettu, joten kesto lasketaan lukemien
+       välistä eikä puhelimen kellosta.
+       Varpula: Q4400220 "Varpulan tekojärvi". ELY:n esitteen mukaan Varpulasta tulee
+       vettä säännöstelypadon kautta altaan itäpuolelle. Hannu 29.9.: tulo Isomaan
+       eteläpuolella lähellä ahvenpaikkaa (sl2-luotaus), virtaus näppituntumalta heikko —
+       varmistamatta, onko tämä Varpulan pato vai Tausneva. Että asema mittaa juuri
+       tätä virtaa, on oletus.
+       Tulo yhteensä vesitaseesta (Hannun kanssa sovittu 29.9.):
+         Qtulo = Qlähtö (jakson ka) + A · ΔH / Δt,  A = 15,3 km² (ELY-esite).
+       Pinta asemalta 2312 (vuorokausiarvo, cm). 1 cm/vrk ≈ 1,8 m³/s, joten jakso on
+       3 vrk ja tarkkuus näytetään. Sade suoraan järveen ja haihdunta jätetty pois.
+       Täyttökanava + Tausneva = Qtulo − Varpula. Todisteen taso Malli. */
+    const HIRVI_A_M2 = 15.3e6, VOIMALA_SEIS_M3S = 0.5, HIRVI_TASE_VRK = 3;
+    let hirviVirta = null, hirviVirtaHaku = null;
+    function lueRtQ(tunnus) {
+      return fetch('https://wwwi3.ymparisto.fi/i3/RealTime/data/Q' + tunnus + '.txt', { cache: 'no-store' })
+        .then(r => r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status)))
+        .then(txt => txt.split(/\r?\n/).map(l => l.split(';'))
+          .filter(c => c.length >= 3 && /^\d\d\.\d\d\.\d{4}$/.test(c[0]) && /^\d\d:\d\d$/.test(c[1]))
+          .map(c => {
+            const [d, m, y] = c[0].split('.').map(Number), [hh, mm] = c[1].split(':').map(Number);
+            // "Naiivi" aikaleima: vain järjestystä ja erotuksia varten
+            return { t: Date.UTC(y, m - 1, d, hh, mm), pv: d + '.' + m + '.', klo: hh, q: Number(c[2].replace(',', '.')) };
+          })
+          .filter(x => isFinite(x.q))
+          .sort((a, b) => b.t - a.t));
+    }
+    function voimalaTila(rivit) {
+      if (!rivit.length) return null;
+      const r0 = rivit[0], ajaa = r0.q >= VOIMALA_SEIS_M3S;
+      let i = 0;
+      while (i + 1 < rivit.length && (rivit[i + 1].q >= VOIMALA_SEIS_M3S) === ajaa) i++;
+      const alku = rivit[i];
+      return { ajaa, q: r0.q, viim: r0, alku, lukemia: i + 1, koko: i + 1 === rivit.length };
+    }
+    function jaksonKa(rivit, t0, t1) {
+      const v = rivit.filter(x => x.t > t0 && x.t <= t1);
+      const odotus = Math.round((t1 - t0) / 3600000);
+      if (!odotus || v.length < 0.9 * odotus) return null;
+      return v.reduce((a, x) => a + x.q, 0) / v.length;
+    }
+    function haeHirviVirta() {
+      if (hirviVirta || hirviVirtaHaku) return hirviVirtaHaku;
+      const ok = p => p.then(v => ({ v }), e => ({ e: String(e && e.message || e) }));
+      const u = new URL('https://rajapinnat.ymparisto.fi/api/Hydrologiarajapinta/1.0/odata/Vedenkorkeus');
+      u.searchParams.set('$filter', 'Paikka_Id eq ' + HIRVI_TASO_ASEMA);
+      u.searchParams.set('$orderby', 'Aika desc');
+      u.searchParams.set('$top', '10');
+      hirviVirtaHaku = Promise.all([
+        ok(lueRtQ('4400210')), ok(lueRtQ('4400220')),
+        ok(fetch(u, { cache: 'no-store' }).then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
+      ]).then(([lahto, varp, taso]) => {
+        const tulos = { haettu: new Date() };
+        if (lahto.v && lahto.v.length) tulos.voimala = voimalaTila(lahto.v); else tulos.voimalaVirhe = lahto.e || 'tyhjä tiedosto';
+        if (varp.v && varp.v.length) tulos.varpula = varp.v[0]; else tulos.varpulaVirhe = varp.e || 'tyhjä tiedosto';
+        // Vesitase
+        try {
+          if (!lahto.v || !taso.v) throw new Error(lahto.e || taso.e || 'data puuttuu');
+          const tt = (taso.v.value || []).map(x => ({ t: Date.parse(String(x.Aika).slice(0, 19) + 'Z'), cm: Number(x.Arvo) }))
+            .filter(x => isFinite(x.t) && isFinite(x.cm)).sort((a, b) => b.t - a.t);
+          if (tt.length < 2) throw new Error('vedenkorkeuslukemia liian vähän');
+          const L = tt[0];
+          const E = tt.find(x => (L.t - x.t) / 86400000 >= HIRVI_TASE_VRK - 0.01) || tt[tt.length - 1];
+          const dtS = (L.t - E.t) / 1000;
+          if (dtS < 2 * 86400) throw new Error('vedenkorkeusjakso alle 2 vrk');
+          // Vuorokausiarvo ~ päivän keskikohta → lähtö samalta väliltä
+          const t0 = E.t + 12 * 3600000, t1 = L.t + 12 * 3600000;
+          const qL = jaksonKa(lahto.v, t0, t1);
+          if (qL === null) throw new Error('voimalan tuntiarvoja puuttuu jaksolta');
+          const dH = (L.cm - E.cm) / 100;
+          const qT = qL + HIRVI_A_M2 * dH / dtS;
+          const qV = varp.v ? jaksonKa(varp.v, t0, t1) : null;
+          tulos.tase = { qTulo: qT, qLahto: qL, dHcm: L.cm - E.cm, vrk: dtS / 86400,
+            tarkkuus: HIRVI_A_M2 * 0.01 / dtS, qVarpula: qV, loppu: new Date(L.t) };
+        } catch (e) { tulos.taseVirhe = String(e && e.message || e); }
+        hirviVirta = tulos; hirviVirtaHaku = null;
+        const kp = document.getElementById('kuhaPaneeli');
+        if (kp && kuhaViimeArgs) kp.innerHTML = kuhaPaneeliHtml(kuhaViimeArgs);
+        return tulos;
+      });
+      return hirviVirtaHaku;
+    }
+    function hirviVirtaHtml(chip) {
+      const n1 = x => (Math.round(x * 10) / 10).toLocaleString('fi-FI');
+      const p = t => '<p style="font-size:13px;line-height:1.45;margin:8px 0 0;">' + t + '</p>';
+      if (!hirviVirta) return '<p class="hint" style="margin:8px 0 0;">Haetaan voimalan juoksutusta ja tulovirtaamaa…</p>';
+      let h = '';
+      const v = hirviVirta.voimala;
+      if (v) {
+        const vali = v.alku.pv === v.viim.pv ? v.alku.pv + ' klo ' + v.alku.klo + '–' + v.viim.klo
+          : v.alku.pv + ' klo ' + v.alku.klo + ' – ' + v.viim.pv + ' klo ' + v.viim.klo;
+        const kesto = (v.koko ? 'yli ' : '') + v.lukemia + ' tuntilukemaa (' + vali + ')';
+        h += p(chip('Mittaus') + (v.ajaa
+          ? 'Hirvikosken voimala ajaa ' + n1(v.q) + ' m³/s. Ajoa on jatkunut ' + kesto + '. Otto vetää vettä altaan länsilaidalta Konivuoren kohdalta, joten virta kulkee nyt kohti länsivallia.'
+          : 'Hirvikosken voimala on seis. Seisokkia on jatkunut ' + kesto + '. Ilman juoksutusta altaassa virtaa vain tulovesi, ja se hajoaa laajalle.')
+          + ' <span class="hint">(SYKE, asema 4400210, tarkistamaton tuntiarvo)</span>');
+      } else h += '<p class="hint" style="margin:8px 0 0;">Voimalan tilaa ei saatu (' + hirviVirta.voimalaVirhe + '). Jos virhe on "Failed to fetch", SYKEn palvelin ei todennäköisesti salli hakua selaimesta (CORS).</p>';
+      if (hirviVirta.varpula)
+        h += p(chip('Mittaus') + 'Varpulan padolta tulee ' + n1(hirviVirta.varpula.q) + ' m³/s altaan itäpuolelle. <span class="hint">(asema 4400220; oletus, että asema mittaa juuri tätä virtaa)</span>');
+      const ts = hirviVirta.tase;
+      if (ts) {
+        const muu = ts.qVarpula !== null ? ts.qTulo - ts.qVarpula : null;
+        h += p(chip('Malli') + (ts.qTulo < 0
+          ? 'Vesitase ei täsmää (tulo laskee negatiiviseksi), joten tulovirtaamaa ei arvioida. Pinta ' + (ts.dHcm >= 0 ? '+' : '−') + Math.abs(ts.dHcm) + ' cm / ' + n1(ts.vrk) + ' vrk, lähtö keskimäärin ' + n1(ts.qLahto) + ' m³/s.'
+          : 'Altaaseen tulee yhteensä noin ' + n1(ts.qTulo) + ' m³/s (± ' + n1(ts.tarkkuus) + ')'
+            + (muu !== null ? ', josta täyttökanavan ja Tausnevan osuus on noin ' + n1(Math.max(0, muu)) + ' m³/s' : '') + '. '
+            + 'Laskettu vesitaseesta ' + n1(ts.vrk) + ' vrk:n ajalta: lähtö keskimäärin ' + n1(ts.qLahto) + ' m³/s ja pinta ' + (ts.dHcm >= 0 ? '+' : '−') + Math.abs(ts.dHcm) + ' cm (asema 2312, pinta-ala 15,3 km²). Sade ja haihdunta eivät ole mukana.'));
+      } else h += '<p class="hint" style="margin:8px 0 0;">Tulovirtaamaa ei voitu laskea (' + hirviVirta.taseVirhe + ').</p>';
+      return h;
+    }
+
     function pisteytaKuhapaikat(o) {
       // o: { hetki, tunti, tuuliSuunta, tuuliMs, lampo, valoPorras, syvyysKuha }
       const jarviAvain = kuhaJarvi();
@@ -8526,7 +8661,7 @@ lataa(eka);
         // 2b Vanha tie (Hirvijärvi, peruskartta 1969): kova tiepohja ja ojat veden alla
         if (typeof s.vanhaTieM === 'number' && s.vanhaTieM <= 100)
           lisaa(8, 'Paikkatieto', 'Paikka on noin ' + s.vanhaTieM + ' metrin päässä veden alle jääneestä vanhasta tiestä (peruskartta 1969). Tiepohja on kovaa maata ja sen vieressä on usein ojat. '
-            + 'Eteläosan merkinnöistäsi 46 % on alle 100 metrin päässä vanhasta tiestä, vaikka altaasta vain 13 % on niin lähellä. Osa voi selittyä lähtöpaikkojen läheisyydellä.');
+            + 'Eteläosan kuhamerkinnöistäsi lähes puolet on alle 100 metrin päässä vanhasta tiestä, vaikka altaasta vain 13 % on niin lähellä. Osa voi selittyä sillä, että olet kalastanut siellä eniten.');
         // 2c Hirviluoma: vain tieto, koska merkinnät eivät painotu uomaan
         if (typeof s.luomaM === 'number' && s.luomaM <= 250)
           lisaa(0, 'Paikkatieto', 'Vanha Hirviluoman uoma on noin ' + s.luomaM + ' metrin päässä. Merkinnöistäsi uoma ei erotu (alle 100 m: 15 % merkinnöistä, 12 % altaasta), joten siitä ei anneta pisteitä.');
@@ -8583,6 +8718,7 @@ lataa(eka);
       kuhaViimeArgs = o;
       viimeisinKuhapaikka = null;
       if (jarviAvain === 'hirvijarvi' && !hirviTaso) haeHirviTasoero();
+      if (jarviAvain === 'hirvijarvi' && !hirviVirta) haeHirviVirta();
       const tulos = pisteytaKuhapaikat(o);
       if (!tulos.length) return '';
       const auki = tulos.filter(x => !x.suljettu), par = auki[0] || tulos[0];
@@ -8617,7 +8753,7 @@ lataa(eka);
         + (suljetut.length ? '<p class="hint" style="margin:8px 0 0;">Aallon takia suljettu: ' + suljetut.join(', ') + '.</p>' : '')
         + '<p style="font-size:13px;line-height:1.45;margin:8px 0 0;">' + chip('Tutkittu') + 'Kuhan aineenvaihdunta hidastuu veden viiletessä, joten kylmässä vedessä se syö harvemmin. '
         + 'Tarkkaa lämpötilaa, jossa syönti luonnonvedessä loppuu, en löytänyt luotettavasta lähteestä, joten sitä ei tässä arvata.</p>'
-        + huom + '</div>';
+        + huom + (jarviAvain === 'hirvijarvi' ? hirviVirtaHtml(chip) : '') + '</div>';
     }
 
     /* Ennuste tunnille: FMI ensin, Open-Meteo varalla, muuten null.
@@ -13485,6 +13621,16 @@ lataa(eka);
           reasonsKirjolohi.push('1–4 VIIKKOA: Ivasauskas & Bettoli 2011 havaitsi tässä vaiheessa vähän liikettä — kalat ovat asettuneet mutta eivät vielä hajaantuneet laajalle. Etsi poukamista ja lahdista.');
         } else if (a.istutusPaivat === 'hajaantunut') {
           reasonsKirjolohi.push('YLI KUUKAUSI: Ivasauskas & Bettoli 2011 mittasi uuden hajaantumisvaiheen viikoilla 5–8. Kalat ovat levinneet laajalle ja käyttäytyvät luonnonvaraisemmin. Ravinto on jo luonnonravintoa.');
+        }
+        // 29.9.2026 (v97): Hirvijärvellä omat kirjolohipaikat ja voimalan tila.
+        if (typeof kuhaJarvi === 'function' && kuhaJarvi() === 'hirvijarvi') {
+          reasonsKirjolohi.push('OMAT PAIKAT: ' + HIRVI_KIRJOLOHIPAIKAT.map(k => k.name + ' (' + k.merkintoja + ' merkintää)').join(' ja ')
+            + ' altaan eteläosassa. Merkinnöissä ei ole päivämääriä.');
+          if (!hirviVirta) haeHirviVirta();
+          else if (hirviVirta.voimala)
+            reasonsKirjolohi.push('VOIMALA: ' + (hirviVirta.voimala.ajaa
+              ? 'ajaa nyt ' + (Math.round(hirviVirta.voimala.q * 10) / 10).toLocaleString('fi-FI') + ' m³/s (' + hirviVirta.voimala.lukemia + ' tuntilukemaa). Parhaat kirjolohesi ovat tulleet kohdasta, jossa on lievää virtaa, ja ajon aikana altaassa virtaa enemmän kuin seisokissa.'
+              : 'seis (' + hirviVirta.voimala.lukemia + ' tuntilukemaa). Altaassa virtaa vain tulovesi.'));
         }
         // Käyttäjän oma havainto virtauspaikoista — merkitty hypoteesiksi.
         reasonsKirjolohi.push('Virtauspaikat: kirjolohi on kasvatettu virtaavassa vedessä ja on positiivisesti reotaktinen (Waldrop ym. 2020). JÄRVESTÄ ei ole mitattua näyttöä virtaushakuisuudesta istutuksen jälkeen. Todennäköisin selitys hyville virtauspaikoille on happi ja ravinnon kertyminen, ei virtaus sinänsä.');
