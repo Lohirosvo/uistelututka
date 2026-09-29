@@ -8481,6 +8481,19 @@ lataa(eka);
           }
           lisaa(0, 'Paikkatieto', t);
         }
+        // 1c Kausi (Hirvijärvi, Oma kokemus, 28.9.2026): keväästä pohjoinen ja itä,
+        // syksyllä siirtyy etelämmäksi. Tahallaan pieni paino (4 p): vaellus on
+        // tiedossa, mutta sääntö ei saa ratkaista yksin. Kun saalislokiin kertyy
+        // päivättyjä kuhia, painon voi tarkistaa niistä.
+        if (jarviAvain === 'hirvijarvi') {
+          const kk = new Date(o.hetki).getMonth() + 1;
+          const pohjoinen = s.lat >= 62.815;
+          const kausi = (kk >= 4 && kk <= 8) ? 'kevat' : (kk >= 9 && kk <= 11) ? 'syksy' : null;
+          if (kausi === 'kevat' && pohjoinen)
+            lisaa(4, 'Oma kokemus', 'Keväästä alkaen kuha on ollut kokemuksesi mukaan parempi altaan pohjois- ja itäosassa. Pieni paino: vaellus vaihtelee vuosittain.');
+          else if (kausi === 'syksy' && !pohjoinen)
+            lisaa(4, 'Oma kokemus', 'Syksyllä kuha siirtyy kokemuksesi mukaan etelämmäksi kohti talvehtimisalueita (vanha jokiuoma, tulokanavan suunta). Pieni paino: vaellus vaihtelee vuosittain.');
+        }
         // 2 Vanha rantaviiva (Hirvijärvi): veden alla oleva pudotusreuna
         if (typeof s.vanhaRantaM === 'number' && s.vanhaRantaM <= 150)
           lisaa(8, 'Paikkatieto', 'Paikka on noin ' + s.vanhaRantaM + ' metrin päässä vanhan Hirvijärven rannasta, joka on nyt veden alla oleva reuna: pohja laskee entiseltä suolta vanhaan järvialtaaseen. '
@@ -9737,7 +9750,7 @@ lataa(eka);
       const r = Number(x).toFixed(des === undefined ? 1 : des);
       return r.replace(/[.,]0+$/, '').replace('.', ' pilkku ');
     }
-    const TASO_PUHE = { 'Tutkittu': 'Tämä on tutkittua tietoa.', 'Oma saalis': 'Tämä perustuu omiin saaliisiisi.',
+    const TASO_PUHE = { 'Tutkittu': 'Tämä on tutkittua tietoa.', 'Oma saalis': 'Tämä perustuu omiin saaliisiisi.', 'Oma kokemus': 'Tämä perustuu omaan kokemukseesi.',
       'Konsensus': 'Tämä on uistelijoiden yleinen käsitys, ei tieteellistä näyttöä.', 'Malli': 'Tämä on mallin arvio.',
       'Paikkatieto': 'Tämä on omista merkinnöistäsi.', 'Rekisteri': 'Tämä on Suurkalarekisteristä.' };
     // "kello 6 05", ei "06.05": puhemoottori lukee välilyönnin luontevasti
