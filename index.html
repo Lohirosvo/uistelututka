@@ -8536,7 +8536,10 @@ lataa(eka);
          sijainti on arvioitu kuvasta (22 px/ruutu, kalibroitu kanavan eteläisimpään
          vesiruutuun): B ruutu (55,23), syvyysluokka 4–6 m; C ruutu (67,24), 0–2 m. C on
          noin 2 km pitkä kanavaosuus (rivit 58–77), piste on sen keskeltä. Merkintämäärää
-         ei tiedetä. Istutuspaikka ei ole varma: Hannun mukaan satama, eteläpää tai muu. */
+         ei tiedetä. Istutuspaikka ei ole varma: Hannun mukaan satama, eteläpää tai muu.
+         30.9.2026 (v104): Hannu tarkensi, että A, B ja C ovat alueita: kalat ovat niillä
+         hajallaan eivätkä selvästi tietyssä rakenteessa. k3 ja k4 ovat alueen edustava
+         piste, eivät kalapaikka. GPS-piste ei siksi korjaa B:tä; tarvittaessa alueen rajaus. */
       { id: 'k3', name: "Kärjenkankaan edustan syvä", alue: 'B', lat: 62.79026, lon: 23.09129, merkintoja: null, arvio: true },
       { id: 'k4', name: "Täyttökanavan virtapaikat", alue: 'C', lat: 62.77948, lon: 23.09324, merkintoja: null, arvio: true }
     ];
@@ -8724,12 +8727,16 @@ lataa(eka);
        tuloja ei lisätä kenttään (vain otto). */
     const TAUSNEVA_OSUUS = 1 / 12;
     /* 30.9.2026 (v101): kirjolohen VOIMALA-rivi yhdessä paikassa. Käytetään sekä
-       analyysissa että silloin, kun SYKEn data saapuu analyysin jälkeen. */
+       analyysissa että silloin, kun SYKEn data saapuu analyysin jälkeen.
+       KORJATTU 30.9.2026 (v104): poistettu väite "Parhaat kirjolohesi ovat tulleet
+       kohdasta, jossa on lievää virtaa". Sille ei ollut näyttöä: mallin läpivirtaus
+       paikoilla on 0,01–0,02 km/h, merkinnöissä ei ole päivämääriä eikä voimalan tilaa
+       saaliin hetkellä tiedetä, eikä "parhaita" ole mitattu. Tilalle päätelmä merkittynä. */
     function hirviKirjolohiVoimalaRivi() {
       const v = hirviVirta && hirviVirta.voimala;
       if (!v) return null;
       return 'VOIMALA: ' + (v.ajaa
-        ? 'ajaa nyt ' + (Math.round(v.q * 10) / 10).toLocaleString('fi-FI') + ' m³/s (' + v.lukemia + ' tuntilukemaa). Parhaat kirjolohesi ovat tulleet kohdasta, jossa on lievää virtaa, ja ajon aikana altaassa virtaa enemmän kuin seisokissa.'
+        ? 'ajaa nyt ' + (Math.round(v.q * 10) / 10).toLocaleString('fi-FI') + ' m³/s (' + v.lukemia + ' tuntilukemaa). Ajon aikana altaassa virtaa enemmän kuin seisokissa. Alue A on voimalan oton lähellä, mutta sitä ei tiedetä, ajoiko voimala saaliiden hetkellä (päätelmä, ei testattu).'
         : 'seis (' + v.lukemia + ' tuntilukemaa). Altaassa virtaa vain tulovesi.');
     }
     /* 30.9.2026 (v102): kirjolohipaikkojen läpivirtaus samasta mallista kuin kartan
@@ -8750,7 +8757,7 @@ lataa(eka);
       }
       return 'LÄPIVIRTAUS NYT (malli, ei pisteitä): ' + osat.join('; ') + '. Voimala '
         + (Q && Q.otto > 0 ? Q.otto.toFixed(1).replace('.', ',') + ' m³/s' : 'seis') + '. '
-        + 'Malli antaa 100 metrin ruudun keskiarvon, joten kaivetussa kanavassa virta on todellisuudessa kovempi. '
+        + 'Arvo on paikan tai alueen edustavan pisteen 100 metrin ruudun keskiarvo, ei koko alueen. Kaivetussa kanavassa virta on todellisuudessa kovempi. '
         + 'Yhteys saaliisiin testataan saalislokista.';
     }
     /* Asettaa VOIMALA- ja LÄPIVIRTAUS-rivit jo piirrettyyn kirjolohipaneeliin
@@ -9402,7 +9409,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v103';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v104';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -13846,10 +13853,10 @@ lataa(eka);
         if (typeof kuhaJarvi === 'function' && kuhaJarvi() === 'hirvijarvi') {
           const klA = HIRVI_KIRJOLOHIPAIKAT.filter(k => k.alue === 'A'), klMuut = HIRVI_KIRJOLOHIPAIKAT.filter(k => k.alue !== 'A');
           const ksA = HIRVI_KIRJOLOHISAALIIT.filter(k => k.alue === 'A'), ksTuuli = ksA.filter(k => k.tuuli === 'pohjoinen').length;
-          reasonsKirjolohi.push('OMAT PAIKAT: Sataman–Valkiavuoren edusta: ' + klA.map(k => k.name + ' (' + k.merkintoja + ' merkintää)').join(' ja ')
+          reasonsKirjolohi.push('OMAT PAIKAT: kolme aluetta, joilla kalat ovat hajallaan eivätkä selvästi tietyssä rakenteessa (oma havainto). A Sataman–Valkiavuoren edusta: ' + klA.map(k => k.name + ' (' + k.merkintoja + ' merkintää)').join(' ja ')
             + (ksA.length ? ', lisäksi ' + ksA.length + ' tarkkaa saalispistettä (1 kirjolohi kustakin'
               + (ksTuuli ? ', ' + (ksTuuli === 1 ? 'yksi' : ksTuuli) + ' pohjoistuulella' : '') + ')' : '')
-            + '. Lisäksi ' + klMuut.map(k => k.name).join(' ja ') + ' (sijainti arvioitu kartalta, merkintämäärä ei tiedossa). '
+            + '. ' + klMuut.map(k => k.alue + ' ' + k.name).join(' ja ') + ': sijainti arvioitu kartalta, piste edustaa aluetta, merkintämäärä ei tiedossa. '
             + 'Merkinnöissä ei ole päivämääriä. Istutuspaikkaa ei tiedetä varmasti. Jos kalat istutetaan näille alueille, saaliit voivat kertoa istutuksesta eivätkä virrasta.');
           if (!hirviVirta) haeHirviVirta();
           else { const vr = hirviKirjolohiVoimalaRivi(); if (vr) reasonsKirjolohi.push(vr); }
