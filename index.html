@@ -4781,6 +4781,8 @@ function akLapiNyt(aikaMs){
 
 /* 30.9.2026 (v101): kutsutaan, kun SYKEn data saapuu. Jos Syvempi vesi -kartta
    on Hirvijärvellä jo piirretty ilman läpivirtausta, piirretään se uudelleen. */
+window.akOnHirvi = function(){ return !!jarvi && jarvi === JARVET.hirvijarvi; };
+window.akValmiina = function(){ return Promise.resolve(akLatausLupaus); };
 window.akLapiPaivita = function(){
   if (!jarvi || jarvi !== JARVET.hirvijarvi || akTila !== 'syva' || !akSyvyys || !data || !data.length) return;
   piirra();
@@ -8527,8 +8529,16 @@ lataa(eka);
        (nimettyjen paikkojen merkinnät keskipisteessä, likiarvo): 100 m 48 % vs 13 %
        altaasta, 50 m 32 % vs 7 % → tie-efekti pysyy. */
     const HIRVI_KIRJOLOHIPAIKAT = [
-      { id: 'k1', name: "1. Laiturin pää", lat: 62.80602, lon: 23.06212, merkintoja: 9 },
-      { id: 'k2', name: "2. Laituri", lat: 62.8036, lon: 23.05752, merkintoja: 6 }
+      { id: 'k1', name: "1. Laiturin pää", alue: 'A', lat: 62.80602, lon: 23.06212, merkintoja: 9 },
+      { id: 'k2', name: "2. Laituri", alue: 'A', lat: 62.8036, lon: 23.05752, merkintoja: 6 },
+      /* 30.9.2026 (v102): Hannun piirros Syvempi vesi -kartan päälle. Alueet A (Nurmon
+         Sataman – Valkiavuoren edusta, k1 ja k2 ovat sen sisällä), B ja C. B:n ja C:n
+         sijainti on arvioitu kuvasta (22 px/ruutu, kalibroitu kanavan eteläisimpään
+         vesiruutuun): B ruutu (55,23), syvyysluokka 4–6 m; C ruutu (67,24), 0–2 m. C on
+         noin 2 km pitkä kanavaosuus (rivit 58–77), piste on sen keskeltä. Merkintämäärää
+         ei tiedetä. Istutuspaikka ei ole varma: Hannun mukaan satama, eteläpää tai muu. */
+      { id: 'k3', name: "Kärjenkankaan edustan syvä", alue: 'B', lat: 62.79026, lon: 23.09129, merkintoja: null, arvio: true },
+      { id: 'k4', name: "Täyttökanavan virtapaikat", alue: 'C', lat: 62.77948, lon: 23.09324, merkintoja: null, arvio: true }
     ];
     const HIRVI_KUHA_HAJA = [[62.82739,23.10959],[62.82726,23.10959],[62.80249,23.09765],[62.80234,23.09812],[62.80246,23.09799],[62.80234,23.09779],[62.79562,23.09054],[62.79562,23.09081],[62.83294,23.13086],[62.82932,23.13358],[62.82372,23.11882],[62.82363,23.11883],[62.80826,23.10046],[62.79557,23.10384],[62.79298,23.10381],[62.80544,23.06571],[62.80551,23.06633],[62.80556,23.0679],[62.80569,23.07072],[62.80732,23.06306],[62.80614,23.07416],[62.80659,23.07681],[62.80406,23.07956],[62.78987,23.09388],[62.78949,23.09185],[62.79918,23.10308],[62.80328,23.10311],[62.80399,23.10269],[62.80489,23.10251],[62.80738,23.09914],[62.80937,23.10167],[62.80956,23.10346],[62.79126,23.08168],[62.79076,23.08201],[62.78854,23.0889],[62.78961,23.09366],[62.78952,23.08574],[62.79932,23.10312],[62.80574,23.09837],[62.81638,23.11692],[62.81723,23.11739],[62.82041,23.11189],[62.83556,23.12451],[62.83533,23.13103],[62.83455,23.13248],[62.83022,23.12996],[62.83006,23.12668],[62.82944,23.1108],[62.83006,23.10969],[62.83036,23.11304],[62.8338,23.12216],[62.82371,23.11966],[62.81916,23.12203],[62.81896,23.12204],[62.81615,23.11961],[62.81593,23.11859],[62.82016,23.05112],[62.82017,23.10232],[62.81894,23.10077],[62.81831,23.09978],[62.81714,23.09935],[62.81113,23.11467],[62.81048,23.10857],[62.81037,23.10741],[62.80951,23.10362],[62.80915,23.10345],[62.81217,23.11652],[62.81275,23.122],[62.8125,23.12204],[62.81282,23.11979],[62.81141,23.09095],[62.80914,23.08466],[62.80971,23.08664],[62.80666,23.0766],[62.8062,23.07408],[62.80768,23.10183],[62.80798,23.10228],[62.78819,23.08762],[62.78946,23.08363],[62.79747,23.08888],[62.79785,23.08719],[62.7972,23.0825],[62.7992,23.0872],[62.80109,23.08612],[62.80194,23.08442],[62.80277,23.08445],[62.80389,23.0825],[62.80389,23.07972],[62.79306,23.10389],[62.80722,23.07444],[62.7922,23.08596],[62.81746,23.12377],[62.81714,23.12361],[62.8327,23.13366],[62.82938,23.12137],[62.82863,23.10104]];
 
@@ -8713,24 +8723,49 @@ lataa(eka);
         ? 'ajaa nyt ' + (Math.round(v.q * 10) / 10).toLocaleString('fi-FI') + ' m³/s (' + v.lukemia + ' tuntilukemaa). Parhaat kirjolohesi ovat tulleet kohdasta, jossa on lievää virtaa, ja ajon aikana altaassa virtaa enemmän kuin seisokissa.'
         : 'seis (' + v.lukemia + ' tuntilukemaa). Altaassa virtaa vain tulovesi.');
     }
-    /* Lisää VOIMALA-rivin jo piirrettyyn kirjolohipaneeliin OMAT PAIKAT -rivin perään.
-       Ei tee mitään, jos paneeli on piilossa, rivi on jo siellä tai dataa ei ole. */
+    /* 30.9.2026 (v102): kirjolohipaikkojen läpivirtaus samasta mallista kuin kartan
+       nuolet. Tietorivi, ei pisteitä: yhteyttä saaliisiin ei voi testata, koska
+       merkinnöissä ei ole päivämääriä eikä voimalan tilaa saaliin hetkellä tiedetä.
+       Palauttaa null, jos aaltokartta ei ole Hirvijärvellä tai dataa ei vielä ole. */
+    function hirviKirjolohiVirtaRivi() {
+      if (typeof window.akMalliSync !== 'function' || typeof window.akOnHirvi !== 'function' || !window.akOnHirvi()) return null;
+      const kohti = d => ['pohjoiseen','koilliseen','itään','kaakkoon','etelään','lounaaseen','länteen','luoteeseen'][Math.round((((d % 360) + 360) % 360) / 45) % 8];
+      const nyt = Date.now(), osat = [];
+      let Q = null;
+      for (const k of HIRVI_KIRJOLOHIPAIKAT) {
+        const t = window.akMalliSync(k.lat, k.lon, nyt);
+        if (!t || typeof t.lapiKmh !== 'number') return null;
+        if (t.lapiQ) Q = t.lapiQ;
+        osat.push(k.name + ' ' + (t.lapiKmh < 0.01 ? 'alle 0,01 km/h'
+          : t.lapiKmh.toFixed(2).replace('.', ',') + ' km/h ' + kohti(t.lapiSuunta)));
+      }
+      return 'LÄPIVIRTAUS NYT (malli, ei pisteitä): ' + osat.join('; ') + '. Voimala '
+        + (Q && Q.otto > 0 ? Q.otto.toFixed(1).replace('.', ',') + ' m³/s' : 'seis') + '. '
+        + 'Malli antaa 100 metrin ruudun keskiarvon, joten kaivetussa kanavassa virta on todellisuudessa kovempi. '
+        + 'Yhteys saaliisiin testataan saalislokista.';
+    }
+    /* Asettaa VOIMALA- ja LÄPIVIRTAUS-rivit jo piirrettyyn kirjolohipaneeliin
+       OMAT PAIKAT -rivin perään. Olemassa oleva rivi korvataan uudella tekstillä.
+       Kutsutaan analyysin jälkeen, kun aaltokartta on valmis, ja kun SYKEn data saapuu. */
     function hirviKirjolohiPaivita() {
       const panel = document.getElementById('panelKirjolohi');
       const ul = document.getElementById('reasonsOutKirjolohi');
       if (!panel || !ul || panel.style.display === 'none') return;
-      const rivit = [...ul.children];
-      if (rivit.some(li => li.textContent.startsWith('VOIMALA:'))) return;
-      const omat = rivit.find(li => li.textContent.startsWith('OMAT PAIKAT:'));
+      const omat = [...ul.children].find(li => li.textContent.startsWith('OMAT PAIKAT:'));
       if (!omat) return;
-      const teksti = hirviKirjolohiVoimalaRivi();
-      if (!teksti) return;
-      const li = document.createElement('li'); li.textContent = teksti;
-      omat.after(li);
+      let edellinen = omat;
+      [['VOIMALA:', hirviKirjolohiVoimalaRivi()], ['LÄPIVIRTAUS NYT', hirviKirjolohiVirtaRivi()]].forEach(([alku, teksti]) => {
+        let li = [...ul.children].find(x => x.textContent.startsWith(alku));
+        if (!teksti) { if (li) edellinen = li; return; }
+        if (!li) { li = document.createElement('li'); edellinen.after(li); }
+        li.textContent = teksti;
+        edellinen = li;
+      });
       const sum = ul.parentElement && ul.parentElement.querySelector('summary');
       const luku = sum && sum.querySelector('span[style*="muted"]');
       if (luku) luku.textContent = '(' + ul.children.length + ')';
     }
+    window.hirviKirjolohiPaivita = hirviKirjolohiPaivita;
     window.hirviLapiQ = function () {
       if (!hirviVirta) { haeHirviVirta(); return null; }
       const v = hirviVirta.voimala;
@@ -9358,7 +9393,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v101';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v102';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -13800,8 +13835,10 @@ lataa(eka);
         }
         // 29.9.2026 (v97): Hirvijärvellä omat kirjolohipaikat ja voimalan tila.
         if (typeof kuhaJarvi === 'function' && kuhaJarvi() === 'hirvijarvi') {
-          reasonsKirjolohi.push('OMAT PAIKAT: ' + HIRVI_KIRJOLOHIPAIKAT.map(k => k.name + ' (' + k.merkintoja + ' merkintää)').join(' ja ')
-            + ' altaan eteläosassa. Merkinnöissä ei ole päivämääriä.');
+          const klA = HIRVI_KIRJOLOHIPAIKAT.filter(k => k.alue === 'A'), klMuut = HIRVI_KIRJOLOHIPAIKAT.filter(k => k.alue !== 'A');
+          reasonsKirjolohi.push('OMAT PAIKAT: Sataman–Valkiavuoren edusta: ' + klA.map(k => k.name + ' (' + k.merkintoja + ' merkintää)').join(' ja ')
+            + '. Lisäksi ' + klMuut.map(k => k.name).join(' ja ') + ' (sijainti arvioitu kartalta, merkintämäärä ei tiedossa). '
+            + 'Merkinnöissä ei ole päivämääriä. Istutuspaikkaa ei tiedetä varmasti. Jos kalat istutetaan näille alueille, saaliit voivat kertoa istutuksesta eivätkä virrasta.');
           if (!hirviVirta) haeHirviVirta();
           else { const vr = hirviKirjolohiVoimalaRivi(); if (vr) reasonsKirjolohi.push(vr); }
         }
@@ -14742,6 +14779,11 @@ lataa(eka);
           ulKL.innerHTML = '';
           reasonsKirjolohi.forEach(r => { const li = document.createElement('li'); li.textContent = r; ulKL.appendChild(li); });
           merkitseMaara('reasonsOutKirjolohi', reasonsKirjolohi.length);
+          // 30.9.2026 (v102): läpivirtausrivi, kun aaltokartta on latautunut
+          if (typeof window.hirviKirjolohiPaivita === 'function') {
+            const ajaRivi = () => { try { window.hirviKirjolohiPaivita(); } catch (e) { console.warn('Kirjolohi/läpivirtaus:', e.message); } };
+            if (typeof window.akValmiina === 'function') window.akValmiina().then(ajaRivi, ajaRivi); else ajaRivi();
+          }
         }
       }
 
