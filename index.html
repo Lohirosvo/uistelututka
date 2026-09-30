@@ -1160,6 +1160,19 @@ body{padding-bottom:66px}
         <p class="hint" id="ottiHalytysStatus" style="margin-top:6px;"></p>
       </div>
 
+      <!-- PYYNTIPONNISTUS — 30.9.2026 (v109): Aloita/Lopeta uistelu -->
+      <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--line);">
+        <button id="pyyntiBtn" onclick="pyyntiNappi()" style="width:100%; background:transparent; color:var(--cyan); border:2px solid var(--cyan); border-radius:10px; font-family:'Barlow Condensed',sans-serif; font-size:20px; font-weight:700; letter-spacing:.02em; padding:12px; cursor:pointer;">▶ ALOITA UISTELU</button>
+        <p class="hint" id="pyyntiTila" style="margin-top:8px;"></p>
+        <div id="pyyntiAukiBox" style="display:none; margin-top:8px;">
+          <input type="datetime-local" id="pyyntiLoppuAika" style="width:100%;">
+          <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="chip" onclick="pyyntiLopetaAjalla()" style="border-color:var(--cyan);color:var(--cyan);">Tallenna lopetus</button>
+            <button class="chip" onclick="pyyntiHylkaa()" style="border-color:var(--muted);color:var(--muted);">Hylkää reissu</button>
+          </div>
+        </div>
+      </div>
+
       <!-- SAALISKIRJAUS: yksi napautus tallentaa kaikki olosuhteet, täydennys myöhemmin -->
       <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--line);">
         <button onclick="kalaKiinni()" style="width:100%; background:var(--hard-red); color:#fff; border:none; border-radius:10px; font-family:'Barlow Condensed',sans-serif; font-size:22px; font-weight:700; letter-spacing:.02em; padding:16px; cursor:pointer;">
@@ -2041,6 +2054,15 @@ body{padding-bottom:66px}
       <div id="osuvuusTila" style="font-size:14px;line-height:1.5;"></div>
       <div id="osuvuusTaulu" style="margin-top:8px;overflow-x:auto;"></div>
       <div id="lahdeVertailuTila" class="hint" style="margin-top:10px;font-size:13px;"></div>
+    </div>
+
+    <!-- PYYNTIPONNISTUS — 30.9.2026 (v109) -->
+    <div class="q" id="pyyntiRaportti">
+      <div class="idx">Pyynti</div>
+      <h2>Saalis per uistelutunti</h2>
+      <p class="hint">Vain Aloita/Lopeta uistelu -napeilla kirjatut reissut. Kala lasketaan reissuun, jos sen
+        kirjausaika osuu reissun sisään. Nollajakso = 30 min ilman kalaa.</p>
+      <div id="pyyntiRaporttiSisalto" style="font-size:14px;line-height:1.5;"></div>
     </div>
 
     <footer>
@@ -6180,6 +6202,254 @@ lataa(eka);
     // arvokasta on tallentaa sekä mallin ennustama syvyys että todellinen pyyntisyvyys,
     // jolloin mallin osumatarkkuutta voi myöhemmin arvioida.
     const LS_SAALIS = 'nopeusnaytto_pro1_saaliit';
+
+    /* ============================================================
+       PYYNTIPONNISTUS JA NOLLAHETKET — 30.9.2026 (v109)
+       ============================================================
+       Miksi: saalisloki näkee vain onnistumiset. Ilman pyyntiaikaa malli oppii,
+       missä olit, ei missä kala oli. Hannun tarkistuslista, kohta 4.
+       Miten (Hannun kanssa sovittu 30.9.):
+         - Aloita/Lopeta uistelu -napit ovat ensisijainen lähde. Kaksi
+           kellonaikaa pitää, vaikka näyttö sammuu tai välillä luetaan viestejä.
+           Selain keskeyttää paikannuksen taustalla, joten jatkuva GPS ei käy
+           pyyntiajan lähteeksi.
+         - GPS-piste (mittarista) talteen enintään kerran minuutissa silloin,
+           kun sovellus on auki. Jakson sijainti = jakson viimeinen GPS-piste,
+           sitten jakson viimeinen saaliskirjaus, muuten "ei tiedossa". Sijaintia
+           ei keksitä.
+         - Olot (tuuli, vesi, ilma) kerran jaksossa, jos sovellus oli auki.
+           Muuten tyhjä; voidaan myöhemmin täydentää tuntisäädatasta.
+         - 30 min jaksot muodostetaan lopetuksessa. Jakso ilman kalaa on
+           nollahetki. Raportti laskee kalat aina saalislokista uudelleen, joten
+           myöhemmin täydennetty laji tai jälkikirjaus näkyy.
+         - Auki jäänyt reissu (yli 12 h) kysyy lopetusajan seuraavalla avauksella.
+         - Lopetus kirjoittaa pyyntiloki_pvm.csv Lataukset-kansioon, kuten saalisloki.
+       Saalisloki ja "Merkitse nollareissu" ennallaan. */
+    const LS_PYYNTI = 'uistelututka_pyyntiloki';
+    const LS_PYYNTI_AUKI = 'uistelututka_pyynti_auki';
+    const PYYNTI_JAKSO_MIN = 30, PYYNTI_AUKI_MAX_H = 12, PYYNTI_MIN_MIN = 3;
+    const PYYNTI_JAKSO_MS = PYYNTI_JAKSO_MIN * 60000, PYYNTI_PISTEET_MAX = 1500;
+    let viimeisinGpsAika = null;   // asetetaan mittarin GPS-päivityksessä
+
+    function pyyntiLue(k, oletus) {
+      try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? oletus : v; } catch (e) { return oletus; }
+    }
+    function pyyntiKirjoita(k, v) {
+      try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); return true; }
+      catch (e) { console.warn('Pyyntiloki:', e.message); return false; }
+    }
+    function pyyntiOlot() {
+      let om = null;
+      try { om = nykyOm(); } catch (e) { om = null; }
+      let vesi = null;
+      try { vesi = (latestSykeTemp !== null && latestSykeTemp !== undefined) ? latestSykeTemp : (answers.temp !== undefined ? answers.temp : null); } catch (e) {}
+      return { t: Date.now(), tuuliMs: om ? om.wind : null, tuuliSuunta: om ? om.windDir : null,
+               ilmaC: om ? om.temp : null, vesiC: vesi };
+    }
+    function pyyntiGpsTalteen(r) {
+      if (!viimeisinGps || !viimeisinGpsAika || Date.now() - viimeisinGpsAika > 120000) return false;
+      const ed = r.pisteet[r.pisteet.length - 1];
+      if (ed && viimeisinGpsAika - ed.t < 60000) return false;
+      r.pisteet.push({ t: viimeisinGpsAika, lat: Math.round(viimeisinGps.lat * 1e5) / 1e5, lon: Math.round(viimeisinGps.lon * 1e5) / 1e5 });
+      if (r.pisteet.length > PYYNTI_PISTEET_MAX) r.pisteet.shift();
+      return true;
+    }
+    function pyyntiTick() {
+      const r = pyyntiLue(LS_PYYNTI_AUKI, null);
+      if (r && Date.now() - r.alku <= PYYNTI_AUKI_MAX_H * 3600000) {
+        let muutos = pyyntiGpsTalteen(r);
+        const j = Math.floor((Date.now() - r.alku) / PYYNTI_JAKSO_MS);
+        if (!r.olot.some(o => Math.floor((o.t - r.alku) / PYYNTI_JAKSO_MS) === j)) { r.olot.push(pyyntiOlot()); muutos = true; }
+        if (muutos) pyyntiKirjoita(LS_PYYNTI_AUKI, r);
+      }
+      pyyntiNayta();
+    }
+    function pyyntiSaaliit(alku, loppu) {
+      let lista = [];
+      try { lista = lataaSaaliit(); } catch (e) { lista = []; }
+      return lista.filter(x => x && !x.nollareissu && x.aika && (t => t >= alku && t < loppu)(Date.parse(x.aika)));
+    }
+    function pyyntiKesto(min) {
+      const h = Math.floor(min / 60), m = Math.round(min % 60);
+      return (h ? h + ' h ' : '') + m + ' min';
+    }
+    const pyyntiKlo = t => { const d = new Date(t); return d.getHours() + '.' + String(d.getMinutes()).padStart(2, '0'); };
+    const pyyntiPvm = t => { const d = new Date(t); return d.getDate() + '.' + (d.getMonth() + 1) + '.'; };
+
+    function pyyntiNappi() {
+      const r = pyyntiLue(LS_PYYNTI_AUKI, null);
+      if (r) pyyntiLopeta(Date.now()); else pyyntiAloita();
+    }
+    function pyyntiAloita() {
+      if (pyyntiLue(LS_PYYNTI_AUKI, null)) return;
+      const r = { id: Date.now(), alku: Date.now(), paikka: (typeof currentLocation === 'object' && currentLocation) ? currentLocation.name : null,
+                  pisteet: [], olot: [pyyntiOlot()] };
+      pyyntiGpsTalteen(r);
+      if (!pyyntiKirjoita(LS_PYYNTI_AUKI, r)) { document.getElementById('pyyntiTila').textContent = 'Tallennus epäonnistui (selaimen muisti).'; return; }
+      pyyntiNayta();
+    }
+    function pyyntiLopeta(loppu) {
+      const r = pyyntiLue(LS_PYYNTI_AUKI, null);
+      const tila = document.getElementById('pyyntiTila');
+      if (!r) return;
+      if (!(loppu > r.alku)) { if (tila) tila.textContent = 'Lopetusajan pitää olla aloituksen jälkeen (' + pyyntiPvm(r.alku) + ' klo ' + pyyntiKlo(r.alku) + ').'; return; }
+      const minuutit = (loppu - r.alku) / 60000;
+      if (minuutit < PYYNTI_MIN_MIN) {
+        pyyntiKirjoita(LS_PYYNTI_AUKI, null);
+        if (tila) tila.textContent = 'Alle ' + PYYNTI_MIN_MIN + ' min reissua ei tallennettu.';
+        pyyntiNayta(true); return;
+      }
+      const kalat = pyyntiSaaliit(r.alku, loppu);
+      const jaksot = [];
+      for (let ja = r.alku; ja < loppu; ja += PYYNTI_JAKSO_MS) {
+        const jl = Math.min(ja + PYYNTI_JAKSO_MS, loppu);
+        const sis = (t) => t >= ja && t < jl;
+        const k = kalat.filter(x => sis(Date.parse(x.aika)));
+        const p = r.pisteet.filter(q => sis(q.t)).pop();
+        const kp = k.filter(x => typeof x.lat === 'number').pop();
+        const o = r.olot.find(q => sis(q.t)) || null;
+        jaksot.push({ alku: ja, loppu: jl, min: Math.round((jl - ja) / 60000), saaliita: k.length,
+          lat: p ? p.lat : (kp ? kp.lat : null), lon: p ? p.lon : (kp ? kp.lon : null),
+          sijaintiLahde: p ? 'gps' : (kp ? 'saalis' : null),
+          tuuliMs: o ? o.tuuliMs : null, tuuliSuunta: o ? o.tuuliSuunta : null, ilmaC: o ? o.ilmaC : null, vesiC: o ? o.vesiC : null });
+      }
+      const reissu = { id: r.id, alku: r.alku, loppu: loppu, paikka: r.paikka, minuutit: Math.round(minuutit),
+                       pisteita: r.pisteet.length, jaksot: jaksot };
+      const kaikki = pyyntiLue(LS_PYYNTI, []);
+      kaikki.push(reissu);
+      if (!pyyntiKirjoita(LS_PYYNTI, kaikki)) { if (tila) tila.textContent = 'Tallennus epäonnistui (selaimen muisti). Reissu jäi auki.'; return; }
+      pyyntiKirjoita(LS_PYYNTI_AUKI, null);
+      const tiedostoOk = pyyntiVarmuuskopio(kaikki);
+      const nollat = jaksot.filter(j => !j.saaliita).length;
+      if (tila) tila.innerHTML = '<span style="color:var(--cyan);">✓ Reissu tallennettu: ' + pyyntiKesto(minuutit) + ', '
+        + kalat.length + ' kalaa, ' + nollat + '/' + jaksot.length + ' jaksoa ilman kalaa.</span>'
+        + (tiedostoOk ? ' Varmuuskopio Lataukset-kansioon.' : '');
+      pyyntiNayta(true);
+    }
+    function pyyntiLopetaAjalla() {
+      const el = document.getElementById('pyyntiLoppuAika');
+      const t = el ? new Date(el.value).getTime() : NaN;   // datetime-local = paikallinen aika
+      if (!isFinite(t)) { document.getElementById('pyyntiTila').textContent = 'Anna lopetusaika.'; return; }
+      if (t > Date.now()) { document.getElementById('pyyntiTila').textContent = 'Lopetusaika ei voi olla tulevaisuudessa.'; return; }
+      pyyntiLopeta(t);
+    }
+    function pyyntiHylkaa() {
+      pyyntiKirjoita(LS_PYYNTI_AUKI, null);
+      document.getElementById('pyyntiTila').textContent = 'Auki jäänyt reissu hylätty.';
+      pyyntiNayta(true);
+    }
+    // Oletuslopetus auki jääneelle: viimeinen merkki toiminnasta (GPS, olot, saalis).
+    function pyyntiOletusLoppu(r) {
+      const raja = r.alku + PYYNTI_AUKI_MAX_H * 3600000;
+      let t = r.alku;
+      r.pisteet.forEach(p => { if (p.t > t) t = p.t; });
+      r.olot.forEach(o => { if (o.t > t) t = o.t; });
+      pyyntiSaaliit(r.alku, raja).forEach(x => { const a = Date.parse(x.aika); if (a > t) t = a; });
+      if (t - r.alku < 30 * 60000) t = r.alku + 60 * 60000;   // ei merkkejä: tunti, jota käyttäjä korjaa
+      return Math.min(t, raja);
+    }
+    function pyyntiNayta(pidaTila) {
+      const btn = document.getElementById('pyyntiBtn'), tila = document.getElementById('pyyntiTila'), box = document.getElementById('pyyntiAukiBox');
+      if (!btn || !tila) return;
+      const r = pyyntiLue(LS_PYYNTI_AUKI, null);
+      if (r && Date.now() - r.alku > PYYNTI_AUKI_MAX_H * 3600000) {
+        btn.style.display = 'none';
+        if (box && box.style.display === 'none') {
+          box.style.display = '';
+          const d = new Date(pyyntiOletusLoppu(r)), p2 = n => String(n).padStart(2, '0');
+          document.getElementById('pyyntiLoppuAika').value = d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + 'T' + p2(d.getHours()) + ':' + p2(d.getMinutes());
+        }
+        tila.textContent = 'Uistelu jäi auki (alkoi ' + pyyntiPvm(r.alku) + ' klo ' + pyyntiKlo(r.alku) + '). Milloin lopetit? Oletus on viimeinen kirjaus tai GPS-havainto.';
+        return;
+      }
+      btn.style.display = ''; if (box) box.style.display = 'none';
+      if (r) {
+        const min = (Date.now() - r.alku) / 60000;
+        btn.textContent = '■ LOPETA UISTELU';
+        btn.style.borderColor = 'var(--amber)'; btn.style.color = 'var(--amber)';
+        tila.textContent = 'Uistelu käynnissä ' + pyyntiKesto(min) + ' (alkoi klo ' + pyyntiKlo(r.alku) + '), jakso '
+          + (Math.floor(min / PYYNTI_JAKSO_MIN) + 1) + ', kaloja ' + pyyntiSaaliit(r.alku, Date.now() + 1).length
+          + '. GPS-pisteitä ' + r.pisteet.length + ' (vain kun mittari käy ja sovellus on auki).';
+      } else {
+        btn.textContent = '▶ ALOITA UISTELU';
+        btn.style.borderColor = 'var(--cyan)'; btn.style.color = 'var(--cyan)';
+        if (!pidaTila) {
+          const kaikki = pyyntiLue(LS_PYYNTI, []), v = kaikki[kaikki.length - 1];
+          tila.textContent = v ? 'Edellinen reissu ' + pyyntiPvm(v.alku) + ': ' + pyyntiKesto(v.minuutit) + ', '
+            + pyyntiSaaliit(v.alku, v.loppu).length + ' kalaa.' : 'Paina, kun vieheet ovat vedessä. Pyyntiaika tekee saaliista vertailukelpoisen.';
+        }
+      }
+    }
+    const PYYNTI_KENTAT = ['reissuId','paikka','jaksoAlku','jaksoLoppu','minuutit','saaliita','lat','lon','sijaintiLahde','tuuliMs','tuuliSuunta','ilmaC','vesiC'];
+    function pyyntiCsv(kaikki) {
+      const iso = t => new Date(t).toISOString();
+      const rivit = [PYYNTI_KENTAT.join(';')];
+      kaikki.forEach(r => r.jaksot.forEach(j => {
+        const o = { reissuId: r.id, paikka: r.paikka, jaksoAlku: iso(j.alku), jaksoLoppu: iso(j.loppu), minuutit: j.min,
+                    saaliita: j.saaliita, lat: j.lat, lon: j.lon, sijaintiLahde: j.sijaintiLahde, tuuliMs: j.tuuliMs,
+                    tuuliSuunta: j.tuuliSuunta, ilmaC: j.ilmaC, vesiC: j.vesiC };
+        rivit.push(PYYNTI_KENTAT.map(k => (o[k] === null || o[k] === undefined) ? '' : String(o[k]).replace(/;/g, ',')).join(';'));
+      }));
+      return rivit.join('\n');
+    }
+    function pyyntiVarmuuskopio(kaikki) {
+      try {
+        const blob = new Blob(['\ufeff' + pyyntiCsv(kaikki)], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob), d = new Date();
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'pyyntiloki_' + d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + '.csv';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        return true;
+      } catch (e) { console.error('Pyyntilokin varmuuskopio epäonnistui:', e); return false; }
+    }
+    /* Raportti: saalis per uistelutunti. Kalat lasketaan saalislokista reissun
+       aikaikkunasta, joten myöhemmin täydennetty laji näkyy. */
+    function pyyntiRaportti() {
+      const el = document.getElementById('pyyntiRaporttiSisalto');
+      if (!el) return;
+      const kaikki = pyyntiLue(LS_PYYNTI, []);
+      if (!kaikki.length) { el.innerHTML = '<p class="hint">Ei vielä reissuja. Paina Vesillä-ruudulla Aloita uistelu, kun vieheet ovat vedessä, ja Lopeta, kun nostat ne.</p>'; return; }
+      const nro = (x, d) => x.toFixed(d).replace('.', ',');
+      const paikat = {}, lajit = {};
+      let tunnit = 0, jaksot = 0, nollat = 0, kaloja = 0;
+      kaikki.forEach(r => {
+        const h = r.minuutit / 60, k = pyyntiSaaliit(r.alku, r.loppu);
+        const p = paikat[r.paikka || '?'] = paikat[r.paikka || '?'] || { reissut: 0, h: 0, kalat: 0 };
+        p.reissut++; p.h += h; p.kalat += k.length;
+        tunnit += h; kaloja += k.length;
+        k.forEach(x => { const l = x.laji || 'laji puuttuu'; lajit[l] = (lajit[l] || 0) + 1; });
+        r.jaksot.forEach(j => {
+          if (j.min < 10) return;   // vajaa loppujakso ei ole nollahetki
+          jaksot++;
+          if (!pyyntiSaaliit(j.alku, j.loppu).length) nollat++;
+        });
+      });
+      const td = 'style="text-align:right;font-family:\'JetBrains Mono\',monospace;"';
+      let h = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><tr style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em;">'
+        + '<th style="text-align:left;">paikka</th><th style="text-align:right;">reissut</th><th style="text-align:right;">tunnit</th><th style="text-align:right;">kalat</th><th style="text-align:right;">kalaa/h</th></tr>';
+      Object.keys(paikat).sort().forEach(n => {
+        const p = paikat[n];
+        h += '<tr style="border-top:1px solid var(--line);"><td style="padding:6px 2px;">' + n + '</td><td ' + td + '>' + p.reissut + '</td><td ' + td + '>'
+          + nro(p.h, 1) + '</td><td ' + td + '>' + p.kalat + '</td><td ' + td + '>' + nro(p.h ? p.kalat / p.h : 0, 2) + '</td></tr>';
+      });
+      h += '</table>';
+      const lj = Object.keys(lajit).sort((a, b) => lajit[b] - lajit[a])
+        .map(l => l + ' ' + lajit[l] + ' (' + nro(lajit[l] / tunnit, 2) + '/h)').join(', ');
+      h += '<p style="font-size:13px;margin:8px 0 0;">Yhteensä ' + nro(tunnit, 1) + ' uistelutuntia, ' + kaloja + ' kalaa'
+        + (lj ? ': ' + lj : '') + '. Nollajaksoja (30 min ilman kalaa) ' + nollat + '/' + jaksot + '.</p>';
+      let ulkona = 0;
+      try { ulkona = lataaSaaliit().filter(x => x && !x.nollareissu && x.aika && !kaikki.some(r => { const t = Date.parse(x.aika); return t >= r.alku && t < r.loppu; })).length; } catch (e) {}
+      h += '<p class="hint" style="margin-top:6px;">' + (ulkona ? ulkona + ' kalaa on kirjattu reissujen ulkopuolella; ne eivät ole tunneissa mukana. ' : '')
+        + (tunnit < 10 ? 'Alle 10 tuntia aineistoa: luvut heiluvat vielä paljon.' : '') + '</p>';
+      el.innerHTML = h;
+    }
+    setInterval(pyyntiTick, 60000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) pyyntiTick(); });
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => pyyntiNayta());
+    else setTimeout(() => pyyntiNayta(), 0);
+
     let keskenerainenSaalis = null;
     // ============================================================
     // VAPAUTUSOHJE — lisätty 11.9.2026
@@ -7715,6 +7985,7 @@ lataa(eka);
 
           // Talteen saaliskirjausta varten
           viimeisinGps = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+          viimeisinGpsAika = Date.now();   // 30.9.2026 (v109): pyyntilokin GPS-pisteille
           viimeisinNopeus = speedKmh;
 
           tarkistaOttiPisteet(pos.coords.latitude, pos.coords.longitude);
@@ -9445,7 +9716,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v107';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v109';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -15381,7 +15652,7 @@ lataa(eka);
 
   var JAKO = {
     vesilla:   ['whatsappNappi','vesillaPaneeli','speedMonitorSection'],
-    raportit:  ['result','malliOsuvuus']
+    raportit:  ['result','malliOsuvuus','pyyntiRaportti']
     /* loput -> suunnittelu */
   };
   var RUUDUT = [
@@ -15436,6 +15707,7 @@ lataa(eka);
     try{ localStorage.setItem('uistelututka_ruutu', id); }catch(e){}
     if(id === 'vesilla' && typeof paivitaVesilla === 'function') paivitaVesilla();
     if(id === 'raportit' && typeof laskeOsuvuus === 'function') laskeOsuvuus();
+    if(id === 'raportit' && typeof pyyntiRaportti === 'function') pyyntiRaportti();
     window.scrollTo(0,0);
   }
   var alku = 'suunnittelu';
@@ -15644,15 +15916,18 @@ function laskeOsuvuus(){
     const p = syvyysVertailuun(s);
     if(p){
       parit.push({ laji: s.laji || '?', ero: p.syvyys - p.ennuste, toteuma: p.syvyys,
-                   ennuste: p.ennuste, aika: s.aika, vesiC: s.vesiC, kausi: s.kausi });
+                   ennuste: p.ennuste, aika: s.aika, vesiC: s.vesiC, kausi: s.kausi,
+                   valo: s.valo, tuuliMs: s.tuuliMs, tuuliSuunta: s.tuuliSuunta, paikka: s.paikka });
     }
   });
 
+  // 30.9.2026 (v108): hudit ja paikkaosuvuus näkyvät myös alle kolmella kalalla
+  const lisat = osuvuusHudit(parit) + osuvuusPaikka(lista);
   if(parit.length < 3){
     tila.innerHTML = 'Vertailuun tarvitaan vähintään kolme kirjausta joissa on sekä '
       + 'saalissyvyys että mallin ennuste. Nyt niitä on <strong>' + parit.length + '</strong>. '
       + 'Kirjaa syvyys kala kiinni -napin jälkeen, niin tämä alkaa kertyä.';
-    taulu.innerHTML = '';
+    taulu.innerHTML = lisat;
     return;
   }
 
@@ -15704,7 +15979,73 @@ function laskeOsuvuus(){
   taulu.innerHTML = html
     + '<p class="hint" style="margin-top:8px;">Harha = keskimääräinen etumerkillinen ero '
     + '(toteuma miinus ennuste). Hajonta = keskimääräinen poikkeama suuntaan katsomatta. '
-    + 'Harhan voi korjata mallista, hajontaa ei.</p>';
+    + 'Harhan voi korjata mallista, hajontaa ei.</p>' + lisat;
+}
+
+/* SUURIMMAT HUDIT — 30.9.2026 (v108). Harha ja hajonta ovat keskiarvoja; ne
+   eivät kerro, MISSÄ oloissa malli oli väärässä. Viisi suurinta poikkeamaa
+   olosuhteineen, jotta yhteinen tekijä (lämpö, valo, tuuli, kausi) näkyy.
+   Sama suodatin kuin harhalla: vain itse mitatut syvyydet. */
+const OSUVUUS_HUDIT_N = 5;
+const OSUVUUS_VALO = { sun: 'aurinko', partly: 'puolipilvi', cloudy: 'pilvi' };
+function osuvuusHudit(parit){
+  if(!parit.length) return '';
+  const nro = function(x, d){ return x.toFixed(d).replace('.', ','); };
+  const rivit = parit.slice().sort(function(a,b){ return Math.abs(b.ero) - Math.abs(a.ero); })
+    .slice(0, OSUVUUS_HUDIT_N).map(function(p){
+      const t = new Date(p.aika);
+      const pvm = isNaN(t) ? '?' : t.getDate() + '.' + (t.getMonth()+1) + '.' + t.getFullYear() + ' klo ' + t.getHours();
+      const olot = [];
+      if(typeof p.vesiC === 'number') olot.push('vesi ' + nro(p.vesiC, 1) + ' °C');
+      if(p.valo) olot.push('valo ' + (OSUVUUS_VALO[p.valo] || p.valo));
+      if(typeof p.tuuliMs === 'number') olot.push('tuuli ' + nro(p.tuuliMs, 0) + ' m/s'
+        + (typeof p.tuuliSuunta === 'number' && typeof kompassi === 'function' ? ' ' + kompassi(p.tuuliSuunta) : ''));
+      if(p.kausi) olot.push('kausi ' + p.kausi);
+      return '<li style="margin:4px 0;"><strong>' + pvm + '</strong> ' + p.laji + (p.paikka ? ', ' + p.paikka : '')
+        + ': ennuste ' + nro(p.ennuste, 1) + ' m, kala ' + nro(p.toteuma, 1) + ' m ('
+        + (p.ero >= 0 ? '+' : '') + nro(p.ero, 1) + ' m, ' + (p.ero >= 0 ? 'syvemmällä' : 'matalammalla') + ')'
+        + (olot.length ? '<br><span class="hint">' + olot.join(' · ') + '</span>' : '') + '</li>';
+    });
+  return '<h3 style="font-size:14px;margin:14px 0 4px;">Suurimmat hudit</h3>'
+    + '<ol style="margin:0;padding-left:20px;font-size:13px;line-height:1.4;">' + rivit.join('') + '</ol>'
+    + '<p class="hint" style="margin-top:6px;">Etsi yhteistä tekijää. Jos hudit kasautuvat samaan lämpöön, '
+    + 'valoon tai tuuleen, vika on siinä osassa mallia. Yksittäinen huti ei vielä kerro mitään.</p>';
+}
+
+/* PAIKKAOSUVUUS — 30.9.2026 (v108). Loki tallentaa etäisyyden saaliista
+   kirjaushetken suositeltuun paikkaan (lohikalat: ottipaikka, kuha: kuhapaneeli).
+   RAJOITUS, sanotaan ääneen: jos ajoit suosituksen perusteella, saalis on sen
+   lähellä joka tapauksessa. Luku kertoo, missä olit, ei sitä, oliko suositus
+   paras. Todellinen osuvuus vaatii tiedon ajasta, jolloin suosituksella EI
+   syönyt (nollahetket, tarkistuslistan kohta 4). */
+const OSUVUUS_PAIKKA_LAHELLA_M = 500;
+function osuvuusPaikka(lista){
+  const rivit = [];
+  lista.forEach(function(x){
+    if(!x || x.nollareissu || !x.laji) return;
+    const kuha = x.laji === 'kuha';
+    const e = kuha ? x.etaisyysKuhasuositukseenM : x.etaisyysSuositukseenM;
+    const nimi = kuha ? x.suositeltuKuhapaikka : x.suositeltuPaikka;
+    if(typeof e === 'number' && isFinite(e)) rivit.push({ e: e, nimi: nimi, laji: x.laji });
+  });
+  const otsikko = '<h3 style="font-size:14px;margin:14px 0 4px;">Paikkaosuvuus</h3>';
+  if(!rivit.length) return otsikko + '<p class="hint">Yhdessäkään saaliissa ei ole vielä tallennettua '
+    + 'etäisyyttä suositeltuun paikkaan (kenttä lisättiin 22.9., kuhalle 28.9.).</p>';
+  const erot = rivit.map(function(r){ return r.e; }).sort(function(a,b){ return a-b; });
+  const n = erot.length, med = n % 2 ? erot[(n-1)/2] : (erot[n/2-1] + erot[n/2]) / 2;
+  const lahella = erot.filter(function(e){ return e <= OSUVUUS_PAIKKA_LAHELLA_M; }).length;
+  const km = function(m){ return m < 1000 ? Math.round(m) + ' m' : (m/1000).toFixed(1).replace('.', ',') + ' km'; };
+  const paikat = {};
+  rivit.forEach(function(r){ if(r.e <= OSUVUUS_PAIKKA_LAHELLA_M && r.nimi) paikat[r.nimi] = (paikat[r.nimi] || 0) + 1; });
+  const pl = Object.keys(paikat).sort(function(a,b){ return paikat[b]-paikat[a]; })
+    .map(function(k){ return k + ' ' + paikat[k]; }).join(', ');
+  return otsikko + '<p style="font-size:13px;line-height:1.45;margin:0;">'
+    + '<strong>' + lahella + '/' + n + '</strong> kalaa tuli alle ' + OSUVUUS_PAIKKA_LAHELLA_M
+    + ' metrin päästä kirjaushetken suosituksesta. Etäisyyden mediaani ' + km(med) + '.'
+    + (pl ? ' Suosituksen kohdalta: ' + pl + '.' : '') + '</p>'
+    + '<p class="hint" style="margin-top:6px;">Varaus: jos ajoit suosituksen perusteella, kala tulee sen lähelle '
+    + 'joka tapauksessa. Luku kertoo, missä olit, ei sitä, oliko suositus paras. Siihen tarvitaan myös hetket, '
+    + 'jolloin suosituksella ei syönyt.</p>';
 }
 
 /* ===== SYVYYS HAARUKKANA =====
