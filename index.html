@@ -8904,13 +8904,17 @@ lataa(eka);
          Särkikalavedet (nimetty myös hauki ja ahven): ohjearvo 100 % > 5 mg/l; raja 4 mg/l.
        Kuha luetaan ahvenen ryhmään (ahvenkala; direktiivi ei nimeä kuhaa, PÄÄTELMÄ).
        Huom: kuhan omassa syvyysfunktiossa on tiukempi Dolinin 1974 (> 7 mg/l 20 °C:ssa).
-       TUOREUS: direktiivi edellyttää vähintään kuukausittaisen näytteen, joten mittaus kelpaa
-       varoitukseen enintään 35 vrk (kuukausi + viive). Vanhempi näytetään vain tietona.
+       TUOREUS: 45 vrk (Hannun päätös 30.9.2026, v112; aiemmin 35 vrk). Näytteet 2026:
+       6.7., 27.7., 24.8. ja julkaisuviive tuntematon; 35 vrk pudotti varoituksen pois
+       välikausina. Paneeli ei rajaa suosituksia, joten vanhan mittauksen haitta on pieni,
+       kun ikä näkyy. Tunnettu riski: 27.7.–24.8. profiili muuttui kokonaan (pohja 4,3 ->
+       8,1 mg/l), joten 36–45 vrk vanha ✓ voi olla väärä rauhoittelu kerrostuneisuuden
+       edetessä. Muutetaan, jos osoittautuu huonoksi. Vanhempi näytetään vain tietona.
        SYVYYS: välin pienin arvo mitatuista syvyyksistä, välin päissä lineaarinen interpolointi
        viereisten mittausten välillä. Ei ekstrapoloida syvimmän mittauksen alle.
        Samalla syvyydellä useampi tulos -> pienin (varovainen).
        VARAUS: yksi piste järven eteläosasta, mittaukset n. kuukauden välein. */
-    const HAPPI_SITE = 4996, HAPPI_TUORE_VRK = 35, HAPPI_LS = 'happiLappajarvi';
+    const HAPPI_SITE = 4996, HAPPI_TUORE_VRK = 45, HAPPI_LS = 'happiLappajarvi';
     const HAPPI_RAJAT = { lohi: { huomio: 7, varoitus: 6 }, muu: { huomio: 5, varoitus: 4 } };
     const HAPPI_UUSINTA_MS = 12 * 3600 * 1000;
     let happiData = null, happiHaku = null, happiVirhe = null, happiViimeValit = null;
@@ -9920,7 +9924,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v111';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v112';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
