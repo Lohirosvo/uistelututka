@@ -8486,7 +8486,13 @@ lataa(eka);
        vanhaRantaM = etäisyys vanhan Hirvijärven rantaviivaan (peruskartta 1969,
        ennen tekojärveä). Merkinnöistä 45 % on alle 100 m päässä siitä, altaan
        pinta-alasta 15 % → noin kolminkertainen osuus. Varaus: osa voi selittyä sillä, missä on kalastettu
-       eniten. (Mökin länsipuolen "mökki" on saaren punainen maamerkkimökki.) */
+       eniten.
+       UUSITTU 30.9.2026 (v106) ilman kirjolohilaitureita (k1, k2; 15 merkintää).
+       249 = 11 kuhapaikkaa 138 + laiturit 15 + haja 96. Laiturit ovat n. 3 km
+       vanhasta rannasta (vrt. h7 3243 m, h9 3134 m), joten osoittaja ei muutu:
+       45 % × 249 ≈ 111–113 (tarkkaa lukua ei kirjattu) → / 234 = 47–48 % vs 15 %
+       → 3,2×. Rantaviivan geometria ei ole sovelluksessa; hajamerkintöjä ei
+       mitattu uudelleen, eikä tarvinnut. (Mökin länsipuolen "mökki" on saaren punainen maamerkkimökki.) */
     /* VANHAT PIIRTEET — 29.9.2026. Digitoitu peruskartasta 1969 (ennen tekojärveä,
        Hirvijärvi_yhdistetty.map, kalibroinnin jäännösvirhe n. 4 m; käsin digitoinnin
        tarkkuus n. ±35 m). Tiet: neljä selvintä vanhaa tietä (kartalla on muitakin
@@ -8677,8 +8683,27 @@ lataa(eka);
       if (!odotus || v.length < 0.9 * odotus) return null;
       return v.reduce((a, x) => a + x.q, 0) / v.length;
     }
-    function haeHirviVirta() {
-      if (hirviVirta || hirviVirtaHaku) return hirviVirtaHaku;
+    /* 30.9.2026 (v107): SYKEn aikaleimat ovat Suomen paikallista aikaa kesäaikoineen
+       (varmistettu 30.9. Kepon Digital Matter -anturista Q4400612: leima 13:35 klo 14.19
+       EEST; UTC+2:na se olisi ollut tulevaisuudessa. Hirvijärvelle 4400210 päätelty,
+       sama järjestelmä). Hirvijärven uusin tuntiarvo tulee n. 2 h viiveellä, ja data
+       haettiin ennen vain kerran istunnossa, jolloin saalislokin voimalan tila saattoi
+       olla tunteja vanha. Nyt haetaan uudelleen 30 min välein (vain jos Hirvijärven
+       data on jo haettu tässä istunnossa) ja heti, kun sovellus palaa näkyviin ja
+       edellisestä hausta on yli 30 min. Jos uusintahaku epäonnistuu (esim. ei verkkoa
+       vesillä), vanha tulos jää voimaan. */
+    const HIRVI_VIRTA_VALI_MS = 30 * 60 * 1000;
+    function hirviVirtaUusi() {
+      if (!hirviVirta || hirviVirtaHaku) return;
+      if (Date.now() - hirviVirta.haettu.getTime() < HIRVI_VIRTA_VALI_MS - 60000) return;
+      haeHirviVirta(true);
+    }
+    setInterval(hirviVirtaUusi, HIRVI_VIRTA_VALI_MS);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) hirviVirtaUusi(); });
+    function haeHirviVirta(pakota) {
+      if (hirviVirtaHaku) return hirviVirtaHaku;
+      if (hirviVirta && !pakota) return null;
+      const vanha = hirviVirta;
       const ok = p => p.then(v => ({ v }), e => ({ e: String(e && e.message || e) }));
       const u = new URL('https://rajapinnat.ymparisto.fi/api/Hydrologiarajapinta/1.0/odata/Vedenkorkeus');
       u.searchParams.set('$filter', 'Paikka_Id eq ' + HIRVI_TASO_ASEMA);
@@ -8711,7 +8736,11 @@ lataa(eka);
           tulos.tase = { qTulo: qT, qLahto: qL, dHcm: L.cm - E.cm, vrk: dtS / 86400,
             tarkkuus: HIRVI_A_M2 * 0.01 / dtS, qVarpula: qV, loppu: new Date(L.t) };
         } catch (e) { tulos.taseVirhe = String(e && e.message || e); }
-        hirviVirta = tulos; hirviVirtaHaku = null;
+        hirviVirtaHaku = null;
+        // Uusintahaku ei saa korvata toimivaa dataa virheellä.
+        if (vanha && vanha.voimala && !tulos.voimala) return vanha;
+        if (vanha && vanha.tase && !tulos.tase) { tulos.tase = vanha.tase; tulos.taseVanha = true; }
+        hirviVirta = tulos;
         const kp = document.getElementById('kuhaPaneeli');
         if (kp && kuhaViimeArgs) kp.innerHTML = kuhaPaneeliHtml(kuhaViimeArgs);
         // 30.9.2026 (v101): myös kirjolohen VOIMALA-rivi ja Syvempi vesi -kartta,
@@ -8884,7 +8913,7 @@ lataa(eka);
         // 2 Vanha rantaviiva (Hirvijärvi): veden alla oleva pudotusreuna
         if (typeof s.vanhaRantaM === 'number' && s.vanhaRantaM <= 150)
           lisaa(8, 'Paikkatieto', 'Paikka on noin ' + s.vanhaRantaM + ' metrin päässä vanhan Hirvijärven rannasta, joka on nyt veden alla oleva reuna: pohja laskee entiseltä suolta vanhaan järvialtaaseen. '
-            + 'Merkinnöistäsi 45 % on alle 100 metrin päässä tästä reunasta, vaikka altaasta vain 15 % on niin lähellä. Osa voi selittyä myös sillä, että olet kalastanut siellä eniten.');
+            + 'Kuhamerkinnöistäsi noin 48 % on alle 100 metrin päässä tästä reunasta, vaikka altaasta vain 15 % on niin lähellä. Osa voi selittyä myös sillä, että olet kalastanut siellä eniten.');
         // 2b Vanha tie (Hirvijärvi, peruskartta 1969): kova tiepohja ja ojat veden alla
         if (typeof s.vanhaTieM === 'number' && s.vanhaTieM <= 100)
           lisaa(8, 'Paikkatieto', 'Paikka on noin ' + s.vanhaTieM + ' metrin päässä veden alle jääneestä vanhasta tiestä (peruskartta 1969). Tiepohja on kovaa maata ja sen vieressä on usein ojat. '
@@ -9416,7 +9445,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v105';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v107';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
