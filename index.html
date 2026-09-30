@@ -1663,6 +1663,8 @@ body{padding-bottom:66px}
     <div id="questions"></div>
 
     <div id="result">
+      <!-- HAPPI (v111) -->
+      <div class="result-panel" id="happiPanel" style="display:none;"></div>
 
       <!-- TAIMENKELI-MITTARI -->
       <div class="result-panel taimen" id="taimenkeliPanel" style="text-align:center;">
@@ -8888,6 +8890,158 @@ lataa(eka);
       return null;
     }
 
+    /* HAPPI — 30.9.2026 (v111). Hannun valinta: varoitus, jos lajin suositusväli osuu
+       alle rajan; kaikki lajit. Suosituksia EI rajata (kesän 2026 mittauksista todettu
+       30.9., ettei taimensuositusta tarvitse rajata hapen takia).
+       DATA: VESLA Result_Wide, Lappajärvi etelä p 125 (Site_Id 4996), AnalyteCode O2D, mg/l.
+       Kentät tarkistettu rajapinnan kuvauksesta 30.9.: Site_Id, AnalyteCode, Time
+       (DateTimeOffset), SampleDepthUpper_m / SampleDepthLower_m (tekstinä), Value, Unit.
+       RAJAT: EU:n kalavesidirektiivi 78/659/ETY = 2006/44/EY, liite I (kumottu 2013,
+       käytetään vertailuarvona). Tarkistettu 30.9. Saarlandin SaarlFischGewV:n liitteestä,
+       joka toistaa direktiivin liitteen.
+         Lohikalavedet (lohi, taimen, harjus, siika): ohjearvo 100 % > 7 mg/l; jos happi
+         menee alle 6 mg/l, viranomaisen on osoitettava, ettei kalakanta kärsi.
+         Särkikalavedet (nimetty myös hauki ja ahven): ohjearvo 100 % > 5 mg/l; raja 4 mg/l.
+       Kuha luetaan ahvenen ryhmään (ahvenkala; direktiivi ei nimeä kuhaa, PÄÄTELMÄ).
+       Huom: kuhan omassa syvyysfunktiossa on tiukempi Dolinin 1974 (> 7 mg/l 20 °C:ssa).
+       TUOREUS: direktiivi edellyttää vähintään kuukausittaisen näytteen, joten mittaus kelpaa
+       varoitukseen enintään 35 vrk (kuukausi + viive). Vanhempi näytetään vain tietona.
+       SYVYYS: välin pienin arvo mitatuista syvyyksistä, välin päissä lineaarinen interpolointi
+       viereisten mittausten välillä. Ei ekstrapoloida syvimmän mittauksen alle.
+       Samalla syvyydellä useampi tulos -> pienin (varovainen).
+       VARAUS: yksi piste järven eteläosasta, mittaukset n. kuukauden välein. */
+    const HAPPI_SITE = 4996, HAPPI_TUORE_VRK = 35, HAPPI_LS = 'happiLappajarvi';
+    const HAPPI_RAJAT = { lohi: { huomio: 7, varoitus: 6 }, muu: { huomio: 5, varoitus: 4 } };
+    const HAPPI_UUSINTA_MS = 12 * 3600 * 1000;
+    let happiData = null, happiHaku = null, happiVirhe = null, happiViimeValit = null;
+    try {
+      const v = JSON.parse(localStorage.getItem(HAPPI_LS) || 'null');
+      if (v && v.aika && Array.isArray(v.profiili) && v.profiili.length)
+        happiData = { aika: new Date(v.aika), haettu: new Date(v.haettu), profiili: v.profiili, valimuisti: true };
+    } catch (e) { /* ei kriittistä */ }
+
+    function happiNum(x) { return x.toFixed(1).replace('.', ','); }
+    function happiEsc(t) { return String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+    function haeHappi() {
+      if (happiHaku) return happiHaku;
+      const kysy = (lisa, jarjesta) => {
+        const u = new URL('https://rajapinnat.ymparisto.fi/api/vesla/2.0/odata/Result_Wide');
+        u.searchParams.set('$filter', 'Site_Id eq ' + HAPPI_SITE + " and AnalyteCode eq 'O2D'" + (lisa ? ' and ' + lisa : ''));
+        if (jarjesta) u.searchParams.set('$orderby', 'Time desc');
+        u.searchParams.set('$top', jarjesta ? '200' : '500');
+        return fetch(u, { cache: 'no-store' }).then(r => r.ok ? r.json() : Promise.reject(new Error('VESLA vastasi ' + r.status)));
+      };
+      happiYritetty = Date.now();
+      happiHaku = kysy('', true)
+        // varakysely, jos järjestys ei kelpaa: kuluvan vuoden rivit, järjestys täällä
+        .catch(e1 => kysy('year(Time) eq ' + new Date().getFullYear(), false)
+          .catch(e2 => Promise.reject(new Error(e1.message + ' / ' + e2.message))))
+        .then(j => {
+          const rivit = (j.value || []).map(x => {
+            const yla = Number(String(x.SampleDepthUpper_m ?? x.SampleDepth_m).replace(',', '.'));
+            const ala = x.SampleDepthLower_m == null ? NaN : Number(String(x.SampleDepthLower_m).replace(',', '.'));
+            return { t: new Date(x.Time), s: isFinite(ala) ? (yla + ala) / 2 : yla, v: Number(x.Value),
+                     yks: String(x.Unit || '').trim().toLowerCase() };
+          }).filter(x => isFinite(x.t.getTime()) && isFinite(x.s) && isFinite(x.v) && x.yks === 'mg/l');
+          if (!rivit.length) throw new Error('ei happituloksia (O2D, mg/l) paikalta ' + HAPPI_SITE);
+          rivit.sort((a, b) => b.t - a.t);
+          const pv = rivit[0].t.toDateString();
+          const syv = new Map();
+          rivit.filter(x => x.t.toDateString() === pv).forEach(x => {
+            const k = Math.round(x.s * 10) / 10;
+            syv.set(k, Math.min(syv.has(k) ? syv.get(k) : Infinity, x.v));
+          });
+          const profiili = [...syv.entries()].map(([s, v]) => ({ s, v })).sort((a, b) => a.s - b.s);
+          happiData = { aika: rivit[0].t, haettu: new Date(), profiili };
+          happiVirhe = null;
+          try { localStorage.setItem(HAPPI_LS, JSON.stringify({ aika: happiData.aika.toISOString(), haettu: happiData.haettu.toISOString(), profiili })); } catch (e) {}
+        })
+        .catch(e => { happiVirhe = String(e && e.message || e); })   // vanha data jää voimaan
+        .finally(() => { happiHaku = null; try { happiPaneeliPaivita(); } catch (e) { console.warn('Happi:', e.message); } });
+      return happiHaku;
+    }
+    let happiYritetty = 0;   // epäonnistunutta hakua ei toisteta joka analyysissä
+    function happiUusi() {
+      if (kuhaJarvi() !== 'lappajarvi' || happiHaku) return;
+      if (Date.now() - happiYritetty < 10 * 60 * 1000) return;
+      if (happiData && !happiData.valimuisti && Date.now() - happiData.haettu.getTime() < HAPPI_UUSINTA_MS) return;
+      haeHappi();
+    }
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) happiUusi(); });
+
+    // Pienin happi välillä [lo, hi]. Palauttaa { min, z, alleMittausten }.
+    function happiValilla(prof, lo, hi) {
+      const eka = prof[0], vika = prof[prof.length - 1];
+      const arvo = z => {
+        if (z <= eka.s) return eka.v;
+        if (z >= vika.s) return vika.v;
+        for (let i = 1; i < prof.length; i++) if (z <= prof[i].s) {
+          const a = prof[i - 1], b = prof[i];
+          return a.v + (b.v - a.v) * (z - a.s) / (b.s - a.s);
+        }
+        return vika.v;
+      };
+      const zt = [lo, hi, ...prof.filter(p => p.s > lo && p.s < hi).map(p => p.s)];
+      let min = Infinity, z = lo;
+      zt.forEach(q => { const v = arvo(q); if (v < min) { min = v; z = q; } });
+      // syvyys näytetään mitatulta alueelta: syvimmän alla arvo on syvimmän mittauksen arvo
+      return { min, z: Math.min(Math.max(z, eka.s), vika.s), alleMittausten: hi > vika.s + 0.5 };
+    }
+
+    function happiPaneeliPaivita() {
+      const el = document.getElementById('happiPanel');
+      if (!el) return;
+      const jarvi = kuhaJarvi();
+      if (jarvi === 'hirvijarvi') {
+        el.style.display = '';
+        el.innerHTML = '<p class="hint" style="margin:0;">Happi: Hirvijärvelle ei ole kytketty happimittausta, joten happivaroitusta ei lasketa.</p>';
+        return;
+      }
+      if (jarvi !== 'lappajarvi' || !happiViimeValit) { el.style.display = 'none'; return; }
+      el.style.display = '';
+      const alaviite = '<p class="hint" style="margin:10px 0 0;">Rajat: EU:n kalavesidirektiivi (kumottu 2013, vertailuarvo). '
+        + 'Lohikalat huomio alle 7, varoitus alle 6 mg/l; kuha, hauki ja ahven huomio alle 5, varoitus alle 4 mg/l '
+        + '(kuha ahvenen ryhmässä on päätelmä). Yksi mittauspiste järven eteläosassa. Vain tieto: suosituksia ei rajata.</p>';
+      const otsikko = t => '<h2 style="margin-top:0;">💧 Happi ' + t + '</h2>';
+      if (!happiData) {
+        el.innerHTML = otsikko('')
+          + (happiHaku || !happiVirhe ? '<p class="hint">Haetaan Lappajärven happimittausta…</p>'
+             : '<p>Happidataa ei saatu: ' + happiEsc(happiVirhe) + '. Varoitusta ei lasketa.</p>')
+          + alaviite;
+        return;
+      }
+      const d = happiData, prof = d.profiili;
+      const ika = Math.floor((happiViimeValit.hetki - d.aika) / 86400000);
+      const pvm = d.aika.getDate() + '.' + (d.aika.getMonth() + 1) + '.' + d.aika.getFullYear();
+      const syvin = prof[prof.length - 1].s;
+      let html = otsikko('<span style="font-weight:normal;font-size:.8em;">Lappajärvi etelä, mitattu ' + pvm + '</span>');
+      if (happiVirhe) html += '<p class="hint">Uusi haku epäonnistui (' + happiEsc(happiVirhe) + '), näytetään edellinen tulos.</p>';
+      const profTxt = prof.map(p => happiNum(p.s).replace(/,0$/, '') + ' m ' + happiNum(p.v)).join(' · ');
+      if (ika > HAPPI_TUORE_VRK || ika < -1) {
+        html += '<p>Viimeisin mittaus on ' + (ika < 0 ? 'tarkasteltavaa päivää myöhempi' : ika + ' vrk vanha')
+          + '. Varoitukseen kelpaa enintään ' + HAPPI_TUORE_VRK + ' vrk vanha mittaus, joten varoitusta ei lasketa. '
+          + 'Järven kerrostuneisuus on voinut muuttua sen jälkeen.</p>'
+          + '<p class="hint">Mittaus (mg/l): ' + profTxt + '</p>' + alaviite;
+        el.innerHTML = html; return;
+      }
+      const rivit = happiViimeValit.lajit.map(l => {
+        const r = HAPPI_RAJAT[l.ryhma], h = happiValilla(prof, l.lo, l.hi);
+        const taso = h.min < r.varoitus ? 2 : h.min < r.huomio ? 1 : 0;
+        return Object.assign({ taso, raja: taso === 2 ? r.varoitus : r.huomio }, l, h);
+      }).sort((a, b) => b.taso - a.taso);
+      const merkki = ['✓', '⚠', '⛔'], vari = ['var(--muted)', 'var(--amber)', 'var(--hard-red)'];
+      html += '<ul style="margin:6px 0 0; padding-left:18px;">' + rivit.map(r =>
+        '<li style="color:' + vari[r.taso] + ';">' + merkki[r.taso] + ' <strong>' + r.nimi + '</strong> '
+        + happiNum(r.lo) + '–' + happiNum(r.hi) + ' m: pienin ' + happiNum(r.min) + ' mg/l (' + happiNum(r.z) + ' m)'
+        + (r.taso === 2 ? ' — alle varoitusrajan ' + r.raja + ' mg/l'
+           : r.taso === 1 ? ' — alle huomiorajan ' + r.raja + ' mg/l' : '')
+        + (r.alleMittausten ? '. Väli ulottuu syvimmän mittauksen (' + happiNum(syvin) + ' m) alle; sen alapuolelta ei ole tietoa' : '')
+        + '</li>').join('') + '</ul>';
+      html += '<p class="hint" style="margin:8px 0 0;">Mittaus ' + ika + ' vrk sitten (mg/l): ' + profTxt + '</p>' + alaviite;
+      el.innerHTML = html;
+    }
+
     function kuhaPaikkaLista(jarviAvain) {
       if (jarviAvain === 'hirvijarvi') return HIRVI_KUHAPAIKAT.map(p => Object.assign({ taso: 'Paikkatieto' }, p));
       if (jarviAvain === 'lappajarvi') return [
@@ -9766,7 +9920,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v110';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v111';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -14759,6 +14913,19 @@ lataa(eka);
       } catch (e) { console.error('Kuhapaneeli epäonnistui:', e); }
 
       updateLakeStatus(targetHour, thermoVal, activeBaitDepth, dKuha, dHauki, dTaimen, dAhven, dJarvilohi, dKuore);
+
+      // 30.9.2026 (v111): happivaroitus suositusväleille. Virhe ei saa kaataa analyysiä.
+      try {
+        happiViimeValit = { hetki: now, lajit: [
+          { nimi: 'Taimen', ryhma: 'lohi', lo: lowT, hi: highT },
+          { nimi: 'Järvilohi', ryhma: 'lohi', lo: lowJL, hi: highJL },
+          { nimi: 'Kuha', ryhma: 'muu', lo: lowK, hi: highK },
+          { nimi: 'Hauki', ryhma: 'muu', lo: lowH, hi: highH },
+          { nimi: 'Ahven', ryhma: 'muu', lo: lowA, hi: highA }
+        ] };
+        happiPaneeliPaivita();
+        happiUusi();
+      } catch (e) { console.warn('Happi:', e.message); }
 
       renderResult({
         dKirjolohi, reasonsKirjolohi,
