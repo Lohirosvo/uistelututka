@@ -1052,6 +1052,7 @@ body{padding-bottom:66px}
   </div>
   <div id="vesillaSyvyys">– <small>m</small></div>
   <div id="vesillaSelite">Aja Analysoi kerran, niin syvyys ilmestyy tähän.</div>
+  <div id="vesillaVeneella" style="margin-top:6px;font-size:14px;line-height:1.4;display:none;"></div>
   <!-- TIIVISTETTY 18.9.2026. Kolme laatikkoa vei kolme riviä pystysuunnassa, ja
        vesillä ruudun korkeus on niukin resurssi. Yksi rivi riittää: luvut ovat
        lyhyitä eikä niitä lueta erikseen vaan vilkaisulla. -->
@@ -6231,6 +6232,40 @@ lataa(eka);
     const PYYNTI_JAKSO_MS = PYYNTI_JAKSO_MIN * 60000, PYYNTI_PISTEET_MAX = 1500;
     let viimeisinGpsAika = null;   // asetetaan mittarin GPS-päivityksessä
 
+    /* VENEEN KOHDAN TAIMENSUOSITUS — 30.9.2026 (v110), Hannun valinta A.
+       Päälukema (dTaimen) pysyy ulappasuosituksena: ottipaikkojen pisteytys
+       käyttää sitä. Tämä on erillinen rivi, kun GPS on tuore ja syvyyskartta ladattu.
+         - pohja 0,5–8 m -> Hannun pintasääntö 0,1–0,7 m (oma käytäntö, ei malli)
+         - muuten mallin luku, enintään pohja − 1 m (pohjaraja)
+       Pohja = syvin ruutu 60 m säteellä (kartan 100 m ruudut, syvyysluokat).
+       Syvin, jotta pintasääntö koskee vain aidosti matalaa ja pohjaraja ei
+       kiristy yhden matalan ruudun takia. Aiemmin raja oli järven syvin kohta
+       (currentLocation.maxDepth), ja pintasääntö oli pelkkää tekstiä. */
+    const PINTASAANTO = { pohjaMin: 0.5, pohjaMax: 8, viehe: [0.1, 0.7] };
+    const POHJAVARA_M = 1, VENE_GPS_MAX_MS = 120000, VENE_SADE_M = 60;
+    function taimenVeneella(dMalli) {
+      if (!viimeisinGps || !viimeisinGpsAika || Date.now() - viimeisinGpsAika > VENE_GPS_MAX_MS) return null;
+      if (typeof window.akValmis !== 'function' || !window.akValmis() || typeof window.akSyvyysPisteessa !== 'function') return null;
+      const s = window.akSyvyysPisteessa(viimeisinGps.lat, viimeisinGps.lon, VENE_SADE_M);
+      if (!s || !isFinite(s.max)) return null;
+      const pohja = Math.round(s.max * 10) / 10;
+      if (pohja < PINTASAANTO.pohjaMin) return { pohja, tyyppi: 'matala', min: null, max: null };
+      if (pohja <= PINTASAANTO.pohjaMax) return { pohja, tyyppi: 'pinta', min: PINTASAANTO.viehe[0], max: PINTASAANTO.viehe[1] };
+      if (typeof dMalli !== 'number' || isNaN(dMalli)) return { pohja, tyyppi: 'pohja', min: null, max: null };
+      const raja = Math.round((pohja - POHJAVARA_M) * 10) / 10, d = Math.round(dMalli * 10) / 10;
+      return d > raja ? { pohja, tyyppi: 'raja', min: raja, max: raja, malli: d } : { pohja, tyyppi: 'malli', min: d, max: d };
+    }
+    function taimenVeneellaTeksti(v) {
+      const n = x => x.toFixed(1).replace('.', ',');
+      if (!v) return '<span class="hint">Veneen kohdalla: ei tuoretta GPS:ää tai syvyyskarttaa. Käynnistä mittari.</span>';
+      const alku = '<strong>Veneen kohdalla:</strong> pohja n. ' + n(v.pohja) + ' m → ';
+      if (v.tyyppi === 'matala') return alku + 'alle ' + n(PINTASAANTO.pohjaMin) + ' m, liian matalaa.';
+      if (v.tyyppi === 'pinta') return alku + 'pintaharava <strong>' + n(v.min) + '–' + n(v.max) + ' m</strong> <span class="hint">(oma käytäntö: pohja ' + n(PINTASAANTO.pohjaMin) + '–' + PINTASAANTO.pohjaMax + ' m)</span>';
+      if (v.tyyppi === 'raja') return alku + '<strong>enintään ' + n(v.min) + ' m</strong> <span class="hint">(pohjaraja; malli ' + n(v.malli) + ' m)</span>';
+      if (v.tyyppi === 'malli') return alku + '<strong>' + n(v.min) + ' m</strong> <span class="hint">(malli)</span>';
+      return alku + 'mallin syvyyttä ei ole laskettu.';
+    }
+
     function pyyntiLue(k, oletus) {
       try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? oletus : v; } catch (e) { return oletus; }
     }
@@ -6764,6 +6799,8 @@ lataa(eka);
       if (!saalis) return null;
       const k = { taimen:'ennusteTaimen', jarvilohi:'ennusteJarvilohi', kirjolohi:'ennusteKirjolohi', kuha:'ennusteKuha',
                   hauki:'ennusteHauki', ahven:'ennusteAhven', muikku:'ennusteMuikku' }[laji];
+      // 30.9.2026 (v110): taimenella veneen kohdan suositus ensin (pinnan puoleinen pää)
+      if (laji === 'taimen' && typeof saalis.ennusteTaimenVeneellaMin === 'number') return saalis.ennusteTaimenVeneellaMin;
       const e = k ? saalis[k] : null;
       if (Array.isArray(e)) return Math.min(e[0], e[1]);
       return (typeof e === 'number' && !isNaN(e)) ? e : null;
@@ -6790,6 +6827,13 @@ lataa(eka);
     }
     function syvyysVertailuun(x) {
       if (!syvyysMitattu(x)) return null;
+      /* 30.9.2026 (v110): taimenella verrataan veneen kohdan suositukseen, jos se on.
+         Väli (pintasääntö 0,1–0,7 m): kala välin sisällä = osuma (ero 0), muuten
+         ero lähimpään reunaan. Muuten matalalta saatu kala näkyisi mallin hutina. */
+      if (x.laji === 'taimen' && typeof x.ennusteTaimenVeneellaMin === 'number' && typeof x.ennusteTaimenVeneellaMax === 'number') {
+        const e = Math.min(Math.max(x.syvyysM, x.ennusteTaimenVeneellaMin), x.ennusteTaimenVeneellaMax);
+        return { syvyys: x.syvyysM, ennuste: e, veneella: true };
+      }
       const e = lajinEnnuste(x, x.laji);
       return e === null ? null : { syvyys: x.syvyysM, ennuste: e };
     }
@@ -6867,6 +6911,10 @@ lataa(eka);
       };
       const hp = harppausSaaliille(nyt);
       snap.harppausEnnuste = hp.arvo; snap.harppausLahde = hp.lahde;
+      /* 30.9.2026 (v110): veneen kohdan taimensuositus ja pohja talteen. */
+      const vt = taimenVeneella(viimeisinEnnuste.taimen);
+      snap.pohjaVeneellaM = vt ? vt.pohja : null; snap.veneellaTyyppi = vt ? vt.tyyppi : null;
+      snap.ennusteTaimenVeneellaMin = vt ? vt.min : null; snap.ennusteTaimenVeneellaMax = vt ? vt.max : null;
       /* 22.9.2026: suositus talteen, jotta lokista näkee myöhemmin osuiko se */
       snap.suositeltuPaikka = null; snap.suositusPisteet = null; snap.etaisyysSuositukseenM = null; snap.suositusHetki = null;
       if (viimeisinOttipaikka && viimeisinOttipaikka.topSpot && viimeisinOttipaikka.paras) {
@@ -7186,7 +7234,9 @@ lataa(eka);
       'jalkikirjaus','tuuliLahde','sijaintiLahde',
       // 28.9.2026
       'suositeltuKuhapaikka','kuhaSuositusPisteet','etaisyysKuhasuositukseenM','kuhaVedenkorkeusKorjausM',
-      'ennusteKirjolohi','syottiLahde'];
+      'ennusteKirjolohi','syottiLahde',
+      // 30.9.2026 (v110)
+      'pohjaVeneellaM','veneellaTyyppi','ennusteTaimenVeneellaMin','ennusteTaimenVeneellaMax'];
 
     function saaliitCsv(lista) {
       return [SAALIS_KENTAT.join(';')].concat(
@@ -9716,7 +9766,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v109';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v110';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -12438,13 +12488,26 @@ lataa(eka);
     // hämärässä matalammassa (Björnsson 2001).
     //
     // Lämpötilavyöhykkeet [matalin, syvin] metreinä kerrostuvassa järvessä:
+    /* TAIMENEN LÄMPÖLUOKAT — vakioiksi 30.9.2026 (v110), käytös ennallaan.
+       Raja on "yli" (t > raja). Hannun tarkistuslista: rajat helposti muutettaviksi.
+       YLÄRAJA 17 °C TARKISTETTU 30.9.2026 (tarkistuslistassa 18; lähdettä 18:lle ei löytynyt):
+         - kalaa syövän taimenen kasvuoptimi 16,6–17,4 °C, selkärangattomia syövän
+           13,1–14,1 °C (Forseth & Jonsson 1994; Elliott & Hurley 2000; kooste
+           Thermal ecology of brown trout, 2019). Lappajärven isot taimenet syövät kalaa.
+         - taimen valitsee kasvuoptiminsa lämpötilan (Larsson 2005, Env Biol Fish 73:89–96)
+         - kasvu lakkaa yli 18,7–19,5 °C (Elliott & Hurley 2001)
+       Varaus: raja koskee pintalämpöä; kala reagoi koko profiiliin (Depth Raider). */
+    const TAIMEN_LAMPOLUOKAT = [
+      { yli: 17, vyo: [10, 16] },   // välttää lämmintä pintaa, termokliinin taso tai alle
+      { yli: 12, vyo: [5, 15] },    // ihannealue (Schulz & Berg: kesällä 8–16 m)
+      { yli: 8,  vyo: [1.5, 7] },   // laaja jakauma, kevät/syksy
+      { yli: 4,  vyo: [0.5, 5] },   // matalalla, litoraali
+      { yli: -Infinity, vyo: [0, 3] }   // talvi (Schulz & Berg: 0–3 m)
+    ];
     function taimenTempBand(t) {
       if (t === undefined || t === null || isNaN(t)) return null;
-      if (t > 17) return [10, 16];   // välttää lämmintä pintaa, termokliinin taso tai alle
-      if (t > 12) return [5, 15];    // ihannealue (Schulz & Berg: kesällä 8–16 m)
-      if (t > 8) return [1.5, 7];    // laaja jakauma, kevät/syksy
-      if (t > 4) return [0.5, 5];    // matalalla, litoraali
-      return [0, 3];                 // talvi (Schulz & Berg: 0–3 m)
+      const l = TAIMEN_LAMPOLUOKAT.find(x => t > x.yli);
+      return l ? l.vyo.slice() : null;
     }
 
     function estimateTaimenDepth(hour, light, wind, activeBaitDepth) {
@@ -14254,7 +14317,7 @@ lataa(eka);
       // Huomaa että sääntö on POHJANSYVYYDEN sääntö, ei lämpötilan. Malli
       // laskee syvyyden valosta ja syöttikalasta; tämä ohittaa sen maaston
       // perusteella. Ne ovat eri akseleita eivätkä ole ristiriidassa.
-      reasonsTaimen.push(`POIKKEUS (MATALA VESI): Kun pohjaa on 0,5–8 m — rantavyöhyke, matalikko tai penkan päällys — ohita matemaattinen syvyyslaskelma. Uistele kalat pintaharavalla aivan kalvosta (0,1–0,7 m) ilman lisäpainoja. Tämä on omaa kokemusperäistä käytäntöä, ei mallin laskema tulos.`);
+      reasonsTaimen.push(`POIKKEUS (MATALA VESI): Kun pohjaa on 0,5–8 m — rantavyöhyke, matalikko tai penkan päällys — ohita matemaattinen syvyyslaskelma. Uistele kalat pintaharavalla aivan kalvosta (0,1–0,7 m) ilman lisäpainoja. Tämä on omaa kokemusperäistä käytäntöä, ei mallin laskema tulos. Vesillä-ruutu soveltaa sen veneen kohdalla, kun mittari on päällä ja syvyyskartta ladattu.`);
 
       if (a.windside === 'windward') {
         reasonsTaimen.push('Maatuuli (Tyyni ranta): Kylmän veden kumpuaminen (upwelling) vetää taimenet matalaan. Smyygaus: Pinnan ollessa tyyni veneen varjot ja äänet säikyttävät kalan. Käytä erittäin pitkiä kelkkojen vapautuspituuksia (10–15 m).');
@@ -15783,6 +15846,13 @@ function paivitaVesilla(){
   document.getElementById('vesillaVari').textContent =
     (paras.varit && paras.varit.length) ? paras.varit[0][0] : '–';
   document.getElementById('vesillaValo').textContent = paras.valo || '–';
+  // 30.9.2026 (v110): veneen kohdan suositus taimenelle
+  var vv = document.getElementById('vesillaVeneella');
+  if(vv){
+    if(vesillaLajiValinta === 'taimen' && typeof taimenVeneella === 'function'){
+      vv.style.display = ''; vv.innerHTML = taimenVeneellaTeksti(taimenVeneella(paras.syvyys));
+    } else vv.style.display = 'none';
+  }
 }
 
 function avaaLajiLaatikko(){
@@ -15917,7 +15987,7 @@ function laskeOsuvuus(){
     if(p){
       parit.push({ laji: s.laji || '?', ero: p.syvyys - p.ennuste, toteuma: p.syvyys,
                    ennuste: p.ennuste, aika: s.aika, vesiC: s.vesiC, kausi: s.kausi,
-                   valo: s.valo, tuuliMs: s.tuuliMs, tuuliSuunta: s.tuuliSuunta, paikka: s.paikka });
+                   valo: s.valo, tuuliMs: s.tuuliMs, tuuliSuunta: s.tuuliSuunta, paikka: s.paikka, veneella: !!p.veneella });
     }
   });
 
@@ -16002,7 +16072,7 @@ function osuvuusHudit(parit){
         + (typeof p.tuuliSuunta === 'number' && typeof kompassi === 'function' ? ' ' + kompassi(p.tuuliSuunta) : ''));
       if(p.kausi) olot.push('kausi ' + p.kausi);
       return '<li style="margin:4px 0;"><strong>' + pvm + '</strong> ' + p.laji + (p.paikka ? ', ' + p.paikka : '')
-        + ': ennuste ' + nro(p.ennuste, 1) + ' m, kala ' + nro(p.toteuma, 1) + ' m ('
+        + ': ennuste ' + nro(p.ennuste, 1) + ' m' + (p.veneella ? ' (veneen kohta)' : '') + ', kala ' + nro(p.toteuma, 1) + ' m ('
         + (p.ero >= 0 ? '+' : '') + nro(p.ero, 1) + ' m, ' + (p.ero >= 0 ? 'syvemmällä' : 'matalammalla') + ')'
         + (olot.length ? '<br><span class="hint">' + olot.join(' · ') + '</span>' : '') + '</li>';
     });
