@@ -1,7 +1,7 @@
 // Service worker — Nopeusnäyttö pro1
 //
 // Tehtävä: sovellus aukeaa ilman verkkoa ja ilman että Acoden palvelinta tarvitsee
-// käynnistää. Sivu on yksi iso HTML-tiedosto (n. 1,6 MB, josta ottipisteääni on
+// käynnistää. Sivu on yksi iso HTML-tiedosto (n. 1,2 MB, josta ottipisteääni on
 // noin 0,9 MB), joten välimuistiin riittää käytännössä se, jaetut sivut ja kuvakkeet.
 //
 // STRATEGIA: sovellussivu haetaan verkosta ensin ja tallennetaan välimuistiin
@@ -12,7 +12,7 @@
 // VERSIO: kasvata tätä aina kun julkaiset uuden version. Vanha välimuisti siivotaan.
 // Versionumeron kasvatus on se mekanismi joka SIIVOAA vanhan välimuistin,
 // index2.html mukaan lukien. Ilman tätä poisto ei näkyisi puhelimissa.
-const VERSIO = 'uistelututka-v100';
+const VERSIO = 'uistelututka-v101';
 const SIVU = './';
 
 // MUUTETTU 18.9.2026. index2.html oli keskeneräinen uusi käyttöliittymä, ja se

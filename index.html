@@ -4779,6 +4779,13 @@ function akLapiNyt(aikaMs){
   return akLapiValimuisti;
 }
 
+/* 30.9.2026 (v101): kutsutaan, kun SYKEn data saapuu. Jos Syvempi vesi -kartta
+   on Hirvijärvellä jo piirretty ilman läpivirtausta, piirretään se uudelleen. */
+window.akLapiPaivita = function(){
+  if (!jarvi || jarvi !== JARVET.hirvijarvi || akTila !== 'syva' || !akSyvyys || !data || !data.length) return;
+  piirra();
+};
+
 function puraSyvyysLuokat(k){
   if (!k || !k.syvyysLuokat) return null;
   var raaka = atob(k.syvyysLuokat), n = k.W*k.H, s = new Float32Array(n);
@@ -4975,7 +4982,9 @@ function piirra(){
         kun[q2] = (tx*P.ita.un[q2] + ty*P.pohjoinen.un[q2])*kerroin + (lapi ? lapi.un[q2] : 0);
         kv[q2] = Math.sqrt(kue[q2]*kue[q2] + kun[q2]*kun[q2])*3.6;       // km/h
         if (kv[q2] > kvMax) kvMax = kv[q2];
-        kvN++; if (kue[q2]*tx + kun[q2]*ty < 0) vastaan++;
+        // 29.9.2026 (v100): osuus vastatuuleen pelkästä tuulikierrosta. Yhteisvirrasta
+        // laskettuna tyynellä säällä luku kertoisi läpivirtauksen suunnasta, ei paluuvirrasta.
+        kvN++; if ((tx*P.ita.ue[q2] + ty*P.pohjoinen.ue[q2])*tx + (tx*P.ita.un[q2] + ty*P.pohjoinen.un[q2])*ty < 0) vastaan++;
       }
       d.kvMax = kvMax; d.vastaOsuus = kvN ? vastaan/kvN : 0; d.kehitys = kehitys;
     }
@@ -5446,7 +5455,8 @@ function naytaTiedot(d){
   if (akTila === 'syva' && typeof d.kvMax === 'number'){
     var vpros = Math.round((d.vastaOsuus || 0)*100);
     $("akLeima").innerHTML = '<span style="color:#17457d">' + vpros + ' %</span>'
-      + '<small>vastatuuleen</small>'
+      + '<small>vastatuuleen' + (d.lapiMukana ? ' (tuulikierto)' : '') + '</small>'
+      + (d.lapiMukana && akLapiValimuisti ? '<small>läpivirtaus mukana · voimala ' + (akLapiValimuisti.Q.otto > 0 ? akLapiValimuisti.Q.otto.toFixed(1).replace('.', ',') + ' m³/s' : 'seis') + '</small>' : '')
       + '<span class="aika">' + pv[d.aika.getDay()] + ' klo ' + pad(d.aika.getHours()) + '</span>'
       + '<small>huippu ' + d.kvMax.toFixed(2).replace('.', ',') + ' km/h</small>';
     $("akTaulu").innerHTML =
@@ -8682,6 +8692,10 @@ lataa(eka);
         hirviVirta = tulos; hirviVirtaHaku = null;
         const kp = document.getElementById('kuhaPaneeli');
         if (kp && kuhaViimeArgs) kp.innerHTML = kuhaPaneeliHtml(kuhaViimeArgs);
+        // 30.9.2026 (v101): myös kirjolohen VOIMALA-rivi ja Syvempi vesi -kartta,
+        // jotka oli ehditty piirtää ennen dataa. Virhe ei saa kaataa hakua.
+        try { hirviKirjolohiPaivita(); } catch (e) { console.warn('Kirjolohi/voimala:', e.message); }
+        try { if (typeof window.akLapiPaivita === 'function') window.akLapiPaivita(); } catch (e) { console.warn('Läpivirtaus:', e.message); }
         return tulos;
       });
       return hirviVirtaHaku;
@@ -8690,14 +8704,47 @@ lataa(eka);
        täyttökanavasta" → 1/11 kanavasta = 1/12 yhteisosuudesta. Jos vesitase puuttuu,
        tuloja ei lisätä kenttään (vain otto). */
     const TAUSNEVA_OSUUS = 1 / 12;
+    /* 30.9.2026 (v101): kirjolohen VOIMALA-rivi yhdessä paikassa. Käytetään sekä
+       analyysissa että silloin, kun SYKEn data saapuu analyysin jälkeen. */
+    function hirviKirjolohiVoimalaRivi() {
+      const v = hirviVirta && hirviVirta.voimala;
+      if (!v) return null;
+      return 'VOIMALA: ' + (v.ajaa
+        ? 'ajaa nyt ' + (Math.round(v.q * 10) / 10).toLocaleString('fi-FI') + ' m³/s (' + v.lukemia + ' tuntilukemaa). Parhaat kirjolohesi ovat tulleet kohdasta, jossa on lievää virtaa, ja ajon aikana altaassa virtaa enemmän kuin seisokissa.'
+        : 'seis (' + v.lukemia + ' tuntilukemaa). Altaassa virtaa vain tulovesi.');
+    }
+    /* Lisää VOIMALA-rivin jo piirrettyyn kirjolohipaneeliin OMAT PAIKAT -rivin perään.
+       Ei tee mitään, jos paneeli on piilossa, rivi on jo siellä tai dataa ei ole. */
+    function hirviKirjolohiPaivita() {
+      const panel = document.getElementById('panelKirjolohi');
+      const ul = document.getElementById('reasonsOutKirjolohi');
+      if (!panel || !ul || panel.style.display === 'none') return;
+      const rivit = [...ul.children];
+      if (rivit.some(li => li.textContent.startsWith('VOIMALA:'))) return;
+      const omat = rivit.find(li => li.textContent.startsWith('OMAT PAIKAT:'));
+      if (!omat) return;
+      const teksti = hirviKirjolohiVoimalaRivi();
+      if (!teksti) return;
+      const li = document.createElement('li'); li.textContent = teksti;
+      omat.after(li);
+      const sum = ul.parentElement && ul.parentElement.querySelector('summary');
+      const luku = sum && sum.querySelector('span[style*="muted"]');
+      if (luku) luku.textContent = '(' + ul.children.length + ')';
+    }
     window.hirviLapiQ = function () {
       if (!hirviVirta) { haeHirviVirta(); return null; }
       const v = hirviVirta.voimala;
       if (!v) return null;
       const qV = hirviVirta.varpula ? hirviVirta.varpula.q : 0;
       const ts = hirviVirta.tase;
-      const muu = (ts && ts.qTulo >= 0) ? Math.max(0, ts.qTulo - (ts.qVarpula !== null ? ts.qVarpula : qV)) : null;
-      return { otto: v.ajaa ? v.q : 0, varpula: qV,
+      /* 30.9.2026 (v101): Varpula samalta 3 vrk:n jaksolta kuin vesitase, kun tase on
+         saatu. Aiemmin kanavan osuus laskettiin jakson keskiarvolla mutta summaan lisättiin
+         Varpulan nykyarvo, jolloin kartta näytti tuloksi 6,2 ja kuhapaneeli 6. Nyt
+         kanava + Tausneva + Varpula = vesitaseen tulo. Varpulan nykyarvo näkyy yhä omalla
+         rivillään kuhapaneelissa. Ilman tasetta käytetään nykyarvoa. */
+      const qVjakso = (ts && ts.qTulo >= 0) ? (ts.qVarpula !== null ? ts.qVarpula : qV) : qV;
+      const muu = (ts && ts.qTulo >= 0) ? Math.max(0, ts.qTulo - qVjakso) : null;
+      return { otto: v.ajaa ? v.q : 0, varpula: qVjakso,
         kanava: muu === null ? null : muu * (1 - TAUSNEVA_OSUUS), tausneva: muu === null ? null : muu * TAUSNEVA_OSUUS };
     };
     function hirviVirtaHtml(chip) {
@@ -9311,7 +9358,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v83';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v101';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -13756,10 +13803,7 @@ lataa(eka);
           reasonsKirjolohi.push('OMAT PAIKAT: ' + HIRVI_KIRJOLOHIPAIKAT.map(k => k.name + ' (' + k.merkintoja + ' merkintää)').join(' ja ')
             + ' altaan eteläosassa. Merkinnöissä ei ole päivämääriä.');
           if (!hirviVirta) haeHirviVirta();
-          else if (hirviVirta.voimala)
-            reasonsKirjolohi.push('VOIMALA: ' + (hirviVirta.voimala.ajaa
-              ? 'ajaa nyt ' + (Math.round(hirviVirta.voimala.q * 10) / 10).toLocaleString('fi-FI') + ' m³/s (' + hirviVirta.voimala.lukemia + ' tuntilukemaa). Parhaat kirjolohesi ovat tulleet kohdasta, jossa on lievää virtaa, ja ajon aikana altaassa virtaa enemmän kuin seisokissa.'
-              : 'seis (' + hirviVirta.voimala.lukemia + ' tuntilukemaa). Altaassa virtaa vain tulovesi.'));
+          else { const vr = hirviKirjolohiVoimalaRivi(); if (vr) reasonsKirjolohi.push(vr); }
         }
         // Käyttäjän oma havainto virtauspaikoista — merkitty hypoteesiksi.
         reasonsKirjolohi.push('Virtauspaikat: kirjolohi on kasvatettu virtaavassa vedessä ja on positiivisesti reotaktinen (Waldrop ym. 2020). JÄRVESTÄ ei ole mitattua näyttöä virtaushakuisuudesta istutuksen jälkeen. Todennäköisin selitys hyville virtauspaikoille on happi ja ravinnon kertyminen, ei virtaus sinänsä.');
