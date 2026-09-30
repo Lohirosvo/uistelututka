@@ -8746,17 +8746,24 @@ lataa(eka);
     function hirviKirjolohiVirtaRivi() {
       if (typeof window.akMalliSync !== 'function' || typeof window.akOnHirvi !== 'function' || !window.akOnHirvi()) return null;
       const kohti = d => ['pohjoiseen','koilliseen','itään','kaakkoon','etelään','lounaaseen','länteen','luoteeseen'][Math.round((((d % 360) + 360) % 360) / 45) % 8];
-      const nyt = Date.now(), osat = [];
+      /* 30.9.2026 (v105): reotaksian kynnys 2 cm/s = 0,072 km/h. Hauer ym. 2026,
+         J. Ecohydraulics, doi 10.1080/24705357.2026.2644253: taimen ja harjus.
+         Kirjolohelle ei mitattu; kerrotaan tekstissä. */
+      const REO_KMH = 0.072;
+      const nyt = Date.now(), osat = [], yli = [];
       let Q = null;
       for (const k of HIRVI_KIRJOLOHIPAIKAT) {
         const t = window.akMalliSync(k.lat, k.lon, nyt);
         if (!t || typeof t.lapiKmh !== 'number') return null;
         if (t.lapiQ) Q = t.lapiQ;
+        if (t.lapiKmh >= REO_KMH) yli.push(k.name);
         osat.push(k.name + ' ' + (t.lapiKmh < 0.01 ? 'alle 0,01 km/h'
           : t.lapiKmh.toFixed(2).replace('.', ',') + ' km/h ' + kohti(t.lapiSuunta)));
       }
       return 'LÄPIVIRTAUS NYT (malli, ei pisteitä): ' + osat.join('; ') + '. Voimala '
         + (Q && Q.otto > 0 ? Q.otto.toFixed(1).replace('.', ',') + ' m³/s' : 'seis') + '. '
+        + (yli.length ? 'Yli 0,07 km/h (taimenen ja harjuksen reotaksiakynnys, kirjolohelle ei mitattu): ' + yli.join(', ') + '. '
+                      : 'Kaikki alle 0,07 km/h, jolla taimen ja harjus alkavat reagoida virtaan (kirjolohelle ei mitattu). ')
         + 'Arvo on paikan tai alueen edustavan pisteen 100 metrin ruudun keskiarvo, ei koko alueen. Kaivetussa kanavassa virta on todellisuudessa kovempi. '
         + 'Yhteys saaliisiin testataan saalislokista.';
     }
@@ -9409,7 +9416,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v104';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v105';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -12289,9 +12296,11 @@ lataa(eka);
     // SYVYYS: Stables & Thomas 1992 (J. Fish Biol. 40:191-203, Spada Lake): keskimäärin
     // 3 m, päivällä ulapalla 4-16 m, hämärästä aamuun 0-4 m ja lähempänä rantaa.
     //
-    // EI KYTKETTY: vuorokausirytmi. Alanärä & Brännäs 1997 (CJFAS 54:2894-2900)
-    // mittasi ettei kirjolohella ole selvää vuorokausipreferenssiä kun ravintoa on —
-    // yksilöt jakautuvat päivä- ja yöaktiivisiin. Rytmiä ei siis kannata mallintaa.
+    // EI KYTKETTY: vuorokausirytmi. Brännäs & Alanärä 1997 (Can J Zool 75:661-669):
+    // ravintoa koko ajan tarjolla, valtaosa söi päivällä, joka ryhmässä 1-5/15 pääosin
+    // yöaktiivisia. Ks. myös Alanärä & Brännäs 1997 (CJFAS 54:2894-2900). Altaat ja
+    // automaattiruokinta, ei järvi. KORJATTU 30.9.2026 (v105): aiempi "ei selvää
+    // vuorokausipreferenssiä" liioitteli. Rytmiä ei silti mallinneta.
     function estimateKirjolohiDepth(hour, light, wind) {
       const a = answers;
       const t = a.temp;
@@ -13862,8 +13871,8 @@ lataa(eka);
           else { const vr = hirviKirjolohiVoimalaRivi(); if (vr) reasonsKirjolohi.push(vr); }
         }
         // Käyttäjän oma havainto virtauspaikoista — merkitty hypoteesiksi.
-        reasonsKirjolohi.push('Virtauspaikat: kirjolohi on kasvatettu virtaavassa vedessä ja on positiivisesti reotaktinen (Waldrop ym. 2020). JÄRVESTÄ ei ole mitattua näyttöä virtaushakuisuudesta istutuksen jälkeen. Todennäköisin selitys hyville virtauspaikoille on happi ja ravinnon kertyminen, ei virtaus sinänsä.');
-        reasonsKirjolohi.push('EI KYTKETTY vuorokausirytmiä: Alanärä & Brännäs 1997 (CJFAS 54:2894–2900) mittasi, ettei kirjolohella ole selvää vuorokausipreferenssiä kun ravintoa on tarjolla — yksilöt jakautuvat päivä- ja yöaktiivisiin. Rytmiä ei siksi mallinneta.');
+        reasonsKirjolohi.push('Virtauspaikat: kirjolohi on kasvatettu virtaavassa vedessä ja on positiivisesti reotaktinen. Kalat suuntautuvat virtaan etsiessään hajun lähdettä, siepatessaan ajelehtivaa ravintoa ja säästäessään energiaa (Coombs ym. 2020, katsaus). Taimen ja harjus alkavat reagoida virtaan noin 2 cm/s eli 0,07 km/h nopeudesta (Hauer ym. 2026); kirjolohelle kynnystä ei ole mitattu. JÄRVESTÄ ei ole mitattua näyttöä virtaushakuisuudesta istutuksen jälkeen. Todennäköisin selitys hyville virtauspaikoille on happi ja ravinnon kertyminen, ei virtaus sinänsä.');
+        reasonsKirjolohi.push('EI KYTKETTY vuorokausirytmiä: kun ravintoa oli tarjolla koko ajan, valtaosa kirjolohista söi päivällä, mutta jokaisessa ryhmässä osa yksilöistä oli pääosin yöaktiivisia (Brännäs & Alanärä 1997, Can J Zool 75:661–669; ks. myös Alanärä & Brännäs 1997, CJFAS 54:2894–2900). Kokeet tehtiin altaissa automaattiruokinnalla, ei järvessä. Rytmiä ei siksi mallinneta.');
         if (t !== undefined && t >= 17) {
           reasonsKirjolohi.push('MAKUHAITTA: geosmiini ja 2-metyyli-isoborneoli kertyvät kalan rasvakudokseen, ja kirjolohi on rasvainen laji. Aistikynnys kirjolohen lihassa on n. 900 ng/kg (Robertson ym. 2005, Aquaculture 245:89–99) ja puhdistuminen puhtaassa vedessä kestää 10–15 vrk (Davidson ym. 2017). Oma 17 °C:n kynnyksesi on paikallinen nyrkkisääntö, ei fysiologinen vakio — mutta se on todennäköisesti oikea Hirvijärvelle.');
         }

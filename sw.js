@@ -12,7 +12,7 @@
 // VERSIO: kasvata tätä aina kun julkaiset uuden version. Vanha välimuisti siivotaan.
 // Versionumeron kasvatus on se mekanismi joka SIIVOAA vanhan välimuistin,
 // index2.html mukaan lukien. Ilman tätä poisto ei näkyisi puhelimissa.
-const VERSIO = 'uistelututka-v104';
+const VERSIO = 'uistelututka-v105';
 const SIVU = './';
 
 // MUUTETTU 18.9.2026. index2.html oli keskeneräinen uusi käyttöliittymä, ja se
@@ -83,6 +83,12 @@ self.addEventListener('fetch', (e) => {
   // Ulkopuoliset rajapinnat (SYKE, Open-Meteo) menevät aina verkkoon — niitä ei
   // saa tarjota välimuistista, koska vanha sää tai vedenkorkeus olisi harhaanjohtava.
   if (url.origin !== self.location.origin) return;
+  /* KORJATTU 30.9.2026 (v105). Sivun versiotarkistus hakee sw.js:n, mutta haku
+     kulki alla olevaan cache-first-haaraan: ensimmäinen vastaus tallentui
+     välimuistiin ja sen jälkeen tarkistus luki vanhaa sw.js:ää. Tila näytti
+     "ajan tasalla", vaikka palvelimella oli uudempi versio. sw.js ohitetaan
+     kokonaan, jolloin selain hakee sen verkosta (sivu pyytää no-store). */
+  if (url.pathname.endsWith('/sw.js')) return;
 
   const onSivu = req.mode === 'navigate' ||
                  url.pathname.endsWith('/') ||
