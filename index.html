@@ -2162,6 +2162,28 @@ body{padding-bottom:66px}
       </div>
       <div id="syvyysAnalyysi" style="margin-top:10px;"></div>
 
+      <!-- KATTAVUUSTESTI (v118): mitä SYKEn rajapinta palauttaa kultakin järveltä -->
+      <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--line);">
+        <p class="hint" style="margin:0 0 8px;">Testi: hakee 8 järveltä lämpötila-aseman ja laskee, montako syvyyskohdetta (luotauspisteet, syvyysalueet, käyrät) SYKEn rajapinnasta löytyy 2 km säteellä. Kestää noin minuutin.</p>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="chip" onclick="syvyysKattavuusTesti()" style="border-color:var(--cyan); color:var(--cyan);">Testaa järvet</button>
+          <button class="chip" id="syvyysTestiKopioi" onclick="syvyysTestiKopioi()" style="display:none; border-color:var(--amber); color:var(--amber);">Kopioi tulos</button>
+        </div>
+        <div id="syvyysTesti" style="margin-top:10px; font-size:12px; line-height:1.45; white-space:pre-wrap; word-break:break-word;"></div>
+      </div>
+
+      <!-- LUOTAUSPISTEIDEN TUONTI (v119): SYKEn luotauspisteet.zip puhelimesta -->
+      <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--line);">
+        <p class="hint" style="margin:0 0 8px;">Luotauspisteet tiedostosta: valitse SYKEn <strong>luotauspisteet.zip</strong> Lataukset-kansiosta. Sovellus käy sen läpi palasina, poimii kahdeksan järven alueen pisteet ja tallentaa ne puhelimeen. Kestää muutaman minuutin; pidä sovellus auki.</p>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <label class="chip" style="border-color:var(--cyan); color:var(--cyan); cursor:pointer;">Valitse luotauspisteet.zip
+            <input type="file" id="luotTiedosto" accept=".zip,application/zip" style="display:none;" onchange="luotTuo(this.files && this.files[0]); this.value='';">
+          </label>
+          <button class="chip" id="luotKopioi" onclick="luotKopioi()" style="display:none; border-color:var(--amber); color:var(--amber);">Kopioi tulos</button>
+        </div>
+        <div id="luotTila" style="margin-top:10px; font-size:12px; line-height:1.45; white-space:pre-wrap; word-break:break-word;"></div>
+      </div>
+
       <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--line);">
         <p class="hint" style="margin:0 0 8px;">
           <strong style="color:var(--amber);">SYKEn vastaus 2.9.2026:</strong> Lappajärveltä ei ole
@@ -2617,6 +2639,421 @@ body{padding-bottom:66px}
       }
       if (!lahin || lyhin > 500) return null;   // yli 500 m päässä ei kerro mitään
       return { min: lahin.min, max: lahin.max, s: lahin.s, viiva: true, etaisyys: lyhin };
+    }
+
+    /* ===== SYVYYSAINEISTON KATTAVUUSTESTI — 1.10.2026 (v118) =====
+       Hannun pyyntö: SYKEn syvyysaineisto käyttöön järville, joilla on myös lämpötila-
+       aineisto; mukaan Ähtärinjärvi ja Kivijärven kunnan Kivijärvi. Ennen rakentamista
+       selvitetään puhelimella, mitä rajapinta palauttaa kultakin järveltä.
+       Luotauspisteet ovat SYKEn metatiedon mukaan "SYKEn kansallisella rajapinnalla",
+       joten tasoja etsitään koko GeoServeristä, ei vain inspire_el-työtilasta.
+       SYKEn ohjeet: tunniste joka kutsuun, peräkkäiset kutsut (tauko 300 ms), vain
+       lukumäärä (resultType=hits) ja yksi näyte tasoa kohden.
+       Ruutu: 2 km joka suuntaan. Keskipiste = lämpöasema, jos se löytyy 30 km sisältä,
+       muuten likimääräinen piste. Ähtärinjärven ja Kivijärven pisteet ovat likimääräisiä
+       (Kivijärvi: kunnan keskipiste 63,136 / 25,039); asema korjaa ne. Suomessa on monta
+       Kivijärveä, joten asema valitaan etäisyyden, ei nimen perusteella. */
+    var SYV_TESTI_JARVET = [
+      { nimi: 'Lappajärvi', haku: 'Lappajärvi', lat: 63.14378, lon: 23.53885 },
+      { nimi: 'Hirvijärven tekoallas', haku: 'Hirvijärven tekojärvi', vara: 'Hirvijärvi', lat: 62.8049, lon: 23.0947 },
+      { nimi: 'Ähtärinjärvi', haku: 'Ähtärinjärvi', lat: 62.53, lon: 24.05 },
+      { nimi: 'Kivijärvi (Kivijärven kunta)', haku: 'Kivijärvi', lat: 63.136, lon: 25.039 },
+      { nimi: 'Näsijärvi', haku: 'Näsijärvi', lat: 61.567, lon: 23.767 },
+      { nimi: 'Päijänne', haku: 'Päijänne', lat: 61.583, lon: 25.500 },
+      { nimi: 'Pielinen', haku: 'Pielinen', lat: 63.266, lon: 29.614 },
+      { nimi: 'Inarijärvi', haku: 'Inari', lat: 68.919, lon: 27.733 }
+    ];
+    var SYV_GEOSERVER = 'https://paikkatiedot.ymparisto.fi/geoserver/wfs';
+    var SYV_HYDRO = 'https://rajapinnat.ymparisto.fi/api/Hydrologiarajapinta/1.0/odata';
+    var syvTestiTeksti = '';
+    function syvTauko(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    async function syvHae(url, json) {
+      await syvTauko(300);
+      const r = await fetch(url, { cache: 'no-store' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return json ? r.json() : r.text();
+    }
+    async function syvTasot(palvelin) {
+      const xml = new DOMParser().parseFromString(
+        await syvHae(palvelin + '?service=WFS&version=2.0.0&request=GetCapabilities&sykeuserid=' + SYKE_ID), 'text/xml');
+      return [...xml.getElementsByTagNameNS('*', 'FeatureType')]
+        .map(ft => (ft.getElementsByTagNameNS('*', 'Name')[0] || {}).textContent).filter(Boolean);
+    }
+    async function syvyysKattavuusTesti() {
+      const box = document.getElementById('syvyysTesti'), kop = document.getElementById('syvyysTestiKopioi');
+      if (!box) return;
+      if (kop) kop.style.display = 'none';
+      const rivit = ['Syvyysaineiston kattavuustesti ' + new Date().toLocaleString('fi-FI') + ' (' + APP_VERSIO + ')'];
+      const loki = t => { rivit.push(t); box.textContent = rivit.join('\n') + '\n…'; };
+      box.textContent = 'Haetaan tasolistaa…';
+      // 1 Tasot: koko palvelin, varalla inspire_el
+      let palvelin = SYV_GEOSERVER, tasot = [];
+      try { tasot = await syvTasot(SYV_GEOSERVER); loki('Koko palvelimen tasoja: ' + tasot.length); }
+      catch (e) { loki('Koko palvelimen tasolista ei onnistunut (' + e.message + '), kokeillaan inspire_el.'); }
+      if (!tasot.length) {
+        try { palvelin = SYKE_WFS; tasot = await syvTasot(SYKE_WFS); loki('inspire_el-tasoja: ' + tasot.length); }
+        catch (e) { loki('inspire_el-tasolista ei onnistunut: ' + e.message); }
+      }
+      let ehd = tasot.filter(n => /syvyy|luotau|depth|contour|bathy|kayra|käyrä|sounding/i.test(n));
+      loki('Syvyystasot: ' + (ehd.join(', ') || 'ei yhtään'));
+      if (ehd.length > 8) { loki('Rajataan 8 ensimmäiseen.'); ehd = ehd.slice(0, 8); }
+      const lyhyt = t => t.replace(/^[^:]*:/, '');
+      const naytteet = {};
+      // 2 Järvet yksi kerrallaan
+      for (const j of SYV_TESTI_JARVET) {
+        let piste = { lat: j.lat, lon: j.lon }, pisteLahde = 'likimääräinen piste', asemaTxt = 'ei pintalämpöasemaa';
+        try {
+          let v = [];
+          for (const termi of [j.haku, j.vara].filter(Boolean)) {   // sama varahaku kuin sovelluksessa (sykeTermVara)
+            const u = new URL(SYV_HYDRO + '/Paikka');
+            u.searchParams.set('$filter', "substringof('" + termi + "', Nimi) and Suure_Id eq 11");
+            v = (await syvHae(u, true)).value || [];
+            if (v.length) break;
+          }
+          const kp = TM35.fwd(j.lat, j.lon);
+          let paras = null, lyhin = Infinity;
+          v.forEach(st => {
+            const E = st.KoordErTmIta ?? st.KoordItaEtrs ?? st.Ita ?? null, N = st.KoordErTmPohj ?? st.KoordPohjEtrs ?? st.Pohjoinen ?? null;
+            if (E === null || N === null) return;
+            const d = Math.hypot(E - kp.E, N - kp.N);
+            if (d < lyhin) { lyhin = d; paras = Object.assign({ E, N }, st); }
+          });
+          if (paras && lyhin < 30000) {
+            const k = TM35.inv(paras.E, paras.N);
+            piste = { lat: k.lat, lon: k.lon }; pisteLahde = 'lämpöasema';
+            asemaTxt = 'asema ' + paras.Nimi + ' (' + (lyhin / 1000).toFixed(1) + ' km pisteestä' + (paras.Tila_Id === 1 ? '' : ', ei-aktiivinen') + ')';
+            try {
+              const u2 = new URL(SYV_HYDRO + '/LampoPintavesi');
+              u2.searchParams.set('$filter', 'Paikka_Id eq ' + paras.Paikka_Id);
+              u2.searchParams.set('$orderby', 'Aika desc'); u2.searchParams.set('$top', '1');
+              const x = ((await syvHae(u2, true)).value || [])[0];
+              asemaTxt += x ? ', viimeisin ' + String(x.Aika).slice(0, 10) + ' ' + x.Arvo + ' °C' : ', ei lukemia';
+            } catch (e) { asemaTxt += ', lukemaa ei saatu (' + e.message + ')'; }
+          } else if (paras) asemaTxt = 'nimellä ' + v.length + ' asemaa, lähin ' + (lyhin / 1000).toFixed(0) + ' km päässä (liian kaukana)';
+          else if (v.length) asemaTxt = 'nimellä ' + v.length + ' asemaa, mutta ei koordinaatteja';
+        } catch (e) { asemaTxt = 'asemahaku epäonnistui: ' + e.message; }
+        const kp = TM35.fwd(piste.lat, piste.lon), r = 2000;
+        const bbox = [kp.E - r, kp.N - r, kp.E + r, kp.N + r].map(Math.round).join(',') + ',EPSG:3067';
+        const osumat = [];
+        for (const t of ehd) {
+          try {
+            const txt = await syvHae(palvelin + '?service=WFS&version=2.0.0&request=GetFeature&typeNames=' + encodeURIComponent(t)
+              + '&resultType=hits&bbox=' + bbox + '&sykeuserid=' + SYKE_ID);
+            const m = txt.match(/numberMatched="([^"]+)"/);
+            if (!m && /Exception/i.test(txt)) { osumat.push(lyhyt(t) + ': virhe ' + (txt.match(/ExceptionText>([^<]{0,80})/) || [, '?'])[1]); continue; }
+            osumat.push(lyhyt(t) + ' ' + (m ? m[1] : '?'));
+            if (m && Number(m[1]) > 0 && !naytteet[t]) naytteet[t] = bbox;
+          } catch (e) { osumat.push(lyhyt(t) + ': ' + e.message); }
+        }
+        loki('\n' + j.nimi + ' — ' + asemaTxt + '. Piste: ' + pisteLahde + ' ' + piste.lat.toFixed(4) + ', ' + piste.lon.toFixed(4)
+          + '.\n  Syvyyskohteita 4×4 km ruudussa: ' + (osumat.join(' · ') || 'ei tasoja testattavaksi'));
+      }
+      // 3 Yksi näyte jokaisesta tasosta, jossa oli osumia: kentät ja geometria
+      for (const t of Object.keys(naytteet)) {
+        try {
+          const d = await syvHae(palvelin + '?service=WFS&version=2.0.0&request=GetFeature&typeNames=' + encodeURIComponent(t)
+            + '&count=1&outputFormat=application/json&bbox=' + naytteet[t] + '&sykeuserid=' + SYKE_ID, true);
+          const f = (d.features || [])[0];
+          loki('\nNäyte ' + lyhyt(t) + ': ' + (f ? (f.geometry ? f.geometry.type : '?') + '; ' + JSON.stringify(f.properties || {}).slice(0, 300) : 'tyhjä'));
+        } catch (e) { loki('\nNäyte ' + lyhyt(t) + ': ' + e.message); }
+      }
+      loki('\nValmis.');
+      syvTestiTeksti = rivit.join('\n');
+      box.textContent = syvTestiTeksti;
+      if (kop) kop.style.display = '';
+    }
+    function syvyysTestiKopioi() {
+      const kop = document.getElementById('syvyysTestiKopioi');
+      try {
+        navigator.clipboard.writeText(syvTestiTeksti).then(
+          () => { if (kop) kop.textContent = 'Kopioitu ✓'; },
+          () => { if (kop) kop.textContent = 'Kopiointi ei onnistunut, maalaa teksti'; });
+      } catch (e) { if (kop) kop.textContent = 'Kopiointi ei onnistunut, maalaa teksti'; }
+    }
+
+    /* ===== LUOTAUSPISTEIDEN TUONTI ZIPISTÄ — 1.10.2026 (v119) =====
+       SYKEn koko Suomen luotauspisteet.zip (138 Mt) on liian iso liitettäväksi Claudelle ja
+       rajapinnasta tasoa ei löytynyt (testi v118). Hannun valinta: sovellus lukee zipin itse.
+       TOTEUTUS ilman kirjastoja ja ilman koko tiedoston purkua muistiin:
+         - zipin keskushakemisto luetaan tiedoston lopusta (ei ZIP64-tukea; ei tarvita, jos
+           tiedostot ovat alle 4 Gt)
+         - .shp ja .dbf puretaan virtana selaimen omalla DecompressionStream('deflate-raw')
+         - 1. kierros .shp: pisteet, jotka osuvat järvien laatikoihin (EPSG:3067)
+         - 2. kierros .dbf: syvyys ja syvyysmittausalueen tunnus valituille pisteille, ja koko
+           maasta Lappajärven tunnuksen (47.031.1.001) pisteiden määrä tarkistukseksi
+       LAATIKOT ovat tarkoituksella väljiä (likimääräiset järven rajat, Clauden arvio): niihin osuu
+       myös naapurijärviä. Siksi tulos eritellään syvyysmittausalueen tunnuksen mukaan, jolloin
+       järvi erottuu tunnuksesta ja painopisteestä. Kenttien nimet SYKEn viitedokumentista:
+       SyvMittausalueTunnus (shapessa lyhenee 10 merkkiin), Syvyys_m, MuutosPvm.
+       TALLENNUS: IndexedDB (localStorage on liian pieni). Koordinaatit Float32: 7 miljoonan
+       pohjoiskoordinaatin tarkkuus on 0,5 m, riittää. */
+    var LUOT_LAATIKOT = [
+      { nimi: 'Lappajärvi',             lat: [63.05, 63.35], lon: [23.40, 23.90] },
+      { nimi: 'Hirvijärven tekoallas',  lat: [62.74, 62.86], lon: [22.95, 23.20] },
+      { nimi: 'Ähtärinjärvi',           lat: [62.40, 62.62], lon: [23.85, 24.25] },
+      { nimi: 'Kivijärvi (Kivijärven kunta)', lat: [62.95, 63.40], lon: [24.80, 25.35] },
+      { nimi: 'Näsijärvi',              lat: [61.48, 62.02], lon: [23.30, 24.10] },
+      { nimi: 'Päijänne',               lat: [61.10, 62.30], lon: [25.15, 26.05] },
+      { nimi: 'Pielinen',               lat: [62.90, 63.65], lon: [29.00, 30.20] },
+      { nimi: 'Inarijärvi',             lat: [68.60, 69.30], lon: [26.80, 28.80] }
+    ];
+    var LUOT_LAPPA_TUNNUS = '47.031.1.001';
+    var luotausData = null, luotTulosTeksti = '';
+
+    function luotIdb() {
+      return new Promise(function (res, rej) {
+        var r = indexedDB.open('uistelututka_syvyys', 1);
+        r.onupgradeneeded = function () { r.result.createObjectStore('luotaus'); };
+        r.onsuccess = function () { res(r.result); };
+        r.onerror = function () { rej(r.error); };
+      });
+    }
+    async function luotTallenna(v) {
+      var db = await luotIdb();
+      await new Promise(function (res, rej) {
+        var tx = db.transaction('luotaus', 'readwrite');
+        tx.objectStore('luotaus').put(v, 'v1');
+        tx.oncomplete = res; tx.onerror = function () { rej(tx.error); };
+      });
+      db.close();
+    }
+    async function luotLataa() {
+      try {
+        var db = await luotIdb();
+        luotausData = await new Promise(function (res, rej) {
+          var q = db.transaction('luotaus').objectStore('luotaus').get('v1');
+          q.onsuccess = function () { res(q.result || null); }; q.onerror = function () { rej(q.error); };
+        });
+        db.close();
+      } catch (e) { luotausData = null; }
+      var el = document.getElementById('luotTila');
+      if (el && luotausData && !el.textContent) {
+        el.textContent = 'Tallennettu ' + new Date(luotausData.aika).toLocaleDateString('fi-FI') + ': '
+          + luotausData.laatikot.map(function (b) { return b.nimi + ' ' + b.n; }).join(' · ') + ' pistettä.';
+      }
+    }
+    setTimeout(function () { if ('indexedDB' in window) luotLataa(); }, 2500);
+
+    function luotLatin(u8) { var s = ''; for (var i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]); return s; }
+    function luotKasvava(Tyyppi) {   // kasvava typed array
+      var a = new Tyyppi(65536), n = 0;
+      return { push: function (v) { if (n === a.length) { var b = new Tyyppi(a.length * 2); b.set(a); a = b; } a[n++] = v; },
+               get n() { return n; }, get a() { return a; } };
+    }
+    async function luotZipHakemisto(file) {
+      var n = Math.min(file.size, 65557);
+      var tail = new Uint8Array(await file.slice(file.size - n).arrayBuffer());
+      var p = -1;
+      for (var i = tail.length - 22; i >= 0; i--) if (tail[i] === 0x50 && tail[i + 1] === 0x4b && tail[i + 2] === 5 && tail[i + 3] === 6) { p = i; break; }
+      if (p < 0) throw new Error('tiedosto ei ole zip (loppuhakemistoa ei löytynyt)');
+      var dv = new DataView(tail.buffer, p);
+      var maara = dv.getUint16(10, true), koko = dv.getUint32(12, true), alku = dv.getUint32(16, true);
+      if (alku === 0xFFFFFFFF || koko === 0xFFFFFFFF || maara === 0xFFFF) throw new Error('ZIP64-muotoa ei tueta');
+      var cd = new Uint8Array(await file.slice(alku, alku + koko).arrayBuffer()), cv = new DataView(cd.buffer);
+      var out = [], o = 0, td = new TextDecoder();
+      for (var k = 0; k < maara; k++) {
+        if (cv.getUint32(o, true) !== 0x02014b50) throw new Error('zipin keskushakemisto on rikki');
+        var nl = cv.getUint16(o + 28, true), el = cv.getUint16(o + 30, true), cl = cv.getUint16(o + 32, true);
+        out.push({ nimi: td.decode(cd.subarray(o + 46, o + 46 + nl)), metodi: cv.getUint16(o + 10, true),
+                   pk: cv.getUint32(o + 20, true), kk: cv.getUint32(o + 24, true), lh: cv.getUint32(o + 42, true) });
+        o += 46 + nl + el + cl;
+      }
+      return out;
+    }
+    async function luotVirta(file, e) {
+      var lh = new DataView(await file.slice(e.lh, e.lh + 30).arrayBuffer());
+      if (lh.getUint32(0, true) !== 0x04034b50) throw new Error('zipin otsake rikki: ' + e.nimi);
+      var alku = e.lh + 30 + lh.getUint16(26, true) + lh.getUint16(28, true);
+      var s = file.slice(alku, alku + e.pk).stream();
+      if (e.metodi === 8) s = s.pipeThrough(new DecompressionStream('deflate-raw'));
+      else if (e.metodi !== 0) throw new Error('pakkaustapaa ' + e.metodi + ' ei tueta (' + e.nimi + ')');
+      return s.getReader();
+    }
+    async function luotLue(reader, kasittele, edistys) {
+      var rest = new Uint8Array(0), luettu = 0, viim = 0;
+      for (;;) {
+        var r = await reader.read();
+        if (r.done) break;
+        luettu += r.value.length;
+        var data;
+        if (rest.length) { data = new Uint8Array(rest.length + r.value.length); data.set(rest); data.set(r.value, rest.length); }
+        else data = r.value;
+        var kaytetty = kasittele(data);
+        rest = data.slice(kaytetty);
+        if (edistys && luettu - viim > 2e6) { viim = luettu; edistys(luettu); await new Promise(function (ok) { setTimeout(ok, 0); }); }
+      }
+    }
+    function luotShp(laatikot, T) {
+      var otsake = false;
+      return function (d) {
+        var dv = new DataView(d.buffer, d.byteOffset, d.byteLength), o = 0;
+        if (!otsake) { if (d.length < 100) return 0; T.tyyppi = dv.getInt32(32, true); otsake = true; o = 100; }
+        while (o + 8 <= d.length) {
+          var pit = dv.getInt32(o + 4, false) * 2;
+          if (o + 8 + pit > d.length) break;
+          var t = pit >= 4 ? dv.getInt32(o + 8, true) : 0;
+          if ((t === 1 || t === 11 || t === 21) && pit >= 20) {
+            var x = dv.getFloat64(o + 12, true), y = dv.getFloat64(o + 20, true);
+            for (var b = 0; b < laatikot.length; b++) {
+              var B = laatikot[b];
+              if (x >= B.e0 && x <= B.e1 && y >= B.n0 && y <= B.n1) {
+                T.idx.push(T.i); T.E.push(x); T.N.push(y); T.B.push(b);
+                T.Z.push(t === 11 && pit >= 28 ? dv.getFloat64(o + 28, true) : NaN);
+                break;
+              }
+            }
+          } else if (t !== 0) T.muuTyyppi = t;
+          T.i++; o += 8 + pit;
+        }
+        return o;
+      };
+    }
+    function luotDbf(T, tunMap, tunLista) {
+      var h = null, rec = 0, vi = 0, idx = T.idx.a, nSel = T.idx.n;
+      var lappa = new TextEncoder().encode(LUOT_LAPPA_TUNNUS);
+      T.dep = new Float32Array(nSel).fill(NaN); T.tun = new Uint16Array(nSel);
+      return function (d) {
+        var o = 0;
+        if (!h) {
+          if (d.length < 32) return 0;
+          var dv = new DataView(d.buffer, d.byteOffset, d.byteLength);
+          var hl = dv.getUint16(8, true), rl = dv.getUint16(10, true);
+          if (d.length < hl) return 0;
+          var kentat = [], q = 32, off = 1;
+          while (q + 32 <= hl && d[q] !== 0x0D) {
+            kentat.push({ nimi: luotLatin(d.subarray(q, q + 11)).replace(/\0[\s\S]*$/, ''), tyyppi: String.fromCharCode(d[q + 11]), len: d[q + 16], off: off });
+            off += d[q + 16]; q += 32;
+          }
+          h = { hl: hl, rl: rl, maara: dv.getUint32(4, true), kentat: kentat,
+                syv: kentat.find(function (k) { return /^syvyys/i.test(k.nimi); }),
+                tun: kentat.find(function (k) { return /^syvmit|tunnus/i.test(k.nimi); }) };
+          T.kentat = kentat.map(function (k) { return k.nimi + ' (' + k.tyyppi + k.len + ')'; });
+          T.dbfMaara = h.maara; o = hl;
+        }
+        while (o + h.rl <= d.length && rec < h.maara) {
+          if (h.tun) {
+            var s0 = o + h.tun.off; while (d[s0] === 32 && s0 < o + h.tun.off + h.tun.len) s0++;
+            var ok = true; for (var k = 0; k < lappa.length; k++) if (d[s0 + k] !== lappa[k]) { ok = false; break; }
+            if (ok) T.lappaN++;
+          }
+          if (vi < nSel && idx[vi] === rec) {
+            if (h.syv) T.dep[vi] = parseFloat(luotLatin(d.subarray(o + h.syv.off, o + h.syv.off + h.syv.len)).trim().replace(',', '.'));
+            if (h.tun) {
+              var tt = luotLatin(d.subarray(o + h.tun.off, o + h.tun.off + h.tun.len)).trim();
+              var ti = tunMap.get(tt);
+              if (ti === undefined) { ti = tunLista.length; tunMap.set(tt, ti); tunLista.push(tt); }
+              T.tun[vi] = ti;
+            }
+            vi++;
+          }
+          rec++; o += h.rl;
+        }
+        return rec >= h.maara ? d.length : o;
+      };
+    }
+    async function luotTuo(file) {
+      var el = document.getElementById('luotTila'), kop = document.getElementById('luotKopioi');
+      if (!file || !el) return;
+      if (kop) kop.style.display = 'none';
+      if (typeof DecompressionStream !== 'function') { el.textContent = 'Tämä selain ei osaa purkaa zipiä virtana (DecompressionStream puuttuu). Päivitä Chrome.'; return; }
+      var lukko = null;
+      try { if ('wakeLock' in navigator) lukko = await navigator.wakeLock.request('screen'); } catch (e) {}
+      var rivit = ['Luotauspisteiden tuonti ' + new Date().toLocaleString('fi-FI') + ' (' + APP_VERSIO + ')',
+                   'Tiedosto: ' + file.name + ', ' + (file.size / 1e6).toFixed(0) + ' Mt'];
+      var nayta = function (lisa) { el.textContent = rivit.join('\n') + (lisa ? '\n' + lisa : ''); };
+      try {
+        nayta('Luetaan zipin sisällysluetteloa…');
+        var hak = await luotZipHakemisto(file);
+        rivit.push('Zipissä: ' + hak.map(function (e) { return e.nimi + ' ' + (e.kk / 1e6).toFixed(0) + ' Mt'; }).join(', '));
+        var parit = {};
+        hak.forEach(function (e) {
+          var m = e.nimi.match(/^(.*)\.(shp|dbf|prj)$/i);
+          if (m) { (parit[m[1]] = parit[m[1]] || {})[m[2].toLowerCase()] = e; }
+        });
+        var pariLista = Object.keys(parit).filter(function (k) { return parit[k].shp && parit[k].dbf; });
+        if (!pariLista.length) throw new Error('zipistä ei löytynyt shapefile-paria (.shp + .dbf)');
+        var laatikot = LUOT_LAATIKOT.map(function (b) {
+          var c = [TM35.fwd(b.lat[0], b.lon[0]), TM35.fwd(b.lat[0], b.lon[1]), TM35.fwd(b.lat[1], b.lon[0]), TM35.fwd(b.lat[1], b.lon[1])];
+          return { e0: Math.min.apply(null, c.map(function (x) { return x.E; })), e1: Math.max.apply(null, c.map(function (x) { return x.E; })),
+                   n0: Math.min.apply(null, c.map(function (x) { return x.N; })), n1: Math.max.apply(null, c.map(function (x) { return x.N; })) };
+        });
+        var tunMap = new Map(), tunLista = [], kaikki = [], yht = 0, lappaN = 0, tyypit = [], kentat = null;
+        for (var pk = 0; pk < pariLista.length; pk++) {
+          var P = parit[pariLista[pk]];
+          if (P.prj) {
+            try {
+              var pr = await luotVirta(file, P.prj), txt = '';
+              await luotLue(pr, function (d) { txt += luotLatin(d); return d.length; });
+              rivit.push('Koordinaatisto (' + pariLista[pk] + '): ' + (/TM35|3067/i.test(txt) ? 'ETRS-TM35FIN ✓' : 'TUNTEMATON: ' + txt.slice(0, 80)));
+            } catch (e) { rivit.push('Koordinaatiston tiedostoa ei saatu luettua: ' + e.message); }
+          }
+          var T = { i: 0, idx: luotKasvava(Uint32Array), E: luotKasvava(Float64Array), N: luotKasvava(Float64Array),
+                    Z: luotKasvava(Float64Array), B: luotKasvava(Uint8Array), lappaN: 0 };
+          var r1 = await luotVirta(file, P.shp);
+          await luotLue(r1, luotShp(laatikot, T), function (n) {
+            nayta('Pisteet (' + pariLista[pk] + '): ' + Math.min(99, Math.round(100 * n / P.shp.kk)) + ' % · poimittu ' + T.idx.n.toLocaleString('fi-FI'));
+          });
+          var r2 = await luotVirta(file, P.dbf);
+          await luotLue(r2, luotDbf(T, tunMap, tunLista), function (n) {
+            nayta('Syvyydet (' + pariLista[pk] + '): ' + Math.min(99, Math.round(100 * n / P.dbf.kk)) + ' %');
+          });
+          yht += T.i; lappaN += T.lappaN; tyypit.push(T.tyyppi + (T.muuTyyppi ? '/' + T.muuTyyppi : '')); kentat = kentat || T.kentat;
+          if (T.dbfMaara !== T.i) rivit.push('HUOM: pisteitä ' + T.i + ', syvyysrivejä ' + T.dbfMaara + ' — eri määrä (' + pariLista[pk] + ')');
+          kaikki.push(T);
+        }
+        rivit.push('Pisteitä koko aineistossa: ' + yht.toLocaleString('fi-FI') + ' · geometriatyyppi ' + tyypit.join(', ')
+          + ' · kentät: ' + (kentat || []).join(', '));
+        rivit.push('Lappajärven tunnus ' + LUOT_LAPPA_TUNNUS + ' koko aineistossa: ' + lappaN + ' pistettä.');
+        // Kokoa järvikohtaisesti
+        var tulos = LUOT_LAATIKOT.map(function (b) { return { nimi: b.nimi, E: [], N: [], d: [], t: [] }; });
+        kaikki.forEach(function (T) {
+          for (var i = 0; i < T.idx.n; i++) {
+            var R = tulos[T.B.a[i]], dd = isFinite(T.dep[i]) ? T.dep[i] : T.Z.a[i];
+            R.E.push(T.E.a[i]); R.N.push(T.N.a[i]); R.d.push(dd); R.t.push(T.tun[i]);
+          }
+        });
+        var tallennus = { aika: Date.now(), tiedosto: file.name, tunnusLista: tunLista, lappaN: lappaN, laatikot: [] };
+        tulos.forEach(function (R) {
+          var tilasto = new Map();
+          for (var i = 0; i < R.E.length; i++) {
+            var s0 = tilasto.get(R.t[i]) || { n: 0, e: 0, nn: 0, min: Infinity, max: -Infinity };
+            s0.n++; s0.e += R.E[i]; s0.nn += R.N[i];
+            if (isFinite(R.d[i])) { s0.min = Math.min(s0.min, R.d[i]); s0.max = Math.max(s0.max, R.d[i]); }   // pyöristys alla
+            tilasto.set(R.t[i], s0);
+          }
+          var tunnukset = [...tilasto.entries()].map(function (kv) {
+            var k = TM35.inv(kv[1].e / kv[1].n, kv[1].nn / kv[1].n);
+            return { tunnus: tunLista[kv[0]] || '?', n: kv[1].n, lat: +k.lat.toFixed(4), lon: +k.lon.toFixed(4),
+                     min: isFinite(kv[1].min) ? Math.round(kv[1].min * 10) / 10 : null, max: isFinite(kv[1].max) ? Math.round(kv[1].max * 10) / 10 : null };
+          }).sort(function (a, b) { return b.n - a.n; });
+          tallennus.laatikot.push({ nimi: R.nimi, n: R.E.length, E: Float32Array.from(R.E), N: Float32Array.from(R.N),
+                                   d: Float32Array.from(R.d), t: Uint16Array.from(R.t), tunnukset: tunnukset });
+          rivit.push('\n' + R.nimi + ': ' + R.E.length.toLocaleString('fi-FI') + ' pistettä, ' + tunnukset.length + ' vesialuetta'
+            + (tunnukset.length ? '\n  ' + tunnukset.slice(0, 5).map(function (x) {
+                return x.tunnus + ' ' + x.n + ' p, painopiste ' + x.lat + ' / ' + x.lon
+                  + (x.max !== null ? ', syvyys ' + x.min + '–' + x.max + ' m' : ''); }).join('\n  ')
+              + (tunnukset.length > 5 ? '\n  … ja ' + (tunnukset.length - 5) + ' muuta' : '') : ''));
+        });
+        nayta('Tallennetaan puhelimeen…');
+        await luotTallenna(tallennus);
+        luotausData = tallennus;
+        rivit.push('\nTallennettu puhelimeen. Valmis.');
+      } catch (e) {
+        rivit.push('\nVIRHE: ' + (e && e.message || e));
+      } finally {
+        try { if (lukko) lukko.release(); } catch (e) {}
+      }
+      luotTulosTeksti = rivit.join('\n');
+      el.textContent = luotTulosTeksti;
+      if (kop) { kop.style.display = ''; kop.textContent = 'Kopioi tulos'; }
+    }
+    function luotKopioi() {
+      var kop = document.getElementById('luotKopioi');
+      try {
+        navigator.clipboard.writeText(luotTulosTeksti).then(
+          function () { if (kop) kop.textContent = 'Kopioitu ✓'; },
+          function () { if (kop) kop.textContent = 'Kopiointi ei onnistunut, maalaa teksti'; });
+      } catch (e) { if (kop) kop.textContent = 'Kopiointi ei onnistunut, maalaa teksti'; }
     }
 
     // Näyttää pohjasyvyyden omilla merkinnöillä — vaihe 1 siitä mitä lupa mahdollistaa.
@@ -10044,7 +10481,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v117';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v119';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
