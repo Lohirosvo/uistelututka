@@ -1719,6 +1719,8 @@ body{padding-bottom:66px}
     <div id="result">
       <!-- HAPPI (v111) -->
       <div class="result-panel" id="happiPanel" style="display:none;"></div>
+      <!-- LAJIKOHTAINEN YLEISNEUVO (v129): järville, joilla on kohdelajit -->
+      <div class="result-panel" id="lajineuvoPanel" style="display:none;"></div>
 
       <!-- TAIMENKELI-MITTARI -->
       <div class="result-panel taimen" id="taimenkeliPanel" style="text-align:center;">
@@ -9774,6 +9776,60 @@ lataa(eka);
 
     // UUSI: yleismalli järville joilla ei ole nimettyä ottipaikkadataa (kaikki paitsi
     // Lappajärvi, mukaan lukien tulevat lisättävät järvet oletuksena).
+    /* ===== LAJIKOHTAINEN YLEISNEUVO — 1.10.2026 (v129) =====
+       Hannun valinta: Ähtärinjärvellä vain kuha; Kivijärvellä kuha, taimen ja järvilohi.
+       Järville ei ole nimettyjä ottipaikkoja, joten neuvo kertoo, MILLAISTA paikkaa etsiä
+       ja millä syvyydellä. Jokainen rivi merkitään todistetasolla, ja lähteet ovat samat kuin
+       muualla sovelluksessa (ei uusia väitteitä ilman lähdettä):
+         Malli     – sovelluksen lajisyvyys (sama kuin syvyysasteikossa)
+         Tutkittu  – kuha ja hämärä (Luchiari ym. 2006, nuoret kalat), taimenen lämpö
+                     (Larsson 2005: hakeutuu kasvuoptimiinsa, kalaa syövällä 16,6–17,4 °C)
+         Konsensus – kuhan tuuliranta (uistelijat; mekanismi sameus tutkittu, käytös ei),
+                     syksyn 4–10 °C rantaikkuna (Harri Hotti), järvilohi ulapan parvikalan
+                     perässä (uistelijoiden yleinen käsitys; en tarkistanut tutkimuslähdettä)
+         Oma käytäntö – pintaharava matalikolla (Hannu)
+       Tuuliranta = ranta, jolle tuuli puhaltaa: järven tuulenalainen ranta tai saaren
+       tuulenpuoli (compassSuojaranta vastakkaisesta suunnasta). */
+    function lajiNeuvoHtml(o) {
+      var chip = function (t) { return '<span class="chip" style="padding:1px 7px;font-size:11px;margin-right:6px;">' + t + '</span>'; };
+      var rivi = function (taso, teksti) { return '<div style="margin:5px 0;font-size:13px;line-height:1.45;">' + chip(taso) + teksti + '</div>'; };
+      var n1 = function (x) { return (Math.round(x * 10) / 10).toLocaleString('fi-FI'); };
+      var vali = function (v) { return v && isFinite(v[0]) && isFinite(v[1]) ? n1(v[0]) + '–' + n1(v[1]) + ' m' : null; };
+      var suoja = compassSuojaranta(o.tuuliSuunta), tuuli = compassSuojaranta(o.tuuliSuunta + 180);
+      var syksy = o.kausi === 'autumn' && o.lampo >= 4 && o.lampo <= 10;
+      var osat = [];
+      o.lajit.forEach(function (laji) {
+        var r = [];
+        if (laji === 'kuha') {
+          if (vali(o.kuha)) r.push(rivi('Malli', 'Kuha noin ' + vali(o.kuha) + '. Aja syvänteen reunaa, jossa pohja laskee tälle syvyydelle.'));
+          if (typeof o.valoPorras === 'number' && o.valoPorras <= 3)
+            r.push(rivi('Tutkittu', 'Nyt on hämärää, jolloin kuha nousee saalistamaan matalalle. Kokeessa kuha valitsi aina heikoimman tarjolla olevan valon (Luchiari ym. 2006, nuoret kalat). Kokeile reunan matalaa puolta.'));
+          if (o.tuuliTunteja >= 3 && o.tuuliMs >= 3)
+            r.push(rivi('Konsensus', 'Tuuli on puhaltanut ' + o.tuuliTunteja + ' tuntia. Uistelijoiden kokemus on, että kuha tulee tuuliselle rannalle: järven ' + tuuli.jarvi
+              + ' tai saaren ' + tuuli.saari + '. Mekanismi (sameus) on tutkittu, tämä käytös ei.'));
+        }
+        if (laji === 'taimen') {
+          if (vali(o.taimen)) r.push(rivi('Malli', 'Taimen noin ' + vali(o.taimen) + '.'));
+          if (syksy)
+            r.push(rivi('Konsensus', 'Syksyn 4–10 °C -ikkunassa (Harri Hotti) taimen on aktiivisin lähellä rantaa, erityisesti maatuulen suojassa: järven ' + suoja.jarvi + ' tai saaren ' + suoja.saari + '.'));
+          if (o.lampo > 17)
+            r.push(rivi('Tutkittu', 'Pintavesi on yli 17 °C. Taimen hakeutuu kasvuoptimiinsa (kalaa syövällä 16,6–17,4 °C, Larsson 2005), joten se on viileämmässä kerroksessa.'));
+          r.push(rivi('Oma käytäntö', 'Matalikolla (pohja 0,5–8 m) pintaharava 0,1–0,7 m. Veneen kohdan pohja näkyy Vesillä-ruudulla.'));
+        }
+        if (laji === 'jarvilohi') {
+          if (vali(o.jarvilohi)) r.push(rivi('Malli', 'Järvilohi noin ' + vali(o.jarvilohi) + '.'));
+          r.push(rivi('Konsensus', 'Järvilohi on ulapan kala, joka liikkuu syöttikalaparvien (muikku, kuore) perässä. Aja avoimia selkiä ja säädä syvyys luotaimen parvien mukaan. Uistelijoiden yleinen käsitys; tutkimuslähdettä en tarkistanut.'));
+          if (o.jarvi === 'kivijarvi')
+            r.push(rivi('Oma kokemus', 'Lintuselkä: järvilohikokemusta. Paikka lisätään ottipaikaksi, kun sijainti ja olosuhteet on kirjattu.'));
+        }
+        var nimi = { kuha: '🐟 Kuha', taimen: '🐟 Taimen', jarvilohi: '🐟 Järvilohi' }[laji] || laji;
+        if (r.length) osat.push('<div style="margin-top:10px;"><strong>' + nimi + '</strong>' + r.join('') + '</div>');
+      });
+      return '<h2 style="margin-top:0;">Yleisneuvo lajeittain <span style="font-weight:normal;font-size:.8em;">' + o.nimi + '</span></h2>'
+        + '<p class="hint" style="margin:0;">Järvelle ei ole nimettyjä ottipaikkoja. Neuvo kertoo, millaista paikkaa ja syvyyttä etsiä.</p>'
+        + osat.join('');
+    }
+
     function genericLocationAdvice(targetHour, dir, temp, season, locName) {
       const maatuuliSuunta = compassName(dir);
       const maatuuliGen = compassGenitive(dir);
@@ -11142,7 +11198,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v128';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v129';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -16136,6 +16192,21 @@ lataa(eka);
 
       updateLakeStatus(targetHour, thermoVal, activeBaitDepth, dKuha, dHauki, dTaimen, dAhven, dJarvilohi, dKuore);
 
+      // 1.10.2026 (v129): lajikohtainen yleisneuvo järville, joilla on kohdelajit
+      try {
+        const ln = document.getElementById('lajineuvoPanel');
+        if (ln) {
+          const kl = currentLocation && currentLocation.kohdelajit;
+          if (kl && kl.length) {
+            ln.style.display = '';
+            ln.innerHTML = lajiNeuvoHtml({ nimi: currentLocation.name.replace(/\s*\(.*\)/, ''), jarvi: karttaAvain(), lajit: kl,
+              tuuliSuunta: wDir, tuuliMs: wSpeed, lampo: curTemp, kausi: a.season, valoPorras: valoPorras(targetFractional),
+              tuuliTunteja: tuuliKertyma && tuuliKertyma.luotettava ? tuuliKertyma.tunteja : 0,
+              kuha: [lowK, highK], taimen: [lowT, highT], jarvilohi: [lowJL, highJL] });
+          } else { ln.style.display = 'none'; ln.innerHTML = ''; }
+        }
+      } catch (e) { console.warn('Lajineuvo:', e.message); }
+
       // 30.9.2026 (v111): happivaroitus suositusväleille. Virhe ei saa kaataa analyysiä.
       try {
         happiViimeValit = { hetki: now, lajit: [
@@ -16658,8 +16729,10 @@ lataa(eka);
          Ähtärinjärvi: Järviwiki (SYKE) 39,9 km², suurin syvyys 27 m, tunnus 35.433.1.001;
          vedenkorkeutta mitataan (vuodesta 1911), aseman tunnusta ei vielä selvitetty.
          Kivijärvi: pinta-ala ja syvin MML-ruudukosta, ei virallisesta lähteestä. */
-      { name: 'Ähtärinjärvi', jarvitunnus: '35.433.1.001', lat: 62.65979, lon: 24.09053, maxDepth: 27, areaKm2: 39.9, clarityClass: 2, sykeTerm: 'Ähtärinjärvi' },
-      { name: 'Kivijärvi (Kivijärven kunta)', lat: 63.12188, lon: 25.16425, maxDepth: 40, areaKm2: 133.8, clarityClass: 2, sykeTerm: 'Kivijärvi' },
+      { name: 'Ähtärinjärvi', jarvitunnus: '35.433.1.001', lat: 62.65979, lon: 24.09053, maxDepth: 27, areaKm2: 39.9, clarityClass: 2, sykeTerm: 'Ähtärinjärvi',
+        kohdelajit: ['kuha'] },   // v129: Hannu 1.10.2026 — yleisneuvo vain kuhalle
+      { name: 'Kivijärvi (Kivijärven kunta)', lat: 63.12188, lon: 25.16425, maxDepth: 40, areaKm2: 133.8, clarityClass: 2, sykeTerm: 'Kivijärvi',
+        kohdelajit: ['kuha', 'taimen', 'jarvilohi'] },   // v129: Hannu 1.10.2026; järvilohikokemusta Lintuselältä
 
       /* JÄRVET JOILLA ON LÄMPÖTILALUOTAUS — lisätty 20.9.2026.
          Nämä kolme valittiin siksi että niillä on toimiva luotauspaikka, eli
