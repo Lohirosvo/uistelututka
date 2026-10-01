@@ -2813,8 +2813,8 @@ body{padding-bottom:66px}
     var LUOT_LAATIKOT = [
       { nimi: 'Lappajärvi',             lat: [63.05, 63.35], lon: [23.40, 23.90] },
       { nimi: 'Hirvijärven tekoallas',  lat: [62.74, 62.86], lon: [22.95, 23.20] },
-      { nimi: 'Ähtärinjärvi',           lat: [62.40, 62.62], lon: [23.85, 24.25] },
-      { nimi: 'Kivijärvi (Kivijärven kunta)', lat: [62.95, 63.40], lon: [24.80, 25.35] },
+      { nimi: 'Ähtärinjärvi',           lat: [62.50, 62.85], lon: [23.80, 24.30] },   // v127: järvi on Ähtärin keskustasta POHJOISEEN (Järviwiki: 29 km P–E, keskipiste ~62,667 N); v119–v126 rajaus oli väärä
+      { nimi: 'Kivijärvi (Kivijärven kunta)', lat: [62.80, 63.40], lon: [24.80, 25.40] },   // v127: laajennettu etelään, järvi ulottui vanhan rajauksen reunaan
       { nimi: 'Näsijärvi',              lat: [61.48, 62.02], lon: [23.30, 24.10] },
       { nimi: 'Päijänne',               lat: [61.10, 62.30], lon: [25.15, 26.05] },
       { nimi: 'Pielinen',               lat: [62.90, 63.65], lon: [29.00, 30.20] },
@@ -3235,7 +3235,8 @@ body{padding-bottom:66px}
     }
     function mmlSyvyysM(p) {
       var v = parseFloat(p.syvyysarvo);
-      if (isFinite(v)) return v / 1000;
+      // v127: Kivijärven alueelta tuli 135 m; Suomen syvin järvi (Päijänne) on alle 100 m -> hylätään
+      if (isFinite(v)) return v / 1000 > 100 ? NaN : v / 1000;
       var t = parseFloat(String(p.teksti || '').replace(',', '.'));
       return isFinite(t) ? t : NaN;
     }
@@ -3402,8 +3403,15 @@ body{padding-bottom:66px}
        Tulos tallennetaan tiedostoksi, jonka Claude upottaa JARVET-osioon. */
     var JK_RAJAT = [1.5, 3, 6, 10, 15, 20, 25, 30, 35, 40, 50, 60];
     var JK_LUOKKA_M = [0.75, 2.25, 4.5, 8, 12.5, 17.5, 22.5, 27.5, 32.5, 37.5, 45, 55, 65];
-    var JK_KOHTEET = [ { avain: 'ahtarinjarvi', nimi: 'Ähtärinjärvi', laatikko: 'Ähtärinjärvi' },
-                       { avain: 'kivijarvi', nimi: 'Kivijärvi', laatikko: 'Kivijärvi (Kivijärven kunta)' } ];
+    /* v127: järvi valitaan SIEMENPISTEEN mukaan yhtenäisenä vesialueena (8-naapurusto).
+       Mukaan myös palat, joihin on enintään 2 tyhjää ruutua (n. 300 m): kapea salmi katkaisee 100 m
+       ruudukon, vaikka vesi on samaa. Kaukaisemmat palat ovat naapurijärviä ja jäävät pois.
+       Siemenet: Ähtärinjärvi Wikipedian järven koordinaatti 62,667 / 24,050; Kivijärvi kunnan
+       keskipiste 63,136 / 25,039 (rannalla: valitaan lähin vesiruutu 2 km sisältä).
+       Viralliset luvut vertailuun (Järviwiki/SYKE): Ähtärinjärvi 39,9 km², keskisyvyys 5,2 m,
+       suurin 27 m. Kivijärvestä virallista lukua ei vielä tarkistettu. */
+    var JK_KOHTEET = [ { avain: 'ahtarinjarvi', nimi: 'Ähtärinjärvi', laatikko: 'Ähtärinjärvi', siemen: [62.667, 24.050], virallinen: '39,9 km², keskisyvyys 5,2 m, suurin 27 m (Järviwiki)' },
+                       { avain: 'kivijarvi', nimi: 'Kivijärvi', laatikko: 'Kivijärvi (Kivijärven kunta)', siemen: [63.136, 25.039], virallinen: null } ];
     var jkTulos = null;
     function jkRenkaat(geom) {   // [[ [lon,lat], ... ], ...] kaikki renkaat
       if (!geom) return [];
@@ -3472,7 +3480,7 @@ body{padding-bottom:66px}
           var pohjoisLat = +(maxLat + 0.0005).toFixed(5), lansiLon = +(minLon - 0.001).toFixed(5);
           var H = Math.ceil((pohjoisLat - minLat) * 111320 / ruutu) + 2;
           var W = Math.ceil((maxLon - lansiLon) * 111320 * Math.cos(minLat * Math.PI / 180) / ruutu) + 2;
-          var mask = new Uint8Array(W * H), luok = new Uint8Array(W * H).fill(15);
+          var mask = new Uint8Array(W * H), luok = new Uint8Array(W * H).fill(15), dep = new Float32Array(W * H), puuttuu = new Uint8Array(W * H);
           // reunat valmiiksi
           var reunat = [];
           renkaat.forEach(function (r) { for (var a = 0, b2 = r.length - 1; a < r.length; b2 = a++) reunat.push([r[b2][0], r[b2][1], r[a][0], r[a][1]]); });
@@ -3490,14 +3498,67 @@ body{padding-bottom:66px}
                 mask[q] = 1; vesi++;
                 var lon = lansiLon + (ii + 0.5) * ruutu / (111320 * cosl), t = TM35.fwd(lat, lon), m = mmlArvioEN(t.E, t.N);
                 var dpt = m ? m.arvio : null;
-                if (dpt === null) { ilman++; dpt = 3; }   // ei näytettä 300 m sisällä: 3 m oletus (kerrotaan)
-                summa += dpt; syvin = Math.max(syvin, dpt);
+                if (dpt === null) { ilman++; dpt = 3; puuttuu[q] = 1; }   // ei näytettä 300 m sisällä: 3 m oletus (kerrotaan)
+                summa += dpt; syvin = Math.max(syvin, dpt); dep[q] = dpt;
                 var c = 0; while (c < JK_RAJAT.length && dpt >= JK_RAJAT[c]) c++;
                 luok[q] = c;
               }
             }
             if (j % 20 === 0) { nayta(K.nimi + ': ruudukko ' + Math.round(100 * j / H) + ' %'); await new Promise(function (ok) { setTimeout(ok, 0); }); }
           }
+          // v127: yhtenäiset vesialueet; pidetään siemenen alue ja alle 2 ruudun päässä olevat
+          var comp = new Int32Array(W * H).fill(-1), koot = [], jono = new Int32Array(W * H);
+          for (var q0 = 0; q0 < W * H; q0++) {
+            if (!mask[q0] || comp[q0] >= 0) continue;
+            var cid = koot.length, alku2 = 0, loppu2 = 0, nn = 0; jono[loppu2++] = q0; comp[q0] = cid;
+            while (alku2 < loppu2) {
+              var pq = jono[alku2++], pi2 = pq % W, pj2 = (pq / W) | 0; nn++;
+              for (var a2 = -1; a2 <= 1; a2++) for (var b3 = -1; b3 <= 1; b3++) {
+                var ni = pi2 + a2, nj = pj2 + b3; if (ni < 0 || nj < 0 || ni >= W || nj >= H) continue;
+                var nq = nj * W + ni; if (mask[nq] && comp[nq] < 0) { comp[nq] = cid; jono[loppu2++] = nq; }
+              }
+            }
+            koot.push(nn);
+          }
+          var sLat = K.siemen[0], sLon = K.siemen[1];
+          var si = Math.floor((sLon - lansiLon) * 111320 * Math.cos(sLat * Math.PI / 180) / ruutu), sj = Math.floor((pohjoisLat - sLat) * 111320 / ruutu);
+          var siemenComp = -1, parasEt = Infinity;
+          for (var rj = -20; rj <= 20; rj++) for (var ri = -20; ri <= 20; ri++) {   // lähin vesiruutu 2 km sisältä
+            var ti = si + ri, tj = sj + rj; if (ti < 0 || tj < 0 || ti >= W || tj >= H) continue;
+            var tq = tj * W + ti, et = ri * ri + rj * rj;
+            if (mask[tq] && et < parasEt) { parasEt = et; siemenComp = comp[tq]; }
+          }
+          if (siemenComp < 0) { rivit.push('  Siemenpisteen lähellä ei ole vettä: järveä ei tunnistettu. Ohitetaan.'); continue; }
+          var pidetaan = {}; pidetaan[siemenComp] = true;
+          for (var kierros = 0; kierros < 10; kierros++) {   // lisää palat, joiden väli pidettyihin on enintään 2 tyhjää ruutua
+            var lisatty = false;
+            for (var q3 = 0; q3 < W * H; q3++) {
+              if (!mask[q3] || !pidetaan[comp[q3]]) continue;
+              var i3 = q3 % W, j3 = (q3 / W) | 0;
+              for (var a4 = -3; a4 <= 3; a4++) for (var b4 = -3; b4 <= 3; b4++) {   // väli enintään 2 tyhjää ruutua ≈ 200–300 m
+                var i4 = i3 + a4, j4 = j3 + b4; if (i4 < 0 || j4 < 0 || i4 >= W || j4 >= H) continue;
+                var q4 = j4 * W + i4; if (mask[q4] && !pidetaan[comp[q4]]) { pidetaan[comp[q4]] = true; lisatty = true; }
+              }
+            }
+            if (!lisatty) break;
+          }
+          var pois = [];
+          vesi = 0; ilman = 0; summa = 0; syvin = 0;
+          var jMin = H, jMax = -1;
+          for (var q5 = 0; q5 < W * H; q5++) {
+            if (!mask[q5]) continue;
+            if (!pidetaan[comp[q5]]) { mask[q5] = 0; luok[q5] = 15; continue; }
+            vesi++; summa += dep[q5]; syvin = Math.max(syvin, dep[q5]); if (puuttuu[q5]) ilman++;
+            var j5 = (q5 / W) | 0; if (j5 < jMin) jMin = j5; if (j5 > jMax) jMax = j5;
+          }
+          koot.forEach(function (n2, c2) { if (!pidetaan[c2]) pois.push(n2); });
+          pois.sort(function (a, b) { return b - a; });
+          rivit.push('  Järveksi tunnistettu ' + Object.keys(pidetaan).length + ' palaa (' + (vesi / 100).toFixed(1) + ' km²). Pois jätetty '
+            + pois.length + ' naapurivettä' + (pois.length ? ': ' + pois.slice(0, 8).map(function (x) { return (x / 100).toFixed(1); }).join(', ') + ' km²' : '') + '.');
+          // rivien rajaus (sarakkeita ei: pituusasteen muunnos riippuu rivin leveysasteesta)
+          var j0c = Math.max(0, jMin - 1), j1c = Math.min(H - 1, jMax + 1), H2 = j1c - j0c + 1;
+          mask = mask.slice(j0c * W, (j1c + 1) * W); luok = luok.slice(j0c * W, (j1c + 1) * W);
+          pohjoisLat = +(pohjoisLat - j0c * ruutu / 111320).toFixed(6); H = H2;
           // pakkaus JARVET-muotoon: maski 1 bitti/ruutu (MSB ensin), luokat 4 bittiä/ruutu
           var mb = new Uint8Array(Math.ceil(W * H / 8)), lb = new Uint8Array(Math.ceil(W * H / 2));
           for (var q2 = 0; q2 < W * H; q2++) {
@@ -3505,7 +3566,7 @@ body{padding-bottom:66px}
             lb[q2 >> 1] |= (q2 & 1) ? (luok[q2] & 15) : ((luok[q2] & 15) << 4);
           }
           var b64 = function (u8) { var s3 = ''; for (var z = 0; z < u8.length; z += 8192) s3 += String.fromCharCode.apply(null, u8.subarray(z, z + 8192)); return btoa(s3); };
-          var syvinNayte = 0; for (var z2 = 0; z2 < D.D.length; z2++) syvinNayte = Math.max(syvinNayte, D.D[z2]);
+          var syvinNayte = 0; for (var z2 = 0; z2 < D.D.length; z2++) if (D.D[z2] <= 100) syvinNayte = Math.max(syvinNayte, D.D[z2]);
           var tulos = { avain: K.avain, nimi: K.nimi, lat: +((minLat + maxLat) / 2).toFixed(5), lon: +((minLon + maxLon) / 2).toFixed(5),
                         syvyys: +(summa / Math.max(1, vesi)).toFixed(1), alaKm2: +(vesi * ruutu * ruutu / 1e6).toFixed(1),
                         syvinRuutu: +syvin.toFixed(1), syvinNayteAlueella: +syvinNayte.toFixed(1), ruutujaIlmanSyvyytta: ilman,
@@ -3513,7 +3574,8 @@ body{padding-bottom:66px}
                         kartta: { ruutu: ruutu, W: W, H: H, pohjoisLat: pohjoisLat, lansiLon: lansiLon, maski: b64(mb), syvyysLuokat: b64(lb), luokkaM: JK_LUOKKA_M } };
           jkTulos.jarvet.push(tulos);
           rivit.push('  Ruudukko ' + W + ' × ' + H + ', vesiruutuja ' + vesi + ' (≈ ' + tulos.alaKm2 + ' km²), keskisyvyys ' + tulos.syvyys
-            + ' m, syvin ruutu ' + tulos.syvinRuutu + ' m, ilman syvyysnäytettä ' + ilman + ' ruutua (' + Math.round(100 * ilman / Math.max(1, vesi)) + ' %, oletus 3 m).');
+            + ' m, syvin ruutu ' + tulos.syvinRuutu + ' m, ilman syvyysnäytettä ' + ilman + ' ruutua (' + Math.round(100 * ilman / Math.max(1, vesi)) + ' %, oletus 3 m).'
+            + (K.virallinen ? '\n  Virallinen: ' + K.virallinen + '.' : ''));
         }
         rivit.push('\nValmis. Paina "Tallenna tiedostoksi" ja lähetä tiedosto Claudelle.');
       } catch (e) { rivit.push('\nVIRHE: ' + (e && e.message || e)); }
@@ -11044,7 +11106,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v126';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v127';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
