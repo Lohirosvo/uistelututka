@@ -1204,6 +1204,14 @@ body{padding-bottom:66px}
       <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--line);">
         <button id="pyyntiBtn" onclick="pyyntiNappi()" style="width:100%; background:transparent; color:var(--cyan); border:2px solid var(--cyan); border-radius:10px; font-family:'Barlow Condensed',sans-serif; font-size:20px; font-weight:700; letter-spacing:.02em; padding:12px; cursor:pointer;">▶ ALOITA UISTELU</button>
         <p class="hint" id="pyyntiTila" style="margin-top:8px;"></p>
+        <!-- UISTELUKUULUTUKSET (v116): näkyy vain uistelun aikana -->
+        <div id="kuulBox" style="display:none; margin-top:10px; border:1px solid var(--line); border-radius:10px; padding:10px;">
+          <div style="display:flex; gap:8px;">
+            <button onclick="kuulToista()" style="flex:1; background:transparent; color:var(--cyan); border:2px solid var(--cyan); border-radius:10px; font-family:'Barlow Condensed',sans-serif; font-size:22px; font-weight:700; padding:16px 6px; cursor:pointer;">🔁 TOISTA</button>
+            <button id="kuulHiljaaBtn" onclick="kuulHiljaa()" style="flex:1; background:transparent; color:var(--muted); border:2px solid var(--muted); border-radius:10px; font-family:'Barlow Condensed',sans-serif; font-size:22px; font-weight:700; padding:16px 6px; cursor:pointer;">🔇 HILJAA 30 MIN</button>
+          </div>
+          <div id="kuulTila" style="font-size:14px; line-height:1.4; margin-top:10px; display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden;"></div>
+        </div>
         <div id="pyyntiAukiBox" style="display:none; margin-top:8px;">
           <input type="datetime-local" id="pyyntiLoppuAika" style="width:100%;">
           <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
@@ -3452,7 +3460,7 @@ body{padding-bottom:66px}
                         : ` Tässä väriryhmässä ei kuitenkaan ole ${VV_PINTANIMI[pinta.luokka]} — järjestys on siis pelkän värin mukaan.`);
       const nahty = {}, ulos = [];
       for (const v of lista) { if (nahty[v[0]]) continue; nahty[v[0]] = 1; ulos.push(v); if (ulos.length === 3) break; }
-      return { varit: ulos, syy: syy, pinta: pinta.luokka };
+      return { varit: ulos, syy: syy, pinta: pinta.luokka, ryhma: ryhma };   // ryhma: v116 kuulutuksille
     }
 
     function vvChip(teksti, aktiivinen, onclick) {
@@ -3964,12 +3972,13 @@ body{padding-bottom:66px}
           const d = vvLajinSyvyys(kala, t);
           if (d === null || isNaN(d)) return;
           const valo = vvValoLuokka(t);
-          let varit = [];
+          let varit = [], ryhma = null;
           try {
             const V = vvValitseVarit(ns.m, valo, kala, d);
             if (V && V.varit) varit = V.varit.map(v => [v[0], variPinta(v[0]) || v[1]]);
+            if (V && V.ryhma) ryhma = V.ryhma;
           } catch (e) { /* väri jää tyhjäksi, syvyys on silti käyttökelpoinen */ }
-          rivit.push({ t: t, syvyys: Math.round(d * 10) / 10, valo: valo, varit: varit });
+          rivit.push({ t: t, syvyys: Math.round(d * 10) / 10, valo: valo, varit: varit, ryhma: ryhma });
         });
         lajit[kala] = { nimi: VV_LAJI[kala].nimi, nopeus: VV_LAJI[kala].nopeus, tunnit: rivit };
       });
@@ -6421,6 +6430,7 @@ lataa(eka);
       pyyntiGpsTalteen(r);
       if (!pyyntiKirjoita(LS_PYYNTI_AUKI, r)) { document.getElementById('pyyntiTila').textContent = 'Tallennus epäonnistui (selaimen muisti).'; return; }
       pyyntiNayta();
+      try { kuulAloita(); } catch (e) { setTimeout(function () { throw e; }, 0); }   // v116
     }
     function pyyntiLopeta(loppu) {
       const r = pyyntiLue(LS_PYYNTI_AUKI, null);
@@ -6483,6 +6493,7 @@ lataa(eka);
       return Math.min(t, raja);
     }
     function pyyntiNayta(pidaTila) {
+      try { if (kuul && !kuulOn()) kuulLopeta(); else kuulNayta(); } catch (e) { console.warn('Kuulutukset:', e.message); }   // v116: lopetus vapauttaa näytön heti
       const btn = document.getElementById('pyyntiBtn'), tila = document.getElementById('pyyntiTila'), box = document.getElementById('pyyntiAukiBox');
       if (!btn || !tila) return;
       const r = pyyntiLue(LS_PYYNTI_AUKI, null);
@@ -10021,7 +10032,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v115';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v116';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -16136,6 +16147,291 @@ function avaaLajiLaatikko(){
 function suljeLajiLaatikko(){
   var k = document.getElementById('lajiLaatikko'); if(k) k.classList.remove('auki');
 }
+/* ===== UISTELUKUULUTUKSET — 1.10.2026 (v116) =====
+   Hannun valinnat 1.10.: kaikki kuulutukset (myös turvallisuus ja nollajaksovinkki),
+   muutosten lisäksi kertaus 60 min välein, näyttö pysyy päällä uistelun ajan.
+   Toimii vain, kun ▶ ALOITA UISTELU on päällä ja sovellus on näkyvissä.
+   Puhutaan vain, kun jokin muuttuu (ja kertaus kerran tunnissa).
+
+   MITÄ KUULUTETAAN
+   - Aloitus: laji, syvyys, kaksi väriä, paras paikka + painavin peruste tasoineen, sää 3 h.
+   - Syvyys alkaa muuttua: seuraavan tunnin syvyys eroaa viimeksi kuulutetusta kynnyksen
+     verran. Vakiintunut: muutos jatkuu alle puoli kynnystä seuraavaan tuntiin.
+     Kynnys = suurempi 0,5 m ja 25 % syvyydestä (OMA VALINTA, ei malli: matalalla
+     metri olisi liian karkea, syvällä 0,5 m liian herkkä).
+   - Väri: kun väriryhmä vaihtuu (hopea / kulta / räikeät / tumma, vvValitseVarit).
+   - Turvallisuus ensin ja myös hiljaisena aikana: tuulihälytys nyt, tuulen voimistuminen
+     rajan yli 3 h sisällä (samat rajat kuin tuulihälytyksessä: 7 m/s / puuska 15 m/s,
+     Hannun kokemus), salamat alle 40 km ja lähestyvät tai alle 15 km.
+   - Nollajakso: tunti ilman kalaa (aloituksesta tai viimeisestä kalasta) -> ehdotus
+     haarukan reunasta tai toisesta väristä. OMA EHDOTUS, ei malli.
+   - Kertaus 60 min välein: syvyys, väri, paikka, sää.
+   SYVYYS on sama tuntitaulukko kuin Vesillä-ruudulla (vvRakennaPaketti). Jos Suunnittelussa
+   on valittuna toinen päivä (ennusteTila), syvyys-, väri- ja paikkakuulutukset ohitetaan.
+   PUHE: Chrome sallii automaattisen puheen vasta, kun sivua on napautettu. ALOITA-nappi
+   riittää; uudelleenlatauksen jälkeen tarvitaan napautus (esim. TOISTA).
+   NÄYTTÖ: Wake Lock -rajapinta. Selain vapauttaa sen, kun sovellus menee taustalle;
+   pyydetään uudelleen, kun sovellus palaa näkyviin.
+   Muuttujat var-määrittelyinä tarkoituksella (v114:n oppi: ei TDZ-virheitä latauksessa). */
+var KUUL = { kynnysMin: 0.5, kynnysOsuus: 0.25, kertausMs: 3600e3, nollaMs: 3600e3,
+             hiljaaMs: 1800e3, tuuliMs: 3600e3, salamaMs: 900e3, salamaKm: 40, salamaLahiKm: 15 };
+var kuul = null, kuulWake = null, kuulSaaHaettu = 0, kuulSaaHaku = false;
+var KUUL_RYHMA = { hopea: ['hopeasta', 'hopeaan'], kulta: ['kullasta', 'kultaan tai kupariin'],
+                   rajut: ['räikeistä', 'räikeisiin kontrastiväreihin'], tumma: ['tummasta', 'tummaan selkään'] };
+var KUUL_ILMANSUUNTA = [['pohjoisesta','pohjoiseen'],['koillisesta','koilliseen'],['idästä','itään'],['kaakosta','kaakkoon'],
+                        ['etelästä','etelään'],['lounaasta','lounaaseen'],['lännestä','länteen'],['luoteesta','luoteeseen']];
+
+function kuulOn() { try { return !!pyyntiLue(LS_PYYNTI_AUKI, null); } catch (e) { return false; } }
+function kuulTunti() { return new Date().getHours(); }
+function kuulKynnys(d) { return Math.max(KUUL.kynnysMin, KUUL.kynnysOsuus * (d || 0)); }
+function kuulLajiNimi(l) { return (VV_LAJI[l] || {}).nimi || l; }
+function kuulToinenPaiva() { return typeof ennusteTila !== 'undefined' && !!ennusteTila; }
+function kuulRivit() {
+  var p = null; try { p = vvRakennaPaketti(); } catch (e) { return null; }
+  var L = p && p.lajit ? p.lajit[vesillaLajiValinta] : null;
+  return (L && L.tunnit && L.tunnit.length) ? L : null;
+}
+function kuulNyt(L) {   // kuluva tunti (viimeisin t <= nyt) ja seuraava
+  var h = kuulTunti(), i = 0;
+  L.tunnit.forEach(function (r, k) { if (r.t <= h) i = k; });
+  return { r: L.tunnit[i], seur: L.tunnit[i + 1] || null };
+}
+function kuulSuunta(deg) { return KUUL_ILMANSUUNTA[Math.round(((deg % 360) + 360) % 360 / 45) % 8]; }
+function kuulSaaTunnit() {
+  if (!Array.isArray(fmiEnnuste)) return null;
+  var nyt = Date.now();
+  var r = fmiEnnuste.filter(function (x) { var t = x.aika.getTime(); return t > nyt - 1800e3 && t <= nyt + 3 * 3600e3; });
+  return r.length ? r : null;
+}
+function kuulHaeSaa() {   // FMI:n tuntiennuste uusiksi tunnin välein
+  if (kuulSaaHaku || Date.now() - kuulSaaHaettu < 3600e3 || typeof haeFmiEnnuste !== 'function') return;
+  kuulSaaHaku = true; kuulSaaHaettu = Date.now();
+  haeFmiEnnuste().then(function (r) { fmiEnnuste = r; }).catch(function () {}).then(function () { kuulSaaHaku = false; });
+}
+function kuulSaaTeksti() {
+  var r = kuulSaaTunnit();
+  if (!r) { kuulHaeSaa(); return 'Sääennustetta ei ole ladattu.'; }
+  var ws = r.map(function (x) { return x.WindSpeedMS; }).filter(isFinite);
+  var wg = r.map(function (x) { return x.WindGust; }).filter(isFinite);
+  var osat = [];
+  if (ws.length) {
+    // ensimmäinen ja viimeinen tunti: "voimistuu / heikkenee" on puheena selvempi kuin väli "3–8"
+    var a = Math.round(r[0].WindSpeedMS), b = Math.round(r[r.length - 1].WindSpeedMS);
+    var t = 'Sää kolme tuntia: tuuli ' + (!isFinite(b) || a === b ? a + ' metriä sekunnissa'
+      : a + ', ' + (b > a ? 'voimistuu ' : 'heikkenee ') + b + ' metriin sekunnissa');
+    if (wg.length) t += ', puuskat ' + Math.round(Math.max.apply(null, wg));
+    var d0 = r[0].WindDirection, d1 = r[r.length - 1].WindDirection;
+    if (isFinite(d0)) {
+      t += ', ' + kuulSuunta(d0)[0];
+      var ero = Math.abs(((d1 - d0 + 540) % 360) - 180);
+      if (isFinite(d1) && ero >= 45) t += ', kääntyy ' + kuulSuunta(d1)[1];
+    }
+    osat.push(t + '.');
+  }
+  var sade = r.map(function (x) { return x.Precipitation1h; }).filter(isFinite);
+  var alku = r.find(function (x) { return x.Precipitation1h >= 0.3; });
+  var summa = sade.reduce(function (s, x) { return s + x; }, 0);
+  if (!sade.length) {}
+  else if (summa < 0.3) osat.push('Ei sadetta.');
+  else osat.push('Sadetta' + (alku ? ' kello ' + alku.aika.getHours() + ' alkaen' : '') + ', yhteensä noin ' + puheLuku(summa) + ' milliä.');
+  return osat.join(' ');
+}
+function kuulPaikkaTeksti(laji) {
+  if (kuulToinenPaiva()) return '';
+  var kt = laji === 'kuha' ? viimeisinKuhapaikka
+         : (['taimen', 'jarvilohi', 'kirjolohi'].indexOf(laji) >= 0 ? viimeisinOttipaikka : null);
+  if (!kt || !kt.topSpot) return '';
+  var t = 'Paras paikka ' + kt.topSpot.name.replace(/\s*\(.*\)/, '') + '.';
+  var s = (kt.paras && kt.paras.syyt) ? kt.paras.syyt.filter(function (x) { return x.p > 0; }).sort(function (a, b) { return b.p - a.p; })[0] : null;
+  if (s) t += ' ' + puheSiisti(s.teksti).split(/(?<=\.)\s/)[0] + ' ' + (TASO_PUHE[s.taso] || '');
+  return t.trim();
+}
+function kuulSyvyysVari(L, kaksiVaria) {
+  var n = kuulNyt(L).r, laji = kuulLajiNimi(vesillaLajiValinta);
+  var t = laji + ' noin ' + puheLuku(n.syvyys) + ' metriä.';
+  var v = (n.varit || []).map(function (x) { return x[0]; });
+  if (v.length) t += kaksiVaria && v[1] ? ' Värit ' + v[0] + ' ja ' + v[1] + '.' : ' Väri ' + v[0] + '.';
+  return t;
+}
+function kuulTuuliVaroitus() {
+  try {
+    var th = tuuliHalytysTila();
+    if (th && th.halytys) return 'Tuulihälytys: tuuli nyt ' + puheLuku(th.ws || 0, 0) + ' metriä sekunnissa'
+      + (th.wg ? ', puuskat ' + puheLuku(th.wg, 0) : '') + '.';
+  } catch (e) {}
+  var r = kuulSaaTunnit(); if (!r) return null;
+  var x = r.find(function (y) { return y.aika.getTime() > Date.now() && (y.WindSpeedMS >= TUULI_JATKUVA_RAJA || y.WindGust >= TUULI_PUUSKA_RAJA); });
+  if (!x) return null;
+  return 'Varoitus: tuuli voimistuu kello ' + x.aika.getHours() + ' mennessä ' + Math.round(x.WindSpeedMS)
+    + ' metriin sekunnissa' + (isFinite(x.WindGust) ? ', puuskat ' + Math.round(x.WindGust) : '') + '.';
+}
+function kuulSalamaVaroitus() {
+  var s = window.salamaTila;
+  if (!s || s.lahin == null || Date.now() - s.t > 15 * 60e3) return null;
+  if (s.lahin >= KUUL.salamaKm || (!s.lahestyy && s.lahin >= KUUL.salamaLahiKm)) return null;
+  var lahella = s.lahin < kuul.salamaKm - 5;   // lähestynyt edellisestä kuulutuksesta
+  if (!lahella && Date.now() - kuul.salamaT < KUUL.salamaMs) return null;
+  kuul.salamaKm = s.lahin; kuul.salamaT = Date.now();
+  return s.lahin < KUUL.salamaLahiKm
+    ? 'Varoitus: salama ' + Math.round(s.lahin) + ' kilometrin päässä. Maihin.'
+    : 'Varoitus: salamoita ' + Math.round(s.lahin) + ' kilometrin päässä, lähestyy.';
+}
+function kuulAlusta() {
+  var nyt = Date.now();
+  kuul = { laji: vesillaLajiValinta, ref: null, muutos: false, ryhma: null, kertausT: nyt, nollaT: nyt,
+           tuuliT: 0, salamaKm: 999, salamaT: 0, hiljaaAsti: 0, viimeisin: null };
+  var L = kuulRivit();
+  if (L && !kuulToinenPaiva()) { var n = kuulNyt(L).r; kuul.ref = n.syvyys; kuul.ryhma = n.ryhma || null; }
+  return L;
+}
+function kuulAloita() {
+  var L = kuulAlusta();
+  kuulWakePaalle();
+  kuulHaeSaa();
+  var osat = ['Uistelu alkoi.'];
+  if (L && !kuulToinenPaiva()) osat.push(kuulSyvyysVari(L, true));
+  else osat.push(kuulToinenPaiva() ? 'Suunnittelussa on valittuna toinen päivä, joten syvyyttä ei kuuluteta.'
+                                    : 'Syvyyttä ei ole laskettu. Aja analyysi kerran.');
+  var pk = kuulPaikkaTeksti(vesillaLajiValinta); if (pk) osat.push(pk);
+  osat.push(kuulSaaTeksti());
+  var tv = kuulTuuliVaroitus(); if (tv) { osat.unshift(tv); kuul.tuuliT = Date.now(); }
+  kuulPuhu(osat.join(' ¶ '), !!tv);
+}
+function kuulLopeta() {
+  kuulWakePois(); kuul = null;
+  try { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); } catch (e) {}
+  kuulNayta();
+}
+function kuulTick() {
+  if (!kuulOn()) { if (kuul) kuulLopeta(); return; }
+  if (document.hidden) return;
+  if (!kuul) { kuulAlusta(); kuulWakePaalle(); kuulNayta(); return; }   // esim. uudelleenlatauksen jälkeen: pohja hiljaa
+  kuulHaeSaa();
+  var nyt = Date.now(), kiire = [], muut = [];
+  // 1 Turvallisuus
+  if (nyt - kuul.tuuliT >= KUUL.tuuliMs) { var tv = kuulTuuliVaroitus(); if (tv) { kiire.push(tv); kuul.tuuliT = nyt; } }
+  var sv = kuulSalamaVaroitus(); if (sv) kiire.push(sv);
+  // 2 Syvyys ja väri
+  var L = kuulRivit();
+  if (L && !kuulToinenPaiva()) {
+    var nn = kuulNyt(L), r = nn.r, seur = nn.seur, nimi = kuulLajiNimi(vesillaLajiValinta);
+    if (kuul.laji !== vesillaLajiValinta || kuul.ref === null) {
+      var vaihto = kuul.ref !== null;
+      kuul.laji = vesillaLajiValinta; kuul.ref = r.syvyys; kuul.muutos = false; kuul.ryhma = r.ryhma || null;
+      if (vaihto) muut.push('Laji vaihdettu. ' + kuulSyvyysVari(L, true));
+    } else {
+      var k = kuulKynnys(kuul.ref);
+      if (!kuul.muutos && seur && Math.abs(seur.syvyys - kuul.ref) >= k) {
+        kuul.muutos = true;
+        muut.push(nimi + (seur.syvyys < kuul.ref ? ' nousee' : ' laskee') + ': nyt ' + puheLuku(r.syvyys)
+          + ', kello ' + seur.t + ' noin ' + puheLuku(seur.syvyys) + ' metriä.');
+      } else if (kuul.muutos) {
+        var jatkuu = seur ? Math.abs(seur.syvyys - r.syvyys) : 0;
+        if (jatkuu < k / 2 && Math.abs(r.syvyys - kuul.ref) >= k / 2) {
+          muut.push('Syvyys vakiintui. ' + nimi + ' noin ' + puheLuku(r.syvyys) + ' metriä.');
+          kuul.ref = r.syvyys; kuul.muutos = false;
+        } else if (Math.abs(r.syvyys - kuul.ref) < k / 2 && (!seur || Math.abs(seur.syvyys - kuul.ref) < k / 2)) {
+          kuul.muutos = false;   // muutos ei toteutunut; ei kuulutusta
+        }
+      }
+      if (r.ryhma && kuul.ryhma && r.ryhma !== kuul.ryhma && KUUL_RYHMA[r.ryhma] && KUUL_RYHMA[kuul.ryhma]) {
+        var esim = r.varit && r.varit[0] ? ', esimerkiksi ' + r.varit[0][0] : '';
+        muut.push('Väri: vaihda ' + KUUL_RYHMA[kuul.ryhma][0] + ' ' + KUUL_RYHMA[r.ryhma][1] + esim + '.');
+      }
+      if (r.ryhma) kuul.ryhma = r.ryhma;
+    }
+  }
+  // 3 Nollajakso: tunti ilman kalaa
+  try {
+    var rk = pyyntiLue(LS_PYYNTI_AUKI, null), viim = rk ? rk.alku : nyt;
+    pyyntiSaaliit(rk.alku, nyt + 1).forEach(function (x) { viim = Math.max(viim, Date.parse(x.aika)); });
+    if (nyt - viim >= KUUL.nollaMs && nyt - kuul.nollaT >= KUUL.nollaMs && L && !kuulToinenPaiva()) {
+      var n2 = kuulNyt(L).r, h = syvyysHaarukka(vesillaLajiValinta, n2.syvyys), v2 = n2.varit && n2.varit[1] ? n2.varit[1][0] : null;
+      var vinkki = 'Tuntiin ei kalaa.';
+      if (h) vinkki += ' Kokeile haarukan reunaa, ' + puheLuku(h.ala) + ' tai ' + puheLuku(h.yla) + ' metriä';
+      if (v2) vinkki += (h ? ', tai väriä ' : ' Kokeile väriä ') + v2;
+      muut.push(vinkki + '.');
+      kuul.nollaT = nyt;
+    }
+  } catch (e) {}
+  // 4 Kertaus tunnin välein
+  if (nyt - kuul.kertausT >= KUUL.kertausMs) {
+    kuul.kertausT = nyt;
+    var kr = ['Kertaus.'];
+    if (L && !kuulToinenPaiva()) kr.push(kuulSyvyysVari(L, false));
+    var pk = kuulPaikkaTeksti(vesillaLajiValinta); if (pk) kr.push(pk);
+    kr.push(kuulSaaTeksti());
+    muut.push(kr.join(' ¶ '));
+  }
+  if (kiire.length || muut.length) kuulPuhu(kiire.concat(muut).join(' ¶ '), kiire.length > 0);
+  else kuulNayta();
+}
+function kuulPuhu(teksti, kiire) {
+  if (!kuul) return;
+  kuul.viimeisin = { teksti: teksti, t: Date.now() };
+  kuulNayta();
+  if (!kiire && kuul.hiljaaAsti > Date.now()) return;
+  kuulAani(teksti, kiire);
+}
+function kuulAani(teksti, kiire) {
+  try { if (navigator.vibrate) navigator.vibrate(kiire ? [300, 150, 300] : 150); } catch (e) {}
+  try {
+    if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance !== 'function') return;
+    var aani = (typeof suomiAani === 'function') ? suomiAani() : null;
+    String(teksti).split('¶').map(function (x) { return x.trim(); }).filter(Boolean).forEach(function (pala) {
+      var u = new SpeechSynthesisUtterance(pala);
+      if (aani) u.voice = aani;
+      u.lang = 'fi-FI'; u.rate = 0.95;
+      window.speechSynthesis.speak(u);
+    });
+  } catch (e) { console.warn('Kuulutus:', e.message); }
+}
+function kuulToista() {
+  if (!kuul) return;
+  try { window.speechSynthesis.cancel(); } catch (e) {}
+  var t = kuul.viimeisin ? kuul.viimeisin.teksti : null;
+  if (!t) { var L = kuulRivit(); t = (L && !kuulToinenPaiva() ? kuulSyvyysVari(L, false) + ' ¶ ' : '') + kuulSaaTeksti(); kuul.viimeisin = { teksti: t, t: Date.now() }; }
+  kuulAani(t, false);   // napautus: puhutaan myös hiljaisena aikana
+  kuulNayta();
+}
+function kuulHiljaa() {
+  if (!kuul) return;
+  kuul.hiljaaAsti = kuul.hiljaaAsti > Date.now() ? 0 : Date.now() + KUUL.hiljaaMs;
+  if (kuul.hiljaaAsti) { try { window.speechSynthesis.cancel(); } catch (e) {} }
+  kuulNayta();
+}
+function kuulNayta() {
+  var box = document.getElementById('kuulBox'); if (!box) return;
+  if (!kuul || !kuulOn()) { box.style.display = 'none'; return; }
+  box.style.display = '';
+  var tila = document.getElementById('kuulTila'), btn = document.getElementById('kuulHiljaaBtn');
+  var hiljaa = kuul.hiljaaAsti > Date.now();
+  var otsikko = hiljaa ? '🔇 Hiljaa klo ' + pyyntiKlo(kuul.hiljaaAsti) + ' asti (varoitukset kuuluvat silti)' : '🔊 Kuulutukset päällä';
+  if (!('wakeLock' in navigator)) otsikko += ' · näyttöä ei voi pitää päällä tässä selaimessa';
+  else if (!kuulWake && document.visibilityState === 'visible') otsikko += ' · näyttö ei pysy päällä';
+  var lupa = (navigator.userActivation && !navigator.userActivation.hasBeenActive)
+    ? '<br><span style="color:var(--amber);">Napauta TOISTA, niin puhe kuuluu (selain vaatii napautuksen).</span>' : '';
+  var viim = kuul.viimeisin
+    ? '<br><span style="color:var(--muted);">Klo ' + pyyntiKlo(kuul.viimeisin.t) + ':</span> ' + String(kuul.viimeisin.teksti).replace(/\s*¶\s*/g, ' ')
+    : '';
+  tila.innerHTML = '<strong>' + otsikko + '</strong>' + lupa + viim;
+  if (btn) btn.textContent = hiljaa ? '🔊 PERU HILJAA' : '🔇 HILJAA 30 MIN';
+}
+function kuulWakePaalle() {
+  try {
+    if (!('wakeLock' in navigator) || kuulWake || document.visibilityState !== 'visible') return;
+    navigator.wakeLock.request('screen').then(function (w) {
+      kuulWake = w; w.addEventListener('release', function () { kuulWake = null; kuulNayta(); }); kuulNayta();
+    }).catch(function (e) { console.warn('Näyttölukko:', e.message); });
+  } catch (e) {}
+}
+function kuulWakePois() { try { if (kuulWake) kuulWake.release(); } catch (e) {} kuulWake = null; }
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'visible' && kuulOn()) { kuulWakePaalle(); try { kuulTick(); } catch (e) { setTimeout(function () { throw e; }, 0); } }
+});
+setInterval(function () { try { kuulTick(); } catch (e) { setTimeout(function () { throw e; }, 0); } }, 60000);
+setTimeout(function () { try { kuulTick(); } catch (e) {} }, 3000);   // uistelu jäi päälle edellisestä istunnosta
+
 setInterval(paivitaVesilla, 60000);
 /* Salamat itsestään: heti käynnistyksessä ja sen jälkeen viiden minuutin
    välein. Haku itse rajoittaa tiheyden, joten tiheämpi ajastus ei aiheuta
@@ -16201,6 +16497,7 @@ async function haeSalamat(){
         uniikit.push(x);
     });
     if(!uniikit.length){
+      window.salamaTila = { lahin: null, t: nyt };   // v116: kuulutuksille
       /* Ei salamoita = ei riviä. Tyhjä rivi vie tilaa kertomatta mitään. */
       el.style.display = 'none'; return;
     }
@@ -16214,6 +16511,7 @@ async function haeSalamat(){
       if(lahinTuore < lahinVanha - 5) suunta = ' — lähestyy';
       else if(lahinTuore > lahinVanha + 5) suunta = ' — loittonee';
     }
+    window.salamaTila = { lahin: lahin, lahestyy: suunta.indexOf('lähestyy') >= 0, maara: uniikit.length, t: nyt };   // v116
     const vari = lahin < 15 ? 'var(--hard-red)' : (lahin < 40 ? 'var(--amber)' : 'var(--muted)');
     el.style.display = '';
     el.innerHTML = '<span style="color:' + vari + '; font-weight:700;">⚡ '
