@@ -2196,6 +2196,10 @@ body{padding-bottom:66px}
           <button class="chip" onclick="mmlTesti()" style="border-color:var(--cyan); color:var(--cyan);">Testaa järvet (MML)</button>
           <button class="chip" id="mmlKopioi" onclick="mmlKopioi()" style="display:none; border-color:var(--amber); color:var(--amber);">Kopioi tulos</button>
         </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+          <button class="chip" onclick="mmlLataaJarvet()" style="border-color:var(--olive); color:var(--olive);">Lataa syvyydet (Lappajärvi, Ähtäri, Kivijärvi)</button>
+          <button class="chip" onclick="mmlVertailu()" style="border-color:var(--olive); color:var(--olive);">Vertailu: DataDeck vs MML</button>
+        </div>
         <div id="mmlTila" style="margin-top:10px; font-size:12px; line-height:1.45; white-space:pre-wrap; word-break:break-word;"></div>
       </div>
 
@@ -3174,6 +3178,196 @@ body{padding-bottom:66px}
           function () { if (kop) kop.textContent = 'Kopioitu ✓'; },
           function () { if (kop) kop.textContent = 'Kopiointi ei onnistunut, maalaa teksti'; });
       } catch (e) { if (kop) kop.textContent = 'Kopiointi ei onnistunut, maalaa teksti'; }
+    }
+
+    /* ===== MML-SYVYYDET KÄYTTÖÖN: LATAUS JA VERTAILU — 1.10.2026 (v122) =====
+       Hannun valinta: ladataan Lappajärvi, Ähtärinjärvi ja Kivijärvi (1b); ENSIN VERTAILU
+       DataDeckiin omissa paikoissa, vaihto vasta näytön jälkeen (2a). Malli ei vielä käytä näitä.
+       YKSIKKÖ: syvyysarvo on millimetreinä (testi v121: käyrät 1500/3000/6000/10000 = karttojen
+       1,5/3/6/10 m, syvyyspisteen teksti "0.6"). Päätelmä, mutta yksiselitteinen.
+       ARVIO PISTEESSÄ (oma menetelmä, ei MML:n): käyrien taitepisteet tihennetään 20 m välein,
+       ja niistä sekä syvyyspisteistä otetaan 6 lähintä 300 m säteeltä, painotus 1/etäisyys².
+       Rantaviivaa (0 m) ei ole mukana, joten rannan lähellä arvio on käyrän mukainen eikä
+       laske nollaan; syvänteen keskellä arvio jää syvimmän käyrän tasolle, ellei siellä
+       ole syvyyspistettä. Siksi vertailussa näytetään myös lähin piste ja lähin käyrä erikseen.
+       TALLENNUS: IndexedDB, avain 'mml_v1'. Luetaan vasta kun tarvitaan (ei käynnistyksessä).
+       Lähdemerkintä: © Maanmittauslaitos, maastotietokanta (CC BY 4.0). */
+    var MML_JARVET = ['Lappajärvi', 'Ähtärinjärvi', 'Kivijärvi (Kivijärven kunta)'];
+    var mmlSyvData = null, mmlIndeksi = null;
+    async function mmlIdbHae() {
+      if (mmlSyvData) return mmlSyvData;
+      try {
+        var db = await luotIdb();
+        mmlSyvData = await new Promise(function (res, rej) {
+          var q = db.transaction('luotaus').objectStore('luotaus').get('mml_v1');
+          q.onsuccess = function () { res(q.result || null); }; q.onerror = function () { rej(q.error); };
+        });
+        db.close();
+      } catch (e) { mmlSyvData = null; }
+      return mmlSyvData;
+    }
+    async function mmlIdbTallenna(v) {
+      var db = await luotIdb();
+      await new Promise(function (res, rej) {
+        var tx = db.transaction('luotaus', 'readwrite');
+        tx.objectStore('luotaus').put(v, 'mml_v1');
+        tx.oncomplete = res; tx.onerror = function () { rej(tx.error); };
+      });
+      db.close();
+    }
+    async function mmlHaeKaikki(kokoelma, b, avain, tila) {
+      var url = MML_OGC + '/collections/' + kokoelma + '/items?f=json&limit=1000&bbox='
+        + [b.lon[0], b.lat[0], b.lon[1], b.lat[1]].join(',') + '&api-key=' + encodeURIComponent(avain);
+      var kaikki = [], sivu = 0;
+      while (url && sivu < 60) {
+        var d = await mmlHae(url);
+        (d.features || []).forEach(function (f) { kaikki.push(f); });
+        sivu++; if (tila) tila(kaikki.length);
+        var seur = (d.links || []).find(function (l) { return l.rel === 'next'; });
+        url = seur ? seur.href : null;
+        if (url && url.indexOf('api-key=') < 0) url += (url.indexOf('?') < 0 ? '?' : '&') + 'api-key=' + encodeURIComponent(avain);
+      }
+      return { kohteet: kaikki, kesken: !!url };
+    }
+    function mmlSyvyysM(p) {
+      var v = parseFloat(p.syvyysarvo);
+      if (isFinite(v)) return v / 1000;
+      var t = parseFloat(String(p.teksti || '').replace(',', '.'));
+      return isFinite(t) ? t : NaN;
+    }
+    async function mmlLataaJarvet() {
+      var box = document.getElementById('mmlTila'), kop = document.getElementById('mmlKopioi');
+      var avain = mmlAvain();
+      if (!avain) { box.textContent = 'Syötä ja tallenna ensin API-avain.'; return; }
+      if (kop) kop.style.display = 'none';
+      var rivit = ['MML-syvyyksien lataus ' + new Date().toLocaleString('fi-FI') + ' (' + APP_VERSIO + ')'];
+      var nayta = function (lisa) { box.textContent = rivit.join('\n') + (lisa ? '\n' + lisa : ''); };
+      var tulos = { aika: Date.now(), lahde: '© Maanmittauslaitos, maastotietokanta (CC BY 4.0)', jarvet: [] };
+      try {
+        for (var k = 0; k < MML_JARVET.length; k++) {
+          var b = LUOT_LAATIKOT.find(function (x) { return x.nimi === MML_JARVET[k]; });
+          if (!b) continue;
+          var E = [], N = [], D = [], L = [];   // L: 1 = käyrä, 2 = syvyyspiste
+          var ka = await mmlHaeKaikki('syvyyskayra', b, avain, function (n) { nayta(b.nimi + ': käyriä haettu ' + n + '…'); });
+          var nKayrat = 0;
+          ka.kohteet.forEach(function (f) {
+            var d = mmlSyvyysM(f.properties || {}); if (!isFinite(d) || !f.geometry) return;
+            var viivat = f.geometry.type === 'LineString' ? [f.geometry.coordinates]
+                       : f.geometry.type === 'MultiLineString' ? f.geometry.coordinates : [];
+            if (!viivat.length) return;
+            nKayrat++;
+            viivat.forEach(function (v) {
+              var ed = null;
+              v.forEach(function (c) {
+                var t = TM35.fwd(c[1], c[0]);
+                if (ed) {   // tihennys 20 m välein
+                  var dist = Math.hypot(t.E - ed.E, t.N - ed.N), osat = Math.floor(dist / 20);
+                  for (var s2 = 1; s2 < osat; s2++) { E.push(ed.E + (t.E - ed.E) * s2 / osat); N.push(ed.N + (t.N - ed.N) * s2 / osat); D.push(d); L.push(1); }
+                }
+                E.push(t.E); N.push(t.N); D.push(d); L.push(1); ed = t;
+              });
+            });
+          });
+          var pi = await mmlHaeKaikki('syvyyspiste', b, avain, function (n) { nayta(b.nimi + ': syvyyspisteitä haettu ' + n + '…'); });
+          var nPisteet = 0;
+          pi.kohteet.forEach(function (f) {
+            var d = mmlSyvyysM(f.properties || {});
+            if (!isFinite(d) || !f.geometry || f.geometry.type !== 'Point') return;
+            var t = TM35.fwd(f.geometry.coordinates[1], f.geometry.coordinates[0]);
+            E.push(t.E); N.push(t.N); D.push(d); L.push(2); nPisteet++;
+          });
+          var syvin = D.reduce(function (m, x) { return Math.max(m, x); }, 0);
+          tulos.jarvet.push({ nimi: b.nimi, E: Float32Array.from(E), N: Float32Array.from(N), D: Float32Array.from(D), L: Uint8Array.from(L),
+                              nKayrat: nKayrat, nPisteet: nPisteet });
+          rivit.push(b.nimi + ': ' + nKayrat + ' käyrää, ' + nPisteet + ' syvyyspistettä, syvin ' + syvin.toFixed(1) + ' m'
+            + (ka.kesken || pi.kesken ? ' (HUOM: haku jäi kesken, sivuraja täyttyi)' : ''));
+        }
+        nayta('Tallennetaan puhelimeen…');
+        await mmlIdbTallenna(tulos);
+        mmlSyvData = tulos; mmlIndeksi = null;
+        rivit.push('Tallennettu puhelimeen. Valmis.');
+      } catch (e) { rivit.push('VIRHE: ' + (e && e.message || e)); }
+      mmlTulosTeksti = rivit.join('\n'); box.textContent = mmlTulosTeksti;
+      if (kop) { kop.style.display = ''; kop.textContent = 'Kopioi tulos'; }
+    }
+    function mmlRakennaIndeksi() {
+      if (mmlIndeksi || !mmlSyvData) return mmlIndeksi;
+      mmlIndeksi = new Map();
+      mmlSyvData.jarvet.forEach(function (j, ji) {
+        for (var i = 0; i < j.E.length; i++) {
+          var key = Math.floor(j.E[i] / 200) + ',' + Math.floor(j.N[i] / 200);
+          var a = mmlIndeksi.get(key); if (!a) mmlIndeksi.set(key, a = []);
+          a.push(ji, i);
+        }
+      });
+      return mmlIndeksi;
+    }
+    // Syvyysarvio pisteessä MML-datasta. Palauttaa null, jos 300 m sisällä ei ole mitään.
+    function mmlSyvyysPisteessa(lat, lon) {
+      var ix = mmlRakennaIndeksi(); if (!ix) return null;
+      var t = TM35.fwd(lat, lon), cx = Math.floor(t.E / 200), cy = Math.floor(t.N / 200), lista = [];
+      var lahinKayra = null, lahinPiste = null;
+      for (var dx = -2; dx <= 2; dx++) for (var dy = -2; dy <= 2; dy++) {
+        var a = ix.get((cx + dx) + ',' + (cy + dy)); if (!a) continue;
+        for (var k = 0; k < a.length; k += 2) {
+          var j = mmlSyvData.jarvet[a[k]], i = a[k + 1];
+          var e = Math.hypot(j.E[i] - t.E, j.N[i] - t.N);
+          if (e > 300) continue;
+          lista.push({ e: e, d: j.D[i] });
+          if (j.L[i] === 1 && (!lahinKayra || e < lahinKayra.e)) lahinKayra = { e: e, d: j.D[i] };
+          if (j.L[i] === 2 && (!lahinPiste || e < lahinPiste.e)) lahinPiste = { e: e, d: j.D[i] };
+        }
+      }
+      if (!lista.length) return null;
+      lista.sort(function (a, b) { return a.e - b.e; });
+      var sw = 0, sd = 0;
+      lista.slice(0, 6).forEach(function (x) { var w = 1 / Math.max(25, x.e * x.e); sw += w; sd += w * x.d; });
+      return { arvio: sd / sw, lahinKayra: lahinKayra, lahinPiste: lahinPiste, n: lista.length };
+    }
+    async function mmlVertailu() {
+      var box = document.getElementById('mmlTila'), kop = document.getElementById('mmlKopioi');
+      if (kop) kop.style.display = 'none';
+      await mmlIdbHae();
+      if (!mmlSyvData) { box.textContent = 'MML-syvyyksiä ei ole vielä ladattu. Paina ensin "Lataa syvyydet".'; return; }
+      var dd = typeof window.akValmis === 'function' && window.akValmis() && typeof window.akSyvyysPisteessa === 'function';
+      var n1 = function (x) { return x.toFixed(1).replace('.', ','); };
+      var rivit = ['Vertailu DataDeck vs MML ' + new Date().toLocaleString('fi-FI') + ' (' + APP_VERSIO + ')',
+        'DataDeck = kartan 100 m ruudut, pienin–suurin 3×3 ruudun alueelta. MML = arvio käyristä ja pisteistä (6 lähintä, 300 m).'
+        + (dd ? '' : '\nHUOM: DataDeck-karttaa ei ole ladattu (valitse Lappajärvi ja aja analyysi), joten näytetään vain MML.')];
+      var pisteet = [];
+      (typeof omatMerkinnat !== 'undefined' ? omatMerkinnat : []).forEach(function (m) { pisteet.push({ ryhma: 'Oma merkintä 2014', lat: m.lat, lon: m.lon, t: m.t }); });
+      try {
+        lataaSaaliit().forEach(function (x) {
+          if (typeof x.lat === 'number' && typeof x.lon === 'number' && x.lat > 63.05 && x.lat < 63.35 && x.lon > 23.4 && x.lon < 23.9)
+            pisteet.push({ ryhma: 'Saalis', lat: x.lat, lon: x.lon, t: (x.laji || '') + ' ' + String(x.aika || '').slice(0, 10) });
+        });
+      } catch (e) {}
+      try {
+        Object.keys(lappajarviHotspots).forEach(function (k) {
+          var h = lappajarviHotspots[k]; if (typeof h.lat === 'number') pisteet.push({ ryhma: 'Ottipaikka', lat: h.lat, lon: h.lon, t: h.name });
+        });
+      } catch (e) {}
+      var ryhma = null, eroja = [];
+      pisteet.forEach(function (q) {
+        if (q.ryhma !== ryhma) { ryhma = q.ryhma; rivit.push('\n' + ryhma + ':'); }
+        var m = mmlSyvyysPisteessa(q.lat, q.lon), a = dd ? window.akSyvyysPisteessa(q.lat, q.lon, 50) : null;
+        var mTxt = m ? 'MML ' + n1(m.arvio) + ' m'
+          + ' (käyrä ' + (m.lahinKayra ? n1(m.lahinKayra.d) + ' m/' + Math.round(m.lahinKayra.e) + ' m' : '–')
+          + ', piste ' + (m.lahinPiste ? n1(m.lahinPiste.d) + ' m/' + Math.round(m.lahinPiste.e) + ' m' : '–') + ')'
+          : 'MML: ei tietoa 300 m sisällä';
+        var aTxt = dd ? (a ? 'DataDeck ' + n1(a.min) + '–' + n1(a.max) + ' m' : 'DataDeck: ei ruutua') : '';
+        if (m && a) eroja.push(m.arvio - (a.min + a.max) / 2);
+        rivit.push('  ' + q.t + ': ' + [aTxt, mTxt].filter(Boolean).join(' · '));
+      });
+      if (eroja.length) {
+        var ka = eroja.reduce(function (s, x) { return s + x; }, 0) / eroja.length;
+        var ab = eroja.reduce(function (s, x) { return s + Math.abs(x); }, 0) / eroja.length;
+        rivit.push('\nYhteenveto ' + eroja.length + ' pisteestä: MML − DataDeck (ruudun keskiarvo) keskimäärin '
+          + (ka >= 0 ? '+' : '') + n1(ka) + ' m, itseisarvona ' + n1(ab) + ' m.');
+      }
+      rivit.push('Lähteet: DataDeck-kartta; © Maanmittauslaitos, maastotietokanta.');
+      mmlTulosTeksti = rivit.join('\n'); box.textContent = mmlTulosTeksti;
+      if (kop) { kop.style.display = ''; kop.textContent = 'Kopioi tulos'; }
     }
 
     // Näyttää pohjasyvyyden omilla merkinnöillä — vaihe 1 siitä mitä lupa mahdollistaa.
@@ -10601,7 +10795,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v121';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v122';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
