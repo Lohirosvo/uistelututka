@@ -3303,9 +3303,10 @@ body{padding-bottom:66px}
       return mmlIndeksi;
     }
     // Syvyysarvio pisteessä MML-datasta. Palauttaa null, jos 300 m sisällä ei ole mitään.
-    function mmlSyvyysPisteessa(lat, lon) {
+    function mmlSyvyysPisteessa(lat, lon) { var t = TM35.fwd(lat, lon); return mmlArvioEN(t.E, t.N); }
+    function mmlArvioEN(tE, tN) {
       var ix = mmlRakennaIndeksi(); if (!ix) return null;
-      var t = TM35.fwd(lat, lon), cx = Math.floor(t.E / 200), cy = Math.floor(t.N / 200), lista = [];
+      var t = { E: tE, N: tN }, cx = Math.floor(t.E / 200), cy = Math.floor(t.N / 200), lista = [];
       var lahinKayra = null, lahinPiste = null;
       for (var dx = -2; dx <= 2; dx++) for (var dy = -2; dy <= 2; dy++) {
         var a = ix.get((cx + dx) + ',' + (cy + dy)); if (!a) continue;
@@ -3324,16 +3325,82 @@ body{padding-bottom:66px}
       lista.slice(0, 6).forEach(function (x) { var w = 1 / Math.max(25, x.e * x.e); sw += w; sd += w * x.d; });
       return { arvio: sd / sw, lahinKayra: lahinKayra, lahinPiste: lahinPiste, n: lista.length };
     }
+    /* ===== YHTEINEN SYVYYSKYSELY — 1.10.2026 (v124), Hannun päätös (a) vertailun jälkeen =====
+       MML ensisijainen, DataDeck varalla. Vertailu v123: MML osui kaikkiin kolmeen omaan
+       syvyysmerkintään (10 m käyrä; 7,5–11 m kahdesti), DataDeck kahteen; yli 6 m:n alueilla
+       lähteet samaa mieltä, matalikoilla MML näyttää 1,5 m siellä missä DataDeck 3,8–6,5 m.
+       Palauttaa saman muodon kuin akSyvyysPisteessa: { min, max, n } + lahde ('MML'/'DataDeck').
+       MML min–max säteellä: säteen sisällä olevat käyrä- ja pistearvot sekä arviot keskeltä ja
+       renkailta (r ≤ 100 m: yksi rengas, muuten r/2 ja r, 8 suuntaa). Rengaspiste ohitetaan, jos
+       se on DataDeckin maskin mukaan maalla (muuten rannan käyrä painaisi minimin 1,5 metriin).
+       DataDeck-varalla luetaan NYKYISEN järven kartta nimeltä, ei kortin valinnasta (v123).
+       Aalto- ja virtausmallit käyttävät yhä DataDeckin ruudukkoa. */
+    function mmlMinMax(lat, lon, r) {
+      if (!mmlSyvData) return null;
+      var ix = mmlRakennaIndeksi(); if (!ix) return null;
+      var t = TM35.fwd(lat, lon), arvot = [], c = Math.ceil(r / 200) + 1;
+      var cx = Math.floor(t.E / 200), cy = Math.floor(t.N / 200);
+      for (var dx = -c; dx <= c; dx++) for (var dy = -c; dy <= c; dy++) {
+        var a = ix.get((cx + dx) + ',' + (cy + dy)); if (!a) continue;
+        for (var k = 0; k < a.length; k += 2) {
+          var j = mmlSyvData.jarvet[a[k]], i = a[k + 1];
+          if (Math.hypot(j.E[i] - t.E, j.N[i] - t.N) <= r) arvot.push(j.D[i]);
+        }
+      }
+      var avain = (typeof kuhaJarvi === 'function') ? kuhaJarvi() : null;
+      var vesi = function (E, N) {
+        if (!avain || typeof window.akOnVetta !== 'function') return true;
+        var g = TM35.inv(E, N), v = window.akOnVetta(avain, g.lat, g.lon);
+        return v !== false;
+      };
+      var pisteet = [[0, 0]];
+      (r <= 100 ? [r] : [r / 2, r]).forEach(function (rr) {
+        for (var q = 0; q < 8; q++) pisteet.push([rr * Math.cos(q * Math.PI / 4), rr * Math.sin(q * Math.PI / 4)]);
+      });
+      var arvioita = 0;
+      pisteet.forEach(function (p, idx) {
+        var E = t.E + p[0], N = t.N + p[1];
+        if (idx > 0 && !vesi(E, N)) return;
+        var m = mmlArvioEN(E, N); if (m) { arvot.push(m.arvio); arvioita++; }
+      });
+      if (!arvioita) return null;   // ei MML-tietoa 300 m sisällä -> varalle
+      return { min: Math.min.apply(null, arvot), max: Math.max.apply(null, arvot), n: arvot.length, lahde: 'MML' };
+    }
+    function syvyysPisteessa(lat, lon, sadeM) {
+      try { var m = mmlMinMax(lat, lon, sadeM || 300); if (m) return m; } catch (e) { console.warn('MML-syvyys:', e.message); }
+      var avain = (typeof kuhaJarvi === 'function') ? kuhaJarvi() : null;
+      if (avain && typeof window.akSyvyysJarvessa !== 'function' && typeof window.akKaynnistaHiljaa === 'function') {
+        try { window.akKaynnistaHiljaa(); } catch (e) {}
+      }
+      var a = null;
+      if (avain && typeof window.akSyvyysJarvessa === 'function') a = window.akSyvyysJarvessa(avain, lat, lon, sadeM);
+      else if (typeof window.akSyvyysPisteessa === 'function') a = window.akSyvyysPisteessa(lat, lon, sadeM);
+      if (a) a.lahde = 'DataDeck';
+      return a;
+    }
+    function syvyysValmis() {
+      return !!mmlSyvData || typeof window.akSyvyysJarvessa === 'function'
+        || (typeof window.akValmis === 'function' && window.akValmis());
+    }
+    function syvLahde(sy) { return sy && sy.lahde === 'MML' ? ' (MML)' : ''; }
+    setTimeout(function () { if ('indexedDB' in window) mmlIdbHae(); }, 3000);   // MML-syvyydet muistiin, jos ladattu
+
     async function mmlVertailu() {
       var box = document.getElementById('mmlTila'), kop = document.getElementById('mmlKopioi');
       if (kop) kop.style.display = 'none';
       await mmlIdbHae();
       if (!mmlSyvData) { box.textContent = 'MML-syvyyksiä ei ole vielä ladattu. Paina ensin "Lataa syvyydet".'; return; }
-      var dd = typeof window.akValmis === 'function' && window.akValmis() && typeof window.akSyvyysPisteessa === 'function';
+      // v123: Lappajärven kartta luetaan nimeltä, ei kortin valinnasta. Karttamoduuli
+      // alustetaan vasta aaltokortin avauksessa, joten käynnistetään se tarvittaessa hiljaa.
+      if (typeof window.akSyvyysJarvessa !== 'function' && typeof window.akKaynnistaHiljaa === 'function') {
+        try { window.akKaynnistaHiljaa(); } catch (e) {}
+      }
+      var dd = typeof window.akSyvyysJarvessa === 'function';
+      var ddHae = function (lat, lon) { return window.akSyvyysJarvessa('lappajarvi', lat, lon, 50); };
       var n1 = function (x) { return x.toFixed(1).replace('.', ','); };
       var rivit = ['Vertailu DataDeck vs MML ' + new Date().toLocaleString('fi-FI') + ' (' + APP_VERSIO + ')',
         'DataDeck = kartan 100 m ruudut, pienin–suurin 3×3 ruudun alueelta. MML = arvio käyristä ja pisteistä (6 lähintä, 300 m).'
-        + (dd ? '' : '\nHUOM: DataDeck-karttaa ei ole ladattu (valitse Lappajärvi ja aja analyysi), joten näytetään vain MML.')];
+        + (dd ? '' : '\nHUOM: DataDeck-karttamoduuli ei ole latautunut, joten näytetään vain MML.')];
       var pisteet = [];
       (typeof omatMerkinnat !== 'undefined' ? omatMerkinnat : []).forEach(function (m) { pisteet.push({ ryhma: 'Oma merkintä 2014', lat: m.lat, lon: m.lon, t: m.t }); });
       try {
@@ -3350,7 +3417,7 @@ body{padding-bottom:66px}
       var ryhma = null, eroja = [];
       pisteet.forEach(function (q) {
         if (q.ryhma !== ryhma) { ryhma = q.ryhma; rivit.push('\n' + ryhma + ':'); }
-        var m = mmlSyvyysPisteessa(q.lat, q.lon), a = dd ? window.akSyvyysPisteessa(q.lat, q.lon, 50) : null;
+        var m = mmlSyvyysPisteessa(q.lat, q.lon), a = dd ? ddHae(q.lat, q.lon) : null;
         var mTxt = m ? 'MML ' + n1(m.arvio) + ' m'
           + ' (käyrä ' + (m.lahinKayra ? n1(m.lahinKayra.d) + ' m/' + Math.round(m.lahinKayra.e) + ' m' : '–')
           + ', piste ' + (m.lahinPiste ? n1(m.lahinPiste.d) + ' m/' + Math.round(m.lahinPiste.e) + ' m' : '–') + ')'
@@ -6532,6 +6599,40 @@ window.akSyvyysPisteessa = function(lat, lon, sadeM){
   return n ? { min: mn, max: mx, n: n } : null;
 };
 
+/* 1.10.2026 (v123): syvyys NIMETYN järven kartasta riippumatta siitä, mikä järvi kortilla
+   on valittuna. akSyvyysPisteessa lukee valitun järven, ja vertailu (v122) antoi Lappajärvellä
+   "ei ruutua" kaikkiin pisteisiin, kun kortilla oli toinen järvi. Purku välimuistiin. */
+var akJarviPurku = {};
+// v124: onko piste vedessä nimetyn järven maskin mukaan (null = ei karttaa / ruudukon ulkopuolella)
+window.akOnVetta = function(avain, lat, lon){
+  var J = JARVET[avain]; if (!J || !J.kartta || !J.kartta.maski) return null;
+  var c = akJarviPurku[avain] || (akJarviPurku[avain] = { s: puraSyvyysLuokat(J.kartta), m: puraMaski(J.kartta) });
+  var k = J.kartta;
+  var i = Math.floor((lon - k.lansiLon)*111320*Math.cos(lat*Math.PI/180)/k.ruutu), j = Math.floor((k.pohjoisLat - lat)*111320/k.ruutu);
+  if (i < 0 || j < 0 || i >= k.W || j >= k.H) return null;
+  return !!c.m[j*k.W + i];
+};
+window.akSyvyysJarvessa = function(avain, lat, lon, sadeM){
+  var J = JARVET[avain];
+  if (!J || !J.kartta || !J.kartta.maski || !J.kartta.syvyysLuokat) return null;
+  var c = akJarviPurku[avain] || (akJarviPurku[avain] = { s: puraSyvyysLuokat(J.kartta), m: puraMaski(J.kartta) });
+  var k = J.kartta, r = Math.max(1, Math.round((sadeM || 300)/k.ruutu));
+  var i0 = Math.floor((lon - k.lansiLon)*111320*Math.cos(lat*Math.PI/180)/k.ruutu);
+  var j0 = Math.floor((k.pohjoisLat - lat)*111320/k.ruutu);
+  var mn = Infinity, mx = -Infinity, n = 0;
+  for (var dj = -r; dj <= r; dj++) for (var di = -r; di <= r; di++){
+    if (di*di + dj*dj > r*r) continue;
+    var i = i0+di, j = j0+dj;
+    if (i < 0 || j < 0 || i >= k.W || j >= k.H) continue;
+    var q = j*k.W + i;
+    if (!c.m[q]) continue;
+    if (c.s[q] < mn) mn = c.s[q];
+    if (c.s[q] > mx) mx = c.s[q];
+    n++;
+  }
+  return n ? { min: mn, max: mx, n: n } : null;
+};
+
 /* YLEISVINKIT ILMAN NIMETTYÄ PAIKKAA — 22.9.2026. Kohdat lasketaan kartasta:
    syvänteen reuna lajin syvyydellä, kumpuamisranta ja paluuvirran reuna.
    Kukin palautetaan koordinaatteina; lähimmän nimetyn paikan etäisyys lasketaan
@@ -7104,20 +7205,21 @@ lataa(eka);
     const POHJAVARA_M = 1, VENE_GPS_MAX_MS = 120000, VENE_SADE_M = 60;
     function taimenVeneella(dMalli) {
       if (!viimeisinGps || !viimeisinGpsAika || Date.now() - viimeisinGpsAika > VENE_GPS_MAX_MS) return null;
-      if (typeof window.akValmis !== 'function' || !window.akValmis() || typeof window.akSyvyysPisteessa !== 'function') return null;
-      const s = window.akSyvyysPisteessa(viimeisinGps.lat, viimeisinGps.lon, VENE_SADE_M);
+      // v124: MML ensin, DataDeck varalla (syvyysPisteessa)
+      const s = syvyysPisteessa(viimeisinGps.lat, viimeisinGps.lon, VENE_SADE_M);
       if (!s || !isFinite(s.max)) return null;
       const pohja = Math.round(s.max * 10) / 10;
-      if (pohja < PINTASAANTO.pohjaMin) return { pohja, tyyppi: 'matala', min: null, max: null };
-      if (pohja <= PINTASAANTO.pohjaMax) return { pohja, tyyppi: 'pinta', min: PINTASAANTO.viehe[0], max: PINTASAANTO.viehe[1] };
-      if (typeof dMalli !== 'number' || isNaN(dMalli)) return { pohja, tyyppi: 'pohja', min: null, max: null };
+      const lahde = s.lahde || 'DataDeck';
+      if (pohja < PINTASAANTO.pohjaMin) return { pohja, lahde, tyyppi: 'matala', min: null, max: null };
+      if (pohja <= PINTASAANTO.pohjaMax) return { pohja, lahde, tyyppi: 'pinta', min: PINTASAANTO.viehe[0], max: PINTASAANTO.viehe[1] };
+      if (typeof dMalli !== 'number' || isNaN(dMalli)) return { pohja, lahde, tyyppi: 'pohja', min: null, max: null };
       const raja = Math.round((pohja - POHJAVARA_M) * 10) / 10, d = Math.round(dMalli * 10) / 10;
-      return d > raja ? { pohja, tyyppi: 'raja', min: raja, max: raja, malli: d } : { pohja, tyyppi: 'malli', min: d, max: d };
+      return d > raja ? { pohja, lahde, tyyppi: 'raja', min: raja, max: raja, malli: d } : { pohja, lahde, tyyppi: 'malli', min: d, max: d };
     }
     function taimenVeneellaTeksti(v) {
       const n = x => x.toFixed(1).replace('.', ',');
       if (!v) return '<span class="hint">Veneen kohdalla: ei tuoretta GPS:ää tai syvyyskarttaa. Käynnistä mittari.</span>';
-      const alku = '<strong>Veneen kohdalla:</strong> pohja n. ' + n(v.pohja) + ' m → ';
+      const alku = '<strong>Veneen kohdalla:</strong> pohja n. ' + n(v.pohja) + ' m <span class="hint">(' + (v.lahde || 'DataDeck') + ')</span> → ';
       if (v.tyyppi === 'matala') return alku + 'alle ' + n(PINTASAANTO.pohjaMin) + ' m, liian matalaa.';
       if (v.tyyppi === 'pinta') return alku + 'pintaharava <strong>' + n(v.min) + '–' + n(v.max) + ' m</strong> <span class="hint">(oma käytäntö: pohja ' + n(PINTASAANTO.pohjaMin) + '–' + PINTASAANTO.pohjaMax + ' m)</span>';
       if (v.tyyppi === 'raja') return alku + '<strong>enintään ' + n(v.min) + ' m</strong> <span class="hint">(pohjaraja; malli ' + n(v.malli) + ' m)</span>';
@@ -9284,7 +9386,7 @@ lataa(eka);
       },
       kuolio: {
         id: "kuolio",
-        name: "Kuolionniemi & Ylivainio (30 m Ottitasanne)",
+        name: "Kuolionniemi & Ylivainio (30 m levyinen hylly)",   // 1.10.2026 (v125): oli "30 m Ottitasanne", luettiin syvyydeksi. 30 m = hyllyn leveys (ks. type). Hannu: ei merkittävää saalishistoriaa nimellä.
         lat: 63.12096, lon: 23.56907,
         type: "1.3–1.6 m patti ➔ 30 m levyinen 1.5–3.0 m hylly",
         hardness: "Kova kivilouhikko (Genesis punainen)",
@@ -9621,14 +9723,14 @@ lataa(eka);
         if (lisa.suosiTuuli && typeof o.tuuliSuunta === 'number' && o.tuuliMs >= 3 && kulmaEro(o.tuuliSuunta, lisa.suosiTuuli) <= 45)
           lisaa(8, 'Paikkatieto', 'Pohjois- tai luoteistuuli on merkitty tälle penkalle sopivaksi.');
         // 7 Syvyyssopivuus (Malli): paikan syvyys 300 m säteellä vs lajien ennustesyvyys
-        const valmis = typeof window.akValmis === 'function' && window.akValmis();
+        const valmis = syvyysValmis();   // v124: MML tai DataDeck
         if (!valmis) puuttuu.add('lataus');
-        const sy = valmis ? window.akSyvyysPisteessa(s.lat, s.lon, 500) : null;
+        const sy = valmis ? syvyysPisteessa(s.lat, s.lon, 500) : null;
         if (valmis && !sy) lisaa(0, 'Malli', 'Paikka on järviruudukon ulkopuolella, joten syvyyttä ja aaltoa ei saada kartalta.');
         if (sy && kohde.length) {
           const osuu = kohde.filter(d => d >= sy.min - 0.5 && d <= sy.max + 0.5).length;
-          if (osuu) lisaa(10, 'Malli', 'Paikalla on syvyyttä ' + n1(sy.min) + '–' + n1(sy.max) + ' m, joten tämän päivän ' + kohde.map(n1).join(' ja ') + ' metrin vetosyvyys löytyy läheltä.');
-          else if (Math.max(...kohde) > sy.max + 3) lisaa(-5, 'Malli', 'Paikka on tälle päivälle matala: syvintä noin ' + n1(sy.max) + ' m, kun malli ajaa kalaa ' + n1(Math.max(...kohde)) + ' metrissä.');
+          if (osuu) lisaa(10, 'Malli', 'Paikalla on syvyyttä ' + n1(sy.min) + '–' + n1(sy.max) + ' m' + syvLahde(sy) + ', joten tämän päivän ' + kohde.map(n1).join(' ja ') + ' metrin vetosyvyys löytyy läheltä.');
+          else if (Math.max(...kohde) > sy.max + 3) lisaa(-5, 'Malli', 'Paikka on tälle päivälle matala: syvintä noin ' + n1(sy.max) + ' m' + syvLahde(sy) + ', kun malli ajaa kalaa ' + n1(Math.max(...kohde)) + ' metrissä.');
           // hämärä ja matala pöytä
           if (typeof o.valoPorras === 'number' && o.valoPorras <= 3 && sy.min <= 4)
             lisaa(6, 'Tutkittu', 'Hämärässä taimen syö aktiivisimmin (Keränen & Lind, Björnsson), ja silloin se uskaltaa nousta matalalle pöydälle. Tässä matalinta on ' + n1(sy.min) + ' m.');
@@ -10220,7 +10322,7 @@ lataa(eka);
       let saaliit = [];
       try { saaliit = lataaSaaliit().filter(x => !x.nollareissu && x.laji === 'kuha'
                                                 && typeof x.lat === 'number' && typeof x.lon === 'number'); } catch (e) {}
-      const valmis = typeof window.akValmis === 'function' && window.akValmis();
+      const valmis = syvyysValmis();   // v124: MML tai DataDeck
       const puuttuu = new Set();
       if (!valmis) puuttuu.add('lataus');
 
@@ -10272,21 +10374,21 @@ lataa(eka);
         if (typeof s.luomaM === 'number' && s.luomaM <= 250)
           lisaa(0, 'Paikkatieto', 'Vanha Hirviluoman uoma on noin ' + s.luomaM + ' metrin päässä. Merkinnöistäsi uoma ei erotu (alle 100 m: 15 % merkinnöistä, 12 % altaasta), joten siitä ei anneta pisteitä.');
         // 3 Syvyys (Malli)
-        let sy = valmis ? window.akSyvyysPisteessa(s.lat, s.lon, 150) : null;
+        let sy = valmis ? syvyysPisteessa(s.lat, s.lon, 150) : null;
         if (sy && jarviAvain === 'hirvijarvi' && hirviKorjaus())
           sy = { min: Math.max(0.3, sy.min + hirviKorjaus()), max: Math.max(0.3, sy.max + hirviKorjaus()), n: sy.n };
         if (valmis && !sy) lisaa(0, 'Malli', 'Paikka on järviruudukon ulkopuolella, joten syvyyttä ja aaltoa ei saada kartalta.');
         if (sy && typeof o.syvyysKuha === 'number') {
           const d = o.syvyysKuha;
           if (d >= sy.min - 0.5 && d <= sy.max + 0.5)
-            lisaa(10, 'Malli', 'Paikalla on syvyyttä ' + n1(sy.min) + '–' + n1(sy.max) + ' m, joten kuhan tämän hetken ' + n1(d) + ' metrin syvyys löytyy läheltä.');
+            lisaa(10, 'Malli', 'Paikalla on syvyyttä ' + n1(sy.min) + '–' + n1(sy.max) + ' m' + syvLahde(sy) + ', joten kuhan tämän hetken ' + n1(d) + ' metrin syvyys löytyy läheltä.');
           else if (d > sy.max + 2)
-            lisaa(-5, 'Malli', 'Paikka on tälle hetkelle matala: syvintä noin ' + n1(sy.max) + ' m, kun malli ajaa kuhaa ' + n1(d) + ' metrissä.');
+            lisaa(-5, 'Malli', 'Paikka on tälle hetkelle matala: syvintä noin ' + n1(sy.max) + ' m' + syvLahde(sy) + ', kun malli ajaa kuhaa ' + n1(d) + ' metrissä.');
           else if (d < sy.min - 1)
-            lisaa(0, 'Malli', 'Malli ajaa kuhaa ' + n1(d) + ' metrissä, mutta paikalla matalinta on noin ' + n1(sy.min) + ' m. '
+            lisaa(0, 'Malli', 'Malli ajaa kuhaa ' + n1(d) + ' metrissä, mutta paikalla matalinta on noin ' + n1(sy.min) + ' m' + syvLahde(sy) + '. '
               + (s.taso === 'Oma saalis' ? 'Omat saaliit ovat tältä alueelta, joten ristiriita kertoo ennemmin mallin kuin paikan epävarmuudesta.' : 'Kuha voi olla reunan matalammalla puolella.'));
           if (sy.max - sy.min >= 1.5)
-            lisaa(5, 'Malli', 'Pohja vaihtuu paikalla ' + n1(sy.min) + ' metristä ' + n1(sy.max) + ' metriin. Reunaa voi ajaa syvyyttä vaihtaen.');
+            lisaa(5, 'Malli', 'Pohja vaihtuu paikalla ' + n1(sy.min) + ' metristä ' + n1(sy.max) + ' metriin' + syvLahde(sy) + '. Reunaa voi ajaa syvyyttä vaihtaen.');
         }
         // 4 Hämärä ja matala paikka (Tutkittu, nuorilla kaloilla)
         if (sy && typeof o.valoPorras === 'number' && o.valoPorras <= 3 && sy.min <= 3)
@@ -10795,7 +10897,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v122';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v125';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
