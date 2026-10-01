@@ -2187,6 +2187,18 @@ body{padding-bottom:66px}
         <div id="luotTila" style="margin-top:10px; font-size:12px; line-height:1.45; white-space:pre-wrap; word-break:break-word;"></div>
       </div>
 
+      <!-- MML MAASTOTIETOKANTA (v121): syvyyskäyrät ja -pisteet, oma API-avain -->
+      <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--line);">
+        <p class="hint" style="margin:0 0 8px;">Maanmittauslaitoksen maastotietokanta: syvyyskäyrät ja syvyyspisteet. API-avain tallentuu vain tähän puhelimeen, ei sovelluksen koodiin.</p>
+        <input type="text" id="mmlAvain" placeholder="MML API-avain" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:100%; box-sizing:border-box;">
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+          <button class="chip" onclick="mmlTallennaAvain()" style="border-color:var(--cyan); color:var(--cyan);">Tallenna avain</button>
+          <button class="chip" onclick="mmlTesti()" style="border-color:var(--cyan); color:var(--cyan);">Testaa järvet (MML)</button>
+          <button class="chip" id="mmlKopioi" onclick="mmlKopioi()" style="display:none; border-color:var(--amber); color:var(--amber);">Kopioi tulos</button>
+        </div>
+        <div id="mmlTila" style="margin-top:10px; font-size:12px; line-height:1.45; white-space:pre-wrap; word-break:break-word;"></div>
+      </div>
+
       <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--line);">
         <p class="hint" style="margin:0 0 8px;">
           <strong style="color:var(--amber);">SYKEn vastaus 2.9.2026:</strong> Lappajärveltä ei ole
@@ -3054,6 +3066,111 @@ body{padding-bottom:66px}
       var kop = document.getElementById('luotKopioi');
       try {
         navigator.clipboard.writeText(luotTulosTeksti).then(
+          function () { if (kop) kop.textContent = 'Kopioitu ✓'; },
+          function () { if (kop) kop.textContent = 'Kopiointi ei onnistunut, maalaa teksti'; });
+      } catch (e) { if (kop) kop.textContent = 'Kopiointi ei onnistunut, maalaa teksti'; }
+    }
+
+    /* ===== MML MAASTOTIETOKANTA — 1.10.2026 (v121) =====
+       Maastotietokannassa on kohdeluokat Syvyyskäyrä (54100) ja Syvyyspiste (54210),
+       käyrät 1,5 / 3 / 6 / 10 / 15 / 20 / 25 m (MML:n kohdemalli; tarkistettu 1.10.).
+       DataDeck-kartta mainitsee lähteiksi MML:n ja Väyläviraston, joten Lappajärven syvyydet
+       voivat olla täällä, vaikka SYKEn luotauksissa niitä ei ole (v120: 0 pistettä).
+       Avoin OGC API Features vaatii maksuttoman API-avaimen. AVAIN EI KOODIIN: sovellus on
+       julkisessa GitHubissa. Avain syötetään kerran ja tallentuu vain puhelimen localStorageen.
+       Testi listaa kohdeluokat, suodattaa syvyysluokat ja hakee kultakin järven laatikolta
+       (samat väljät laatikot kuin luotaustuonnissa) enintään 1000 kohdetta. bbox on WGS84
+       (lon,lat), OGC API Featuresin oletus. Kutsut peräkkäin, tauko 300 ms. */
+    var MML_OGC = 'https://avoin-paikkatieto.maanmittauslaitos.fi/maastotiedot/features/v1';
+    var MML_LS = 'uistelututka_mml_avain';
+    var mmlTulosTeksti = '';
+    function mmlAvain() { try { return localStorage.getItem(MML_LS) || ''; } catch (e) { return ''; } }
+    function mmlNaytaAvain() {
+      var el = document.getElementById('mmlAvain'); if (!el) return;
+      var a = mmlAvain();
+      el.placeholder = a ? 'Avain tallennettu (…' + a.slice(-4) + '). Uusi avain korvaa sen.' : 'MML API-avain';
+    }
+    function mmlTallennaAvain() {
+      var el = document.getElementById('mmlAvain'), tila = document.getElementById('mmlTila');
+      var v = (el.value || '').trim();
+      if (!/^[0-9a-z-]{20,}$/i.test(v)) { tila.textContent = 'Avain näyttää väärältä: siinä pitäisi olla vain kirjaimia, numeroita ja väliviivoja.'; return; }
+      try { localStorage.setItem(MML_LS, v); } catch (e) { tila.textContent = 'Tallennus epäonnistui: ' + e.message; return; }
+      el.value = ''; mmlNaytaAvain();
+      tila.textContent = 'Avain tallennettu tähän puhelimeen.';
+    }
+    setTimeout(mmlNaytaAvain, 1500);
+    async function mmlHae(url) {
+      await syvTauko(300);
+      var r = await fetch(url, { cache: 'no-store' });
+      if (!r.ok) {
+        var t = ''; try { t = (await r.text()).replace(/\s+/g, ' ').slice(0, 120); } catch (e) {}
+        throw new Error('HTTP ' + r.status + (r.status === 401 || r.status === 403 ? ' (avain hylättiin)' : '') + (t ? ': ' + t : ''));
+      }
+      return r.json();
+    }
+    async function mmlTesti() {
+      var box = document.getElementById('mmlTila'), kop = document.getElementById('mmlKopioi');
+      if (!box) return;
+      if (kop) kop.style.display = 'none';
+      var avain = mmlAvain();
+      if (!avain) { box.textContent = 'Syötä ja tallenna ensin API-avain.'; return; }
+      var ak = '&api-key=' + encodeURIComponent(avain);
+      var rivit = ['MML-maastotietokannan testi ' + new Date().toLocaleString('fi-FI') + ' (' + APP_VERSIO + ')'];
+      var loki = function (t) { rivit.push(t); box.textContent = rivit.join('\n') + '\n…'; };
+      var valmis = function () {
+        mmlTulosTeksti = rivit.join('\n'); box.textContent = mmlTulosTeksti;
+        if (kop) { kop.style.display = ''; kop.textContent = 'Kopioi tulos'; }
+      };
+      box.textContent = 'Haetaan kohdeluokkia…';
+      var kokoelmat = [];
+      try {
+        var d = await mmlHae(MML_OGC + '/collections?f=json' + ak);
+        kokoelmat = (d.collections || []).map(function (c) { return { id: c.id, nimi: c.title || '' }; });
+        loki('Kohdeluokkia: ' + kokoelmat.length);
+      } catch (e) {
+        loki('Kohdeluokkia ei saatu: ' + e.message + (e instanceof TypeError ? ' (selain esti haun tai verkko puuttuu)' : ''));
+        valmis(); return;
+      }
+      var syv = kokoelmat.filter(function (c) { return /syvyys|depth/i.test(c.id + ' ' + c.nimi); });
+      loki('Syvyysluokat: ' + (syv.map(function (c) { return c.id + (c.nimi && c.nimi !== c.id ? ' (' + c.nimi + ')' : ''); }).join(', ') || 'ei yhtään'));
+      if (!syv.length) loki('Kaikki luokat: ' + kokoelmat.map(function (c) { return c.id; }).join(', '));
+      var naytteet = {};
+      for (var jj = 0; jj < LUOT_LAATIKOT.length; jj++) {
+        var j = LUOT_LAATIKOT[jj], osat = [];
+        for (var cc = 0; cc < syv.length; cc++) {
+          var c = syv[cc];
+          try {
+            var u = MML_OGC + '/collections/' + encodeURIComponent(c.id) + '/items?f=json&limit=1000&bbox='
+              + [j.lon[0], j.lat[0], j.lon[1], j.lat[1]].join(',') + ak;
+            var dd = await mmlHae(u);
+            var f = dd.features || [];
+            var lisaa = (dd.links || []).some(function (l) { return l.rel === 'next'; });
+            var maara = typeof dd.numberMatched === 'number' ? String(dd.numberMatched) : f.length + (lisaa ? '+' : '');
+            var kentta = null, arvot = [];
+            f.forEach(function (x) {
+              var pp = x.properties || {};
+              if (!kentta) kentta = Object.keys(pp).find(function (k) { return /syvyys|depth|arvo/i.test(k) && isFinite(parseFloat(pp[k])); }) || null;
+              if (kentta) { var v = parseFloat(pp[kentta]); if (isFinite(v)) arvot.push(v); }
+            });
+            var erilaiset = [...new Set(arvot)].sort(function (a, b) { return a - b; });
+            osat.push(c.id + ' ' + maara + (erilaiset.length ? ' (' + kentta + ': ' + (erilaiset.length <= 12 ? erilaiset.join(', ')
+              : erilaiset[0] + '…' + erilaiset[erilaiset.length - 1] + ', ' + erilaiset.length + ' eri arvoa') + ')' : ''));
+            if (f.length && !naytteet[c.id]) naytteet[c.id] = f[0];
+          } catch (e) { osat.push(c.id + ': ' + e.message); }
+        }
+        loki('\n' + j.nimi + ': ' + (osat.join(' · ') || '—'));
+      }
+      Object.keys(naytteet).forEach(function (id) {
+        var f = naytteet[id];
+        loki('\nNäyte ' + id + ': ' + (f.geometry ? f.geometry.type : '?') + '; ' + JSON.stringify(f.properties || {}).slice(0, 300));
+      });
+      loki('\nValmis. Laatikot ovat väljiä, joten määriin sisältyy myös naapurijärviä.');
+      valmis();
+    }
+    function mmlKopioi() {
+      var kop = document.getElementById('mmlKopioi');
+      try {
+        navigator.clipboard.writeText(mmlTulosTeksti).then(
           function () { if (kop) kop.textContent = 'Kopioitu ✓'; },
           function () { if (kop) kop.textContent = 'Kopiointi ei onnistunut, maalaa teksti'; });
       } catch (e) { if (kop) kop.textContent = 'Kopiointi ei onnistunut, maalaa teksti'; }
@@ -10484,7 +10601,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v120';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v121';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
