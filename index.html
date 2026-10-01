@@ -2177,7 +2177,10 @@ body{padding-bottom:66px}
         <p class="hint" style="margin:0 0 8px;">Luotauspisteet tiedostosta: valitse SYKEn <strong>luotauspisteet.zip</strong> Lataukset-kansiosta. Sovellus käy sen läpi palasina, poimii kahdeksan järven alueen pisteet ja tallentaa ne puhelimeen. Kestää muutaman minuutin; pidä sovellus auki.</p>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
           <label class="chip" style="border-color:var(--cyan); color:var(--cyan); cursor:pointer;">Valitse luotauspisteet.zip
-            <input type="file" id="luotTiedosto" accept=".zip,application/zip" style="display:none;" onchange="luotTuo(this.files && this.files[0]); this.value='';">
+            <!-- v120: ei accept-rajausta. Androidin tiedostovalitsin harmaannutti zipin, jos sen
+                 tyypiksi oli tallentunut esim. application/x-zip-compressed tai octet-stream.
+                 Tiedoston kelpoisuus tarkistetaan sisällöstä (zipin loppuhakemisto). -->
+            <input type="file" id="luotTiedosto" style="display:none;" onchange="luotTuo(this.files && this.files[0]); this.value='';">
           </label>
           <button class="chip" id="luotKopioi" onclick="luotKopioi()" style="display:none; border-color:var(--amber); color:var(--amber);">Kopioi tulos</button>
         </div>
@@ -10481,7 +10484,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v119';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v120';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
