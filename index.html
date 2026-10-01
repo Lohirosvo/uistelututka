@@ -2200,6 +2200,10 @@ body{padding-bottom:66px}
           <button class="chip" onclick="mmlLataaJarvet()" style="border-color:var(--olive); color:var(--olive);">Lataa syvyydet (Lappajärvi, Ähtäri, Kivijärvi)</button>
           <button class="chip" onclick="mmlVertailu()" style="border-color:var(--olive); color:var(--olive);">Vertailu: DataDeck vs MML</button>
         </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+          <button class="chip" onclick="jkRakenna()" style="border-color:var(--pink); color:var(--pink);">Rakenna järvikartat (Ähtäri, Kivijärvi)</button>
+          <button class="chip" id="jkTallenna" onclick="jkTallennaTiedosto()" style="display:none; border-color:var(--amber); color:var(--amber);">Tallenna tiedostoksi</button>
+        </div>
         <div id="mmlTila" style="margin-top:10px; font-size:12px; line-height:1.45; white-space:pre-wrap; word-break:break-word;"></div>
       </div>
 
@@ -3384,6 +3388,149 @@ body{padding-bottom:66px}
     }
     function syvLahde(sy) { return sy && sy.lahde === 'MML' ? ' (MML)' : ''; }
     setTimeout(function () { if ('indexedDB' in window) mmlIdbHae(); }, 3000);   // MML-syvyydet muistiin, jos ladattu
+
+    /* ===== JÄRVIKARTAN RAKENNUS MML:STÄ — 1.10.2026 (v126) =====
+       Hannun toive: aalto- ja virtausmalli erityisesti Kivijärvelle (järvilohikokemusta
+       Lintuselältä) sekä Ähtärinjärvelle. Mallit laskevat 100 m ruudukossa (JARVET.kartta:
+       maski + syvyysluokat), joten ruudukko rakennetaan MML:n aineistosta:
+         - rantaviiva: maastotietokannan järvialueet (kohdeluokka haetaan nimellä 'jarvi')
+         - syvyys: jo ladatut MML-käyrät ja -pisteet (v122), arvio ruudun keskeltä
+       Järven monikulmio valitaan syvyysnäytteiden mukaan: mukaan ne yli 0,2 km² monikulmiot,
+       joiden sisään osuu vähintään 1 % näytteistä (iso järvi voi olla useana monikulmiona).
+       Rasterointi rivi kerrallaan (pariton–parillinen sääntö, saaret reikinä): ruudun keskipiste.
+       Syvyysluokat järvikohtaisina (luokkaM) MML:n käyrätasojen mukaan.
+       Tulos tallennetaan tiedostoksi, jonka Claude upottaa JARVET-osioon. */
+    var JK_RAJAT = [1.5, 3, 6, 10, 15, 20, 25, 30, 35, 40, 50, 60];
+    var JK_LUOKKA_M = [0.75, 2.25, 4.5, 8, 12.5, 17.5, 22.5, 27.5, 32.5, 37.5, 45, 55, 65];
+    var JK_KOHTEET = [ { avain: 'ahtarinjarvi', nimi: 'Ähtärinjärvi', laatikko: 'Ähtärinjärvi' },
+                       { avain: 'kivijarvi', nimi: 'Kivijärvi', laatikko: 'Kivijärvi (Kivijärven kunta)' } ];
+    var jkTulos = null;
+    function jkRenkaat(geom) {   // [[ [lon,lat], ... ], ...] kaikki renkaat
+      if (!geom) return [];
+      if (geom.type === 'Polygon') return geom.coordinates;
+      if (geom.type === 'MultiPolygon') return [].concat.apply([], geom.coordinates);
+      return [];
+    }
+    function jkSisalla(renkaat, lon, lat) {   // pariton–parillinen kaikilla renkailla
+      var sis = false;
+      renkaat.forEach(function (r) {
+        for (var i = 0, j = r.length - 1; i < r.length; j = i++) {
+          var xi = r[i][0], yi = r[i][1], xj = r[j][0], yj = r[j][1];
+          if ((yi > lat) !== (yj > lat) && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) sis = !sis;
+        }
+      });
+      return sis;
+    }
+    function jkAlaKm2(renkaat) {
+      var a = 0;
+      renkaat.forEach(function (r, ri) {
+        var s2 = 0, t = r.map(function (c) { return TM35.fwd(c[1], c[0]); });
+        for (var i = 0, j = t.length - 1; i < t.length; j = i++) s2 += (t[j].E + t[i].E) * (t[j].N - t[i].N);
+        a += Math.abs(s2 / 2) * (ri === 0 ? 1 : -1);   // karkea: ensimmäinen ulkorengas, muut reikiä
+      });
+      return Math.abs(a) / 1e6;
+    }
+    async function jkRakenna() {
+      var box = document.getElementById('mmlTila'), kop = document.getElementById('mmlKopioi'), tal = document.getElementById('jkTallenna');
+      if (kop) kop.style.display = 'none'; if (tal) tal.style.display = 'none';
+      var avain = mmlAvain();
+      if (!avain) { box.textContent = 'Syötä ja tallenna ensin API-avain.'; return; }
+      await mmlIdbHae();
+      if (!mmlSyvData) { box.textContent = 'Lataa ensin syvyydet ("Lataa syvyydet").'; return; }
+      var lukko = null; try { if ('wakeLock' in navigator) lukko = await navigator.wakeLock.request('screen'); } catch (e) {}
+      var rivit = ['Järvikarttojen rakennus ' + new Date().toLocaleString('fi-FI') + ' (' + APP_VERSIO + ')'];
+      var nayta = function (lisa) { box.textContent = rivit.join('\n') + (lisa ? '\n' + lisa : ''); };
+      jkTulos = { versio: 1, luotu: new Date().toISOString(), lahde: '© Maanmittauslaitos, maastotietokanta (CC BY 4.0)', jarvet: [] };
+      try {
+        nayta('Etsitään järvialueiden kohdeluokkaa…');
+        var kok = ((await mmlHae(MML_OGC + '/collections?f=json&api-key=' + encodeURIComponent(avain))).collections || []).map(function (c) { return c.id; });
+        var jid = kok.indexOf('jarvi') >= 0 ? 'jarvi' : kok.find(function (x) { return /^jarvi/i.test(x); });
+        if (!jid) throw new Error('järvialueiden kohdeluokkaa ei löytynyt. Tarjolla: ' + kok.filter(function (x) { return /jarv|vesi|allas/i.test(x); }).join(', '));
+        rivit.push('Järvialueet kohdeluokasta: ' + jid);
+        for (var kk = 0; kk < JK_KOHTEET.length; kk++) {
+          var K = JK_KOHTEET[kk];
+          var B = LUOT_LAATIKOT.find(function (x) { return x.nimi === K.laatikko; });
+          var D = mmlSyvData.jarvet.find(function (x) { return x.nimi === K.laatikko; });
+          if (!B || !D || !D.E.length) { rivit.push(K.nimi + ': ei syvyysdataa, ohitetaan.'); continue; }
+          var haku = await mmlHaeKaikki(jid, B, avain, function (n) { nayta(K.nimi + ': järvialueita haettu ' + n + '…'); });
+          // näyte syvyyspisteistä (enintään 600), lon/lat
+          var nayte = [], askel = Math.max(1, Math.floor(D.E.length / 600));
+          for (var i = 0; i < D.E.length; i += askel) { var g = TM35.inv(D.E[i], D.N[i]); nayte.push([g.lon, g.lat]); }
+          nayta(K.nimi + ': valitaan järven monikulmiot…');
+          var ehdokkaat = haku.kohteet.map(function (f) { var r = jkRenkaat(f.geometry); return { r: r, ala: jkAlaKm2(r), p: f.properties || {} }; })
+            .filter(function (x) { return x.r.length && x.ala > 0.2; });
+          ehdokkaat.forEach(function (x) { x.osuus = nayte.filter(function (q) { return jkSisalla(x.r, q[0], q[1]); }).length / nayte.length; });
+          ehdokkaat.sort(function (a, b) { return b.osuus - a.osuus; });
+          var valitut = ehdokkaat.filter(function (x) { return x.osuus >= 0.01; });
+          rivit.push('\n' + K.nimi + ': järvialueita ' + haku.kohteet.length + (haku.kesken ? ' (KESKEN)' : '') + ', valittu ' + valitut.length + ': '
+            + valitut.map(function (x) { return x.ala.toFixed(1) + ' km² / ' + Math.round(x.osuus * 100) + ' %'; }).join(', '));
+          if (!valitut.length) { rivit.push('  Ei sopivaa monikulmiota.'); continue; }
+          var renkaat = [].concat.apply([], valitut.map(function (x) { return x.r; }));
+          var minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
+          renkaat.forEach(function (r) { r.forEach(function (c) { minLon = Math.min(minLon, c[0]); maxLon = Math.max(maxLon, c[0]); minLat = Math.min(minLat, c[1]); maxLat = Math.max(maxLat, c[1]); }); });
+          var ruutu = 100, latK = (minLat + maxLat) / 2;
+          var pohjoisLat = +(maxLat + 0.0005).toFixed(5), lansiLon = +(minLon - 0.001).toFixed(5);
+          var H = Math.ceil((pohjoisLat - minLat) * 111320 / ruutu) + 2;
+          var W = Math.ceil((maxLon - lansiLon) * 111320 * Math.cos(minLat * Math.PI / 180) / ruutu) + 2;
+          var mask = new Uint8Array(W * H), luok = new Uint8Array(W * H).fill(15);
+          // reunat valmiiksi
+          var reunat = [];
+          renkaat.forEach(function (r) { for (var a = 0, b2 = r.length - 1; a < r.length; b2 = a++) reunat.push([r[b2][0], r[b2][1], r[a][0], r[a][1]]); });
+          var vesi = 0, ilman = 0, summa = 0, syvin = 0;
+          for (var j = 0; j < H; j++) {
+            var lat = pohjoisLat - (j + 0.5) * ruutu / 111320, cosl = Math.cos(lat * Math.PI / 180), xs = [];
+            reunat.forEach(function (e) {
+              if ((e[1] > lat) !== (e[3] > lat)) xs.push(e[0] + (lat - e[1]) * (e[2] - e[0]) / (e[3] - e[1]));
+            });
+            xs.sort(function (a, b) { return a - b; });
+            for (var p2 = 0; p2 + 1 < xs.length; p2 += 2) {
+              var i0 = Math.ceil((xs[p2] - lansiLon) * 111320 * cosl / ruutu - 0.5), i1 = Math.floor((xs[p2 + 1] - lansiLon) * 111320 * cosl / ruutu - 0.5);
+              for (var ii = Math.max(0, i0); ii <= Math.min(W - 1, i1); ii++) {
+                var q = j * W + ii; if (mask[q]) continue;
+                mask[q] = 1; vesi++;
+                var lon = lansiLon + (ii + 0.5) * ruutu / (111320 * cosl), t = TM35.fwd(lat, lon), m = mmlArvioEN(t.E, t.N);
+                var dpt = m ? m.arvio : null;
+                if (dpt === null) { ilman++; dpt = 3; }   // ei näytettä 300 m sisällä: 3 m oletus (kerrotaan)
+                summa += dpt; syvin = Math.max(syvin, dpt);
+                var c = 0; while (c < JK_RAJAT.length && dpt >= JK_RAJAT[c]) c++;
+                luok[q] = c;
+              }
+            }
+            if (j % 20 === 0) { nayta(K.nimi + ': ruudukko ' + Math.round(100 * j / H) + ' %'); await new Promise(function (ok) { setTimeout(ok, 0); }); }
+          }
+          // pakkaus JARVET-muotoon: maski 1 bitti/ruutu (MSB ensin), luokat 4 bittiä/ruutu
+          var mb = new Uint8Array(Math.ceil(W * H / 8)), lb = new Uint8Array(Math.ceil(W * H / 2));
+          for (var q2 = 0; q2 < W * H; q2++) {
+            if (mask[q2]) mb[q2 >> 3] |= 1 << (7 - (q2 & 7));
+            lb[q2 >> 1] |= (q2 & 1) ? (luok[q2] & 15) : ((luok[q2] & 15) << 4);
+          }
+          var b64 = function (u8) { var s3 = ''; for (var z = 0; z < u8.length; z += 8192) s3 += String.fromCharCode.apply(null, u8.subarray(z, z + 8192)); return btoa(s3); };
+          var syvinNayte = 0; for (var z2 = 0; z2 < D.D.length; z2++) syvinNayte = Math.max(syvinNayte, D.D[z2]);
+          var tulos = { avain: K.avain, nimi: K.nimi, lat: +((minLat + maxLat) / 2).toFixed(5), lon: +((minLon + maxLon) / 2).toFixed(5),
+                        syvyys: +(summa / Math.max(1, vesi)).toFixed(1), alaKm2: +(vesi * ruutu * ruutu / 1e6).toFixed(1),
+                        syvinRuutu: +syvin.toFixed(1), syvinNayteAlueella: +syvinNayte.toFixed(1), ruutujaIlmanSyvyytta: ilman,
+                        monikulmiot: valitut.map(function (x) { return { alaKm2: +x.ala.toFixed(2), osuus: +x.osuus.toFixed(3) }; }),
+                        kartta: { ruutu: ruutu, W: W, H: H, pohjoisLat: pohjoisLat, lansiLon: lansiLon, maski: b64(mb), syvyysLuokat: b64(lb), luokkaM: JK_LUOKKA_M } };
+          jkTulos.jarvet.push(tulos);
+          rivit.push('  Ruudukko ' + W + ' × ' + H + ', vesiruutuja ' + vesi + ' (≈ ' + tulos.alaKm2 + ' km²), keskisyvyys ' + tulos.syvyys
+            + ' m, syvin ruutu ' + tulos.syvinRuutu + ' m, ilman syvyysnäytettä ' + ilman + ' ruutua (' + Math.round(100 * ilman / Math.max(1, vesi)) + ' %, oletus 3 m).');
+        }
+        rivit.push('\nValmis. Paina "Tallenna tiedostoksi" ja lähetä tiedosto Claudelle.');
+      } catch (e) { rivit.push('\nVIRHE: ' + (e && e.message || e)); }
+      finally { try { if (lukko) lukko.release(); } catch (e) {} }
+      mmlTulosTeksti = rivit.join('\n'); box.textContent = mmlTulosTeksti;
+      if (kop) { kop.style.display = ''; kop.textContent = 'Kopioi tulos'; }
+      if (tal && jkTulos && jkTulos.jarvet.length) tal.style.display = '';
+    }
+    function jkTallennaTiedosto() {
+      if (!jkTulos) return;
+      var blob = new Blob([JSON.stringify(jkTulos)], { type: 'application/json' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = 'uistelututka_jarvikartat.json';
+      document.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+      var tal = document.getElementById('jkTallenna'); if (tal) tal.textContent = 'Tallennettu Latauksiin ✓';
+    }
 
     async function mmlVertailu() {
       var box = document.getElementById('mmlTila'), kop = document.getElementById('mmlKopioi');
@@ -10897,7 +11044,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v125';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v126';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
