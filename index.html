@@ -9963,7 +9963,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v113';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v114';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -15972,21 +15972,34 @@ lataa(eka);
   });
   document.body.appendChild(navi);
 
-  function nayta(id){
+  /* 1.10.2026 (v114): KORJAUS. Sovellus muistaa viimeisen ruudun. Kun se oli
+     Raportit, nayta() laski osuvuusraportin KESKEN pääskriptin latauksen, ennen kuin
+     sen vakiot (OSUVUUS_HUDIT_N, v108) oli määritelty -> ReferenceError, pääskripti
+     kaatui ja intro jäi ruudulle. Vika näkyi vain, kun saalislokissa oli mitattu syvyys.
+     Nyt: (1) ensimmäisen ruudun sisältö lasketaan vasta, kun koko skripti on ajettu,
+     (2) yhden ruudun kaatuminen ei estä ruudun vaihtoa; virhe näytetään silti
+     punaisessa palkissa (heitetään uudelleen erikseen). */
+  function nayta(id, lykkaa){
     RUUDUT.forEach(function(r){ sailio[r.id].style.display = (r.id===id) ? '' : 'none'; });
     Array.prototype.forEach.call(navi.children, function(b){
       b.classList.toggle('on', b.getAttribute('data-ruutu') === id);
     });
     try{ localStorage.setItem('uistelututka_ruutu', id); }catch(e){}
-    if(id === 'vesilla' && typeof paivitaVesilla === 'function') paivitaVesilla();
-    if(id === 'raportit' && typeof laskeOsuvuus === 'function') laskeOsuvuus();
-    if(id === 'raportit' && typeof pyyntiRaportti === 'function') pyyntiRaportti();
+    function aja(f){
+      try { f(); } catch(e) { setTimeout(function(){ throw e; }, 0); }
+    }
+    function paivita(){
+      if(id === 'vesilla' && typeof paivitaVesilla === 'function') aja(paivitaVesilla);
+      if(id === 'raportit' && typeof laskeOsuvuus === 'function') aja(laskeOsuvuus);
+      if(id === 'raportit' && typeof pyyntiRaportti === 'function') aja(pyyntiRaportti);
+    }
+    if (lykkaa) setTimeout(paivita, 0); else paivita();
     window.scrollTo(0,0);
   }
   var alku = 'suunnittelu';
   try{ var t = localStorage.getItem('uistelututka_ruutu');
        if(t && sailio[t]) alku = t; }catch(e){}
-  nayta(alku);
+  nayta(alku, true);
   window.naytaRuutu = nayta;
 })();
 
