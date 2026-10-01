@@ -8667,6 +8667,16 @@ lataa(eka);
       const m = ["pohjoisosaan","koillisosaan","itäosaan","kaakkoisosaan","eteläosaan","lounaisosaan","länsiosaan","luoteisosaan"];
       return m[(Math.round(((deg % 360) / 45)) % 8 + 8) % 8];
     }
+    /* 1.10.2026 (v117): "Etelän puoleinen ranta" luettiin saaren kohdalla väärin.
+       Suoja on siellä, missä MAA on tuulen puolella: järvellä tuulen suunnan ranta,
+       saarella vastakkainen puoli (etelätuuli -> järven eteläranta, saaren pohjoispuoli).
+       deg = mistä tuulee. Hannun huomio 1.10.2026. */
+    function compassSuojaranta(deg) {
+      const ranta = ["pohjoisranta","koillisranta","itäranta","kaakkoisranta","eteläranta","lounaisranta","länsiranta","luoteisranta"];
+      const puoli = ["pohjoispuoli","koillispuoli","itäpuoli","kaakkoispuoli","eteläpuoli","lounaispuoli","länsipuoli","luoteispuoli"];
+      const i = (Math.round(((deg % 360) / 45)) % 8 + 8) % 8;
+      return { jarvi: ranta[i], saari: puoli[(i + 4) % 8] };
+    }
     function compassGenitive(deg) {
       const gen = ["Pohjoisen","Koillisen","Idän","Kaakon","Etelän","Lounaan","Lännen","Luoteen"];
       const idx = Math.round(((deg % 360) / 45)) % 8;
@@ -8678,6 +8688,8 @@ lataa(eka);
     function genericLocationAdvice(targetHour, dir, temp, season, locName) {
       const maatuuliSuunta = compassName(dir);
       const maatuuliGen = compassGenitive(dir);
+      const suoja = compassSuojaranta(dir);
+      const suojaTxt = `rantaa, jossa maa on tuulen puolella: järven ${suoja.jarvi} tai saaren ${suoja.saari}`;
       let targetSpecies, structureTip, why;
 
       if (temp > 17) {
@@ -8686,17 +8698,17 @@ lataa(eka);
         why = `Pintavesi on yli 17 °C, joten kalat todennäköisesti vetäytyvät viileämpään avoveteen. ${locName}:lle ei ole vielä nimettyjä tarkkoja paikkoja — yleinen periaate, ei tälle järvelle erikseen vahvistettu.`;
       } else if (season === 'autumn' && temp >= 4 && temp <= 10) {
         targetSpecies = "Rantavyöhyke";
-        structureTip = `Etsi ${maatuuliGen} puoleista rantaa tai niemenkärkeä (maa tuulen puolella) — siellä vesi on tyynempää ja kylmää kumpuaa pohjasta.`;
+        structureTip = `Etsi ${suojaTxt}, myös niemenkärkiä. Siellä vesi on tyynempää ja kylmää kumpuaa pohjasta.`;
         why = `Syksyn 4–10 °C -ikkunassa (Harri Hotti) kala on yleensä aktiivisin lähellä rantaa, erityisesti maatuulen suojassa. Yleinen periaate, ei ${locName}:lle erikseen vahvistettu.`;
       } else {
         targetSpecies = "Niemenkärjet ja syvänteen reunat";
-        structureTip = `Etsi ${maatuuliGen} puoleista rantaa (maatuulen puoli, kylmempää ja tyynempää) tai kovaa pohjaa/rinnettä syvänteen laidalla.`;
+        structureTip = `Etsi ${suojaTxt} (kylmempää ja tyynempää), tai kovaa pohjaa/rinnettä syvänteen laidalla.`;
         why = `Ei nimettyä paikkatietoa ${locName}:lle vielä — suositus perustuu yleisiin tuuli- ja lämpötilaperiaatteisiin, jotka on validoitu Lappajärvellä mutta ei tällä järvellä.`;
       }
 
       return {
         topSpot: {
-          name: `Yleisneuvo — ${maatuuliGen} puoleinen ranta`,
+          name: `Yleisneuvo — järven ${suoja.jarvi} tai saaren ${suoja.saari}`,
           targetSpecies,
           type: "Ei nimettyä paikkatietoa tällä järvellä",
           hardness: "Ei tiedossa — tarkista kaikuluotaimella",
@@ -10032,7 +10044,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v116';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v117';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
