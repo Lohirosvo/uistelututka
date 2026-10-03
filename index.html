@@ -1426,6 +1426,7 @@ body{padding-bottom:66px}
     <div class="ak-leima" id="akLeima">–<small>haetaan</small></div>
     <div class="ak-tuuli" id="akTuuli"></div>
   </div>
+  <p class="hint" id="akKumpuInfo" style="margin:6px 0 0; color:#e0308a; display:none;"></p>
 
   <div class="ak-asteikko" id="akAsteikko"></div>
   <div class="ak-alarivi">
@@ -5044,6 +5045,58 @@ body{padding-bottom:66px}
                tuuli: saa.tuuli, lahde: saa.tuuliLahde, h1: h1, L: L, Llahde: Llahde };
     }
 
+    /* ===== KUMPUAMINEN KARTALLE JA PUHEESEEN — 3.10.2026 (v136) =====
+       Hannun pyyntö: kumpuaminen puheisiin ja keskeinen kumpuamisalue pinkillä kartalle,
+       jos oletus on vahva. Sama Wedderburn-laskenta kuin kumpuamisAnalyysi (lähteet yllä):
+       W = g'·h1² / (u*²·L). VAHVA = mitattu kerrostuneisuus (lämpöprofiili) JA W ≤ 1 JA tuuli
+       on kestänyt vähintään neljäsosan sisäisen seichen jaksosta (Stevens & Imberger 1996).
+       Ilman mitattua profiilia kumpuamista ei lasketa eikä väritetä (g' ja h1 puuttuvat).
+       Alue = ranta, jonka takana maa on tuulen puolella (pintavesi työntyy siitä pois). */
+    function kumpuParametrit() {
+      try {
+        if (!drProfiili || drProfiili.tasalampoinen) return null;
+        const T1 = drProfiili.pinta, T2 = drProfiili.pohja;
+        if (!(T1 > T2)) return null;
+        const h1 = drProfiili.termokliini || 4, h2 = Math.max(1, ((currentLocation && currentLocation.maxDepth) || 20) - h1);
+        const r1 = vedenTiheys(T1), r2 = vedenTiheys(T2);
+        return { gp: 9.81 * (r2 - r1) / r2, h1: h1, h2: h2, rho: r1 };
+      } catch (e) { return null; }
+    }
+    function kumpuArvio(U, L, tunteja) {
+      const p = kumpuParametrit();
+      if (!p || !(U > 0) || !(L > 0)) return null;
+      const Cd = U >= 5 ? 0.0015 : 0.001, uStar = Math.sqrt(Cd * 1.225 * U * U / p.rho);
+      const W = p.gp * p.h1 * p.h1 / (uStar * uStar * L);
+      const ci = Math.sqrt(p.gp * p.h1 * p.h2 / (p.h1 + p.h2)), kestoH = (2 * L / ci) / 4 / 3600;
+      const riittaa = typeof tunteja === 'number' ? tunteja >= kestoH : false;
+      return { W: W, kestoH: kestoH, riittaa: riittaa, vahva: W <= 1 && riittaa };
+    }
+    window.kumpuArvio = kumpuArvio;   // aaltokartan moduuli käyttää tätä
+    // Havaittu tuulen kesto (tuuliKertyma), jos suunta on sama kuin ennusteen alussa (±45°)
+    window.kumpuHistoriaTunteja = function (dir) {
+      try {
+        if (!tuuliKertyma || !tuuliKertyma.luotettava || typeof tuuliKertyma.suunta !== 'number') return 0;
+        return Math.abs(((tuuliKertyma.suunta - dir + 540) % 360) - 180) <= 45 ? tuuliKertyma.tunteja : 0;
+      } catch (e) { return 0; }
+    };
+    function kumpuPuhe() {
+      try {
+        const k = kumpuamisAnalyysi(), saa = saaNyt();
+        if (!k || saa.tuuliSuunta == null) return '';
+        const sj0 = compassSuojaranta(saa.tuuliSuunta);
+        const sj = { jarvi: sj0.jarvi.replace(/ranta$/, 'rannalla'), saari: sj0.saari.replace(/puoli$/, 'puolella') };
+        const tun = (tuuliKertyma && tuuliKertyma.luotettava) ? tuuliKertyma.tunteja : null;
+        if (k.W <= 1 && tun !== null && tun >= k.kestoH)
+          return 'Kumpuaminen on todennäköistä. Tuuli on puhaltanut ' + tun + ' tuntia, ja kylmää alusvettä nousee järven ' + sj.jarvi
+            + ' ja saarten ' + sj.saari + '. Kartalla alue on pinkki.';
+        if (k.W <= 1)
+          return 'Tuuli riittää kumpuamiseen, mutta sen pitää kestää noin ' + Math.max(1, Math.round(k.kestoH)) + ' tuntia ennen kuin kylmää vettä nousee järven ' + sj.jarvi + '.';
+        if (k.W <= 3)
+          return 'Harppauskerros kallistuu: järven ' + sj.jarvi + ' se nousee lähemmäs pintaa, mutta ei pintaan asti.';
+        return '';
+      } catch (e) { return ''; }
+    }
+
     /* Kerrostuneisuus: DepthRider-profiili ensin, sitten syötetty harppauskerros.
        true = kerrostunut, false = mitattu tasalämpöiseksi, null = ei tiedossa.
        Yksi funktio, jota kumpuamisselostus ja ottipaikkojen pisteytys käyttävät. */
@@ -6429,6 +6482,25 @@ function piirra(){
 
   // Piirretään moninkertaisella tarkkuudella ja pehmennetään aallonkorkeus
   // ruutujen välillä. Näin ranta pysyy terävänä mutta pinta ei ole porrasteinen.
+  // v136: vahva kumpuaminen -> pinkki alue
+  var kumpu = null, kumpuInfo = $("akKumpuInfo");
+  try {
+    /* Kesto: ennustesarjan alusta laskettu kesto + havaittu tuuli ennen sarjaa, jos tuuli on
+       pysynyt samana sarjan alusta asti. Pyyhkäisymatka tuulen suunnassa (akSuunnattuMitta). */
+    var tunt = d.tunteja, ix = data.indexOf(d);
+    if (ix >= 0 && d.tunteja >= ix + 1 && typeof window.kumpuHistoriaTunteja === 'function') tunt += window.kumpuHistoriaTunteja(data[0].dir);
+    var Lk = (typeof window.akSuunnattuMitta === 'function') ? window.akSuunnattuMitta(d.dir, jarvi.nimi) : null;
+    if (!(Lk > 200)) Lk = d.Fpahin || 0;
+    var ka = (typeof window.kumpuArvio === 'function') ? window.kumpuArvio(U, Lk, tunt) : null;
+    if (ka && ka.vahva) kumpu = akKumpuAlue(d.dir);
+    if (kumpuInfo){
+      if (kumpu){ kumpuInfo.style.display = '';
+        kumpuInfo.textContent = 'Pinkki = todennäköinen kumpuamisalue: kylmää alusvettä nousee. Wedderburn-luku ' + ka.W.toFixed(2).replace('.', ',')
+          + ' (≤ 1) ja tuuli on kestänyt ' + tunt + ' h (tarve noin ' + Math.max(1, Math.round(ka.kestoH)) + ' h). Edellyttää mitattua lämpöprofiilia.'; }
+      else { kumpuInfo.style.display = 'none'; kumpuInfo.textContent = ''; }
+    }
+  } catch (e) { kumpu = null; }
+
   var S = Math.min(8, Math.max(2, Math.round(380/k.W)));
   var LW = k.W*S, LH = k.H*S;
   var c = $("akKuva");
@@ -6480,6 +6552,11 @@ function piirra(){
       } else {
         kuva.data[o] = t[0]; kuva.data[o+1] = t[1]; kuva.data[o+2] = t[2];
       }
+      if (kumpu && kumpu[nj*k.W + ni]){   // v136: pinkki sävy päälle
+        kuva.data[o]   = Math.round(kuva.data[o]*0.2 + 255*0.8);
+        kuva.data[o+1] = Math.round(kuva.data[o+1]*0.2 + 64*0.8);
+        kuva.data[o+2] = Math.round(kuva.data[o+2]*0.2 + 170*0.8);
+      }
       kuva.data[o+3] = 255;
     }
   }
@@ -6524,6 +6601,23 @@ function piirra(){
 }
 
 var akViime = null, akValittu = null;
+
+/* v136: kumpuamisalue = vesiruudut, joista tuulen yläpuolelle (tuulen tulosuuntaan) 300 m
+   sisällä on rantaa. Siellä pintavesi työntyy pois rannasta ja tilalle nousee syvempää vettä.
+   Piirretään vain, kun pääkoodin Wedderburn-arvio on VAHVA (kumpuArvio). */
+function akKumpuAlue(dir){
+  var k = jarvi.kartta, W = k.W, H = k.H, z = new Uint8Array(mask.length), n = 0;
+  var a = dir*Math.PI/180, sx = Math.sin(a), sy = -Math.cos(a);
+  for (var q = 0; q < mask.length; q++){
+    if (!mask[q]) continue;
+    var i = q % W, j = (q/W)|0;
+    for (var st = 1; st <= 3; st++){
+      var ii = Math.round(i + sx*st), jj = Math.round(j + sy*st);
+      if (ii < 0 || jj < 0 || ii >= W || jj >= H || !mask[jj*W + ii]){ z[q] = 1; n++; break; }
+    }
+  }
+  return n ? z : null;
+}
 
 /* Yhden tunnin uisteltava osuus. Sama laskenta kuin kartassa, mutta ilman
    piirtoa: vain osuus rajan alla. */
@@ -10033,7 +10127,13 @@ lataa(eka);
       var chip = function (t) { return '<span class="chip" style="padding:1px 7px;font-size:11px;margin-right:6px;">' + t + '</span>'; };
       var rivi = function (taso, teksti) { return '<div style="margin:5px 0;font-size:13px;line-height:1.45;">' + chip(taso) + teksti + '</div>'; };
       var n1 = function (x) { return (Math.round(x * 10) / 10).toLocaleString('fi-FI'); };
-      var vali = function (v) { return v && isFinite(v[0]) && isFinite(v[1]) ? n1(v[0]) + '–' + n1(v[1]) + ' m' : null; };
+      // v136: malli ei voi ajaa kalaa järven pohjan alle (esim. Evijärvi 3,5 m)
+      var maxD = o.maxDepth || Infinity;
+      var vali = function (v) {
+        if (!v || !isFinite(v[0]) || !isFinite(v[1])) return null;
+        var a = Math.min(v[0], maxD), b = Math.min(v[1], maxD);
+        return n1(a) + '–' + n1(b) + ' m' + (v[1] > maxD ? ' (järvi on enintään ' + n1(maxD) + ' m syvä)' : '');
+      };
       var suoja = compassSuojaranta(o.tuuliSuunta), tuuli = compassSuojaranta(o.tuuliSuunta + 180);
       var syksy = o.kausi === 'autumn' && o.lampo >= 4 && o.lampo <= 10;
       var osat = [];
@@ -10055,18 +10155,51 @@ lataa(eka);
             r.push(rivi('Tutkittu', 'Pintavesi on yli 17 °C. Taimen hakeutuu kasvuoptimiinsa (kalaa syövällä 16,6–17,4 °C, Larsson 2005), joten se on viileämmässä kerroksessa.'));
           r.push(rivi('Oma käytäntö', 'Matalikolla (pohja 0,5–8 m) pintaharava 0,1–0,7 m. Veneen kohdan pohja näkyy Vesillä-ruudulla.'));
         }
+        if (laji === 'hauki') {
+          if (vali(o.hauki)) r.push(rivi('Malli', 'Hauki noin ' + vali(o.hauki) + '.'));
+          r.push(rivi('Konsensus', 'Hauki väijyy kasvillisuuden reunoilla ja matalan rannan pudotuksissa. Syksyllä isot hauet siirtyvät syvemmälle syöttikalaparvien perään. Uistelijoiden yleinen käsitys; tutkimuslähdettä en tarkistanut.'));
+        }
+        if (laji === 'ahven') {
+          if (vali(o.ahven)) r.push(rivi('Malli', 'Ahven noin ' + vali(o.ahven) + '.'));
+          r.push(rivi('Konsensus', 'Ahven liikkuu parvina pudotuksilla ja matalikkojen reunoilla ja syö pääosin valoisaan aikaan. Uistelijoiden yleinen käsitys; tutkimuslähdettä en tarkistanut.'));
+        }
         if (laji === 'jarvilohi') {
           if (vali(o.jarvilohi)) r.push(rivi('Malli', 'Järvilohi noin ' + vali(o.jarvilohi) + '.'));
           r.push(rivi('Konsensus', 'Järvilohi on ulapan kala, joka liikkuu syöttikalaparvien (muikku, kuore) perässä. Aja avoimia selkiä ja säädä syvyys luotaimen parvien mukaan. Uistelijoiden yleinen käsitys; tutkimuslähdettä en tarkistanut.'));
           if (o.jarvi === 'kivijarvi')
             r.push(rivi('Oma kokemus', 'Lintuselkä: järvilohikokemusta. Paikka lisätään ottipaikaksi, kun sijainti ja olosuhteet on kirjattu.'));
         }
-        var nimi = { kuha: '🐟 Kuha', taimen: '🐟 Taimen', jarvilohi: '🐟 Järvilohi' }[laji] || laji;
+        var nimi = { kuha: '🐟 Kuha', taimen: '🐟 Taimen', jarvilohi: '🐟 Järvilohi', hauki: '🐟 Hauki', ahven: '🐟 Ahven' }[laji] || laji;
         if (r.length) osat.push('<div style="margin-top:10px;"><strong>' + nimi + '</strong>' + r.join('') + '</div>');
       });
       return '<h2 style="margin-top:0;">Yleisneuvo lajeittain <span style="font-weight:normal;font-size:.8em;">' + o.nimi + '</span></h2>'
         + '<p class="hint" style="margin:0;">Järvelle ei ole nimettyjä ottipaikkoja. Neuvo kertoo, millaista paikkaa ja syvyyttä etsiä.</p>'
+        + '<div id="lajineuvoVirta"></div>'
         + osat.join('');
+    }
+
+    /* v136: virtaukset lajineuvoon. Aaltokartan malli järven keskipisteessä: pintavirta (tuulen
+       mukana, ~2 % tuulesta) ja syvempi vesi (tuulen ajama kierto, usein paluuvirta). Vaikutus
+       kalastukseen kerrotaan fysiikkana (vene kulkee vedessä eri nopeutta kuin GPS näyttää)
+       ja konsensuksena (ajelehtiva ravinto kasautuu tuulen alapuolelle). Kumpuaminen erikseen. */
+    function lajiNeuvoVirrat(paikka, hetki) {
+      var el = document.getElementById('lajineuvoVirta');
+      if (!el || typeof window.akMalliPisteessa !== 'function' || !paikka) return;
+      if (typeof window.akKaynnistaHiljaa === 'function') { try { window.akKaynnistaHiljaa(); } catch (e) {} }
+      var n1 = function (x) { return (Math.round(x * 10) / 10).toLocaleString('fi-FI'); };
+      var chip = function (t) { return '<span class="chip" style="padding:1px 7px;font-size:11px;margin-right:6px;">' + t + '</span>'; };
+      Promise.resolve(window.akMalliPisteessa(paikka.lat, paikka.lon, hetki && hetki.getTime ? hetki.getTime() : Date.now())).then(function (m) {
+        if (!m || !(m.pintaKmh >= 0)) { el.innerHTML = ''; return; }
+        var kohti = function (deg) { return isFinite(deg) ? KUUL_ILMANSUUNTA[Math.round(((deg % 360) + 360) % 360 / 45) % 8][1] : '?'; };
+        var t = '<div style="margin-top:10px;"><strong>🌊 Virtaukset (järven keskellä)</strong>'
+          + '<div style="margin:5px 0;font-size:13px;line-height:1.45;">' + chip('Malli') + 'Pintavirta noin ' + n1(m.pintaKmh) + ' km/h ' + kohti(m.pintaSuunta)
+          + (m.syvaKmh > 0.01 ? ', syvemmällä noin ' + n1(m.syvaKmh) + ' km/h ' + kohti(m.syvaSuunta) + (m.syvaTuuleen === 'vastaan' ? ' (paluuvirta tuulta vastaan)' : '') : '')
+          + '. Myötävirtaan vene kulkee vedessä hitaammin kuin GPS näyttää, vastavirtaan nopeammin: vieheen käynti muuttuu, vaikka GPS-nopeus pysyy samana.</div>'
+          + '<div style="margin:5px 0;font-size:13px;line-height:1.45;">' + chip('Konsensus') + 'Pinnalla ajelehtiva ravinto ja syöttikala kasautuvat tuulen alapuoliselle rannalle. Vastarannalla pintavesi vaihtuu syvemmästä nousevaan.</div>';
+        var kp = ''; try { kp = kumpuPuhe(); } catch (e) {}
+        if (kp) t += '<div style="margin:5px 0;font-size:13px;line-height:1.45;color:#ff40a0;">' + chip('Tutkittu') + kp + ' (Wedderburn-luku, mitattu lämpöprofiili.)</div>';
+        el.innerHTML = t + '</div>';
+      }).catch(function () { el.innerHTML = ''; });
     }
 
     function genericLocationAdvice(targetHour, dir, temp, season, locName) {
@@ -11441,7 +11574,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v135';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v136';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -12428,6 +12561,9 @@ lataa(eka);
           if (saeOsat.length) osat.push('Sää. ' + saeOsat.join(' '));
         }
       }
+
+      // v136: kumpuaminen, jos laskettavissa ja merkittävä
+      try { const kp = kumpuPuhe(); if (kp) osat.push(kp); } catch (e2) {}
 
       // 9 Muut syvyydet lyhyesti
       osat.push('Syöttikala on noin ' + puheLuku(e.muikku, 0) + ' metrissä.' + (viimeisinKuhapaikka ? '' : ' Kuha, jos sitä kokeilet, noin ' + puheLuku(e.kuha) + ' metrissä.'));
@@ -16445,7 +16581,9 @@ lataa(eka);
             ln.innerHTML = lajiNeuvoHtml({ nimi: currentLocation.name.replace(/\s*\(.*\)/, ''), jarvi: karttaAvain(), lajit: kl,
               tuuliSuunta: wDir, tuuliMs: wSpeed, lampo: curTemp, kausi: a.season, valoPorras: valoPorras(targetFractional),
               tuuliTunteja: tuuliKertyma && tuuliKertyma.luotettava ? tuuliKertyma.tunteja : 0,
-              kuha: [lowK, highK], taimen: [lowT, highT], jarvilohi: [lowJL, highJL] });
+              kuha: [lowK, highK], taimen: [lowT, highT], jarvilohi: [lowJL, highJL], hauki: [lowH, highH], ahven: [lowA, highA],
+              maxDepth: currentLocation.maxDepth });
+            lajiNeuvoVirrat(currentLocation, now);   // v136: pinta- ja syvävirta järven keskeltä
           } else { ln.style.display = 'none'; ln.innerHTML = ''; }
         }
       } catch (e) { console.warn('Lajineuvo:', e.message); }
@@ -16978,10 +17116,14 @@ lataa(eka);
          kohdalla). Piste = vesiruutujen painopistettä lähin vesiruutu. Lämpöasemaa ei tarkistettu
          (sykeTerm nimellä; jos asemaa ei löydy, lämpö tulee oletuksesta). Kirkkausluokka 2 = arvio.
          Toisvesi puuttuu: siemenpiste osui pieneen lampeen, odotetaan Hannun koordinaattia. */
-      { name: 'Alajärvi', lat: 63.00526, lon: 23.8666, maxDepth: 6, areaKm2: 11.3, clarityClass: 2, sykeTerm: 'Alajärvi' },
-      { name: 'Evijärvi', lat: 63.41003, lon: 23.48758, maxDepth: 3.5, areaKm2: 28, clarityClass: 2, sykeTerm: 'Evijärvi' },
-      { name: 'Toisvesi', lat: 62.302059, lon: 23.737861, maxDepth: 85, areaKm2: 29.4, clarityClass: 2, sykeTerm: 'Toisvesi' },   // v135; Järviwiki 29,4 km², suurin 85 m
-      { name: 'Patanan tekojärvi', lat: 63.2776, lon: 24.00618, maxDepth: 10.7, areaKm2: 9.8, clarityClass: 2, sykeTerm: 'Patana' },
+      { name: 'Alajärvi', lat: 63.00526, lon: 23.8666, maxDepth: 6, areaKm2: 11.3, clarityClass: 2, sykeTerm: 'Alajärvi',
+        kohdelajit: ['kuha', 'hauki', 'ahven'] },
+      { name: 'Evijärvi', lat: 63.41003, lon: 23.48758, maxDepth: 3.5, areaKm2: 28, clarityClass: 2, sykeTerm: 'Evijärvi',
+        kohdelajit: ['kuha', 'hauki', 'ahven'] },
+      { name: 'Toisvesi', lat: 62.302059, lon: 23.737861, maxDepth: 85, areaKm2: 29.4, clarityClass: 2, sykeTerm: 'Toisvesi',
+        kohdelajit: ['taimen', 'jarvilohi', 'kuha', 'hauki', 'ahven'] },   // v136: Hannu 3.10.2026   // v135; Järviwiki 29,4 km², suurin 85 m
+      { name: 'Patanan tekojärvi', lat: 63.2776, lon: 24.00618, maxDepth: 10.7, areaKm2: 9.8, clarityClass: 2, sykeTerm: 'Patana',
+        kohdelajit: ['kuha', 'hauki', 'ahven'] },
       { name: 'Kivijärvi (Kivijärven kunta)', lat: 63.12188, lon: 25.16425, maxDepth: 40, areaKm2: 133.8, clarityClass: 2, sykeTerm: 'Kivijärvi',
         kohdelajit: ['kuha', 'taimen', 'jarvilohi'] },   // v129: Hannu 1.10.2026; järvilohikokemusta Lintuselältä
 
@@ -17860,6 +18002,7 @@ function kuulAloita() {
                                     : 'Syvyyttä ei ole laskettu. Aja analyysi kerran.');
   var pk = kuulPaikkaTeksti(vesillaLajiValinta); if (pk) osat.push(pk);
   osat.push(kuulSaaTeksti());
+  try { var kpA = kumpuPuhe(); if (kpA) osat.push(kpA); } catch (e) {}   // v136
   var tv = kuulTuuliVaroitus(); if (tv) { osat.unshift(tv); kuul.tuuliT = Date.now(); }
   kuulPuhu(osat.join(' ¶ '), !!tv);
 }
@@ -17927,6 +18070,7 @@ function kuulTick() {
     if (L && !kuulToinenPaiva()) kr.push(kuulSyvyysVari(L, false));
     var pk = kuulPaikkaTeksti(vesillaLajiValinta); if (pk) kr.push(pk);
     kr.push(kuulSaaTeksti());
+    try { var kpK = kumpuPuhe(); if (kpK) kr.push(kpK); } catch (e) {}   // v136
     muut.push(kr.join(' ¶ '));
   }
   if (kiire.length || muut.length) kuulPuhu(kiire.concat(muut).join(' ¶ '), kiire.length > 0);
