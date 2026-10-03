@@ -2228,7 +2228,7 @@ body{padding-bottom:66px}
           <button class="chip" onclick="mmlVertailu()" style="border-color:var(--olive); color:var(--olive);">Vertailu: DataDeck vs MML</button>
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
-          <button class="chip" onclick="jkRakenna()" style="border-color:var(--pink); color:var(--pink);">Rakenna järvikartat (kaikki upotettu)</button>
+          <button class="chip" onclick="jkRakenna()" style="border-color:var(--pink); color:var(--pink);">Rakenna järvikartta (Saimaa, Imatra)</button>
           <button class="chip" id="jkTallenna" onclick="jkTallennaTiedosto()" style="display:none; border-color:var(--amber); color:var(--amber);">Tallenna tiedostoksi</button>
         </div>
         <div id="mmlTila" style="margin-top:10px; font-size:12px; line-height:1.45; white-space:pre-wrap; word-break:break-word;"></div>
@@ -2854,7 +2854,10 @@ body{padding-bottom:66px}
       { nimi: 'Patanan tekojärvi',      lat: [63.20, 63.36], lon: [23.88, 24.12] },
       // v138: Seinäjoen tekojärvet (Hannu 3.10.2026)
       { nimi: 'Kyrkösjärven tekojärvi', lat: [62.69, 62.81], lon: [22.70, 22.92] },
-      { nimi: 'Kalajärven tekoallas',   lat: [62.51, 62.61], lon: [23.04, 23.24] }
+      { nimi: 'Kalajärven tekoallas',   lat: [62.51, 62.61], lon: [23.04, 23.24] },
+      // v141: Etelä-Saimaa Imatran edustalla (Hannu 3.10.2026, SM 2027 -alue Hannun tiedon mukaan).
+      // Väljä rajaus noin 24 × 29 km; rajauksen reuna toimii mallissa rantana.
+      { nimi: 'Saimaa (Imatra)',        lat: [61.10, 61.32], lon: [28.40, 28.95] }
     ];
     var LUOT_LAPPA_TUNNUS = '47.031.1.001';
     var luotausData = null, luotTulosTeksti = '';
@@ -3232,7 +3235,7 @@ body{padding-bottom:66px}
        ole syvyyspistettä. Siksi vertailussa näytetään myös lähin piste ja lähin käyrä erikseen.
        TALLENNUS: IndexedDB, avain 'mml_v1'. Luetaan vasta kun tarvitaan (ei käynnistyksessä).
        Lähdemerkintä: © Maanmittauslaitos, maastotietokanta (CC BY 4.0). */
-    var MML_JARVET = ['Lappajärvi', 'Ähtärinjärvi', 'Kivijärvi (Kivijärven kunta)', 'Alajärvi', 'Evijärvi', 'Toisvesi', 'Patanan tekojärvi', 'Kyrkösjärven tekojärvi', 'Kalajärven tekoallas'];   // v131: + Cupin järvet
+    var MML_JARVET = ['Lappajärvi', 'Ähtärinjärvi', 'Kivijärvi (Kivijärven kunta)', 'Alajärvi', 'Evijärvi', 'Toisvesi', 'Patanan tekojärvi', 'Kyrkösjärven tekojärvi', 'Kalajärven tekoallas', 'Saimaa (Imatra)'];   // v131: + Cupin järvet
     var mmlSyvData = null, mmlIndeksi = null;
     async function mmlIdbHae() {
       if (mmlSyvData) return mmlSyvData;
@@ -3507,7 +3510,12 @@ body{padding-bottom:66px}
       { ohita: true, avain: 'kyrkosjarvi', nimi: 'Kyrkösjärven tekojärvi', laatikko: 'Kyrkösjärven tekojärvi', siemen: [62.737495, 22.806543], lataaSyvyydet: true,
         virallinen: 'vedenpinta kartalla 81,6 m; kaverin luotaus pääosin 1–4 m', korkeus: { vedenpinta: 81.6 } },
       { ohita: true, avain: 'kalajarvi', nimi: 'Kalajärven tekoallas', laatikko: 'Kalajärven tekoallas', siemen: [62.559693, 23.137612], lataaSyvyydet: true,
-        virallinen: 'vedenpinta kartalla 105,7 m; kaverin luotaus syvin noin 6 m', korkeus: { vedenpinta: 105.7 } }
+        virallinen: 'vedenpinta kartalla 105,7 m; kaverin luotaus syvin noin 6 m', korkeus: { vedenpinta: 105.7 } },
+      /* v141: Etelä-Saimaa, siemen Hannulta 61,2033597 / 28,6897126. Saimaa on niin iso, ettei koko järveä
+         voi ruudukoida: rajaa = leikataan rajaukseen. Syvyydet MML:stä, jos rajapinnassa on (väyläjärvellä
+         ei välttämättä ole, vrt. Toisvesi). */
+      { avain: 'saimaa_imatra', nimi: 'Saimaa (Imatra)', laatikko: 'Saimaa (Imatra)', siemen: [61.2033597, 28.6897126], lataaSyvyydet: true, rajaa: true,
+        virallinen: null }
     ];
     var jkTulos = null;
     function jkRenkaat(geom) {   // [[ [lon,lat], ... ], ...] kaikki renkaat
@@ -3527,9 +3535,12 @@ body{padding-bottom:66px}
       return sis;
     }
     // v132: rasteroi renkaat 100 m ruudukkoon (pariton–parillinen, ruudun keskipiste)
-    function jkRasteri(renkaat, ruutu) {
+    /* v141: rajat = { lat:[a,b], lon:[c,d] } leikkaa ruudukon (iso järvi, esim. Saimaa). Rajauksen reuna
+       on mallille rantaa, joten pyyhkäisymatka lyhenee reunan lähellä: rajaus tehdään väljäksi. */
+    function jkRasteri(renkaat, ruutu, rajat) {
       var minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
-      renkaat.forEach(function (r) { r.forEach(function (c) { if (c[0] < minLon) minLon = c[0]; if (c[0] > maxLon) maxLon = c[0]; if (c[1] < minLat) minLat = c[1]; if (c[1] > maxLat) maxLat = c[1]; }); });
+      if (rajat) { minLat = rajat.lat[0]; maxLat = rajat.lat[1]; minLon = rajat.lon[0]; maxLon = rajat.lon[1]; }
+      else renkaat.forEach(function (r) { r.forEach(function (c) { if (c[0] < minLon) minLon = c[0]; if (c[0] > maxLon) maxLon = c[0]; if (c[1] < minLat) minLat = c[1]; if (c[1] > maxLat) maxLat = c[1]; }); });
       var pohjoisLat = +(maxLat + 0.0005).toFixed(5), lansiLon = +(minLon - 0.001).toFixed(5);
       var H = Math.ceil((pohjoisLat - minLat) * 111320 / ruutu) + 2;
       var W = Math.ceil((maxLon - lansiLon) * 111320 * Math.cos(minLat * Math.PI / 180) / ruutu) + 2;
@@ -3625,10 +3636,10 @@ body{padding-bottom:66px}
             .filter(function (x) { return x.r.length && x.ala > 0.2; });
           if (!ehdokkaat.length) { rivit.push('\n' + K.nimi + ': ei järvialueita rajauksessa.'); continue; }
           var ruutu = 100;
-          var RA = jkRasteri([].concat.apply([], ehdokkaat.map(function (x) { return x.r; })), ruutu);
+          var RA = jkRasteri([].concat.apply([], ehdokkaat.map(function (x) { return x.r; })), ruutu, K.rajaa ? B : null);
           var pidA = jkSiemenAlue(RA, K.siemen);
           if (!pidA) { rivit.push('\n' + K.nimi + ': siemenpisteen lähellä ei ole vettä. Ohitetaan.'); continue; }
-          var valitut = ehdokkaat.filter(function (x) {
+          var valitut = K.rajaa ? ehdokkaat.slice() : ehdokkaat.filter(function (x) {
             var r0 = x.r[0], askelV = Math.max(1, Math.floor(r0.length / 80));
             for (var v = 0; v < r0.length; v += askelV) {
               var ci = Math.floor((r0[v][0] - RA.lansiLon) * 111320 * Math.cos(r0[v][1] * Math.PI / 180) / ruutu), cj = Math.floor((RA.pohjoisLat - r0[v][1]) * 111320 / ruutu);
@@ -3643,7 +3654,13 @@ body{padding-bottom:66px}
           rivit.push('\n' + K.nimi + ': järvialueita ' + haku.kohteet.length + (haku.kesken ? ' (KESKEN)' : '') + ', järveen kuuluu ' + valitut.length + ' palaa: '
             + valitut.map(function (x) { return x.ala.toFixed(1); }).join(', ') + ' km²');
           if (!valitut.length) { rivit.push('  Ei sopivaa monikulmiota.'); continue; }
-          var RB = jkRasteri([].concat.apply([], valitut.map(function (x) { return x.r; })), ruutu);
+          // v141: rajatussa tilassa ruudukko on jo oikea; käytetään vaiheen A siemenaluetta suoraan
+          var RB = K.rajaa ? (function () {
+                var m2 = new Uint8Array(RA.mask.length), v2 = 0;
+                for (var q9 = 0; q9 < m2.length; q9++) if (pidA[q9]) { m2[q9] = 1; v2++; }
+                return { W: RA.W, H: RA.H, pohjoisLat: RA.pohjoisLat, lansiLon: RA.lansiLon, mask: m2, vesi: v2,
+                         minLat: B.lat[0], maxLat: B.lat[1], minLon: B.lon[0], maxLon: B.lon[1] };
+              })() : jkRasteri([].concat.apply([], valitut.map(function (x) { return x.r; })), ruutu);
           var W = RB.W, H = RB.H, pohjoisLat = RB.pohjoisLat, lansiLon = RB.lansiLon, mask = RB.mask, vesi = RB.vesi;
           var luok = new Uint8Array(W * H).fill(15), dep = new Float32Array(W * H), puuttuu = new Uint8Array(W * H);
           var ilman = 0, summa = 0, syvin = 0;
@@ -11685,7 +11702,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v140';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v141';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
