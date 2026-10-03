@@ -1,0 +1,1958 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lappajärven Uistelukartta</title>
+<style>
+:root{
+  --muste:#16211f;
+  --harmaa:#5d6a68;
+  --raja:#d6dbda;
+}
+*{box-sizing:border-box}
+body{
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  margin:0;padding:14px;background:#f7f8f8;color:var(--muste);line-height:1.5
+}
+.ak{
+  max-width:600px;margin:0 auto;background:#fff;border:1px solid var(--raja);
+  border-radius:10px;padding:14px;overflow-x:hidden
+}
+.ak h2{margin:0 0 10px;font-size:1.05rem;font-weight:650}
+.ak-valinta{
+  width:100%;padding:9px 8px;font-size:.95rem;font-family:inherit;
+  border:1px solid #c4ccca;border-radius:6px;background:#fff;margin-bottom:12px;
+  -webkit-appearance:none;appearance:none
+}
+.ak-kartta{
+  position:relative;background:#eef1f0;border-radius:8px;overflow:hidden
+}
+.ak-kartta canvas{width:100%;display:block;image-rendering:auto}
+.ak-leima{
+  position:absolute;top:8px;right:8px;background:rgba(255,255,255,.92);
+  border-radius:6px;padding:5px 9px;font-size:.8rem;font-weight:650;
+  font-variant-numeric:tabular-nums;text-align:center;line-height:1.25
+}
+.ak-leima small{
+  display:block;font-weight:400;font-size:.68rem;color:var(--harmaa)
+}
+.ak-tuuli{
+  position:absolute;left:8px;bottom:8px;background:rgba(255,255,255,.92);
+  border-radius:6px;padding:5px 9px;font-size:.75rem;font-variant-numeric:tabular-nums
+}
+.ak-asteikko{
+  display:flex;margin-top:8px;border-radius:3px;overflow:hidden;
+  font-size:.62rem;font-variant-numeric:tabular-nums
+}
+.ak-asteikko div{
+  flex:1;text-align:center;padding:3px 0;color:#fff;
+  text-shadow:0 0 2px rgba(0,0,0,.45)
+}
+.ak-alarivi{
+  display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;
+  margin-top:6px;gap:10px
+}
+.ak-kytkimet{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.ak-kytkin{
+  font-size:.72rem;color:#4a5654;display:flex;align-items:center;gap:5px;
+  cursor:pointer;user-select:none
+}
+.ak-kytkin input{
+  accent-color:#16211f;width:15px;height:15px;margin:0
+}
+.ak-yksikko{font-size:.66rem;color:var(--harmaa);font-weight:600}
+input[type=range]{
+  width:100%;margin:12px 0 2px;accent-color:#16211f
+}
+.ak-aika{
+  display:flex;justify-content:space-between;font-size:.72rem;
+  color:var(--harmaa);font-variant-numeric:tabular-nums
+}
+.ak-taulu{
+  font-size:.8rem;line-height:1.6;background:#f2f5f4;border-radius:6px;
+  padding:10px 12px;margin-top:11px
+}
+.ak-taulu div{display:flex;justify-content:space-between;gap:12px}
+.ak-taulu span{color:var(--harmaa);flex:none}
+.ak-taulu b{text-align:right;font-variant-numeric:tabular-nums}
+.ak-huom{
+  margin-top:11px;font-size:.72rem;color:var(--harmaa);line-height:1.5
+}
+.ak-virhe{font-size:.83rem;color:#8f1414}
+</style>
+</head>
+
+<body>
+<section class="ak" id="aaltokartta">
+
+  <h2>Veden Liike & Uisteluennuste</h2>
+
+  <select class="ak-valinta" id="akJarvi" aria-label="Järvi"></select>
+
+  <div class="ak-kartta">
+    <canvas id="akKuva" width="300" height="300"></canvas>
+
+    <div class="ak-leima" id="akLeima">
+      –<small>haetaan</small>
+    </div>
+
+    <div class="ak-tuuli" id="akTuuli"></div>
+  </div>
+
+  <div class="ak-asteikko" id="akAsteikko"></div>
+
+  <div class="ak-alarivi">
+    <div class="ak-kytkimet">
+
+      <label class="ak-kytkin">
+        <input type="checkbox" id="akKorosta">
+        Korosta erot
+      </label>
+
+      <select id="akNaytto"
+              aria-label="Kartan suure"
+              style="font:inherit;font-size:.8rem;padding:3px 6px;border-radius:6px;
+                     border:1px solid #c4ccca;background:#fff;color:#16211f;">
+        <option value="aalto">Aallonkorkeus</option>
+        <option value="virtaus">Pintavirtaus</option>
+        <option value="vajoama">Vajoamaindeksi</option>
+      </select>
+
+    </div>
+
+    <span class="ak-yksikko" id="akYksikko">
+      Aallonkorkeus (m)
+    </span>
+  </div>
+
+  <input type="range" id="akLiuku" min="0" max="0" value="0" aria-label="Tunti">
+
+  <div class="ak-aika">
+    <span id="akAlku"></span>
+    <span id="akLoppu"></span>
+  </div>
+
+  <div class="ak-taulu" id="akTaulu"></div>
+
+  <p class="ak-huom" id="akHuomTeksti">
+    Tummilla ääriviivoilla on korostettu jyrkimmät penkat.
+    Vajoamaindeksissä väri korostaa kohtia, joissa tuulen synnyttämä
+    pintavirtaus kohtaa mataloituvan pohjan ja veden painuminen on
+    mallin perusteella todennäköisempää.
+  </p>
+
+</section>
+
+<script>
+(function(){
+"use strict";
+
+var $ = function(id){
+  return document.getElementById(id);
+};
+
+var g = 9.81;
+
+
+// ============================================================
+// JÄRVET
+// ============================================================
+
+var JARVET = {
+
+  lappajarvi: {
+    nimi: "Lappajärvi",
+
+    lat: 63.1561,
+    lon: 23.6704,
+
+    syvyys: 7.4,
+
+    kartta: {
+      ruutu: 50,
+      W: 220,
+      H: 450,
+      pohjoisLat: 63.26435,
+      lansiLon: 23.54408,
+      kuvaUrl: "1000081925.jpg",
+      maski: ""
+    }
+  }
+
+};
+
+
+// ============================================================
+// VÄRIASTEIKOT
+// ============================================================
+
+// Aallonkorkeus
+var RAJAT = [
+  0, .05, .10, .15, .20, .30,
+  .40, .50, .65, .80, 1.00, 1.30
+];
+
+var VARIT = [
+  "#cfe0e6",
+  "#7fc6a0",
+  "#3faa62",
+  "#8cc63f",
+  "#c8d422",
+  "#f2c200",
+  "#f79800",
+  "#ee6f1e",
+  "#dc4426",
+  "#bd2430",
+  "#8f1414",
+  "#5c0b0b"
+];
+
+
+// ============================================================
+// VAJOAMAINDEKSIN ASTEIKKO
+//
+// TÄRKEÄ:
+// Tämä ei ole mitattu pystysuuntainen virtaus cm/s.
+// Arvo on suhteellinen mallinnettu vajoamaindeksi.
+// ============================================================
+
+var RAJAT_VI = [
+  0, .5, 1.0, 1.5, 2.0, 2.5,
+  3.0, 4.0, 5.0, 6.0, 8.0, 10.0
+];
+
+var VARIT_VI = [
+  "#f7fbff",
+  "#deebf7",
+  "#c6dbef",
+  "#9ecae1",
+  "#6baed6",
+  "#4292c6",
+  "#2171b5",
+  "#08519c",
+  "#08306b",
+  "#041a4a",
+  "#020f2e",
+  "#010614"
+];
+
+
+var korosta = false;
+var akTila = "aalto";
+var venytys = 1;
+
+
+// ============================================================
+// VÄRI
+// ============================================================
+
+function vari(h){
+
+  var x = h * venytys;
+
+  var R = (akTila === "vajoama") ? RAJAT_VI : RAJAT;
+  var C = (akTila === "vajoama") ? VARIT_VI : VARIT;
+
+  for(var i=R.length-1;i>=0;i--){
+    if(x >= R[i]) return C[i];
+  }
+
+  return C[0];
+}
+
+
+// ============================================================
+// AALTOMALLI
+// ============================================================
+
+function jonswapHs(F,U){
+  return 0.0016 * Math.sqrt(g*F/(U*U)) * U*U/g;
+}
+
+function jonswapTp(F,U){
+  return 0.286 * Math.cbrt(g*F/(U*U)) * U/g;
+}
+
+function syvyysKatto(d,U){
+  return 0.283 * (U*U/g) *
+         Math.tanh(0.53*Math.pow(g*d/(U*U),0.75));
+}
+
+function kestonPyyhkaisy(t,U){
+  return Math.pow(
+    t*Math.pow(U,0.34)*Math.pow(g,0.33)/77.23,
+    1/0.67
+  );
+}
+
+
+// ============================================================
+// KOMPASSI
+// ============================================================
+
+function kompassi(dir){
+
+  var n = [
+    "pohjoisesta",
+    "koillisesta",
+    "idästä",
+    "kaakosta",
+    "etelästä",
+    "lounaasta",
+    "lännestä",
+    "luoteesta"
+  ];
+
+  return n[
+    Math.round(((dir%360)+360)%360/45)%8
+  ];
+}
+
+
+// ============================================================
+// PINTAVIRTAUKSEN SUUNTA
+//
+// Yksinkertaistettu Coriolis-poikkeama.
+// Suomessa käytetään tässä +15° mallioletusta.
+// ============================================================
+
+function akVirtausSuunta(tuuliDir){
+
+  return (
+    (tuuliDir + 180 + 15) % 360 + 360
+  ) % 360;
+}
+
+
+// ============================================================
+// SYVYYDEN LUKU KARTTAKUVASTA
+// ============================================================
+
+function puraSyvyysKuvasta(img,W,H){
+
+  var c = document.createElement("canvas");
+
+  c.width = W;
+  c.height = H;
+
+  var ctx = c.getContext("2d");
+
+  ctx.drawImage(img,0,0,W,H);
+
+  var data = ctx.getImageData(0,0,W,H).data;
+
+  var s = new Float32Array(W*H);
+  var m = new Uint8Array(W*H);
+
+
+  for(var i=0;i<W*H;i++){
+
+    var r = data[i*4];
+    var gg = data[i*4+1];
+    var b = data[i*4+2];
+
+    // Tunnistetaan veden sinertävä alue
+    if(b > r + 10 && b > gg - 40){
+
+      var kirkkaus = r + gg + b;
+
+      if(kirkkaus < 300)
+        s[i] = 15.0;
+
+      else if(kirkkaus < 550)
+        s[i] = 7.0;
+
+      else
+        s[i] = 2.0;
+
+      m[i] = 1;
+
+    }else{
+
+      s[i] = 0;
+      m[i] = 0;
+    }
+  }
+
+
+  // PEHMENNYS
+  for(var pass=0;pass<3;pass++){
+
+    var uusiM = new Uint8Array(m);
+    var uusiS = new Float32Array(s);
+
+    for(var y=1;y<H-1;y++){
+
+      for(var x=1;x<W-1;x++){
+
+        var idx = y*W+x;
+
+        if(m[idx] === 0){
+
+          var vesi = 0;
+          var summa = 0;
+
+          for(var dy=-1;dy<=1;dy++){
+
+            for(var dx=-1;dx<=1;dx++){
+
+              if(dx===0 && dy===0) continue;
+
+              var n = (y+dy)*W+(x+dx);
+
+              if(m[n]){
+                vesi++;
+                summa += s[n];
+              }
+            }
+          }
+
+          if(vesi >= 4){
+
+            uusiM[idx] = 1;
+            uusiS[idx] = summa/vesi;
+          }
+        }
+      }
+    }
+
+    m = uusiM;
+    s = uusiS;
+  }
+
+
+  return {
+    syvyys:s,
+    mask:m
+  };
+}
+
+
+// ============================================================
+// TUULEN PYYHKÄISY
+// ============================================================
+
+function pyyhkaisyKentta(mask,W,H,ruutu,suunta){
+
+  var rad = (suunta+180)*Math.PI/180;
+
+  var ux = Math.sin(rad);
+  var uy = -Math.cos(rad);
+
+  var px = -uy;
+  var py = ux;
+
+  var kentta = new Float32Array(W*H);
+
+  var dia = Math.ceil(Math.sqrt(W*W+H*H));
+
+  var cx = W/2;
+  var cy = H/2;
+
+
+  for(var n=-dia;n<=dia;n++){
+
+    var sx =
+      cx + px*n - ux*dia/2;
+
+    var sy =
+      cy + py*n - uy*dia/2;
+
+    var jakso = 0;
+
+
+    for(var s=0;s<dia;s++){
+
+      var i = Math.round(sx+ux*s);
+      var j = Math.round(sy+uy*s);
+
+      if(
+        i<0 || i>=W ||
+        j<0 || j>=H
+      ){
+        jakso=0;
+        continue;
+      }
+
+      var k = j*W+i;
+
+      if(mask[k]){
+
+        jakso++;
+
+        var dist = jakso*ruutu;
+
+        if(dist>kentta[k])
+          kentta[k]=dist;
+
+      }else{
+
+        jakso=0;
+      }
+    }
+  }
+
+
+  // Täytetään yksittäiset aukot
+  for(var j2=0;j2<H;j2++){
+
+    for(var i2=0;i2<W;i2++){
+
+      var k2=j2*W+i2;
+
+      if(!mask[k2] || kentta[k2]>0)
+        continue;
+
+      var paras=0;
+
+      for(var dy=-1;dy<=1;dy++){
+
+        for(var dx=-1;dx<=1;dx++){
+
+          var jj=j2+dy;
+          var ii=i2+dx;
+
+          if(
+            jj<0 || jj>=H ||
+            ii<0 || ii>=W
+          ) continue;
+
+          var n2=jj*W+ii;
+
+          if(mask[n2] && kentta[n2]>paras)
+            paras=kentta[n2];
+        }
+      }
+
+      kentta[k2]=paras || ruutu;
+    }
+  }
+
+  return kentta;
+}
+
+
+// ============================================================
+// MUUTTUJAT
+// ============================================================
+
+var data=[];
+var valittu=0;
+var jarvi=null;
+var mask=null;
+var kentta=null;
+var viimeSuunta=null;
+var karttaSyvyys=null;
+
+
+// ============================================================
+// PÄÄPIIRTO
+// ============================================================
+
+function piirra(){
+
+  var d=data[valittu];
+  var k=jarvi.kartta;
+
+  if(!d || !k || !mask || !karttaSyvyys)
+    return;
+
+
+  var suunta=Math.round(d.dir/5)*5;
+
+  if(suunta!==viimeSuunta){
+
+    kentta=pyyhkaisyKentta(
+      mask,
+      k.W,
+      k.H,
+      k.ruutu,
+      suunta
+    );
+
+    viimeSuunta=suunta;
+  }
+
+
+  var U=Math.max(0.5,d.U);
+
+  var Fkesto= kestonPyyhkaisy(
+    d.tunteja*3600,
+    U
+  );
+
+
+  var hs=new Float32Array(mask.length);
+  var korkein=0;
+
+
+  var vir =
+    (akTila==="virtaus" || akTila==="vajoama")
+    ? new Float32Array(mask.length)
+    : null;
+
+  var virMax=0;
+
+
+  var vi =
+    (akTila==="vajoama")
+    ? new Float32Array(mask.length)
+    : null;
+
+  var viMax=0;
+
+
+  // ========================================================
+  // ENSIMMÄINEN KIERROS
+  // ========================================================
+
+  for(var q=0;q<mask.length;q++){
+
+    if(!mask[q]) continue;
+
+    var Fq=Math.min(
+      kentta[q],
+      Fkesto
+    );
+
+    var syv=karttaSyvyys[q];
+
+
+    // AALLONKORKEUS
+    var lokaaliKatto=syvyysKatto(
+      syv,
+      U
+    );
+
+    hs[q]=Math.min(
+      jonswapHs(
+        Math.max(Fq,50),
+        U
+      ),
+      lokaaliKatto
+    );
+
+    if(hs[q]>korkein)
+      korkein=hs[q];
+
+
+    // ======================================================
+    // PINTAVIRTAUS
+    // ======================================================
+
+    if(vir){
+
+      /*
+       * Mallinnettu pintavirtaus.
+       *
+       * Tärkeää:
+       * arvo muunnetaan myöhemmin km/h-esitykseen.
+       */
+
+      var perusNopeus =
+        U * 0.02 * 100;
+
+      var syvyysKerroin =
+        1.0 +
+        (5.0-Math.min(syv,5.0))*0.15;
+
+      var pyyhkaisyKerroin =
+        0.4 +
+        0.6*Math.min(
+          1,
+          Fq/3000
+        );
+
+      vir[q]=
+        perusNopeus *
+        syvyysKerroin *
+        pyyhkaisyKerroin;
+
+      if(vir[q]>virMax)
+        virMax=vir[q];
+    }
+  }
+
+
+  // ========================================================
+  // VAJOAMAINDEKSI
+  //
+  // Vajoamaindeksi =
+  // pintavirtaus × pohjan nousu virtausta vastaan
+  //
+  // Lisäksi mukaan otetaan:
+  // 1. jyrkkyys
+  // 2. tuulen kesto
+  // 3. syvyysvyöhykkeen sopivuus
+  //
+  // Tulos on RELATIIVINEN INDEKSI, EI cm/s.
+  // ========================================================
+
+  if(vi){
+
+    var v_rad =
+      akVirtausSuunta(d.dir)*Math.PI/180;
+
+    var vx=Math.sin(v_rad);
+    var vy=-Math.cos(v_rad);
+
+
+    for(var j=1;j<k.H-1;j++){
+
+      for(var i=1;i<k.W-1;i++){
+
+        var idx=j*k.W+i;
+
+        if(!mask[idx]) continue;
+
+
+        // Pintavirtaus metreinä sekunnissa.
+        // vir[] on tässä sisäinen skaalattu arvo.
+        var v_m_s =
+          vir[idx]*0.036/3.6;
+
+
+        // Naapurisyvyydet
+        var he =
+          mask[idx+1]
+          ? karttaSyvyys[idx+1]
+          : karttaSyvyys[idx];
+
+        var hw =
+          mask[idx-1]
+          ? karttaSyvyys[idx-1]
+          : karttaSyvyys[idx];
+
+        var hs_s =
+          mask[idx+k.W]
+          ? karttaSyvyys[idx+k.W]
+          : karttaSyvyys[idx];
+
+        var hn =
+          mask[idx-k.W]
+          ? karttaSyvyys[idx-k.W]
+          : karttaSyvyys[idx];
+
+
+        // Pohjan syvyysgradientti
+        var dzdx =
+          (he-hw)/(2*k.ruutu);
+
+        var dzdy =
+          (hs_s-hn)/(2*k.ruutu);
+
+
+        // Gradientti virtaussuunnassa
+        var dzds =
+          dzdx*vx +
+          dzdy*vy;
+
+
+        /*
+         * dzds < 0:
+         * virtaus kulkee kohti matalampaa vettä.
+         *
+         * Tällöin pintavesi osuu nousevaan pohjaan /
+         * rantavyöhykkeeseen ja vajoaman mahdollisuus kasvaa.
+         */
+
+        if(dzds<0){
+
+          var nousu =
+            -dzds;
+
+
+          // Penkan kaltevuuden vaikutus.
+          // Rajataan, ettei yksittäinen pikseli hallitse.
+          var penkka =
+            Math.min(
+              1.0,
+              nousu*35
+            );
+
+
+          // Tuulen/pintavirran kesto.
+          var kesto =
+            Math.min(
+              1.0,
+              d.tunteja/6
+            );
+
+
+          // Syvyyskerroin:
+          // matala + jyrkkä reuna on kiinnostava,
+          // mutta aivan 0–1 m vesialuetta ei ylikorosteta.
+          var syvyysTekija;
+
+          if(syv<1.5){
+
+            syvyysTekija=0.35;
+
+          }else if(syv<4){
+
+            syvyysTekija=0.65;
+
+          }else if(syv<12){
+
+            syvyysTekija=1.0;
+
+          }else if(syv<20){
+
+            syvyysTekija=0.85;
+
+          }else{
+
+            syvyysTekija=0.60;
+          }
+
+
+          /*
+           * Vajoamaindeksi.
+           *
+           * Tämä on tarkoituksella indeksiarvo.
+           * Sitä ei nimetä cm/s-yksiköksi.
+           */
+
+          var indeksi =
+            v_m_s *
+            penkka *
+            (0.55+0.45*kesto) *
+            syvyysTekija *
+            100;
+
+
+          if(indeksi>viMax)
+            viMax=indeksi;
+
+
+          vi[idx]=indeksi;
+        }
+      }
+    }
+  }
+
+
+  // ========================================================
+  // KARTAN ARVOT
+  // ========================================================
+
+  var arvot =
+    (akTila==="vajoama")
+    ? vi
+    : (akTila==="virtaus")
+      ? vir
+      : hs;
+
+
+  var huippu =
+    (akTila==="vajoama")
+    ? viMax
+    : (akTila==="virtaus")
+      ? virMax
+      : korkein;
+
+
+  // ========================================================
+  // AUTOMAATTINEN KONTRASTI
+  // ========================================================
+
+  venytys=1;
+
+  if(akTila==="virtaus"){
+
+    venytys =
+      RAJAT[RAJAT.length-1] /
+      Math.max(
+        huippu*1.1,
+        5.0
+      );
+
+  }else if(
+    korosta &&
+    huippu>0.02
+  ){
+
+    var maxRaja =
+      (akTila==="vajoama")
+      ? RAJAT_VI[RAJAT_VI.length-1]
+      : RAJAT[RAJAT.length-1];
+
+    venytys =
+      maxRaja /
+      (huippu*1.02);
+  }
+
+
+  piirraAsteikko();
+
+
+  // ========================================================
+  // CANVAS
+  // ========================================================
+
+  var S=Math.min(
+    8,
+    Math.max(
+      2,
+      Math.round(380/k.W)
+    )
+  );
+
+  var LW=k.W*S;
+  var LH=k.H*S;
+
+  var c=$("akKuva");
+
+  c.width=LW;
+  c.height=LH;
+
+  var ctx=c.getContext("2d");
+
+  var kuva=ctx.createImageData(
+    LW,
+    LH
+  );
+
+  var talteen={};
+
+
+  function rgb(v){
+
+    var avain=Math.round(v*400);
+
+    if(talteen[avain])
+      return talteen[avain];
+
+    var h=vari(v);
+
+    var t=[
+      parseInt(h.substr(1,2),16),
+      parseInt(h.substr(3,2),16),
+      parseInt(h.substr(5,2),16)
+    ];
+
+    talteen[avain]=t;
+
+    return t;
+  }
+
+
+  // ========================================================
+  // VÄRITYS
+  // ========================================================
+
+  for(var y=0;y<LH;y++){
+
+    var v0=y/S-0.5;
+    var j0=Math.floor(v0);
+    var fy=v0-j0;
+
+
+    for(var x=0;x<LW;x++){
+
+      var o=(y*LW+x)*4;
+
+      var ni=Math.min(
+        k.W-1,
+        Math.max(
+          0,
+          Math.round(x/S-0.5)
+        )
+      );
+
+      var nj=Math.min(
+        k.H-1,
+        Math.max(
+          0,
+          Math.round(v0)
+        )
+      );
+
+
+      if(!mask[nj*k.W+ni]){
+
+        kuva.data[o]=232;
+        kuva.data[o+1]=236;
+        kuva.data[o+2]=231;
+        kuva.data[o+3]=255;
+
+        continue;
+      }
+
+
+      var u0=x/S-0.5;
+      var i0=Math.floor(u0);
+      var fx=u0-i0;
+
+      var summa=0;
+      var paino=0;
+
+
+      for(var dy=0;dy<2;dy++){
+
+        for(var dx=0;dx<2;dx++){
+
+          var ii=i0+dx;
+          var jj=j0+dy;
+
+          if(
+            ii<0 || ii>=k.W ||
+            jj<0 || jj>=k.H
+          ) continue;
+
+          var kk=jj*k.W+ii;
+
+          if(!mask[kk]) continue;
+
+          var p=
+            (dx?fx:1-fx) *
+            (dy?fy:1-fy);
+
+          summa += arvot[kk]*p;
+          paino += p;
+        }
+      }
+
+
+      var t=rgb(
+        paino>0
+        ? summa/paino
+        : arvot[nj*k.W+ni]
+      );
+
+
+      kuva.data[o]=t[0];
+      kuva.data[o+1]=t[1];
+      kuva.data[o+2]=t[2];
+      kuva.data[o+3]=255;
+    }
+  }
+
+
+  ctx.putImageData(
+    kuva,
+    0,
+    0
+  );
+
+
+  // ========================================================
+  // PENKAT
+  // ========================================================
+
+  if(akTila!=="vajoama"){
+
+    ctx.strokeStyle=
+      "rgba(16,24,22,0.45)";
+
+    ctx.lineWidth=1.2;
+
+    ctx.beginPath();
+
+
+    for(var jy=0;jy<k.H;jy++){
+
+      for(var ix=0;ix<k.W;ix++){
+
+        if(!mask[jy*k.W+ix])
+          continue;
+
+        var cur=
+          karttaSyvyys[
+            jy*k.W+ix
+          ];
+
+        var right=
+          (ix<k.W-1)
+          ? karttaSyvyys[
+              jy*k.W+ix+1
+            ]
+          : cur;
+
+        var bottom=
+          (jy<k.H-1)
+          ? karttaSyvyys[
+              (jy+1)*k.W+ix
+            ]
+          : cur;
+
+
+        if(
+          right>0 &&
+          cur!==right
+        ){
+
+          ctx.moveTo(
+            (ix+1)*S,
+            jy*S
+          );
+
+          ctx.lineTo(
+            (ix+1)*S,
+            (jy+1)*S
+          );
+        }
+
+
+        if(
+          bottom>0 &&
+          cur!==bottom
+        ){
+
+          ctx.moveTo(
+            ix*S,
+            (jy+1)*S
+          );
+
+          ctx.lineTo(
+            (ix+1)*S,
+            (jy+1)*S
+          );
+        }
+      }
+    }
+
+    ctx.stroke();
+  }
+
+
+  // ========================================================
+  // VIRTAUSNUOLET
+  // ========================================================
+
+  var aaltoSuunta =
+    (akTila==="virtaus" || akTila==="vajoama")
+    ? d.dir+15
+    : d.dir;
+
+
+  var rad=
+    (aaltoSuunta+180)*Math.PI/180;
+
+  var ax=Math.sin(rad);
+  var ay=-Math.cos(rad);
+
+  var vali=
+    Math.max(
+      6,
+      Math.round(k.W/13)
+    )*S;
+
+  var pit=vali*0.40;
+
+
+  ctx.strokeStyle=
+    "rgba(16,24,22,.55)";
+
+  ctx.lineWidth=
+    Math.max(
+      1.1,
+      LW/300
+    );
+
+  ctx.lineCap="round";
+
+  ctx.beginPath();
+
+
+  for(
+    var jyN=vali;
+    jyN<LH;
+    jyN+=vali
+  ){
+
+    for(
+      var jxN=vali;
+      jxN<LW;
+      jxN+=vali
+    ){
+
+      var mi=Math.min(
+        k.W-1,
+        Math.floor(jxN/S)
+      );
+
+      var mj=Math.min(
+        k.H-1,
+        Math.floor(jyN/S)
+      );
+
+
+      if(!mask[mj*k.W+mi])
+        continue;
+
+
+      var x1=jxN-ax*pit;
+      var y1=jyN-ay*pit;
+
+      var x2=jxN+ax*pit;
+      var y2=jyN+ay*pit;
+
+
+      ctx.moveTo(x1,y1);
+      ctx.lineTo(x2,y2);
+
+
+      ctx.moveTo(x2,y2);
+
+      ctx.lineTo(
+        x2-ax*pit*0.45-ay*pit*0.28,
+        y2-ay*pit*0.45+ax*pit*0.28
+      );
+
+
+      ctx.moveTo(x2,y2);
+
+      ctx.lineTo(
+        x2-ax*pit*0.45+ay*pit*0.28,
+        y2-ay*pit*0.45-ax*pit*0.28
+      );
+    }
+  }
+
+  ctx.stroke();
+
+
+  // ========================================================
+  // TIEDOT
+  // ========================================================
+
+  d.korkein=korkein;
+  d.virMax=virMax;
+  d.viMax=viMax;
+
+  d.Tp=jonswapTp(
+    Math.min(
+      d.Fpahin,
+      Fkesto
+    ),
+    U
+  );
+
+
+  naytaTiedot(d);
+}
+
+
+// ============================================================
+// TIEDOT
+// ============================================================
+
+function naytaTiedot(d){
+
+  var pad=function(n){
+    return ("0"+n).slice(-2);
+  };
+
+  var pv=[
+    "su","ma","ti","ke",
+    "to","pe","la"
+  ];
+
+
+  var arvoStr="";
+
+
+  if(akTila==="vajoama"){
+
+    arvoStr=
+      d.viMax.toFixed(1);
+
+  }else if(akTila==="virtaus"){
+
+    arvoStr=
+      (d.virMax*0.036).toFixed(2)
+      +" km/h";
+
+  }else{
+
+    arvoStr=
+      d.korkein.toFixed(2)
+      +" m";
+  }
+
+
+  $("akLeima").innerHTML=
+    arvoStr+
+    "<small>"+
+    pv[d.aika.getDay()]+
+    " klo "+
+    pad(d.aika.getHours())+
+    "</small>";
+
+
+  $("akTuuli").textContent=
+    d.U.toFixed(0)+
+    " m/s "+
+    kompassi(d.dir);
+
+
+  var ylaTieto="";
+
+
+  if(akTila==="vajoama"){
+
+    ylaTieto=
+      "<div><span>Vajoamaindeksi max</span>"+
+      "<b>"+d.viMax.toFixed(1)+"</b></div>"+
+
+      "<div><span>Tulkinta</span>"+
+      "<b>suurempi = voimakkaampi vajoamapaikka</b></div>"+
+
+      "<div><span>Yksikkö</span>"+
+      "<b>ei fysikaalinen cm/s</b></div>";
+
+  }else if(akTila==="virtaus"){
+
+    ylaTieto=
+      "<div><span>Pintavirtaus max</span>"+
+      "<b>"+arvoStr+"</b></div>"+
+
+      "<div><span>Suunta</span>"+
+      "<b>"+kompassi(d.dir+15)+
+      " (+15° mallipoikkeama)</b></div>";
+
+  }else{
+
+    ylaTieto=
+      "<div><span>Korkein järvellä</span>"+
+      "<b>"+d.korkein.toFixed(2)+" m</b></div>"+
+
+      "<div><span>Suurin yksittäinen</span>"+
+      "<b>"+(1.86*d.korkein).toFixed(2)+" m</b></div>"+
+
+      "<div><span>Jakso</span>"+
+      "<b>"+d.Tp.toFixed(1)+" s</b></div>";
+  }
+
+
+  $("akTaulu").innerHTML=
+    ylaTieto+
+
+    "<div><span>Tuuli</span>"+
+    "<b>"+d.U.toFixed(1)+
+    " m/s, "+
+    Math.round(d.dir)+
+    "°</b></div>"+
+
+    "<div><span>Tuullut</span>"+
+    "<b>"+d.tunteja+
+    " h samasta suunnasta</b></div>";
+}
+
+
+// ============================================================
+// AIKALIIKUTIN
+// ============================================================
+
+$("akLiuku").addEventListener(
+  "input",
+  function(){
+
+    valittu=+this.value;
+
+    piirra();
+  }
+);
+
+
+// ============================================================
+// FMI
+// ============================================================
+
+function fmiUrl(lat,lon){
+
+  var a=new Date();
+
+  a.setUTCMinutes(0,0,0);
+
+  var z=new Date(
+    a.getTime()+
+    84*3600*1000
+  );
+
+
+  return "https://opendata.fmi.fi/wfs?service=WFS"+
+    "&version=2.0.0"+
+    "&request=getFeature"+
+    "&storedquery_id=fmi::forecast::edited::weather::scandinavia::point::timevaluepair"+
+    "&latlon="+lat+","+lon+
+    "&parameters=WindSpeedMS,WindDirection"+
+    "&timestep=60"+
+    "&starttime="+
+    a.toISOString().slice(0,19)+
+    "Z"+
+    "&endtime="+
+    z.toISOString().slice(0,19)+
+    "Z";
+}
+
+
+// ============================================================
+// FMI XML PARSINTA
+// ============================================================
+
+function parsi(txt){
+
+  var doc=
+    new DOMParser()
+    .parseFromString(
+      txt,
+      "text/xml"
+    );
+
+
+  if(
+    doc.querySelector("parsererror")
+  )
+    throw new Error(
+      "vastausta ei voitu lukea"
+    );
+
+
+  var kaikki=
+    doc.getElementsByTagName("*");
+
+  var ulos={};
+
+
+  for(
+    var i=0;
+    i<kaikki.length;
+    i++
+  ){
+
+    if(
+      kaikki[i].localName!==
+      "MeasurementTimeseries"
+    )
+      continue;
+
+
+    var id=
+      kaikki[i].getAttribute("gml:id") ||
+      kaikki[i].getAttribute("id") ||
+      "";
+
+
+    var nimi=
+      id.toLowerCase().split("-").pop();
+
+
+    var sarja=[];
+
+
+    var tvp=
+      kaikki[i].getElementsByTagName("*");
+
+
+    for(
+      var j=0;
+      j<tvp.length;
+      j++
+    ){
+
+      if(
+        tvp[j].localName!==
+        "MeasurementTVP"
+      )
+        continue;
+
+
+      var aika=null;
+      var arvo=null;
+      var c=tvp[j].children;
+
+
+      for(
+        var q=0;
+        q<c.length;
+        q++
+      ){
+
+        if(
+          c[q].localName==="time"
+        )
+          aika=
+            c[q].textContent.trim();
+
+
+        if(
+          c[q].localName==="value"
+        )
+          arvo=
+            parseFloat(
+              c[q].textContent
+            );
+      }
+
+
+      sarja.push({
+        aika:new Date(aika),
+        arvo:isNaN(arvo)
+          ? null
+          : arvo
+      });
+    }
+
+
+    ulos[nimi]=sarja;
+  }
+
+
+  return ulos;
+}
+
+
+// ============================================================
+// DATAN LATAUS
+// ============================================================
+
+function lataa(avain){
+
+  jarvi=JARVET[avain];
+
+  viimeSuunta=null;
+
+
+  if(!jarvi.kartta)
+    return;
+
+
+  $("akLeima").innerHTML=
+    "<small>haetaan…</small>";
+
+
+  var fmiKutsu=function(){
+
+    fetch(
+      fmiUrl(
+        jarvi.lat,
+        jarvi.lon
+      )
+    )
+
+    .then(function(r){
+
+      return r.ok
+        ? r.text()
+        : Promise.reject(
+            new Error(
+              "palvelin "+r.status
+            )
+          );
+    })
+
+    .then(function(txt){
+
+      var s=parsi(txt);
+
+      var nop=s.windspeedms;
+      var suu=s.winddirection;
+
+
+      if(
+        !nop ||
+        !nop.length
+      )
+        throw new Error(
+          "tuulitietoja ei saatu"
+        );
+
+
+      var sarja=
+        nop.map(
+          function(p,i){
+
+            return {
+              aika:p.aika,
+              U:p.arvo,
+              dir:
+                suu && suu[i]
+                ? suu[i].arvo
+                : null
+            };
+          }
+        )
+        .filter(
+          function(p){
+
+            return(
+              p.U!=null &&
+              p.dir!=null
+            );
+          }
+        );
+
+
+      if(!sarja.length)
+        throw new Error(
+          "ennusteessa ei ollut arvoja"
+        );
+
+
+      data=
+        sarja.map(
+          function(p,i){
+
+            var t=1;
+
+
+            for(
+              var k=i-1;
+              k>=0;
+              k--
+            ){
+
+              var ero=
+                Math.abs(
+                  (
+                    (
+                      sarja[k].dir-
+                      p.dir+
+                      540
+                    )%360
+                  )-180
+                );
+
+
+              if(
+                ero>45 ||
+                sarja[k].U<
+                0.55*Math.max(
+                  p.U,
+                  0.5
+                )
+              )
+                break;
+
+
+              t++;
+            }
+
+
+            return {
+              aika:p.aika,
+              U:p.U,
+              dir:p.dir,
+              tunteja:t,
+              Fpahin:20000,
+              korkein:0,
+              Tp:0
+            };
+          }
+        );
+
+
+      valittu=0;
+
+      $("akLiuku").max=
+        data.length-1;
+
+      $("akLiuku").value=0;
+
+
+      var pv=[
+        "su","ma","ti","ke",
+        "to","pe","la"
+      ];
+
+
+      var pad=function(n){
+        return ("0"+n).slice(-2);
+      };
+
+
+      $("akAlku").textContent=
+        pv[data[0].aika.getDay()]+
+        " "+
+        pad(data[0].aika.getHours())+
+        ":00";
+
+
+      var v=
+        data[data.length-1].aika;
+
+
+      $("akLoppu").textContent=
+        pv[v.getDay()]+
+        " "+
+        pad(v.getHours())+
+        ":00";
+
+
+      piirra();
+    })
+
+
+    .catch(function(e){
+
+      $("akLeima").innerHTML=
+        "<small>ei ennustetta</small>";
+
+
+      $("akTaulu").innerHTML=
+        '<div class="ak-virhe">'+
+        "Ennustetta ei saatu: "+
+        e.message+
+        ".</div>";
+    });
+  };
+
+
+  // ========================================================
+  // KARTTAKUVA
+  // ========================================================
+
+  if(jarvi.kartta.kuvaUrl){
+
+    var img=new Image();
+
+    img.crossOrigin="Anonymous";
+
+
+    img.onload=function(){
+
+      var tulos=
+        puraSyvyysKuvasta(
+          img,
+          jarvi.kartta.W,
+          jarvi.kartta.H
+        );
+
+
+      mask=tulos.mask;
+      karttaSyvyys=tulos.syvyys;
+
+
+      fmiKutsu();
+    };
+
+
+    img.onerror=function(){
+
+      $("akTaulu").innerHTML=
+        '<div class="ak-virhe">'+
+        "Syvyyskarttakuvaa ("+
+        jarvi.kartta.kuvaUrl+
+        ") ei löydy.</div>";
+    };
+
+
+    img.src=
+      jarvi.kartta.kuvaUrl;
+  }
+}
+
+
+// ============================================================
+// ASTEIKKO
+// ============================================================
+
+function piirraAsteikko(){
+
+  var R=
+    (akTila==="vajoama")
+    ? RAJAT_VI
+    : RAJAT;
+
+  var C=
+    (akTila==="vajoama")
+    ? VARIT_VI
+    : VARIT;
+
+
+  $("akAsteikko").innerHTML=
+    R.map(
+      function(raja,i){
+
+        var n=
+          raja/venytys;
+
+
+        if(
+          akTila==="virtaus"
+        )
+          n=n*0.036;
+
+
+        var teksti;
+
+
+        if(
+          akTila==="virtaus"
+        ){
+
+          teksti=
+            n.toFixed(2)
+            .replace(
+              /^0\./,
+              "."
+            );
+
+        }else{
+
+          teksti=
+            (
+              n>=1
+              ? n.toFixed(1)
+              : n.toFixed(2)
+            )
+            .replace(
+              /^0\./,
+              "."
+            );
+        }
+
+
+        if(
+          akTila==="vajoama"
+        )
+          teksti=
+            (
+              n>=1
+              ? n.toFixed(1)
+              : n.toFixed(1)
+            );
+
+
+        return(
+          '<div style="background:'+
+          C[i]+'">'+
+          teksti+
+          "</div>"
+        );
+      }
+    )
+    .join("");
+}
+
+
+// ============================================================
+// KOROSTUS
+// ============================================================
+
+$("akKorosta").addEventListener(
+  "change",
+  function(){
+
+    korosta=this.checked;
+
+    piirra();
+  }
+);
+
+
+// ============================================================
+// NÄYTTÖVALINTA
+// ============================================================
+
+$("akNaytto").addEventListener(
+  "change",
+  function(){
+
+    akTila=this.value;
+
+
+    var yksikkoLappu=
+      $("akYksikko");
+
+    var huomTeksti=
+      $("akHuomTeksti");
+
+
+    if(akTila==="virtaus"){
+
+      yksikkoLappu.textContent=
+        "Pintavirtausarvio (km/h)";
+
+      huomTeksti.style.display=
+        "block";
+
+    }else if(akTila==="vajoama"){
+
+      yksikkoLappu.textContent=
+        "Vajoamaindeksi (suhteellinen)";
+
+      huomTeksti.textContent=
+        "Vajoamaindeksi etsii kohtia, joissa tuulen synnyttämä " +
+        "pintavirtaus kulkee kohti matalampaa vettä ja kohtaa " +
+        "jyrkän penkan. Suurempi arvo tarkoittaa mallissa " +
+        "voimakkaampaa vajoamapotentiaalia. Arvo ei ole mitattu " +
+        "pystysuuntainen virtausnopeus.";
+
+      huomTeksti.style.display=
+        "block";
+
+    }else{
+
+      yksikkoLappu.textContent=
+        "Aallonkorkeus (m)";
+
+      huomTeksti.textContent=
+        "Tummilla ääriviivoilla on korostettu jyrkimmät penkat " +
+        "(syvyysvyöhykkeiden rajat), joissa kumpuamista esiintyy " +
+        "todennäköisimmin.";
+
+      huomTeksti.style.display=
+        "block";
+    }
+
+
+    piirra();
+  }
+);
+
+
+// ============================================================
+// JÄRVIVALINTA
+// ============================================================
+
+var val=$("akJarvi");
+
+
+Object.keys(JARVET).forEach(
+  function(k){
+
+    var o=
+      document.createElement(
+        "option"
+      );
+
+    o.value=k;
+    o.textContent=
+      JARVET[k].nimi;
+
+    val.appendChild(o);
+  }
+);
+
+
+val.addEventListener(
+  "change",
+  function(){
+    lataa(this.value);
+  }
+);
+
+
+var eka=
+  Object.keys(JARVET)[0];
+
+val.value=eka;
+
+
+// ============================================================
+// KÄYNNISTYS
+// ============================================================
+
+piirraAsteikko();
+
+lataa(eka);
+
+})();
+</script>
+
+</body>
+</html>
