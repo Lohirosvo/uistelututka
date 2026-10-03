@@ -2228,7 +2228,7 @@ body{padding-bottom:66px}
           <button class="chip" onclick="mmlVertailu()" style="border-color:var(--olive); color:var(--olive);">Vertailu: DataDeck vs MML</button>
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
-          <button class="chip" onclick="jkRakenna()" style="border-color:var(--pink); color:var(--pink);">Rakenna järvikartat (kaikki upotettu)</button>
+          <button class="chip" onclick="jkRakenna()" style="border-color:var(--pink); color:var(--pink);">Rakenna järvikartta (Lappajärvi 50 m)</button>
           <button class="chip" id="jkTallenna" onclick="jkTallennaTiedosto()" style="display:none; border-color:var(--amber); color:var(--amber);">Tallenna tiedostoksi</button>
         </div>
         <div id="mmlTila" style="margin-top:10px; font-size:12px; line-height:1.45; white-space:pre-wrap; word-break:break-word;"></div>
@@ -3521,6 +3521,9 @@ body{padding-bottom:66px}
       /* v141: Etelä-Saimaa, siemen Hannulta 61,2033597 / 28,6897126. Saimaa on niin iso, ettei koko järveä
          voi ruudukoida: rajaa = leikataan rajaukseen. Syvyydet MML:stä, jos rajapinnassa on (väyläjärvellä
          ei välttämättä ole, vrt. Toisvesi). */
+      /* v144: Lappajärvi MML:stä 50 m ruuduin (Hannu 3.10.2026: tarkkuus, hinta maksetaan). Korvaa
+         DataDeck-ruudukon malleissa. Syvyydet jo puhelimessa (MML, v122). Siemen = järven keskiosa. */
+      { avain: 'lappajarvi', nimi: 'Lappajärvi', laatikko: 'Lappajärvi', siemen: [63.1561, 23.6704], ruutu: 50, virallinen: 'Järviwiki: 145 km², suurin syvyys 38 m' },
       { ohita: true, avain: 'saimaa_imatra', nimi: 'Saimaa (Imatra)', laatikko: 'Saimaa (Imatra)', siemen: [61.2033597, 28.6897126], lataaSyvyydet: true, rajaa: true,
         virallinen: null }
     ];
@@ -3562,7 +3565,7 @@ body{padding-bottom:66px}
           for (var i = Math.max(0, i0); i <= Math.min(W - 1, i1); i++) { var q = j * W + i; if (!mask[q]) { mask[q] = 1; vesi++; } }
         }
       }
-      return { W: W, H: H, pohjoisLat: pohjoisLat, lansiLon: lansiLon, mask: mask, vesi: vesi, minLat: minLat, minLon: minLon, maxLat: maxLat, maxLon: maxLon };
+      return { W: W, H: H, pohjoisLat: pohjoisLat, lansiLon: lansiLon, mask: mask, vesi: vesi, minLat: minLat, minLon: minLon, maxLat: maxLat, maxLon: maxLon, ruutu: ruutu };
     }
     // v132: siemenen vesialue + palat, joihin on enintään 2 tyhjää ruutua. Palauttaa Uint8Array tai null.
     function jkSiemenAlue(R, siemen) {
@@ -3574,9 +3577,10 @@ body{padding-bottom:66px}
           for (var da = -1; da <= 1; da++) for (var db = -1; db <= 1; db++) { var ni = pi + da, nj = pj + db; if (ni < 0 || nj < 0 || ni >= W || nj >= H) continue; var nq = nj * W + ni; if (mask[nq] && comp[nq] < 0) { comp[nq] = n; jono[b++] = nq; } } }
         n++;
       }
-      var si = Math.floor((siemen[1] - R.lansiLon) * 111320 * Math.cos(siemen[0] * Math.PI / 180) / 100), sj = Math.floor((R.pohjoisLat - siemen[0]) * 111320 / 100);
+      var rr = R.ruutu || 100, haku = Math.round(2000 / rr);   // v144: 2 km haku ruutukoosta riippumatta
+      var si = Math.floor((siemen[1] - R.lansiLon) * 111320 * Math.cos(siemen[0] * Math.PI / 180) / rr), sj = Math.floor((R.pohjoisLat - siemen[0]) * 111320 / rr);
       var sc = -1, best = Infinity;
-      for (var rj = -20; rj <= 20; rj++) for (var ri = -20; ri <= 20; ri++) {
+      for (var rj = -haku; rj <= haku; rj++) for (var ri = -haku; ri <= haku; ri++) {
         var ti = si + ri, tj = sj + rj; if (ti < 0 || tj < 0 || ti >= W || tj >= H) continue;
         var tq = tj * W + ti, et = ri * ri + rj * rj; if (mask[tq] && et < best) { best = et; sc = comp[tq]; }
       }
@@ -3642,7 +3646,7 @@ body{padding-bottom:66px}
           var ehdokkaat = haku.kohteet.map(function (f) { var r = jkRenkaat(f.geometry); return { r: r, ala: jkAlaKm2(r), p: f.properties || {} }; })
             .filter(function (x) { return x.r.length && x.ala > 0.2; });
           if (!ehdokkaat.length) { rivit.push('\n' + K.nimi + ': ei järvialueita rajauksessa.'); continue; }
-          var ruutu = 100;
+          var ruutu = K.ruutu || 100;   // v144: Lappajärvi 50 m
           var RA = jkRasteri([].concat.apply([], ehdokkaat.map(function (x) { return x.r; })), ruutu, K.rajaa ? B : null);
           var pidA = jkSiemenAlue(RA, K.siemen);
           if (!pidA) { rivit.push('\n' + K.nimi + ': siemenpisteen lähellä ei ole vettä. Ohitetaan.'); continue; }
@@ -3662,10 +3666,11 @@ body{padding-bottom:66px}
             + valitut.map(function (x) { return x.ala.toFixed(1); }).join(', ') + ' km²');
           if (!valitut.length) { rivit.push('  Ei sopivaa monikulmiota.'); continue; }
           // v141: rajatussa tilassa ruudukko on jo oikea; käytetään vaiheen A siemenaluetta suoraan
+          if (RA.ruutu === undefined) RA.ruutu = ruutu;
           var RB = K.rajaa ? (function () {
                 var m2 = new Uint8Array(RA.mask.length), v2 = 0;
                 for (var q9 = 0; q9 < m2.length; q9++) if (pidA[q9]) { m2[q9] = 1; v2++; }
-                return { W: RA.W, H: RA.H, pohjoisLat: RA.pohjoisLat, lansiLon: RA.lansiLon, mask: m2, vesi: v2,
+                return { W: RA.W, H: RA.H, pohjoisLat: RA.pohjoisLat, lansiLon: RA.lansiLon, mask: m2, vesi: v2, ruutu: ruutu,
                          minLat: B.lat[0], maxLat: B.lat[1], minLon: B.lon[0], maxLon: B.lon[1] };
               })() : jkRasteri([].concat.apply([], valitut.map(function (x) { return x.r; })), ruutu);
           var W = RB.W, H = RB.H, pohjoisLat = RB.pohjoisLat, lansiLon = RB.lansiLon, mask = RB.mask, vesi = RB.vesi;
@@ -3776,8 +3781,8 @@ body{padding-bottom:66px}
           }
           koot.forEach(function (n2, c2) { if (!pidetaan[c2]) pois.push(n2); });
           pois.sort(function (a, b) { return b - a; });
-          rivit.push('  Järveksi tunnistettu ' + Object.keys(pidetaan).length + ' palaa (' + (vesi / 100).toFixed(1) + ' km²). Pois jätetty '
-            + pois.length + ' naapurivettä' + (pois.length ? ': ' + pois.slice(0, 8).map(function (x) { return (x / 100).toFixed(1); }).join(', ') + ' km²' : '') + '.');
+          rivit.push('  Järveksi tunnistettu ' + Object.keys(pidetaan).length + ' palaa (' + (vesi * ruutu * ruutu / 1e6).toFixed(1) + ' km²). Pois jätetty '
+            + pois.length + ' naapurivettä' + (pois.length ? ': ' + pois.slice(0, 8).map(function (x) { return (x * ruutu * ruutu / 1e6).toFixed(1); }).join(', ') + ' km²' : '') + '.');
           // rivien rajaus (sarakkeita ei: pituusasteen muunnos riippuu rivin leveysasteesta)
           var j0c = Math.max(0, jMin - 1), j1c = Math.min(H - 1, jMax + 1), H2 = j1c - j0c + 1;
           mask = mask.slice(j0c * W, (j1c + 1) * W); luok = luok.slice(j0c * W, (j1c + 1) * W);
@@ -6247,13 +6252,16 @@ function akKiertoPohjat(mask, h, W, H, dx, r){
   function ratkaise(tx, ty){
     var psi = new Float64Array(N), rhs = new Float64Array(N);
     for (var p = 0; p < N; p++) rhs[p] = (ty*gx[p] - tx*gy[p])*dx*dx;
-    for (var it = 0; it < 4000; it++){
+    /* v144: optimaalinen ylirelaksaatio ~ 2/(1+π/n), n = ruudukon lineaarinen koko. Kiinteä 1,9
+       suppeni hitaasti isoilla ruudukoilla (50 m Lappajärvi). Ratkaisu on sama, vain nopeampi. */
+    var omega = Math.min(1.97, Math.max(1.9, 2/(1 + Math.PI/Math.sqrt(N))));
+    for (var it = 0; it < 12000; it++){
       var muutos = 0, suurin = 1e-30;
       for (var p = 0; p < N; p++){
         var o = p*4, s2 = 0;
         for (var k = 0; k < 4; k++){ var n2 = nb[o+k]; if (n2 >= 0) s2 += af[o+k]*psi[n2]; }
         var d = (s2 - rhs[p])/sum[p] - psi[p];
-        psi[p] += 1.9*d;
+        psi[p] += omega*d;
         var ad = d < 0 ? -d : d; if (ad > muutos) muutos = ad;
         var ap = psi[p] < 0 ? -psi[p] : psi[p]; if (ap > suurin) suurin = ap;
       }
@@ -11745,7 +11753,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v143';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v144';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
