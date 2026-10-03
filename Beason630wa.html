@@ -2143,8 +2143,10 @@ lataa(eka);
 window.addEventListener('load', function(){
   try { aaltokarttaAlusta(); } catch(e){ console.error(e); }
   // Beason 630 WA oletusveneeksi, jos käyttäjä ei ole valinnut muuta
-  try { var s = document.getElementById('akVene'); if (s && !localStorage.getItem('aaltokartta_vene')) {
-    s.value = 'beason630'; s.dispatchEvent(new Event('change')); } } catch(e){}
+  try { var s = document.getElementById('akVene');
+    if (s) [].forEach.call(s.options, function(o, i){ o.value = AK_VENEET_ID[i] || ''; });   // arvot vain luettavuuden vuoksi; moduuli käyttää indeksiä
+    if (s && !localStorage.getItem('aaltokartta_vene')) {
+      s.selectedIndex = AK_VENEET_ID.indexOf('beason630'); s.dispatchEvent(new Event('change')); } } catch(e){}
   kumpuNayta();
 });
 </script>
