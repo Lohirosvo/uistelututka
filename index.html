@@ -2221,7 +2221,7 @@ body{padding-bottom:66px}
           <button class="chip" onclick="mmlVertailu()" style="border-color:var(--olive); color:var(--olive);">Vertailu: DataDeck vs MML</button>
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
-          <button class="chip" onclick="jkRakenna()" style="border-color:var(--pink); color:var(--pink);">Rakenna järvikartat (Alajärvi, Evijärvi, Toisvesi, Patana)</button>
+          <button class="chip" onclick="jkRakenna()" style="border-color:var(--pink); color:var(--pink);">Rakenna järvikartta (Toisvesi)</button>
           <button class="chip" id="jkTallenna" onclick="jkTallennaTiedosto()" style="display:none; border-color:var(--amber); color:var(--amber);">Tallenna tiedostoksi</button>
         </div>
         <div id="mmlTila" style="margin-top:10px; font-size:12px; line-height:1.45; white-space:pre-wrap; word-break:break-word;"></div>
@@ -2843,7 +2843,7 @@ body{padding-bottom:66px}
          siemenpisteestä (JK_KOHTEET). Kuhalordi, Kivitippu ja Vimpeli = Lappajärvi (tehty). */
       { nimi: 'Alajärvi',               lat: [62.92, 63.10], lon: [23.65, 23.95] },
       { nimi: 'Evijärvi',               lat: [63.33, 63.50], lon: [23.30, 23.70] },
-      { nimi: 'Toisvesi',               lat: [62.28, 62.50], lon: [23.55, 24.10] },
+      { nimi: 'Toisvesi',               lat: [62.20, 62.45], lon: [23.55, 24.00] },   // v134: V-muotoinen, eteläpää Virroilla ~62,25 N (Hannun kartta 3.10.); v131 rajaus katkaisi
       { nimi: 'Patanan tekojärvi',      lat: [63.20, 63.36], lon: [23.88, 24.12] }
     ];
     var LUOT_LAPPA_TUNNUS = '47.031.1.001';
@@ -3266,6 +3266,37 @@ body{padding-bottom:66px}
       var t = parseFloat(String(p.teksti || '').replace(',', '.'));
       return isFinite(t) ? t : NaN;
     }
+    // v134: yhden rajauksen syvyyskäyrät ja -pisteet (sama logiikka kuin mmlLataaJarvet)
+    async function mmlLataaYksi(b, avain, nayta) {
+      var E = [], N = [], D = [], L = [];
+      var ka = await mmlHaeKaikki('syvyyskayra', b, avain, function (n) { nayta(b.nimi + ': käyriä haettu ' + n + '…'); });
+      var nKayrat = 0;
+      ka.kohteet.forEach(function (f) {
+        var d = mmlSyvyysM(f.properties || {}); if (!isFinite(d) || !f.geometry) return;
+        var viivat = f.geometry.type === 'LineString' ? [f.geometry.coordinates] : f.geometry.type === 'MultiLineString' ? f.geometry.coordinates : [];
+        if (!viivat.length) return;
+        nKayrat++;
+        viivat.forEach(function (v) {
+          var ed = null;
+          v.forEach(function (c) {
+            var t = TM35.fwd(c[1], c[0]);
+            if (ed) { var dist = Math.hypot(t.E - ed.E, t.N - ed.N), osat = Math.floor(dist / 20);
+              for (var s2 = 1; s2 < osat; s2++) { E.push(ed.E + (t.E - ed.E) * s2 / osat); N.push(ed.N + (t.N - ed.N) * s2 / osat); D.push(d); L.push(1); } }
+            E.push(t.E); N.push(t.N); D.push(d); L.push(1); ed = t;
+          });
+        });
+      });
+      var pi = await mmlHaeKaikki('syvyyspiste', b, avain, function (n) { nayta(b.nimi + ': syvyyspisteitä haettu ' + n + '…'); });
+      var nPisteet = 0;
+      pi.kohteet.forEach(function (f) {
+        var d = mmlSyvyysM(f.properties || {});
+        if (!isFinite(d) || !f.geometry || f.geometry.type !== 'Point') return;
+        var t = TM35.fwd(f.geometry.coordinates[1], f.geometry.coordinates[0]);
+        E.push(t.E); N.push(t.N); D.push(d); L.push(2); nPisteet++;
+      });
+      return { nimi: b.nimi, E: Float32Array.from(E), N: Float32Array.from(N), D: Float32Array.from(D), L: Uint8Array.from(L),
+               nKayrat: nKayrat, nPisteet: nPisteet, kesken: ka.kesken || pi.kesken };
+    }
     async function mmlLataaJarvet() {
       var box = document.getElementById('mmlTila'), kop = document.getElementById('mmlKopioi');
       var avain = mmlAvain();
@@ -3451,7 +3482,9 @@ body{padding-bottom:66px}
         virallinen: 'matala, runsashumuksinen, säännöstelty (Ramboll 2021); pinta-alaa ei tarkistettu' },
       { ohita: true, avain: 'evijarvi', nimi: 'Evijärvi', laatikko: 'Evijärvi', siemen: [63.4125, 23.4964],
         virallinen: '28 km², keskisyvyys 1,7 m, suurin 3,5 m (Wikipedia)' },
-      { avain: 'toisvesi', nimi: 'Toisvesi', laatikko: 'Toisvesi', siemen: [62.383, 23.850],
+      // v134: siemen Hannun kartalta 3.10.2026 (Wikipedian 62,383/23,850 osui 0,7 km²:n lampeen);
+      // lataaSyvyydet: rajaus muuttui, joten Toisveden MML-syvyydet ladataan rakennuksen yhteydessä
+      { avain: 'toisvesi', nimi: 'Toisvesi', laatikko: 'Toisvesi', siemen: [62.302059, 23.737861], lataaSyvyydet: true,
         virallinen: '29,4 km², keskisyvyys 19,4 m, suurin 85 m (Wikipedia/Järviwiki)' },
       { ohita: true, avain: 'patana', nimi: 'Patanan tekojärvi', laatikko: 'Patanan tekojärvi', siemen: [63.278964, 23.996236],
         virallinen: null, korkeus: { vedenpinta: 123.2 } }
@@ -3547,6 +3580,17 @@ body{padding-bottom:66px}
         for (var kk = 0; kk < JK_KOHTEET.length; kk++) {
           var K = JK_KOHTEET[kk];
           if (K.ohita) continue;   // v133: jo upotettu
+          if (K.lataaSyvyydet) {   // v134: tämän järven syvyydet uudella rajauksella; muut järvet säilyvät
+            var Bl = LUOT_LAATIKOT.find(function (x) { return x.nimi === K.laatikko; });
+            var uusiD = await mmlLataaYksi(Bl, avain, nayta);
+            var ix2 = mmlSyvData.jarvet.findIndex(function (x) { return x.nimi === K.laatikko; });
+            if (ix2 >= 0) mmlSyvData.jarvet[ix2] = uusiD; else mmlSyvData.jarvet.push(uusiD);
+            mmlIndeksi = null;
+            try { await mmlIdbTallenna(mmlSyvData); } catch (e) {}
+            var syvinL = 0; for (var zz = 0; zz < uusiD.D.length; zz++) syvinL = Math.max(syvinL, uusiD.D[zz]);
+            rivit.push(K.nimi + ': syvyydet ladattu uudella rajauksella: ' + uusiD.nKayrat + ' käyrää, ' + uusiD.nPisteet + ' pistettä, syvin ' + syvinL.toFixed(1) + ' m'
+              + (uusiD.kesken ? ' (HUOM: haku jäi kesken)' : '') + '.');
+          }
           var B = LUOT_LAATIKOT.find(function (x) { return x.nimi === K.laatikko; });
           var D = mmlSyvData.jarvet.find(function (x) { return x.nimi === K.laatikko; });
           if (!B || !D || (!D.E.length && !K.korkeus)) { rivit.push(K.nimi + ': ei syvyysdataa, ohitetaan.'); continue; }
@@ -11373,7 +11417,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v133';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v134';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
