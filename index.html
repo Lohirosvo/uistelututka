@@ -3472,6 +3472,51 @@ body{padding-bottom:66px}
       });
       return sis;
     }
+    // v132: rasteroi renkaat 100 m ruudukkoon (pariton–parillinen, ruudun keskipiste)
+    function jkRasteri(renkaat, ruutu) {
+      var minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
+      renkaat.forEach(function (r) { r.forEach(function (c) { if (c[0] < minLon) minLon = c[0]; if (c[0] > maxLon) maxLon = c[0]; if (c[1] < minLat) minLat = c[1]; if (c[1] > maxLat) maxLat = c[1]; }); });
+      var pohjoisLat = +(maxLat + 0.0005).toFixed(5), lansiLon = +(minLon - 0.001).toFixed(5);
+      var H = Math.ceil((pohjoisLat - minLat) * 111320 / ruutu) + 2;
+      var W = Math.ceil((maxLon - lansiLon) * 111320 * Math.cos(minLat * Math.PI / 180) / ruutu) + 2;
+      var mask = new Uint8Array(W * H), vesi = 0, reunat = [];
+      renkaat.forEach(function (r) { for (var a = 0, b = r.length - 1; a < r.length; b = a++) reunat.push([r[b][0], r[b][1], r[a][0], r[a][1]]); });
+      for (var j = 0; j < H; j++) {
+        var lat = pohjoisLat - (j + 0.5) * ruutu / 111320, cosl = Math.cos(lat * Math.PI / 180), xs = [];
+        for (var e = 0; e < reunat.length; e++) { var R = reunat[e]; if ((R[1] > lat) !== (R[3] > lat)) xs.push(R[0] + (lat - R[1]) * (R[2] - R[0]) / (R[3] - R[1])); }
+        xs.sort(function (a, b) { return a - b; });
+        for (var p = 0; p + 1 < xs.length; p += 2) {
+          var i0 = Math.ceil((xs[p] - lansiLon) * 111320 * cosl / ruutu - 0.5), i1 = Math.floor((xs[p + 1] - lansiLon) * 111320 * cosl / ruutu - 0.5);
+          for (var i = Math.max(0, i0); i <= Math.min(W - 1, i1); i++) { var q = j * W + i; if (!mask[q]) { mask[q] = 1; vesi++; } }
+        }
+      }
+      return { W: W, H: H, pohjoisLat: pohjoisLat, lansiLon: lansiLon, mask: mask, vesi: vesi, minLat: minLat, minLon: minLon, maxLat: maxLat, maxLon: maxLon };
+    }
+    // v132: siemenen vesialue + palat, joihin on enintään 2 tyhjää ruutua. Palauttaa Uint8Array tai null.
+    function jkSiemenAlue(R, siemen) {
+      var W = R.W, H = R.H, mask = R.mask, comp = new Int32Array(W * H).fill(-1), jono = new Int32Array(W * H), n = 0;
+      for (var q0 = 0; q0 < W * H; q0++) {
+        if (!mask[q0] || comp[q0] >= 0) continue;
+        var a = 0, b = 0; jono[b++] = q0; comp[q0] = n;
+        while (a < b) { var pq = jono[a++], pi = pq % W, pj = (pq / W) | 0;
+          for (var da = -1; da <= 1; da++) for (var db = -1; db <= 1; db++) { var ni = pi + da, nj = pj + db; if (ni < 0 || nj < 0 || ni >= W || nj >= H) continue; var nq = nj * W + ni; if (mask[nq] && comp[nq] < 0) { comp[nq] = n; jono[b++] = nq; } } }
+        n++;
+      }
+      var si = Math.floor((siemen[1] - R.lansiLon) * 111320 * Math.cos(siemen[0] * Math.PI / 180) / 100), sj = Math.floor((R.pohjoisLat - siemen[0]) * 111320 / 100);
+      var sc = -1, best = Infinity;
+      for (var rj = -20; rj <= 20; rj++) for (var ri = -20; ri <= 20; ri++) {
+        var ti = si + ri, tj = sj + rj; if (ti < 0 || tj < 0 || ti >= W || tj >= H) continue;
+        var tq = tj * W + ti, et = ri * ri + rj * rj; if (mask[tq] && et < best) { best = et; sc = comp[tq]; }
+      }
+      if (sc < 0) return null;
+      var pid = {}; pid[sc] = true;
+      for (var k = 0; k < 10; k++) { var lis = false;
+        for (var q = 0; q < W * H; q++) { if (!mask[q] || !pid[comp[q]]) continue; var i3 = q % W, j3 = (q / W) | 0;
+          for (var a4 = -3; a4 <= 3; a4++) for (var b4 = -3; b4 <= 3; b4++) { var i4 = i3 + a4, j4 = j3 + b4; if (i4 < 0 || j4 < 0 || i4 >= W || j4 >= H) continue; var q4 = j4 * W + i4; if (mask[q4] && !pid[comp[q4]]) { pid[comp[q4]] = true; lis = true; } } }
+        if (!lis) break; }
+      var out = new Uint8Array(W * H); for (var q2 = 0; q2 < W * H; q2++) if (mask[q2] && pid[comp[q2]]) out[q2] = 1;
+      return out;
+    }
     function jkAlaKm2(renkaat) {
       var a = 0;
       renkaat.forEach(function (r, ri) {
@@ -3504,55 +3549,51 @@ body{padding-bottom:66px}
           var D = mmlSyvData.jarvet.find(function (x) { return x.nimi === K.laatikko; });
           if (!B || !D || (!D.E.length && !K.korkeus)) { rivit.push(K.nimi + ': ei syvyysdataa, ohitetaan.'); continue; }
           var haku = await mmlHaeKaikki(jid, B, avain, function (n) { nayta(K.nimi + ': järvialueita haettu ' + n + '…'); });
-          // näyte syvyyspisteistä (enintään 600), lon/lat
-          var nayte = [], askel = Math.max(1, Math.floor(D.E.length / 600));
-          for (var i = 0; i < D.E.length; i += askel) { var g = TM35.inv(D.E[i], D.N[i]); nayte.push([g.lon, g.lat]); }
+          /* v132: JÄRVI VALITAAN SIEMENPISTEESTÄ, EI SYVYYSNÄYTTEISTÄ. v131:ssä Patanalle valittiin
+             pieni naapurijärvi (sillä oli näytteitä, Patanalla ei) ja Toisvedeltä naapurivedet.
+             Vaihe A: kaikki yli 0,2 km² järvialueet ruudukkoon, siemenen vesialue (+ ≤ 2 tyhjän ruudun
+             päässä olevat palat). Vaihe B: vain ne monikulmiot, joiden reuna osuu valittuun alueeseen,
+             tiukkaan ruudukkoon (myös sarakkeet rajautuvat). */
           nayta(K.nimi + ': valitaan järven monikulmiot…');
           var ehdokkaat = haku.kohteet.map(function (f) { var r = jkRenkaat(f.geometry); return { r: r, ala: jkAlaKm2(r), p: f.properties || {} }; })
             .filter(function (x) { return x.r.length && x.ala > 0.2; });
-          ehdokkaat.forEach(function (x) { x.osuus = nayte.length ? nayte.filter(function (q) { return jkSisalla(x.r, q[0], q[1]); }).length / nayte.length : 0; });
-          ehdokkaat.sort(function (a, b) { return b.osuus - a.osuus; });
-          var valitut = ehdokkaat.filter(function (x) { return x.osuus >= 0.01; });
-          // v131: jos syvyysnäytteitä on vähän (esim. tekojärvi), otetaan kaikki; siemen rajaa järven myöhemmin
-          if (nayte.length < 50) valitut = ehdokkaat.slice();
-          var vpOminaisuudet = valitut.length ? Object.keys(valitut[0].p).join(', ') : '';
-          rivit.push('\n' + K.nimi + ': järvialueita ' + haku.kohteet.length + (haku.kesken ? ' (KESKEN)' : '') + ', valittu ' + valitut.length + ': '
-            + valitut.map(function (x) { return x.ala.toFixed(1) + ' km² / ' + Math.round(x.osuus * 100) + ' %'; }).join(', '));
-          if (!valitut.length) { rivit.push('  Ei sopivaa monikulmiota.'); continue; }
-          var renkaat = [].concat.apply([], valitut.map(function (x) { return x.r; }));
-          var minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
-          renkaat.forEach(function (r) { r.forEach(function (c) { minLon = Math.min(minLon, c[0]); maxLon = Math.max(maxLon, c[0]); minLat = Math.min(minLat, c[1]); maxLat = Math.max(maxLat, c[1]); }); });
-          var ruutu = 100, latK = (minLat + maxLat) / 2;
-          var pohjoisLat = +(maxLat + 0.0005).toFixed(5), lansiLon = +(minLon - 0.001).toFixed(5);
-          var H = Math.ceil((pohjoisLat - minLat) * 111320 / ruutu) + 2;
-          var W = Math.ceil((maxLon - lansiLon) * 111320 * Math.cos(minLat * Math.PI / 180) / ruutu) + 2;
-          var mask = new Uint8Array(W * H), luok = new Uint8Array(W * H).fill(15), dep = new Float32Array(W * H), puuttuu = new Uint8Array(W * H);
-          // reunat valmiiksi
-          var reunat = [];
-          renkaat.forEach(function (r) { for (var a = 0, b2 = r.length - 1; a < r.length; b2 = a++) reunat.push([r[b2][0], r[b2][1], r[a][0], r[a][1]]); });
-          var vesi = 0, ilman = 0, summa = 0, syvin = 0;
-          for (var j = 0; j < H; j++) {
-            var lat = pohjoisLat - (j + 0.5) * ruutu / 111320, cosl = Math.cos(lat * Math.PI / 180), xs = [];
-            reunat.forEach(function (e) {
-              if ((e[1] > lat) !== (e[3] > lat)) xs.push(e[0] + (lat - e[1]) * (e[2] - e[0]) / (e[3] - e[1]));
-            });
-            xs.sort(function (a, b) { return a - b; });
-            for (var p2 = 0; p2 + 1 < xs.length; p2 += 2) {
-              var i0 = Math.ceil((xs[p2] - lansiLon) * 111320 * cosl / ruutu - 0.5), i1 = Math.floor((xs[p2 + 1] - lansiLon) * 111320 * cosl / ruutu - 0.5);
-              for (var ii = Math.max(0, i0); ii <= Math.min(W - 1, i1); ii++) {
-                var q = j * W + ii; if (mask[q]) continue;
-                mask[q] = 1; vesi++;
+          if (!ehdokkaat.length) { rivit.push('\n' + K.nimi + ': ei järvialueita rajauksessa.'); continue; }
+          var ruutu = 100;
+          var RA = jkRasteri([].concat.apply([], ehdokkaat.map(function (x) { return x.r; })), ruutu);
+          var pidA = jkSiemenAlue(RA, K.siemen);
+          if (!pidA) { rivit.push('\n' + K.nimi + ': siemenpisteen lähellä ei ole vettä. Ohitetaan.'); continue; }
+          var valitut = ehdokkaat.filter(function (x) {
+            var r0 = x.r[0], askelV = Math.max(1, Math.floor(r0.length / 80));
+            for (var v = 0; v < r0.length; v += askelV) {
+              var ci = Math.floor((r0[v][0] - RA.lansiLon) * 111320 * Math.cos(r0[v][1] * Math.PI / 180) / ruutu), cj = Math.floor((RA.pohjoisLat - r0[v][1]) * 111320 / ruutu);
+              for (var a5 = -1; a5 <= 1; a5++) for (var b5 = -1; b5 <= 1; b5++) {
+                var i6 = ci + a5, j6 = cj + b5; if (i6 < 0 || j6 < 0 || i6 >= RA.W || j6 >= RA.H) continue;
+                if (pidA[j6 * RA.W + i6]) return true;
               }
             }
-            if (j % 40 === 0) { nayta(K.nimi + ': rantaviiva ' + Math.round(100 * j / H) + ' %'); await new Promise(function (ok) { setTimeout(ok, 0); }); }
-          }
+            return false;
+          });
+          var vpOminaisuudet = valitut.length ? Object.keys(valitut[0].p).join(', ') : '';
+          rivit.push('\n' + K.nimi + ': järvialueita ' + haku.kohteet.length + (haku.kesken ? ' (KESKEN)' : '') + ', järveen kuuluu ' + valitut.length + ' palaa: '
+            + valitut.map(function (x) { return x.ala.toFixed(1); }).join(', ') + ' km²');
+          if (!valitut.length) { rivit.push('  Ei sopivaa monikulmiota.'); continue; }
+          var RB = jkRasteri([].concat.apply([], valitut.map(function (x) { return x.r; })), ruutu);
+          var W = RB.W, H = RB.H, pohjoisLat = RB.pohjoisLat, lansiLon = RB.lansiLon, mask = RB.mask, vesi = RB.vesi;
+          var luok = new Uint8Array(W * H).fill(15), dep = new Float32Array(W * H), puuttuu = new Uint8Array(W * H);
+          var ilman = 0, summa = 0, syvin = 0;
+          var minLat = RB.minLat, minLon = RB.minLon, maxLat = RB.maxLat, maxLon = RB.maxLon;
           // v131: korkeuskäyrät veden alla -> syvyysnäytteiksi (tekojärvet)
           if (K.korkeus) {
             var kid = kok.indexOf('korkeuskayra') >= 0 ? 'korkeuskayra' : kok.find(function (x) { return /^korkeusk/i.test(x); });
             var vp = K.korkeus.vedenpinta, vpLahde = 'kartta ' + vp + ' m';
+            // v132: MML:n järvikohteessa on keskikorkeus ja säännöstelyrajat (testi v131)
+            var mmMetriksi = function (v) { v = parseFloat(v); return isFinite(v) && v > 0 ? (v > 1000 ? v / 1000 : v) : null; };
+            var kkM = null, alM = null, ylM = null;
             valitut.forEach(function (x) {
-              var kv = parseFloat(x.p.korkeusarvo); if (isFinite(kv) && kv > 0) { vp = kv > 1000 ? kv / 1000 : kv; vpLahde = 'MML ' + vp + ' m'; }
+              kkM = kkM || mmMetriksi(x.p.keskikorkeus); alM = alM || mmMetriksi(x.p.saannostelynalaraja); ylM = ylM || mmMetriksi(x.p.saannostelynylaraja);
             });
+            if (kkM) { vp = kkM; vpLahde = 'MML:n keskikorkeus ' + kkM + ' m'; }
+            if (alM || ylM) vpLahde += ' (säännöstely ' + (alM || '?') + '–' + (ylM || '?') + ' m)';
             if (!kid) rivit.push('  Korkeuskäyräluokkaa ei löytynyt.');
             else {
               var kh = await mmlHaeKaikki(kid, B, avain, function (n) { nayta(K.nimi + ': korkeuskäyriä haettu ' + n + '…'); });
@@ -3662,7 +3703,7 @@ body{padding-bottom:66px}
           var tulos = { avain: K.avain, nimi: K.nimi, lat: +((minLat + maxLat) / 2).toFixed(5), lon: +((minLon + maxLon) / 2).toFixed(5),
                         syvyys: +(summa / Math.max(1, vesi)).toFixed(1), alaKm2: +(vesi * ruutu * ruutu / 1e6).toFixed(1),
                         syvinRuutu: +syvin.toFixed(1), syvinNayteAlueella: +syvinNayte.toFixed(1), ruutujaIlmanSyvyytta: ilman,
-                        monikulmiot: valitut.map(function (x) { return { alaKm2: +x.ala.toFixed(2), osuus: +x.osuus.toFixed(3) }; }),
+                        monikulmiot: valitut.map(function (x) { return { alaKm2: +x.ala.toFixed(2) }; }),
                         kartta: { ruutu: ruutu, W: W, H: H, pohjoisLat: pohjoisLat, lansiLon: lansiLon, maski: b64(mb), syvyysLuokat: b64(lb), luokkaM: JK_LUOKKA_M } };
           jkTulos.jarvet.push(tulos);
           rivit.push('  Ruudukko ' + W + ' × ' + H + ', vesiruutuja ' + vesi + ' (≈ ' + tulos.alaKm2 + ' km²), keskisyvyys ' + tulos.syvyys
@@ -11288,7 +11329,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v131';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v132';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
