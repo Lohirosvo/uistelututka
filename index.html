@@ -2228,7 +2228,7 @@ body{padding-bottom:66px}
           <button class="chip" onclick="mmlVertailu()" style="border-color:var(--olive); color:var(--olive);">Vertailu: DataDeck vs MML</button>
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
-          <button class="chip" onclick="jkRakenna()" style="border-color:var(--pink); color:var(--pink);">Rakenna järvikartat (kaikki upotettu)</button>
+          <button class="chip" onclick="jkRakenna()" style="border-color:var(--pink); color:var(--pink);">Rakenna järvikartat (Kyrkösjärvi, Kalajärvi)</button>
           <button class="chip" id="jkTallenna" onclick="jkTallennaTiedosto()" style="display:none; border-color:var(--amber); color:var(--amber);">Tallenna tiedostoksi</button>
         </div>
         <div id="mmlTila" style="margin-top:10px; font-size:12px; line-height:1.45; white-space:pre-wrap; word-break:break-word;"></div>
@@ -2851,7 +2851,10 @@ body{padding-bottom:66px}
       { nimi: 'Alajärvi',               lat: [62.92, 63.10], lon: [23.65, 23.95] },
       { nimi: 'Evijärvi',               lat: [63.33, 63.50], lon: [23.30, 23.70] },
       { nimi: 'Toisvesi',               lat: [62.20, 62.45], lon: [23.55, 24.00] },   // v134: V-muotoinen, eteläpää Virroilla ~62,25 N (Hannun kartta 3.10.); v131 rajaus katkaisi
-      { nimi: 'Patanan tekojärvi',      lat: [63.20, 63.36], lon: [23.88, 24.12] }
+      { nimi: 'Patanan tekojärvi',      lat: [63.20, 63.36], lon: [23.88, 24.12] },
+      // v138: Seinäjoen tekojärvet (Hannu 3.10.2026)
+      { nimi: 'Kyrkösjärven tekojärvi', lat: [62.69, 62.81], lon: [22.70, 22.92] },
+      { nimi: 'Kalajärven tekoallas',   lat: [62.51, 62.61], lon: [23.04, 23.24] }
     ];
     var LUOT_LAPPA_TUNNUS = '47.031.1.001';
     var luotausData = null, luotTulosTeksti = '';
@@ -3229,7 +3232,7 @@ body{padding-bottom:66px}
        ole syvyyspistettä. Siksi vertailussa näytetään myös lähin piste ja lähin käyrä erikseen.
        TALLENNUS: IndexedDB, avain 'mml_v1'. Luetaan vasta kun tarvitaan (ei käynnistyksessä).
        Lähdemerkintä: © Maanmittauslaitos, maastotietokanta (CC BY 4.0). */
-    var MML_JARVET = ['Lappajärvi', 'Ähtärinjärvi', 'Kivijärvi (Kivijärven kunta)', 'Alajärvi', 'Evijärvi', 'Toisvesi', 'Patanan tekojärvi'];   // v131: + Cupin järvet
+    var MML_JARVET = ['Lappajärvi', 'Ähtärinjärvi', 'Kivijärvi (Kivijärven kunta)', 'Alajärvi', 'Evijärvi', 'Toisvesi', 'Patanan tekojärvi', 'Kyrkösjärven tekojärvi', 'Kalajärven tekoallas'];   // v131: + Cupin järvet
     var mmlSyvData = null, mmlIndeksi = null;
     async function mmlIdbHae() {
       if (mmlSyvData) return mmlSyvData;
@@ -3494,7 +3497,17 @@ body{padding-bottom:66px}
       { ohita: true, avain: 'toisvesi', nimi: 'Toisvesi', laatikko: 'Toisvesi', siemen: [62.302059, 23.737861], lataaSyvyydet: true,   // v135: upotettu
         virallinen: '29,4 km², keskisyvyys 19,4 m, suurin 85 m (Wikipedia/Järviwiki)' },
       { ohita: true, avain: 'patana', nimi: 'Patanan tekojärvi', laatikko: 'Patanan tekojärvi', siemen: [63.278964, 23.996236],
-        virallinen: null, korkeus: { vedenpinta: 123.2 } }
+        virallinen: null, korkeus: { vedenpinta: 123.2 } },
+      /* v138: Seinäjoen tekojärvet, entistä suota ja maata kuten Patana: syvyys = vedenpinta − veden
+         alle jääneet korkeuskäyrät (vedenpinta MML:n keskikorkeudesta; varalla kartan arvo).
+         Siemenet Hannun kartalta 3.10.2026. Kyrkösjärvestä Hannu antoi eteläisemmän selän; kapean
+         kanavan kautta yhteydessä oleva pohjoisosa tulee mukaan samana vesialueena.
+         Kaverin luotauskartat (Hannu 3.10.) tarkistukseen: Kalajärvi syvin alue noin 6 m,
+         Kyrkösjärvi pääosin 1–4 m, syvempi uoma itärannalla. */
+      { avain: 'kyrkosjarvi', nimi: 'Kyrkösjärven tekojärvi', laatikko: 'Kyrkösjärven tekojärvi', siemen: [62.737495, 22.806543], lataaSyvyydet: true,
+        virallinen: 'vedenpinta kartalla 81,6 m; kaverin luotaus pääosin 1–4 m', korkeus: { vedenpinta: 81.6 } },
+      { avain: 'kalajarvi', nimi: 'Kalajärven tekoallas', laatikko: 'Kalajärven tekoallas', siemen: [62.559693, 23.137612], lataaSyvyydet: true,
+        virallinen: 'vedenpinta kartalla 105,7 m; kaverin luotaus syvin noin 6 m', korkeus: { vedenpinta: 105.7 } }
     ];
     var jkTulos = null;
     function jkRenkaat(geom) {   // [[ [lon,lat], ... ], ...] kaikki renkaat
@@ -11638,7 +11651,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v137';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v138';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
