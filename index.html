@@ -1423,6 +1423,12 @@ body{padding-bottom:66px}
 
   <div class="ak-kartta">
     <canvas id="akKuva" width="300" height="300"></canvas>
+    <!-- v137: zoom. Valitse piste napauttamalla, sitten + zoomaa sen ympärille. -->
+    <div style="position:absolute; top:6px; right:6px; display:flex; flex-direction:column; gap:5px; z-index:2;">
+      <button type="button" onclick="akZoomaa(2)" style="width:38px;height:38px;border-radius:8px;border:1px solid #c4ccca;background:rgba(255,255,255,.94);font-size:22px;font-weight:700;color:#16211f;">+</button>
+      <button type="button" onclick="akZoomaa(0.5)" style="width:38px;height:38px;border-radius:8px;border:1px solid #c4ccca;background:rgba(255,255,255,.94);font-size:22px;font-weight:700;color:#16211f;">−</button>
+      <button type="button" onclick="akZoomaa(0)" id="akZoomTaso" style="width:38px;height:30px;border-radius:8px;border:1px solid #c4ccca;background:rgba(255,255,255,.94);font-size:12px;color:#16211f;">1×</button>
+    </div>
     <div class="ak-leima" id="akLeima">–<small>haetaan</small></div>
     <div class="ak-tuuli" id="akTuuli"></div>
   </div>
@@ -5052,16 +5058,40 @@ body{padding-bottom:66px}
        on kestänyt vähintään neljäsosan sisäisen seichen jaksosta (Stevens & Imberger 1996).
        Ilman mitattua profiilia kumpuamista ei lasketa eikä väritetä (g' ja h1 puuttuvat).
        Alue = ranta, jonka takana maa on tuulen puolella (pintavesi työntyy siitä pois). */
+    /* v137 (Hannu 3.10.2026): Lappajärvellä kerrostuneisuus MITATUSTA lämpöprofiilista, jos sellainen
+       on; muuten käytetään harppausennustetta 2027 (HARPPAUS_TAULUKKO, oma toteuma edellä).
+       Mitattu = DepthRider-profiili enintään 7 vrk vanha (lämpötilat ja harppaus mitattu).
+       Arvio = taulukon harppaussyvyys (välin keskikohta) + pintalämpö mallista + alusveden lämpö
+       8 °C (OLETUS, ei mitattu; Wedderburn ei ole kovin herkkä tälle: 8 vs 10 °C muuttaa
+       tiheyseroa noin viidenneksen). Arviolla kartta näyttää vaaleamman pinkin ja puhe sanoo "arvion mukaan".
+       Muilla järvillä vain mitattu profiili. */
     function kumpuParametrit() {
       try {
-        if (!drProfiili || drProfiili.tasalampoinen) return null;
-        const T1 = drProfiili.pinta, T2 = drProfiili.pohja;
-        if (!(T1 > T2)) return null;
-        const h1 = drProfiili.termokliini || 4, h2 = Math.max(1, ((currentLocation && currentLocation.maxDepth) || 20) - h1);
+        const maxD = (currentLocation && currentLocation.maxDepth) || 20;
+        const tuore = drProfiili && drProfiili.aika && (Date.now() - new Date(drProfiili.aika).getTime()) < 7 * 86400e3;
+        if (drProfiili && tuore) {
+          if (drProfiili.tasalampoinen) return null;   // mitattu sekoittuneeksi
+          const T1 = drProfiili.pinta, T2 = drProfiili.pohja;
+          if (T1 > T2) {
+            const h1 = drProfiili.termokliini || 4, r1 = vedenTiheys(T1), r2 = vedenTiheys(T2);
+            return { gp: 9.81 * (r2 - r1) / r2, h1: h1, h2: Math.max(1, maxD - h1), rho: r1, mitattu: true, lahde: 'mitattu lämpöprofiili' };
+          }
+        }
+        const nimi = currentLocation && currentLocation.name ? currentLocation.name : '';
+        if (!nimi.startsWith('Lappajärvi') || typeof harppausSaaliille !== 'function') return null;
+        const h = harppausSaaliille(analyysiHetkiTaiNyt());
+        const m = String(h.arvo).match(/(\d+(?:,\d+)?)\s*(?:[–-]\s*(\d+(?:,\d+)?))?/);
+        if (!m || /poissa|ei vielä|käänteinen/.test(h.arvo) && !/\d/.test(h.arvo)) return null;
+        const a1 = parseFloat(m[1].replace(',', '.')), a2 = m[2] ? parseFloat(m[2].replace(',', '.')) : a1, h1 = (a1 + a2) / 2;
+        const T1 = (typeof answers === 'object' && typeof answers.temp === 'number') ? answers.temp : null, T2 = 8;
+        if (T1 === null || !(T1 > T2 + 1)) return null;
         const r1 = vedenTiheys(T1), r2 = vedenTiheys(T2);
-        return { gp: 9.81 * (r2 - r1) / r2, h1: h1, h2: h2, rho: r1 };
+        const mit = /toteuma/.test(h.lahde);
+        return { gp: 9.81 * (r2 - r1) / r2, h1: h1, h2: Math.max(1, maxD - h1), rho: r1, mitattu: mit,
+                 lahde: (mit ? 'oma harppausmittaus (' + h.lahde + ')' : 'arvio: harppausennuste 2027') + ', alusvesi 8 °C oletus' };
       } catch (e) { return null; }
     }
+    function analyysiHetkiTaiNyt() { try { return analyysiHetki(); } catch (e) { return new Date(); } }
     function kumpuArvio(U, L, tunteja) {
       const p = kumpuParametrit();
       if (!p || !(U > 0) || !(L > 0)) return null;
@@ -5069,7 +5099,7 @@ body{padding-bottom:66px}
       const W = p.gp * p.h1 * p.h1 / (uStar * uStar * L);
       const ci = Math.sqrt(p.gp * p.h1 * p.h2 / (p.h1 + p.h2)), kestoH = (2 * L / ci) / 4 / 3600;
       const riittaa = typeof tunteja === 'number' ? tunteja >= kestoH : false;
-      return { W: W, kestoH: kestoH, riittaa: riittaa, vahva: W <= 1 && riittaa };
+      return { W: W, kestoH: kestoH, riittaa: riittaa, vahva: W <= 1 && riittaa, mitattu: !!p.mitattu, lahde: p.lahde };
     }
     window.kumpuArvio = kumpuArvio;   // aaltokartan moduuli käyttää tätä
     // Havaittu tuulen kesto (tuuliKertyma), jos suunta on sama kuin ennusteen alussa (±45°)
@@ -5081,18 +5111,25 @@ body{padding-bottom:66px}
     };
     function kumpuPuhe() {
       try {
-        const k = kumpuamisAnalyysi(), saa = saaNyt();
-        if (!k || saa.tuuliSuunta == null) return '';
+        const saa = saaNyt();
+        if (saa.tuuliSuunta == null || !(saa.tuuli > 0)) return '';
+        let L = null;
+        if (typeof window.akSuunnattuMitta === 'function') L = window.akSuunnattuMitta(saa.tuuliSuunta, currentLocation && currentLocation.name);
+        if (!(L > 200)) L = 2 * Math.sqrt(((currentLocation && currentLocation.areaKm2) || 20) * 1e6 / Math.PI);
+        const tun0 = (tuuliKertyma && tuuliKertyma.luotettava) ? tuuliKertyma.tunteja : 0;
+        const k = kumpuArvio(saa.tuuli, L, tun0);
+        if (!k) return '';
+        const ar = k.mitattu ? '' : 'Arvion mukaan ';
         const sj0 = compassSuojaranta(saa.tuuliSuunta);
         const sj = { jarvi: sj0.jarvi.replace(/ranta$/, 'rannalla'), saari: sj0.saari.replace(/puoli$/, 'puolella') };
         const tun = (tuuliKertyma && tuuliKertyma.luotettava) ? tuuliKertyma.tunteja : null;
         if (k.W <= 1 && tun !== null && tun >= k.kestoH)
-          return 'Kumpuaminen on todennäköistä. Tuuli on puhaltanut ' + tun + ' tuntia, ja kylmää alusvettä nousee järven ' + sj.jarvi
-            + ' ja saarten ' + sj.saari + '. Kartalla alue on pinkki.';
+          return (ar ? ar + 'kumpuaminen' : 'Kumpuaminen') + ' on todennäköistä. Tuuli on puhaltanut ' + tun + ' tuntia, ja kylmää alusvettä nousee järven ' + sj.jarvi
+            + ' ja saarten ' + sj.saari + '. Kartalla alue on pinkki.' + (ar ? ' Harppaus on ennusteesta, ei mitattu.' : '');
         if (k.W <= 1)
-          return 'Tuuli riittää kumpuamiseen, mutta sen pitää kestää noin ' + Math.max(1, Math.round(k.kestoH)) + ' tuntia ennen kuin kylmää vettä nousee järven ' + sj.jarvi + '.';
+          return ar + (ar ? 'tuuli' : 'Tuuli') + ' riittää kumpuamiseen, mutta sen pitää kestää noin ' + Math.max(1, Math.round(k.kestoH)) + ' tuntia ennen kuin kylmää vettä nousee järven ' + sj.jarvi + '.';
         if (k.W <= 3)
-          return 'Harppauskerros kallistuu: järven ' + sj.jarvi + ' se nousee lähemmäs pintaa, mutta ei pintaan asti.';
+          return ar + (ar ? 'harppauskerros' : 'Harppauskerros') + ' kallistuu: järven ' + sj.jarvi + ' se nousee lähemmäs pintaa, mutta ei pintaan asti.';
         return '';
       } catch (e) { return ''; }
     }
@@ -6483,7 +6520,7 @@ function piirra(){
   // Piirretään moninkertaisella tarkkuudella ja pehmennetään aallonkorkeus
   // ruutujen välillä. Näin ranta pysyy terävänä mutta pinta ei ole porrasteinen.
   // v136: vahva kumpuaminen -> pinkki alue
-  var kumpu = null, kumpuInfo = $("akKumpuInfo");
+  var kumpu = null, kumpuInfo = $("akKumpuInfo"), kumpuArvioVain = false;
   try {
     /* Kesto: ennustesarjan alusta laskettu kesto + havaittu tuuli ennen sarjaa, jos tuuli on
        pysynyt samana sarjan alusta asti. Pyyhkäisymatka tuulen suunnassa (akSuunnattuMitta). */
@@ -6493,16 +6530,18 @@ function piirra(){
     if (!(Lk > 200)) Lk = d.Fpahin || 0;
     var ka = (typeof window.kumpuArvio === 'function') ? window.kumpuArvio(U, Lk, tunt) : null;
     if (ka && ka.vahva) kumpu = akKumpuAlue(d.dir);
+    kumpuArvioVain = !!(kumpu && !ka.mitattu);
     if (kumpuInfo){
       if (kumpu){ kumpuInfo.style.display = '';
-        kumpuInfo.textContent = 'Pinkki = todennäköinen kumpuamisalue: kylmää alusvettä nousee. Wedderburn-luku ' + ka.W.toFixed(2).replace('.', ',')
-          + ' (≤ 1) ja tuuli on kestänyt ' + tunt + ' h (tarve noin ' + Math.max(1, Math.round(ka.kestoH)) + ' h). Edellyttää mitattua lämpöprofiilia.'; }
+        kumpuInfo.textContent = (kumpuArvioVain ? 'Vaaleanpinkki = ARVIOITU kumpuamisalue' : 'Pinkki = todennäköinen kumpuamisalue') + ': kylmää alusvettä nousee. Wedderburn-luku '
+          + ka.W.toFixed(2).replace('.', ',') + ' (≤ 1), tuuli kestänyt ' + tunt + ' h (tarve noin ' + Math.max(1, Math.round(ka.kestoH)) + ' h). Kerrostuneisuus: ' + ka.lahde + '.'; }
       else { kumpuInfo.style.display = 'none'; kumpuInfo.textContent = ''; }
     }
   } catch (e) { kumpu = null; }
 
-  var S = Math.min(8, Math.max(2, Math.round(380/k.W)));
-  var LW = k.W*S, LH = k.H*S;
+  var win = akIkkuna(k);
+  var S = Math.min(24, Math.max(2, Math.round(380/win.w)));
+  var LW = win.w*S, LH = win.h*S;
   var c = $("akKuva");
   c.width = LW; c.height = LH;
   var ctx = c.getContext("2d"), kuva = ctx.createImageData(LW, LH);
@@ -6518,17 +6557,17 @@ function piirra(){
   }
 
   for (var y = 0; y < LH; y++){
-    var v0 = y/S - 0.5, j0 = Math.floor(v0), fy = v0 - j0;
+    var v0 = y/S - 0.5 + win.j0, j0 = Math.floor(v0), fy = v0 - j0;
     for (var x = 0; x < LW; x++){
       var o = (y*LW + x)*4;
       // Ranta ratkaistaan lähimmästä ruudusta, jotta reuna ei leviä.
-      var ni = Math.min(k.W-1, Math.max(0, Math.round(v0*0 + x/S - 0.5)));
+      var ni = Math.min(k.W-1, Math.max(0, Math.round(x/S - 0.5) + win.i0));
       var nj = Math.min(k.H-1, Math.max(0, Math.round(v0)));
       if (!mask[nj*k.W + ni]){
         kuva.data[o] = 232; kuva.data[o+1] = 236; kuva.data[o+2] = 231; kuva.data[o+3] = 255;
         continue;
       }
-      var u0 = x/S - 0.5, i0 = Math.floor(u0), fx = u0 - i0;
+      var u0 = x/S - 0.5 + win.i0, i0 = Math.floor(u0), fx = u0 - i0;
       var summa = 0, paino = 0;
       for (var dy = 0; dy < 2; dy++){
         for (var dx = 0; dx < 2; dx++){
@@ -6552,10 +6591,11 @@ function piirra(){
       } else {
         kuva.data[o] = t[0]; kuva.data[o+1] = t[1]; kuva.data[o+2] = t[2];
       }
-      if (kumpu && kumpu[nj*k.W + ni]){   // v136: pinkki sävy päälle
-        kuva.data[o]   = Math.round(kuva.data[o]*0.2 + 255*0.8);
-        kuva.data[o+1] = Math.round(kuva.data[o+1]*0.2 + 64*0.8);
-        kuva.data[o+2] = Math.round(kuva.data[o+2]*0.2 + 170*0.8);
+      if (kumpu && kumpu[nj*k.W + ni]){   // v136: pinkki; v137: arvio vaaleampi
+        var pa = kumpuArvioVain ? 0.5 : 0.8, pg = kumpuArvioVain ? 140 : 64, pb = kumpuArvioVain ? 200 : 170;
+        kuva.data[o]   = Math.round(kuva.data[o]*(1-pa) + 255*pa);
+        kuva.data[o+1] = Math.round(kuva.data[o+1]*(1-pa) + pg*pa);
+        kuva.data[o+2] = Math.round(kuva.data[o+2]*(1-pa) + pb*pa);
       }
       kuva.data[o+3] = 255;
     }
@@ -6565,14 +6605,14 @@ function piirra(){
   // Nuolet: mihin aalto (tai virtaus) kulkee
   var rad = (virtaus ? akVirtausSuunta(d.dir) : d.dir + 180)*Math.PI/180;
   var ax = Math.sin(rad), ay = -Math.cos(rad);
-  var vali = Math.max(6, Math.round(k.W/13))*S, pit = vali*0.40;
+  var vali = Math.max(6, Math.round(win.w/13))*S, pit = vali*0.40;
   ctx.strokeStyle = "rgba(16,24,22,.55)";
   ctx.lineWidth = Math.max(1.1, LW/300);
   ctx.lineCap = "round";
   ctx.beginPath();
   for (var jy = vali; jy < LH; jy += vali){
     for (var jx = vali; jx < LW; jx += vali){
-      var mi = Math.min(k.W-1, Math.floor(jx/S)), mj = Math.min(k.H-1, Math.floor(jy/S));
+      var mi = Math.min(k.W-1, Math.floor(jx/S) + win.i0), mj = Math.min(k.H-1, Math.floor(jy/S) + win.j0);
       if (!mask[mj*k.W + mi]) continue;
       if (syva){
         /* Syvemmässä vedessä suunta vaihtelee paikasta toiseen, joten nuoli
@@ -6591,7 +6631,7 @@ function piirra(){
 
   /* Talteen napautusta varten: nämä ovat piirron paikallisia, mutta napautus
      tarvitsee ne piirron jälkeen. */
-  akViime = { hs:hs, vir:vir, kue:kue, kun:kun, kv:kv, kentta:kentta, k:k, S:S, kalaRaja:kalaRaja, turva:akVene().turva, dir:d.dir };
+  akViime = { hs:hs, vir:vir, kue:kue, kun:kun, kv:kv, kentta:kentta, k:k, S:S, win:win, kalaRaja:kalaRaja, turva:akVene().turva, dir:d.dir };
   akPiirraMerkki(ctx, S);
 
   d.korkein = korkein;
@@ -6601,6 +6641,28 @@ function piirra(){
 }
 
 var akViime = null, akValittu = null;
+
+/* v137: ZOOM. Pitkissä ja kapeissa järvissä koko järven kuva on karkea. Zoomaus piirtää
+   osaikkunan ruudukosta isommilla pikseleillä; mallit lasketaan koko järvelle kuten ennen.
+   Keskipiste = valittu piste (napautus), muuten edellinen keskipiste tai järven keskusta. */
+var akZoom = 1, akZoomKeski = null;
+function akIkkuna(k){
+  if (akZoom <= 1) return { i0: 0, j0: 0, w: k.W, h: k.H };
+  var w = Math.max(8, Math.ceil(k.W/akZoom)), h = Math.max(8, Math.ceil(k.H/akZoom));
+  w = Math.min(w, k.W); h = Math.min(h, k.H);
+  var c = akZoomKeski || { i: k.W/2, j: k.H/2 };
+  var i0 = Math.min(Math.max(0, Math.round(c.i - w/2)), k.W - w), j0 = Math.min(Math.max(0, Math.round(c.j - h/2)), k.H - h);
+  return { i0: i0, j0: j0, w: w, h: h };
+}
+window.akZoomTila = function(){ return { zoom: akZoom, keski: akZoomKeski, valittu: akValittu, win: akViime && akViime.win, S: akViime && akViime.S }; };   // testiä varten
+window.akZoomaa = function(kerroin){
+  if (!jarvi || !jarvi.kartta) return;
+  if (kerroin === 0) akZoom = 1;
+  else akZoom = Math.min(16, Math.max(1, akZoom*kerroin));
+  if (akValittu) akZoomKeski = { i: akValittu.i, j: akValittu.j };
+  var b = $("akZoomTaso"); if (b) b.textContent = (akZoom <= 1 ? 1 : akZoom) + '×';
+  piirra();
+};
 
 /* v136: kumpuamisalue = vesiruudut, joista tuulen yläpuolelle (tuulen tulosuuntaan) 300 m
    sisällä on rantaa. Siellä pintavesi työntyy pois rannasta ja tilalle nousee syvempää vettä.
@@ -6887,7 +6949,9 @@ function akPiirraMerkki(ctx, S){
   if (!akValittu || !akViime) return;
   var k = akViime.k;
   if (akValittu.i >= k.W || akValittu.j >= k.H) return;
-  var x = (akValittu.i + 0.5)*S, y = (akValittu.j + 0.5)*S, r = Math.max(5, S*1.6);
+  var w0 = akViime.win || { i0: 0, j0: 0, w: k.W, h: k.H };
+  if (akValittu.i < w0.i0 || akValittu.j < w0.j0 || akValittu.i >= w0.i0 + w0.w || akValittu.j >= w0.j0 + w0.h) return;
+  var x = (akValittu.i - w0.i0 + 0.5)*S, y = (akValittu.j - w0.j0 + 0.5)*S, r = Math.max(5, Math.min(S*1.6, 14));
   ctx.strokeStyle = "rgba(20,28,26,.85)"; ctx.lineWidth = Math.max(1.6, S*0.35);
   ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.stroke();
   ctx.strokeStyle = "rgba(255,255,255,.95)"; ctx.lineWidth = Math.max(1, S*0.2);
@@ -7028,9 +7092,9 @@ $("akJana").addEventListener("click", function(e){
   var c = $("akKuva");
   function osu(x, y){
     if (!akViime) return;
-    var r = c.getBoundingClientRect(), k = akViime.k;
-    var i = Math.floor((x - r.left)/r.width*k.W);
-    var j = Math.floor((y - r.top)/r.height*k.H);
+    var r = c.getBoundingClientRect(), k = akViime.k, w0 = akViime.win || { i0: 0, j0: 0, w: k.W, h: k.H };
+    var i = Math.floor((x - r.left)/r.width*w0.w) + w0.i0;
+    var j = Math.floor((y - r.top)/r.height*w0.h) + w0.j0;
     if (i < 0 || i >= k.W || j < 0 || j >= k.H) return;
     akValittu = { i:i, j:j };
     piirra();
@@ -11574,7 +11638,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v136';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v137';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
