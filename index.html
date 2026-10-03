@@ -2217,11 +2217,11 @@ body{padding-bottom:66px}
           <button class="chip" id="mmlKopioi" onclick="mmlKopioi()" style="display:none; border-color:var(--amber); color:var(--amber);">Kopioi tulos</button>
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
-          <button class="chip" onclick="mmlLataaJarvet()" style="border-color:var(--olive); color:var(--olive);">Lataa syvyydet (Lappajärvi, Ähtäri, Kivijärvi)</button>
+          <button class="chip" onclick="mmlLataaJarvet()" style="border-color:var(--olive); color:var(--olive);">Lataa syvyydet (7 järveä)</button>
           <button class="chip" onclick="mmlVertailu()" style="border-color:var(--olive); color:var(--olive);">Vertailu: DataDeck vs MML</button>
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
-          <button class="chip" onclick="jkRakenna()" style="border-color:var(--pink); color:var(--pink);">Rakenna järvikartat (Ähtäri, Kivijärvi)</button>
+          <button class="chip" onclick="jkRakenna()" style="border-color:var(--pink); color:var(--pink);">Rakenna järvikartat (Alajärvi, Evijärvi, Toisvesi, Patana)</button>
           <button class="chip" id="jkTallenna" onclick="jkTallennaTiedosto()" style="display:none; border-color:var(--amber); color:var(--amber);">Tallenna tiedostoksi</button>
         </div>
         <div id="mmlTila" style="margin-top:10px; font-size:12px; line-height:1.45; white-space:pre-wrap; word-break:break-word;"></div>
@@ -2838,7 +2838,13 @@ body{padding-bottom:66px}
       { nimi: 'Näsijärvi',              lat: [61.48, 62.02], lon: [23.30, 24.10] },
       { nimi: 'Päijänne',               lat: [61.10, 62.30], lon: [25.15, 26.05] },
       { nimi: 'Pielinen',               lat: [62.90, 63.65], lon: [29.00, 30.20] },
-      { nimi: 'Inarijärvi',             lat: [68.60, 69.30], lon: [26.80, 28.80] }
+      { nimi: 'Inarijärvi',             lat: [68.60, 69.30], lon: [26.80, 28.80] },
+      /* v131: Pohjanmaa Cupin järvet (Hannu 3.10.2026). Väljät rajaukset; järvi valitaan
+         siemenpisteestä (JK_KOHTEET). Kuhalordi, Kivitippu ja Vimpeli = Lappajärvi (tehty). */
+      { nimi: 'Alajärvi',               lat: [62.92, 63.10], lon: [23.65, 23.95] },
+      { nimi: 'Evijärvi',               lat: [63.33, 63.50], lon: [23.30, 23.70] },
+      { nimi: 'Toisvesi',               lat: [62.28, 62.50], lon: [23.55, 24.10] },
+      { nimi: 'Patanan tekojärvi',      lat: [63.20, 63.36], lon: [23.88, 24.12] }
     ];
     var LUOT_LAPPA_TUNNUS = '47.031.1.001';
     var luotausData = null, luotTulosTeksti = '';
@@ -3216,7 +3222,7 @@ body{padding-bottom:66px}
        ole syvyyspistettä. Siksi vertailussa näytetään myös lähin piste ja lähin käyrä erikseen.
        TALLENNUS: IndexedDB, avain 'mml_v1'. Luetaan vasta kun tarvitaan (ei käynnistyksessä).
        Lähdemerkintä: © Maanmittauslaitos, maastotietokanta (CC BY 4.0). */
-    var MML_JARVET = ['Lappajärvi', 'Ähtärinjärvi', 'Kivijärvi (Kivijärven kunta)'];
+    var MML_JARVET = ['Lappajärvi', 'Ähtärinjärvi', 'Kivijärvi (Kivijärven kunta)', 'Alajärvi', 'Evijärvi', 'Toisvesi', 'Patanan tekojärvi'];   // v131: + Cupin järvet
     var mmlSyvData = null, mmlIndeksi = null;
     async function mmlIdbHae() {
       if (mmlSyvData) return mmlSyvData;
@@ -3431,8 +3437,24 @@ body{padding-bottom:66px}
        keskipiste 63,136 / 25,039 (rannalla: valitaan lähin vesiruutu 2 km sisältä).
        Viralliset luvut vertailuun (Järviwiki/SYKE): Ähtärinjärvi 39,9 km², keskisyvyys 5,2 m,
        suurin 27 m. Kivijärvestä virallista lukua ei vielä tarkistettu. */
-    var JK_KOHTEET = [ { avain: 'ahtarinjarvi', nimi: 'Ähtärinjärvi', laatikko: 'Ähtärinjärvi', siemen: [62.667, 24.050], virallinen: '39,9 km², keskisyvyys 5,2 m, suurin 27 m (Järviwiki)' },
-                       { avain: 'kivijarvi', nimi: 'Kivijärvi', laatikko: 'Kivijärvi (Kivijärven kunta)', siemen: [63.136, 25.039], virallinen: null } ];
+    /* v131: Ähtärinjärvi ja Kivijärvi on upotettu (v128), joten rakennetaan Pohjanmaa Cupin järvet.
+       Siemenet: Alajärvi = Alajärven kaupungin koordinaatti (Wikipedia 63,000 / 23,817; järvi on
+       keskustan vieressä, lähin vesiruutu 2 km sisältä), Evijärvi ja Toisvesi = Wikipedian järven
+       koordinaatit, Patana = Hannun kartalta 3.10.2026.
+       PATANA: tekojärvi (1966), entistä maata. MML:n syvyyskäyriä tuskin on, mutta maastokartan
+       korkeuskäyrät jatkuvat veden alla (115 ja 120 m, vedenpinta 123,2 m kartalla). Syvyys =
+       vedenpinta − korkeuskäyrä. Vedenpinta luetaan MML:n järvikohteesta, jos siinä on korkeus,
+       muuten käytetään kartan arvoa 123,2 m (säännöstely muuttaa tätä). */
+    var JK_KOHTEET = [
+      { avain: 'alajarvi', nimi: 'Alajärvi', laatikko: 'Alajärvi', siemen: [63.000, 23.817],
+        virallinen: 'matala, runsashumuksinen, säännöstelty (Ramboll 2021); pinta-alaa ei tarkistettu' },
+      { avain: 'evijarvi', nimi: 'Evijärvi', laatikko: 'Evijärvi', siemen: [63.4125, 23.4964],
+        virallinen: '28 km², keskisyvyys 1,7 m, suurin 3,5 m (Wikipedia)' },
+      { avain: 'toisvesi', nimi: 'Toisvesi', laatikko: 'Toisvesi', siemen: [62.383, 23.850],
+        virallinen: '29,4 km², keskisyvyys 19,4 m, suurin 85 m (Wikipedia/Järviwiki)' },
+      { avain: 'patana', nimi: 'Patanan tekojärvi', laatikko: 'Patanan tekojärvi', siemen: [63.278964, 23.996236],
+        virallinen: null, korkeus: { vedenpinta: 123.2 } }
+    ];
     var jkTulos = null;
     function jkRenkaat(geom) {   // [[ [lon,lat], ... ], ...] kaikki renkaat
       if (!geom) return [];
@@ -3480,7 +3502,7 @@ body{padding-bottom:66px}
           var K = JK_KOHTEET[kk];
           var B = LUOT_LAATIKOT.find(function (x) { return x.nimi === K.laatikko; });
           var D = mmlSyvData.jarvet.find(function (x) { return x.nimi === K.laatikko; });
-          if (!B || !D || !D.E.length) { rivit.push(K.nimi + ': ei syvyysdataa, ohitetaan.'); continue; }
+          if (!B || !D || (!D.E.length && !K.korkeus)) { rivit.push(K.nimi + ': ei syvyysdataa, ohitetaan.'); continue; }
           var haku = await mmlHaeKaikki(jid, B, avain, function (n) { nayta(K.nimi + ': järvialueita haettu ' + n + '…'); });
           // näyte syvyyspisteistä (enintään 600), lon/lat
           var nayte = [], askel = Math.max(1, Math.floor(D.E.length / 600));
@@ -3488,9 +3510,12 @@ body{padding-bottom:66px}
           nayta(K.nimi + ': valitaan järven monikulmiot…');
           var ehdokkaat = haku.kohteet.map(function (f) { var r = jkRenkaat(f.geometry); return { r: r, ala: jkAlaKm2(r), p: f.properties || {} }; })
             .filter(function (x) { return x.r.length && x.ala > 0.2; });
-          ehdokkaat.forEach(function (x) { x.osuus = nayte.filter(function (q) { return jkSisalla(x.r, q[0], q[1]); }).length / nayte.length; });
+          ehdokkaat.forEach(function (x) { x.osuus = nayte.length ? nayte.filter(function (q) { return jkSisalla(x.r, q[0], q[1]); }).length / nayte.length : 0; });
           ehdokkaat.sort(function (a, b) { return b.osuus - a.osuus; });
           var valitut = ehdokkaat.filter(function (x) { return x.osuus >= 0.01; });
+          // v131: jos syvyysnäytteitä on vähän (esim. tekojärvi), otetaan kaikki; siemen rajaa järven myöhemmin
+          if (nayte.length < 50) valitut = ehdokkaat.slice();
+          var vpOminaisuudet = valitut.length ? Object.keys(valitut[0].p).join(', ') : '';
           rivit.push('\n' + K.nimi + ': järvialueita ' + haku.kohteet.length + (haku.kesken ? ' (KESKEN)' : '') + ', valittu ' + valitut.length + ': '
             + valitut.map(function (x) { return x.ala.toFixed(1) + ' km² / ' + Math.round(x.osuus * 100) + ' %'; }).join(', '));
           if (!valitut.length) { rivit.push('  Ei sopivaa monikulmiota.'); continue; }
@@ -3517,15 +3542,61 @@ body{padding-bottom:66px}
               for (var ii = Math.max(0, i0); ii <= Math.min(W - 1, i1); ii++) {
                 var q = j * W + ii; if (mask[q]) continue;
                 mask[q] = 1; vesi++;
-                var lon = lansiLon + (ii + 0.5) * ruutu / (111320 * cosl), t = TM35.fwd(lat, lon), m = mmlArvioEN(t.E, t.N);
-                var dpt = m ? m.arvio : null;
-                if (dpt === null) { ilman++; dpt = 3; puuttuu[q] = 1; }   // ei näytettä 300 m sisällä: 3 m oletus (kerrotaan)
-                summa += dpt; syvin = Math.max(syvin, dpt); dep[q] = dpt;
-                var c = 0; while (c < JK_RAJAT.length && dpt >= JK_RAJAT[c]) c++;
-                luok[q] = c;
               }
             }
-            if (j % 20 === 0) { nayta(K.nimi + ': ruudukko ' + Math.round(100 * j / H) + ' %'); await new Promise(function (ok) { setTimeout(ok, 0); }); }
+            if (j % 40 === 0) { nayta(K.nimi + ': rantaviiva ' + Math.round(100 * j / H) + ' %'); await new Promise(function (ok) { setTimeout(ok, 0); }); }
+          }
+          // v131: korkeuskäyrät veden alla -> syvyysnäytteiksi (tekojärvet)
+          if (K.korkeus) {
+            var kid = kok.indexOf('korkeuskayra') >= 0 ? 'korkeuskayra' : kok.find(function (x) { return /^korkeusk/i.test(x); });
+            var vp = K.korkeus.vedenpinta, vpLahde = 'kartta ' + vp + ' m';
+            valitut.forEach(function (x) {
+              var kv = parseFloat(x.p.korkeusarvo); if (isFinite(kv) && kv > 0) { vp = kv > 1000 ? kv / 1000 : kv; vpLahde = 'MML ' + vp + ' m'; }
+            });
+            if (!kid) rivit.push('  Korkeuskäyräluokkaa ei löytynyt.');
+            else {
+              var kh = await mmlHaeKaikki(kid, B, avain, function (n) { nayta(K.nimi + ': korkeuskäyriä haettu ' + n + '…'); });
+              var lisE = [], lisN = [], lisD = [], kayria = 0;
+              kh.kohteet.forEach(function (f) {
+                var h = parseFloat((f.properties || {}).korkeusarvo); if (!isFinite(h)) return;
+                if (h > 1000) h = h / 1000;
+                var dd = vp - h; if (!(dd > 0)) return;   // vain vedenpinnan alla olevat käyrät
+                var viivat = !f.geometry ? [] : f.geometry.type === 'LineString' ? [f.geometry.coordinates] : f.geometry.type === 'MultiLineString' ? f.geometry.coordinates : [];
+                var osui = false;
+                viivat.forEach(function (v) {
+                  var ed = null;
+                  v.forEach(function (c) {
+                    var pts = [c];
+                    if (ed) { var dl = Math.hypot((c[0] - ed[0]) * 111320 * Math.cos(c[1] * Math.PI / 180), (c[1] - ed[1]) * 111320), os = Math.floor(dl / 20);
+                      pts = []; for (var s2 = 1; s2 <= Math.max(1, os); s2++) pts.push([ed[0] + (c[0] - ed[0]) * s2 / Math.max(1, os), ed[1] + (c[1] - ed[1]) * s2 / Math.max(1, os)]); }
+                    pts.forEach(function (pt) {
+                      var ci = Math.floor((pt[0] - lansiLon) * 111320 * Math.cos(pt[1] * Math.PI / 180) / ruutu), cj = Math.floor((pohjoisLat - pt[1]) * 111320 / ruutu);
+                      if (ci < 0 || cj < 0 || ci >= W || cj >= H || !mask[cj * W + ci]) return;
+                      var t2 = TM35.fwd(pt[1], pt[0]); lisE.push(t2.E); lisN.push(t2.N); lisD.push(dd); osui = true;
+                    });
+                    ed = c;
+                  });
+                });
+                if (osui) kayria++;
+              });
+              var cat = function (a1, a2) { var o = new Float32Array(a1.length + a2.length); o.set(a1); o.set(a2, a1.length); return o; };
+              D.E = cat(D.E, lisE); D.N = cat(D.N, lisN); D.D = cat(D.D, lisD);
+              var L2 = new Uint8Array(D.L.length + lisE.length); L2.set(D.L); L2.fill(3, D.L.length); D.L = L2;
+              mmlIndeksi = null;
+              rivit.push('  Korkeuskäyristä syvyyttä: ' + kayria + ' käyrää veden alla, ' + lisE.length + ' näytettä. Vedenpinta: ' + vpLahde + '.');
+            }
+          }
+          // syvyys jokaiseen vesiruutuun
+          for (var qd = 0; qd < W * H; qd++) {
+            if (!mask[qd]) continue;
+            var jd = (qd / W) | 0, idd = qd % W, latd = pohjoisLat - (jd + 0.5) * ruutu / 111320;
+            var lond = lansiLon + (idd + 0.5) * ruutu / (111320 * Math.cos(latd * Math.PI / 180)), td = TM35.fwd(latd, lond), md = mmlArvioEN(td.E, td.N);
+            var dpt = md ? md.arvio : null;
+            if (dpt === null) { dpt = 3; puuttuu[qd] = 1; }   // ei näytettä 300 m sisällä: 3 m oletus (kerrotaan)
+            dep[qd] = dpt;
+            var c = 0; while (c < JK_RAJAT.length && dpt >= JK_RAJAT[c]) c++;
+            luok[qd] = c;
+            if (qd % 20000 === 0) { nayta(K.nimi + ': syvyydet ' + Math.round(100 * qd / (W * H)) + ' %'); await new Promise(function (ok) { setTimeout(ok, 0); }); }
           }
           // v127: yhtenäiset vesialueet; pidetään siemenen alue ja alle 2 ruudun päässä olevat
           var comp = new Int32Array(W * H).fill(-1), koot = [], jono = new Int32Array(W * H);
@@ -3596,7 +3667,8 @@ body{padding-bottom:66px}
           jkTulos.jarvet.push(tulos);
           rivit.push('  Ruudukko ' + W + ' × ' + H + ', vesiruutuja ' + vesi + ' (≈ ' + tulos.alaKm2 + ' km²), keskisyvyys ' + tulos.syvyys
             + ' m, syvin ruutu ' + tulos.syvinRuutu + ' m, ilman syvyysnäytettä ' + ilman + ' ruutua (' + Math.round(100 * ilman / Math.max(1, vesi)) + ' %, oletus 3 m).'
-            + (K.virallinen ? '\n  Virallinen: ' + K.virallinen + '.' : ''));
+            + (K.virallinen ? '\n  Virallinen: ' + K.virallinen + '.' : '')
+            + (vpOminaisuudet ? '\n  Järvikohteen kentät: ' + vpOminaisuudet.slice(0, 200) : ''));
         }
         rivit.push('\nValmis. Paina "Tallenna tiedostoksi" ja lähetä tiedosto Claudelle.');
       } catch (e) { rivit.push('\nVIRHE: ' + (e && e.message || e)); }
@@ -11216,7 +11288,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v130';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v131';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
