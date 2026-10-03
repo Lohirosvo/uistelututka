@@ -2124,6 +2124,24 @@ body{padding-bottom:66px}
       <div id="pyyntiRaporttiSisalto" style="font-size:14px;line-height:1.5;"></div>
     </div>
 
+    <!-- VARMUUSKOPIO JA SIIRTO (v130): kaikki tiedot ja API-avaimet yhteen tiedostoon -->
+    <div class="q" id="varmuuskopio">
+      <div class="idx">Siirto</div>
+      <h2>Varmuuskopio ja siirto toiseen puhelimeen</h2>
+      <p class="hint">Vie: kaikki tämän puhelimen tiedot yhteen tiedostoon (saaliit, reissut, asetukset, API-avain ja ladatut MML-syvyydet).
+        Tuo: lue tiedosto toisessa puhelimessa. Saaliit ja reissut <strong>yhdistetään</strong> (mitään ei katoa), asetukset ja avaimet
+        <strong>korvataan</strong> tiedoston arvoilla. Tiedostossa on API-avain: älä julkaise sitä.</p>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="chip" onclick="vkVie(true)" style="border-color:var(--cyan); color:var(--cyan);">Vie ja jaa</button>
+        <button class="chip" onclick="vkVie(false)" style="border-color:var(--cyan); color:var(--cyan);">Vie Latauksiin</button>
+        <label class="chip" style="border-color:var(--amber); color:var(--amber); cursor:pointer;">Tuo tiedosto
+          <input type="file" id="vkTiedosto" style="display:none;" onchange="vkTuo(this.files && this.files[0]); this.value='';">
+        </label>
+        <button class="chip" id="vkLataa" onclick="location.reload()" style="display:none; border-color:var(--olive); color:var(--olive);">Käynnistä sovellus uudelleen</button>
+      </div>
+      <div id="vkTila" style="margin-top:10px; font-size:13px; line-height:1.45; white-space:pre-wrap;"></div>
+    </div>
+
     <footer>
       Lappajärven tutka yhdistää pohjankovuusdatan, tuulidynamiikan (mm. maatuulen kumpuamisen) ja uistelutekniikan.
       Ennustetta kompensoidaan +30 min tulevaisuuteen.
@@ -11198,7 +11216,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v129';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v130';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -17186,7 +17204,7 @@ lataa(eka);
 
   var JAKO = {
     vesilla:   ['whatsappNappi','vesillaPaneeli','speedMonitorSection'],
-    raportit:  ['result','malliOsuvuus','pyyntiRaportti']
+    raportit:  ['result','malliOsuvuus','pyyntiRaportti','varmuuskopio']
     /* loput -> suunnittelu */
   };
   var RUUDUT = [
@@ -17339,6 +17357,129 @@ function avaaLajiLaatikko(){
 function suljeLajiLaatikko(){
   var k = document.getElementById('lajiLaatikko'); if(k) k.classList.remove('auki');
 }
+
+/* ===== VARMUUSKOPIO JA SIIRTO — 1.10.2026 (v130) =====
+   Oma arvio 1.10.: suurin riski on, että tiedot ovat vain yhdessä puhelimessa. Hannun
+   pyyntö: kaikki tiedot ja API-avaimet yhteen tiedostoon, jotta veneen puhelin (S25 Ultra,
+   hotspot) saa kaikki ominaisuudet yhdellä tiedostolla.
+   SISÄLTÖ: koko localStorage (myös saman github.io-osoitteen muiden sovellusten, esim.
+   TrollingPron, tiedot: samaa alkuperää) + IndexedDB:stä MML-syvyydet ('mml_v1').
+   SYKEn luotauspisteet ('v1', 6,6 Mt) jätetään pois: niitä ei käytetä (v120: omia järviä ei ole).
+   Typed arrayt koodataan base64:ksi ({__ta, b64}).
+   TUONTI: saalisloki ja pyyntiloki yhdistetään tunnisteen (id) mukaan, joten kumpikaan puhelin
+   ei menetä kaloja. Muut avaimet korvataan tiedoston arvoilla. Käynnissä olevaa uistelua ei
+   korvata, jos tässä puhelimessa on jo oma käynnissä.
+   JAKO: Web Share (tiedosto) jos selain sallii, muuten lataus Latauksiin. */
+var VK_IDB_AVAIMET = ['mml_v1'];
+var VK_YHDISTETTAVAT = ['nopeusnaytto_pro1_saaliit', 'uistelututka_pyyntiloki'];
+function vkB64(u8) { var s = ''; for (var i = 0; i < u8.length; i += 8192) s += String.fromCharCode.apply(null, u8.subarray(i, i + 8192)); return btoa(s); }
+function vkKoodaa(v) {
+  if (ArrayBuffer.isView(v)) return { __ta: v.constructor.name, b64: vkB64(new Uint8Array(v.buffer, v.byteOffset, v.byteLength)) };
+  if (Array.isArray(v)) return v.map(vkKoodaa);
+  if (v && typeof v === 'object') { var o = {}; Object.keys(v).forEach(function (k) { o[k] = vkKoodaa(v[k]); }); return o; }
+  return v;
+}
+function vkPura(v) {
+  if (v && typeof v === 'object' && v.__ta && typeof v.b64 === 'string') {
+    var raw = atob(v.b64), u8 = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) u8[i] = raw.charCodeAt(i);
+    var T = { Float32Array: Float32Array, Float64Array: Float64Array, Uint8Array: Uint8Array, Uint16Array: Uint16Array,
+              Uint32Array: Uint32Array, Int32Array: Int32Array, Int16Array: Int16Array, Int8Array: Int8Array }[v.__ta];
+    return T ? new T(u8.buffer) : u8;
+  }
+  if (Array.isArray(v)) return v.map(vkPura);
+  if (v && typeof v === 'object') { var o = {}; Object.keys(v).forEach(function (k) { o[k] = vkPura(v[k]); }); return o; }
+  return v;
+}
+async function vkIdb(avain, arvo) {   // arvo === undefined: luku
+  var db = await luotIdb();
+  var tulos = await new Promise(function (res, rej) {
+    var tx = db.transaction('luotaus', arvo === undefined ? 'readonly' : 'readwrite'), st = tx.objectStore('luotaus');
+    if (arvo === undefined) { var q = st.get(avain); q.onsuccess = function () { res(q.result || null); }; q.onerror = function () { rej(q.error); }; }
+    else { st.put(arvo, avain); tx.oncomplete = function () { res(true); }; tx.onerror = function () { rej(tx.error); }; }
+  });
+  db.close(); return tulos;
+}
+function vkLuku(json) { try { var a = JSON.parse(json || '[]'); return Array.isArray(a) ? a.length : 0; } catch (e) { return 0; } }
+async function vkVie(jaa) {
+  var el = document.getElementById('vkTila');
+  el.textContent = 'Kootaan tietoja…';
+  try {
+    var ls = {};
+    for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); ls[k] = localStorage.getItem(k); }
+    var idb = {};
+    if ('indexedDB' in window) for (var j = 0; j < VK_IDB_AVAIMET.length; j++) {
+      try { var v = await vkIdb(VK_IDB_AVAIMET[j]); if (v) idb[VK_IDB_AVAIMET[j]] = vkKoodaa(v); } catch (e) {}
+    }
+    var paketti = { sovellus: 'uistelututka', versio: APP_VERSIO, luotu: new Date().toISOString(), localStorage: ls, indexedDB: idb };
+    var txt = JSON.stringify(paketti);
+    var pvm = new Date().toISOString().slice(0, 10);
+    var nimi = 'uistelututka_varmuuskopio_' + pvm + '.json';
+    var yht = 'Mukana: ' + vkLuku(ls['nopeusnaytto_pro1_saaliit']) + ' saalista, ' + vkLuku(ls['uistelututka_pyyntiloki']) + ' reissua, '
+      + Object.keys(ls).length + ' tallennusta, MML-avain ' + (ls['uistelututka_mml_avain'] ? 'kyllä' : 'ei')
+      + ', MML-syvyydet ' + (idb.mml_v1 ? 'kyllä' : 'ei') + '. Koko ' + (txt.length / 1e6).toFixed(1) + ' Mt.';
+    var jaettu = false;
+    if (jaa && navigator.share && navigator.canShare) {
+      var vaihtoehdot = [new File([txt], nimi, { type: 'application/json' }), new File([txt], nimi.replace(/\.json$/, '.txt'), { type: 'text/plain' })];
+      for (var q = 0; q < vaihtoehdot.length && !jaettu; q++) {
+        if (navigator.canShare({ files: [vaihtoehdot[q]] })) {
+          try { await navigator.share({ files: [vaihtoehdot[q]], title: 'Uistelututka: varmuuskopio' }); jaettu = true; }
+          catch (e) { if (e && e.name === 'AbortError') { el.textContent = 'Jako peruttiin. ' + yht; return; } }
+        }
+      }
+    }
+    if (!jaettu) {
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([txt], { type: 'application/json' })); a.download = nimi;
+      document.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 3000);
+    }
+    el.textContent = (jaettu ? 'Jaettu. ' : 'Tallennettu Latauksiin: ' + nimi + '. ') + yht
+      + (jaa && !jaettu ? '\nSelain ei sallinut suoraa jakoa, joten tiedosto meni Latauksiin. Jaa se sieltä (Quick Share, WhatsApp).' : '');
+  } catch (e) { el.textContent = 'Vienti epäonnistui: ' + (e && e.message || e); }
+}
+async function vkTuo(file) {
+  var el = document.getElementById('vkTila'), lb = document.getElementById('vkLataa');
+  if (!file) return;
+  var p;
+  try { p = JSON.parse(await file.text()); } catch (e) { el.textContent = 'Tiedostoa ei voitu lukea: se ei ole uistelututkan varmuuskopio.'; return; }
+  if (!p || p.sovellus !== 'uistelututka' || !p.localStorage) { el.textContent = 'Tiedosto ei ole uistelututkan varmuuskopio.'; return; }
+  var ls = p.localStorage;
+  var kysymys = 'Tuodaanko varmuuskopio (' + (p.versio || '?') + ', ' + String(p.luotu || '').slice(0, 10) + ')?\n\n'
+    + 'Saaliit (' + vkLuku(ls['nopeusnaytto_pro1_saaliit']) + ') ja reissut (' + vkLuku(ls['uistelututka_pyyntiloki']) + ') yhdistetään tämän puhelimen tietoihin.\n'
+    + 'Asetukset ja avaimet korvataan tiedoston arvoilla.';
+  if (!window.confirm(kysymys)) { el.textContent = 'Tuonti peruttiin.'; return; }
+  var rivit = [], korvattu = 0;
+  try {
+    Object.keys(ls).forEach(function (k) {
+      var arvo = ls[k];
+      if (VK_YHDISTETTAVAT.indexOf(k) >= 0) {
+        var vanha = []; try { vanha = JSON.parse(localStorage.getItem(k) || '[]'); } catch (e) {}
+        var uusi = []; try { uusi = JSON.parse(arvo || '[]'); } catch (e) {}
+        if (!Array.isArray(vanha)) vanha = []; if (!Array.isArray(uusi)) uusi = [];
+        var tunnus = function (x) { return x && (x.id != null ? 'i' + x.id : 'a' + x.aika + '|' + x.alku); };
+        var on = new Set(vanha.map(tunnus)), lisatty = 0;
+        uusi.forEach(function (x) { if (!on.has(tunnus(x))) { vanha.push(x); on.add(tunnus(x)); lisatty++; } });
+        vanha.sort(function (a, b) { return (a.id || Date.parse(a.aika) || a.alku || 0) - (b.id || Date.parse(b.aika) || b.alku || 0); });
+        localStorage.setItem(k, JSON.stringify(vanha));
+        rivit.push((k.indexOf('saali') >= 0 ? 'Saaliit' : 'Reissut') + ': ' + lisatty + ' uutta, yhteensä ' + vanha.length + '.');
+      } else if (k === 'uistelututka_pyynti_auki' && localStorage.getItem(k) && localStorage.getItem(k) !== 'null') {
+        rivit.push('Tässä puhelimessa on uistelu käynnissä: sitä ei korvattu.');
+      } else { localStorage.setItem(k, arvo); korvattu++; }
+    });
+    rivit.push('Asetuksia ja muita tallennuksia korvattu: ' + korvattu + (ls['uistelututka_mml_avain'] ? ' (MML-avain mukana)' : '') + '.');
+    var idb = p.indexedDB || {};
+    for (var k2 in idb) {
+      try { await vkIdb(k2, vkPura(idb[k2])); rivit.push('Syvyysdata ' + k2 + ' tuotu.'); }
+      catch (e) { rivit.push('Syvyysdataa ' + k2 + ' ei voitu tallentaa: ' + e.message); }
+    }
+    try { if (typeof mmlSyvData !== 'undefined') { mmlSyvData = null; mmlIndeksi = null; } } catch (e) {}
+    rivit.push('\nValmis. Käynnistä sovellus uudelleen, niin kaikki asetukset tulevat voimaan.');
+  } catch (e) { rivit.push('VIRHE: ' + (e && e.message || e)); }
+  el.textContent = rivit.join('\n');
+  if (lb) lb.style.display = '';
+}
+
 /* ===== UISTELUKUULUTUKSET — 1.10.2026 (v116) =====
    Hannun valinnat 1.10.: kaikki kuulutukset (myös turvallisuus ja nollajaksovinkki),
    muutosten lisäksi kertaus 60 min välein, näyttö pysyy päällä uistelun ajan.
