@@ -169,6 +169,11 @@ input[type=range]{width:100%;margin:12px 0 2px;accent-color:#16211f}
     </select>
     <span class="ak-yksikko" id="akYksikko">merkitsevä aallonkorkeus, m</span>
   </div>
+  <!-- v148: kartan kuva + OziExplorer-kalibrointi (.map) puhelimeen -->
+  <div style="display:flex;justify-content:flex-end;margin-top:6px;">
+    <button type="button" id="akOziNappi" onclick="akTallennaOzi()" style="font:inherit;font-size:.78rem;padding:5px 10px;border-radius:6px;border:1px solid #c4ccca;background:#fff;color:#16211f;">💾 Tallenna kuva (OziExplorer)</button>
+  </div>
+  <p class="ak-huom" id="akOziTila" style="margin-top:4px;display:none;"></p>
 
   <!-- KALASTUSRAJA — liitetty 15.9.2026.
        Kartta kertoi aallonkorkeuden, muttei sitä mikä osa siitä on uisteltavissa.
@@ -227,7 +232,7 @@ input[type=range]{width:100%;margin:12px 0 2px;accent-color:#16211f}
      Suojaisa ranta pysyy vihreänä samalla kun vastaranta on punainen — siitä näkee
      mihin kannattaa siirtyä. Nuolet osoittavat mihin suuntaan aalto kulkee.</p>
 </section>
-<p class="hint" style="text-align:center;margin:10px 0 0;">Versio 4.10.2026 · aaltokortti uistelututka v147 · tilat: aallot, pintavirtaus, syvempi vesi, vajoama</p>
+<p class="hint" style="text-align:center;margin:10px 0 0;">Versio 4.10.2026 · aaltokortti uistelututka v148 · tilat: aallot, pintavirtaus, syvempi vesi, vajoama · OziExplorer-vienti</p>
 <script>
 "use strict";
 
@@ -1292,6 +1297,98 @@ function piirra(){
 }
 
 var akViime = null, akValittu = null;
+
+/* ===== OZIEXPLORER-VIENTI — 4.10.2026 (v148) =====
+   Hannun pyyntö: nappi, joka tallentaa näkyvän kartan kuvana ja tekee OziExplorerin .map-
+   kalibrointitiedoston. Kartan ruudukossa leveysaste on lineaarinen pystysuunnassa, mutta
+   pituusaste riippuu rivin leveysasteesta (ruutu = metriä, cos(lat)). Siksi kuva muunnetaan
+   ennen tallennusta rivi kerrallaan lat/lon-ruudukkoon: x lineaarinen pituusasteessa, y lineaarinen
+   leveysasteessa. Silloin .map-tiedoston projektio "Latitude/Longitude" ja neljä kulmapistettä
+   ovat tarkkoja koko kuvalle (ei kalibrointivirhettä reunoilla). Datum WGS 84 (kartat ovat
+   ETRS89/WGS84-koordinaateissa; ero < 1 m). Formaatti: OziExplorer Map Data File Version 2.2. */
+function akOziAste(v, pos, neg, lev){
+  var h = v >= 0 ? pos : neg, a = Math.abs(v), d = Math.floor(a), m = (a - d)*60;
+  if (m >= 59.99995){ d += 1; m = 0; }
+  var ds = String(d); while (ds.length < lev) ds = ' ' + ds;
+  var ms = m.toFixed(4); while (ms.length < 8) ms = ' ' + ms;   // Ozin oma muoto: '  63, 15.8904,N'
+  return ds + ',' + ms + ',' + h;
+}
+window.akTallennaOzi = function(){
+  var tila = $("akOziTila");
+  var nayta = function(t){ if (tila){ tila.style.display = ''; tila.textContent = t; } };
+  try {
+    if (!akViime || !jarvi || !jarvi.kartta){ nayta('Kartta ei ole vielä valmis.'); return; }
+    var c = $("akKuva"), LW = c.width, LH = c.height, k = akViime.k, S = akViime.S, win = akViime.win;
+    var lon0 = k.lansiLon, lat0 = k.pohjoisLat, rr = k.ruutu;
+    var latY = function(y){ return lat0 - (y/S + win.j0)*rr/111320; };
+    var lonXY = function(x, y){ var la = latY(y); return lon0 + (x/S + win.i0)*rr/(111320*Math.cos(la*Math.PI/180)); };
+    var latN = latY(0), latS = latY(LH);
+    var lonMin = Math.min(lonXY(0, 0), lonXY(0, LH)), lonMax = Math.max(lonXY(LW, 0), lonXY(LW, LH));
+    var keskiLeveys = lonXY(LW, LH/2) - lonXY(0, LH/2);
+    var WO = Math.round(LW*(lonMax - lonMin)/keskiLeveys), HO = LH;
+    var src = c.getContext('2d').getImageData(0, 0, LW, LH).data;
+    var out = document.createElement('canvas'); out.width = WO; out.height = HO;
+    var octx = out.getContext('2d'), img = octx.createImageData(WO, HO), od = img.data;
+    for (var y = 0; y < HO; y++){
+      var la = latN + (latS - latN)*(y + 0.5)/HO, cosl = Math.cos(la*Math.PI/180), sy = Math.min(LH - 1, Math.max(0, Math.floor(y)));
+      for (var x = 0; x < WO; x++){
+        var lo = lonMin + (lonMax - lonMin)*(x + 0.5)/WO;
+        var sx = Math.floor(((lo - lon0)*111320*cosl/rr - win.i0)*S);
+        var o = (y*WO + x)*4;
+        if (sx < 0 || sx >= LW){ od[o] = 232; od[o+1] = 236; od[o+2] = 231; od[o+3] = 255; continue; }
+        var si = (sy*LW + sx)*4;
+        od[o] = src[si]; od[o+1] = src[si+1]; od[o+2] = src[si+2]; od[o+3] = 255;
+      }
+    }
+    octx.putImageData(img, 0, 0);
+    var d = data[valittu] || {}, pv = d.aika || new Date();
+    var p2 = function(n){ return ('0' + n).slice(-2); };
+    var tilaNimi = { aalto: 'aallot', virtaus: 'pintavirta', syva: 'syvavesi', vajoama: 'vajoama' }[akTila] || akTila;
+    var jn = (jarvi.nimi || 'jarvi').toLowerCase().replace(/[åä]/g, 'a').replace(/ö/g, 'o').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+    var nimi = 'uistelututka_' + jn + '_' + tilaNimi + '_' + pv.getFullYear() + p2(pv.getMonth() + 1) + p2(pv.getDate()) + '_' + p2(pv.getHours()) + '00';
+    var mpp = (latN - latS)*111320/HO;
+    var pisteet = [[0, 0, latN, lonMin], [WO, 0, latN, lonMax], [WO, HO, latS, lonMax], [0, HO, latS, lonMin]];
+    var L = [];
+    L.push('OziExplorer Map Data File Version 2.2');
+    // OziExplorer lukee .map-tiedoston ANSI-merkistönä: otsikko ilman ääkkösiä
+    var ascii = function(t){ return String(t).replace(/[äå]/g, 'a').replace(/[ÄÅ]/g, 'A').replace(/ö/g, 'o').replace(/Ö/g, 'O').replace(/[^\x20-\x7e]/g, ''); };
+    L.push(ascii(jarvi.nimi) + ' ' + tilaNimi + ' ' + pv.getDate() + '.' + (pv.getMonth() + 1) + '.' + pv.getFullYear() + ' klo ' + p2(pv.getHours())
+      + (d.U ? ', tuuli ' + Math.round(d.U) + ' m/s ' + Math.round(d.dir) + ' deg' : '') + ' (uistelututka)');
+    L.push(nimi + '.png');
+    L.push('1 ,Map Code,');
+    L.push('WGS 84,WGS 84,   0.0000,   0.0000,WGS 84');
+    L.push('Reserved 1'); L.push('Reserved 2');
+    L.push('Magnetic Variation,,,E');
+    L.push('Map Projection,Latitude/Longitude,PolyCal,No,AutoCalOnly,No,BSBUseWPX,No');
+    for (var n = 1; n <= 30; n++){
+      var nn = 'Point' + p2(n), pp = pisteet[n - 1];
+      if (pp) L.push(nn + ',xy,' + ('     ' + pp[0]).slice(-5) + ',' + ('     ' + pp[1]).slice(-5) + ',in, deg,' + akOziAste(pp[2], 'N', 'S', 4) + ',' + akOziAste(pp[3], 'E', 'W', 4) + ', grid,   ,           ,           ,N');
+      else L.push(nn + ',xy,     ,     ,in, deg,    ,        ,N,    ,        ,E, grid,   ,           ,           ,N');
+    }
+    L.push('Projection Setup,,,,,,,,,,');
+    L.push('Map Feature = MF ; Map Comment = MC     These follow if they exist');
+    L.push('Track File = TF      These follow if they exist');
+    L.push('Moving Map Parameters = MM?    These follow if they exist');
+    L.push('MM0,Yes');
+    L.push('MMPNUM,4');
+    pisteet.forEach(function(pp, i){ L.push('MMPXY,' + (i + 1) + ',' + pp[0] + ',' + pp[1]); });
+    pisteet.forEach(function(pp, i){ L.push('MMPLL,' + (i + 1) + ',' + pp[3].toFixed(6) + ',' + pp[2].toFixed(6)); });
+    L.push('MM1B,' + mpp.toFixed(6));
+    L.push('MOP,Map Open Position,0,0');
+    L.push('IWH,Map Image Width/Height,' + WO + ',' + HO);
+    var mapTxt = L.join('\r\n') + '\r\n';
+    var lataa = function(blob, tiedosto){
+      var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = tiedosto;
+      document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+    };
+    out.toBlob(function(png){
+      lataa(png, nimi + '.png');
+      setTimeout(function(){ lataa(new Blob([mapTxt], { type: 'application/octet-stream' }), nimi + '.map'); }, 700);
+      nayta('Tallennettu Latauksiin: ' + nimi + '.png ja .map (' + WO + ' × ' + HO + ' px, ' + mpp.toFixed(1).replace('.', ',') + ' m/px). '
+        + 'Pidä tiedostot samassa kansiossa ja avaa .map OziExplorerissa. Jos selain kysyy usean tiedoston latausta, salli se.');
+    }, 'image/png');
+  } catch (e){ nayta('Tallennus epäonnistui: ' + (e && e.message || e)); }
+};
 
 /* v147: vajoamakenttä tunnille d. vir = pintavirta km/h ruuduittain (piirra laskee sen; raportille
    lasketaan tässä samalla kaavalla). Palauttaa { vi, viMax, osuus } (osuus = vesiruuduista ≥ 30). */
