@@ -1288,7 +1288,8 @@ body{padding-bottom:66px}
 
           <div style="margin-top:12px; display:flex; gap:8px;">
             <button class="chip" onclick="tallennaSaalis()" style="border-color:var(--cyan); color:var(--cyan);">Tallenna</button>
-            <button class="chip" onclick="peruSaalis()" style="border-color:var(--muted); color:var(--muted);">Peru</button>
+            <button class="chip" onclick="poistaKeskenerainen(this)" style="border-color:var(--hard-red); color:var(--hard-red);">Poista kirjaus</button>
+            <button class="chip" onclick="peruSaalis()" style="border-color:var(--muted); color:var(--muted);">Sulje</button>
           </div>
         </div>
 
@@ -1447,6 +1448,7 @@ body{padding-bottom:66px}
         <option value="vajoama">Vajoama</option>
         <option value="kumpuama">Kumpuama</option>
         <option value="konvergenssi">Konvergenssi</option>
+        <option value="syvyys">Syvyyskartta</option>
     </select>
     <span class="ak-yksikko" id="akYksikko">merkitsevä aallonkorkeus, m</span>
   </div>
@@ -6218,6 +6220,82 @@ var RAJAT_VI = [0, 5, 10, 15, 20, 30, 40, 50, 60, 70, 85, 100];
    laboratoriossa (Gurung ym. 2024, Limnology & Oceanography). Pinnan vaahtojuovat (metreistä
    kymmeniin metreihin, minuutteja) ovat alle ruudukon ja tunnin tarkkuuden: ne etsitään silmällä. */
 var RAJAT_K = [-100, -60, -35, -20, -10, -4, 4, 10, 20, 35, 60, 85];
+/* v152 SYVYYSKARTTA (Hannu 4.10.2026: käyrät ja ajo OziExplorerilla). Värit syvyysluokittain, käyrät
+   marching squares -menetelmällä pehmennetystä syvyydestä (±75 m), zoomattuna syvyysluvut.
+   EI NAVIGOINTIKARTTA: syvyydet ovat MML:n käyristä/pisteistä tai karttakuvista interpoloituja. */
+var RAJAT_S = [0, 1.5, 3, 6, 10, 15, 20, 25, 30, 40, 50, 60];
+var VARIT_S = ['#e6f4fb','#cfe9f6','#b5ddf1','#97cdea','#78bbe1','#5aa7d6','#4192c8','#2f7cb6','#22669f','#185286','#103f6c','#0a2e52'];
+var KAYRAT_PAA = [3, 10, 20, 30, 40, 50], KAYRAT_KAIKKI = [1.5, 3, 6, 10, 15, 20, 25, 30, 40, 50];
+var akVientiKerroin = 1;   // Ozi-vienti piirtää isommalla tarkkuudella
+var akSileaVM = null;      // { jarvi, kentta }
+function akSileaSyvyys(){
+  if (!akSyvyys || !jarvi) return null;
+  if (akSileaVM && akSileaVM.jarvi === jarvi) return akSileaVM.kentta;
+  var k = jarvi.kartta, W = k.W, H = k.H, r = Math.max(1, Math.round(75/k.ruutu)), out = new Float32Array(mask.length);
+  for (var q = 0; q < mask.length; q++){
+    if (!mask[q]) continue;
+    var i = q % W, j = (q/W)|0, s = 0, n = 0;
+    for (var a = -r; a <= r; a++) for (var b = -r; b <= r; b++){
+      var ii = i + a, jj = j + b; if (ii < 0 || jj < 0 || ii >= W || jj >= H) continue;
+      var q2 = jj*W + ii; if (!mask[q2]) continue; s += akSyvyys[q2]; n++;
+    }
+    out[q] = n ? s/n : akSyvyys[q];
+  }
+  akSileaVM = { jarvi: jarvi, kentta: out };
+  return out;
+}
+/* Marching squares: ruutujen keskipisteiden muodostamat neliöt; maa = 0 m, joten matalin käyrä
+   kulkee rannan tuntumassa. Palauttaa janat kankaan koordinaateissa. */
+function akKayraJanat(f, taso, win, S){
+  var k = jarvi.kartta, W = k.W, H = k.H, out = [];
+  var arvo = function(i, j){ var q = j*W + i; return mask[q] ? f[q] : 0; };
+  for (var j = Math.max(0, win.j0 - 1); j < Math.min(H - 1, win.j0 + win.h); j++){
+    for (var i = Math.max(0, win.i0 - 1); i < Math.min(W - 1, win.i0 + win.w); i++){
+      var a = arvo(i, j), b = arvo(i+1, j), c = arvo(i+1, j+1), d = arvo(i, j+1);
+      var tapaus = (a >= taso ? 8 : 0) | (b >= taso ? 4 : 0) | (c >= taso ? 2 : 0) | (d >= taso ? 1 : 0);
+      if (tapaus === 0 || tapaus === 15) continue;
+      var x0 = (i - win.i0 + 0.5)*S, y0 = (j - win.j0 + 0.5)*S;
+      var ip = function(p, q2){ return (taso - p)/((q2 - p) || 1e-9); };
+      var Y = [x0 + ip(a, b)*S, y0], O = [x0 + S, y0 + ip(b, c)*S], A = [x0 + ip(d, c)*S, y0 + S], V = [x0, y0 + ip(a, d)*S];
+      var E = { 1:[[V,A]], 2:[[A,O]], 3:[[V,O]], 4:[[Y,O]], 5:[[V,Y],[A,O]], 6:[[Y,A]], 7:[[V,Y]], 8:[[V,Y]], 9:[[Y,A]], 10:[[Y,O],[V,A]], 11:[[Y,O]], 12:[[V,O]], 13:[[A,O]], 14:[[V,A]] }[tapaus];
+      for (var e = 0; e < E.length; e++) out.push(E[e]);
+    }
+  }
+  return out;
+}
+function akPiirraKayrat(ctx, win, S, LW){
+  var f = akSileaSyvyys(); if (!f) return;
+  var tasot = S >= 3 ? KAYRAT_KAIKKI : KAYRAT_PAA;
+  tasot.forEach(function(taso){
+    var paa = KAYRAT_PAA.indexOf(taso) >= 0, jt = akKayraJanat(f, taso, win, S);
+    if (!jt.length) return;
+    ctx.strokeStyle = paa ? "rgba(12,38,64,.70)" : "rgba(12,38,64,.38)";
+    ctx.lineWidth = paa ? Math.max(1.2, LW/420) : Math.max(0.8, LW/800);
+    ctx.beginPath();
+    jt.forEach(function(l){ ctx.moveTo(l[0][0], l[0][1]); ctx.lineTo(l[1][0], l[1][1]); });
+    ctx.stroke();
+  });
+}
+/* v152: konvergenssin SYVÄ REUNA (Hannu: kalat punaisen alueen syvältä puolelta; ≥ 1,5 m ajettavaa).
+   Ruudut, joissa pehmennetty syvyys ≥ 1,5 m ja 150 m sisällä on vahvaa kasautumista (≥ 25). */
+var REUNA_SYV = 1.5;
+function akKonvReuna(kf){
+  var f = akSileaSyvyys(); if (!f || !kf) return null;
+  var k = jarvi.kartta, W = k.W, H = k.H, r = Math.max(1, Math.round(150/k.ruutu)), vahva = new Uint8Array(mask.length);
+  for (var q = 0; q < mask.length; q++) if (mask[q] && kf[q] >= 25) vahva[q] = 1;
+  var reuna = new Uint8Array(mask.length), n = 0, vn = 0;
+  for (var q2 = 0; q2 < mask.length; q2++){
+    if (!mask[q2]) continue; vn++;
+    if (f[q2] < REUNA_SYV) continue;
+    var i = q2 % W, j = (q2/W)|0, lo = false;
+    for (var a = -r; a <= r && !lo; a++) for (var b = -r; b <= r && !lo; b++){
+      var ii = i + a, jj = j + b; if (ii < 0 || jj < 0 || ii >= W || jj >= H) continue;
+      if (vahva[jj*W + ii]) lo = true;
+    }
+    if (lo){ reuna[q2] = 1; n++; }
+  }
+  return { reuna: reuna, osuus: vn ? n/vn : 0 };
+}
 var VARIT_K = ['#1d3f8f','#2f63b7','#5b8fd6','#93b9e8','#c6dbf3','#eef1f3','#f6e3e0','#f2bcb2','#e88b7a','#d45a48','#b3302a','#7e1717'];
 var akKayrat = false;
 try { akKayrat = localStorage.getItem('aaltokartta_kayrat') === '1'; } catch(e){}
@@ -6525,6 +6603,10 @@ function akKalaRaja(){
 }
 
 function vari(h){
+  if (akTila === 'syvyys'){
+    for (var is = RAJAT_S.length-1; is >= 0; is--) if (h >= RAJAT_S[is]) return VARIT_S[is];
+    return VARIT_S[0];
+  }
   if (akTila === 'konvergenssi'){
     var xk = h*venytys;
     for (var ik = RAJAT_K.length-1; ik >= 0; ik--) if (xk >= RAJAT_K[ik]) return VARIT_K[ik];
@@ -6686,9 +6768,12 @@ function piirra(){
     if (kue) saumat = akSaumat({ kue: kue, kun: kun, kv: kv });
     d.konvMax = kMax; d.konvMin = kMin; d.saumoja = saumat ? saumat.maara : null; d.saumaOsuus = saumat ? saumat.osuus : null;
   }
+  var reunaK = konv ? akKonvReuna(kf) : null;   // v152
+  if (konv) d.reunaOsuus = reunaK ? reunaK.osuus : null;
+  var syvK = (akTila === 'syvyys' && akSyvyys) ? akSileaSyvyys() : null;   // v152 syvyyskartta
   var virtaus = (akTila === 'virtaus' && vir);
-  var arvot = konv ? kf : vajoama ? vi : syva ? kv : virtaus ? vir : hs;
-  var huippu = konv ? Math.max(d.konvMax || 0, -(d.konvMin || 0)) : vajoama ? viMax : syva ? kvMax : virtaus ? virMax : korkein;
+  var arvot = syvK ? syvK : konv ? kf : vajoama ? vi : syva ? kv : virtaus ? vir : hs;
+  var huippu = syvK ? 1 : konv ? Math.max(d.konvMax || 0, -(d.konvMin || 0)) : vajoama ? viMax : syva ? kvMax : virtaus ? virMax : korkein;
   var R = vajoama ? RAJAT_VI : (virtaus || syva) ? RAJAT_V : RAJAT;
 
   venytys = 1;
@@ -6719,6 +6804,7 @@ function piirra(){
 
   var win = akIkkuna(k);
   var S = Math.min(24, Math.max(2, Math.round(380/win.w)));
+  if (akVientiKerroin > 1) S = Math.max(S, Math.min(S*akVientiKerroin, Math.floor(4200/Math.max(win.w, win.h))));   // v152 Ozi-vienti
   var LW = win.w*S, LH = win.h*S;
   var c = $("akKuva");
   c.width = LW; c.height = LH;
@@ -6759,7 +6845,7 @@ function piirra(){
       }
       var arvo = paino > 0 ? summa/paino : arvot[nj*k.W + ni];
       var t = rgb(arvo);
-      if (!virtaus && !syva && !vajoama && !konv && arvo > kalaRaja){
+      if (!virtaus && !syva && !vajoama && !konv && !syvK && arvo > kalaRaja){
         /* Rajan yli: himmennetään kohti tummaa. Väri jää luettavaksi mutta
            kelvollinen alue hyppää esiin. Turvarajan yli vielä enemmän. */
         var kerroin = arvo > akVene().turva ? 0.30 : 0.55;
@@ -6780,8 +6866,9 @@ function piirra(){
   }
   ctx.putImageData(kuva, 0, 0);
 
-  // Nuolet: mihin aalto (tai virtaus) kulkee
+  // Nuolet: mihin aalto (tai virtaus) kulkee; v152: syvyyskartalla ei nuolia
   var rad = ((virtaus || vajoama || konv) ? akVirtausSuunta(d.dir) : d.dir + 180)*Math.PI/180;
+  var nuoletPois = !!syvK;
   var ax = Math.sin(rad), ay = -Math.cos(rad);
   var vali = Math.max(6, Math.round(win.w/13))*S, pit = vali*0.40;
   ctx.strokeStyle = "rgba(16,24,22,.55)";
@@ -6791,7 +6878,7 @@ function piirra(){
   for (var jy = vali; jy < LH; jy += vali){
     for (var jx = vali; jx < LW; jx += vali){
       var mi = Math.min(k.W-1, Math.floor(jx/S) + win.i0), mj = Math.min(k.H-1, Math.floor(jy/S) + win.j0);
-      if (!mask[mj*k.W + mi]) continue;
+      if (!mask[mj*k.W + mi] || nuoletPois) continue;
       if (syva){
         /* Syvemmässä vedessä suunta vaihtelee paikasta toiseen, joten nuoli
            piirretään ruudun omaan suuntaan. Lähes seisova vesi jää ilman. */
@@ -6820,32 +6907,45 @@ function piirra(){
     }
   }
 
-  /* v145 SYVYYSKÄYRÄT (Hannun luonnoksen "penkat"): viiva syvyysluokkien rajalle 1,5 / 3 / 6 / 10 /
-     15 / 20 / 25 / 30 / 40 / 50 m. Jos raja ylittää kaksi luokkaa kerralla (jyrkkä penkka), viiva on tummempi. */
-  if (akKayrat && akSyvyys){
-    // v146: pienessä mittakaavassa (alle 3 px/ruutu) vain pääkäyrät 3 / 10 / 20 / 30 m, muuten kaikki
-    var KR = S >= 3 ? [1.5, 3, 6, 10, 15, 20, 25, 30, 40, 50] : [3, 10, 20, 30];
-    var luokka = function(qq){ var h0 = akSyvyys[qq], c0 = 0; while (c0 < KR.length && h0 >= KR[c0]) c0++; return c0; };
-    var ohut = [], paksu = [];
-    for (var jk = win.j0; jk < win.j0 + win.h; jk++){
-      for (var ik = win.i0; ik < win.i0 + win.w; ik++){
-        var qk = jk*k.W + ik; if (!mask[qk]) continue;
-        var ck = luokka(qk), xk = (ik - win.i0)*S, yk = (jk - win.j0)*S;
-        if (ik + 1 < win.i0 + win.w && mask[qk+1]){ var cr = luokka(qk+1); if (cr !== ck) (Math.abs(cr-ck) >= 2 ? paksu : ohut).push([xk+S, yk, xk+S, yk+S]); }
-        if (jk + 1 < win.j0 + win.h && mask[qk+k.W]){ var cb = luokka(qk+k.W); if (cb !== ck) (Math.abs(cb-ck) >= 2 ? paksu : ohut).push([xk, yk+S, xk+S, yk+S]); }
+  /* v152 SYVYYSKÄYRÄT: marching squares pehmennetystä syvyydestä (v145–v151 piirsi ruutujen reunoja,
+     mikä porrasti 50 m ruudukossa). Syvyyskartalla aina; muissa tiloissa kytkimellä. */
+  if ((akKayrat || syvK) && akSyvyys) akPiirraKayrat(ctx, win, S, LW);
+
+  /* v152: konvergenssin syvä reuna (≥ 1,5 m) ruskealla ääriviivalla */
+  if (konv && reunaK){
+    ctx.strokeStyle = "rgba(120,62,12,.9)"; ctx.lineWidth = Math.max(1.4, S/3); ctx.beginPath();
+    for (var jr = win.j0; jr < win.j0 + win.h; jr++){
+      for (var ir = win.i0; ir < win.i0 + win.w; ir++){
+        var qr = jr*k.W + ir; if (!reunaK.reuna[qr]) continue;
+        var xr = (ir - win.i0)*S, yr = (jr - win.j0)*S;
+        if (ir + 1 >= k.W || !reunaK.reuna[qr+1]){ ctx.moveTo(xr+S, yr); ctx.lineTo(xr+S, yr+S); }
+        if (ir - 1 < 0 || !reunaK.reuna[qr-1]){ ctx.moveTo(xr, yr); ctx.lineTo(xr, yr+S); }
+        if (jr + 1 >= k.H || !reunaK.reuna[qr+k.W]){ ctx.moveTo(xr, yr+S); ctx.lineTo(xr+S, yr+S); }
+        if (jr - 1 < 0 || !reunaK.reuna[qr-k.W]){ ctx.moveTo(xr, yr); ctx.lineTo(xr+S, yr); }
       }
     }
-    [[ohut, "rgba(16,24,22,.30)", Math.max(0.8, S/8)], [paksu, "rgba(16,24,22,.65)", Math.max(1.3, S/5)]].forEach(function(z){
-      if (!z[0].length) return;
-      ctx.strokeStyle = z[1]; ctx.lineWidth = z[2]; ctx.beginPath();
-      z[0].forEach(function(l){ ctx.moveTo(l[0], l[1]); ctx.lineTo(l[2], l[3]); });
-      ctx.stroke();
-    });
+    ctx.stroke();
+  }
+
+  /* v152: syvyysluvut merikartan tapaan, kun ruutu on vähintään 5 px (zoomattuna tai Ozi-viennissä) */
+  if (syvK && S >= 5){
+    var askelL = Math.max(2, Math.ceil(70/S)), fs = Math.max(10, Math.min(15, Math.round(S*1.4)));
+    ctx.font = fs + "px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.lineWidth = Math.max(2, fs/4); ctx.strokeStyle = "rgba(255,255,255,.85)"; ctx.fillStyle = "#0b2f55";
+    for (var jl = win.j0 + Math.floor(askelL/2); jl < win.j0 + win.h; jl += askelL){
+      for (var il = win.i0 + Math.floor(askelL/2); il < win.i0 + win.w; il += askelL){
+        var ql = jl*k.W + il; if (!mask[ql]) continue;
+        if (il < 1 || jl < 1 || il >= k.W - 1 || jl >= k.H - 1 || !mask[ql-1] || !mask[ql+1] || !mask[ql-k.W] || !mask[ql+k.W]) continue;
+        var hl = syvK[ql], tx = hl < 10 ? hl.toFixed(1).replace('.', ',') : String(Math.round(hl));
+        var xl = (il - win.i0 + 0.5)*S, yl = (jl - win.j0 + 0.5)*S;
+        ctx.strokeText(tx, xl, yl); ctx.fillText(tx, xl, yl);
+      }
+    }
   }
 
   /* Talteen napautusta varten: nämä ovat piirron paikallisia, mutta napautus
      tarvitsee ne piirron jälkeen. */
-  akViime = { hs:hs, vir:vir, vi:vi, kf:kf, saumat:saumat, kue:kue, kun:kun, kv:kv, kentta:kentta, k:k, S:S, win:win, kalaRaja:kalaRaja, turva:akVene().turva, dir:d.dir };
+  akViime = { hs:hs, vir:vir, vi:vi, kf:kf, saumat:saumat, reuna:reunaK, syvK:syvK, kue:kue, kun:kun, kv:kv, kentta:kentta, k:k, S:S, win:win, kalaRaja:kalaRaja, turva:akVene().turva, dir:d.dir };
   akPiirraMerkki(ctx, S);
 
   d.korkein = korkein;
@@ -6874,6 +6974,10 @@ function akOziAste(v, pos, neg, lev){
 window.akTallennaOzi = function(){
   var tila = $("akOziTila");
   var nayta = function(t){ if (tila){ tila.style.display = ''; tila.textContent = t; } };
+  // v152: piirretään vientiä varten noin 3× tarkkuudella (enintään 4200 px), palautetaan sen jälkeen
+  var valittuTalteen = akValittu; akValittu = null;   // valintarengas ei kuulu vientikuvaan
+  try { akVientiKerroin = 3; piirra(); } catch(e0){ akVientiKerroin = 1; }
+  var palauta = function(){ akVientiKerroin = 1; akValittu = valittuTalteen; try { piirra(); } catch(e1){} };
   try {
     if (!akViime || !jarvi || !jarvi.kartta){ nayta('Kartta ei ole vielä valmis.'); return; }
     var c = $("akKuva"), LW = c.width, LH = c.height, k = akViime.k, S = akViime.S, win = akViime.win;
@@ -6901,7 +7005,7 @@ window.akTallennaOzi = function(){
     octx.putImageData(img, 0, 0);
     var d = data[valittu] || {}, pv = d.aika || new Date();
     var p2 = function(n){ return ('0' + n).slice(-2); };
-    var tilaNimi = { aalto: 'aallot', virtaus: 'pintavirta', syva: 'syvavesi', vajoama: 'vajoama' }[akTila] || akTila;
+    var tilaNimi = { aalto: 'aallot', virtaus: 'pintavirta', syva: 'syvavesi', vajoama: 'vajoama', kumpuama: 'kumpuama', konvergenssi: 'konvergenssi', syvyys: 'syvyyskartta' }[akTila] || akTila;
     var jn = (jarvi.nimi || 'jarvi').toLowerCase().replace(/[åä]/g, 'a').replace(/ö/g, 'o').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
     var nimi = 'uistelututka_' + jn + '_' + tilaNimi + '_' + pv.getFullYear() + p2(pv.getMonth() + 1) + p2(pv.getDate()) + '_' + p2(pv.getHours()) + '00';
     var mpp = (latN - latS)*111320/HO;
@@ -6939,13 +7043,14 @@ window.akTallennaOzi = function(){
       var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = tiedosto;
       document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 4000);
     };
+    palauta();
     out.toBlob(function(png){
       lataa(png, nimi + '.png');
       setTimeout(function(){ lataa(new Blob([mapTxt], { type: 'application/octet-stream' }), nimi + '.map'); }, 700);
       nayta('Tallennettu Latauksiin: ' + nimi + '.png ja .map (' + WO + ' × ' + HO + ' px, ' + mpp.toFixed(1).replace('.', ',') + ' m/px). '
         + 'Pidä tiedostot samassa kansiossa ja avaa .map OziExplorerissa. Jos selain kysyy usean tiedoston latausta, salli se.');
     }, 'image/png');
-  } catch (e){ nayta('Tallennus epäonnistui: ' + (e && e.message || e)); }
+  } catch (e){ palauta(); nayta('Tallennus epäonnistui: ' + (e && e.message || e)); }
 };
 
 /* v147: vajoamakenttä tunnille d. vir = pintavirta km/h ruuduittain (piirra laskee sen; raportille
@@ -7084,13 +7189,16 @@ window.akVesiLiikePisteessa = function(lat, lon, aikaMs){
       var zona = (ka && ka.vahva) ? akKumpuAlue(d.dir) : null, zn = 0, wn = 0;
       for (var q2 = 0; q2 < mask.length; q2++){ if (!mask[q2]) continue; wn++; if (zona && zona[q2]) zn++; }
       var skS = null; try { var sk9 = akSyvaKentta(d); if (sk9) skS = akSaumat(sk9); } catch(e9){}   // v150
-      c = akVLValimuisti[avain] = { vk: vk, kk: kk, zona: zona, zOsuus: wn ? zn/wn : 0, kumpuMitattu: !!(ka && ka.mitattu), saumat: skS };
+      var kfS = new Float32Array(mask.length); for (var q7 = 0; q7 < mask.length; q7++) if (mask[q7]) kfS[q7] = vk.vi[q7] - kk.vi[q7];
+      var reS = akKonvReuna(kfS);   // v152
+      c = akVLValimuisti[avain] = { vk: vk, kk: kk, zona: zona, zOsuus: wn ? zn/wn : 0, kumpuMitattu: !!(ka && ka.mitattu), saumat: skS, reuna: reS };
     }
     var vaj = Math.round(c.vk.vi[q]), kum = Math.round(c.kk.vi[q]), pinkki = !!(c.zona && c.zona[q]);
     var luokka = pinkki ? 'kumpu' : (vaj >= 30 && vaj >= kum) ? 'vajoama' : kum >= 30 ? 'kumpuama' : 'muu';
     return { vajoama: vaj, kumpuama: kum, kumpu: pinkki, kumpuMitattu: pinkki ? c.kumpuMitattu : null, luokka: luokka,
              osuusVajoama: +c.vk.osuus.toFixed(3), osuusKumpuama: +c.kk.osuus.toFixed(3), osuusKumpu: +c.zOsuus.toFixed(3),
-             sauma: c.saumat ? !!c.saumat.lahella[q] : null, osuusSauma: c.saumat ? +c.saumat.osuus.toFixed(3) : null, malli: 'v150' };
+             sauma: c.saumat ? !!c.saumat.lahella[q] : null, osuusSauma: c.saumat ? +c.saumat.osuus.toFixed(3) : null,
+             konvReuna: c.reuna ? !!c.reuna.reuna[q] : null, osuusKonvReuna: c.reuna ? +c.reuna.osuus.toFixed(3) : null, malli: 'v152' };
   });
 };
 window.akVajoamaYhteenveto = function(aikaMs){
@@ -7115,9 +7223,19 @@ window.akVajoamaYhteenveto = function(aikaMs){
         sektori = ['pohjois','koillis','itä','kaakkois','etelä','lounais','länsi','luoteis'][Math.round(kulma/45) % 8] + 'osassa';
       } else sektori = 'eri puolilla järveä';
     }
-    var rV = Math.max(1, Math.round(200/k.ruutu)), ehd = [];
+    /* v152: pisteet konvergenssin SYVÄLTÄ REUNALTA (Hannu 4.10.: kalat punaisen syvältä puolelta,
+       ajettava ≥ 1,5 m): syvyys ≥ 1,5 m, ≥ 100 m rannasta, vahva vajoama 150 m sisällä. */
+    var fP = akSileaSyvyys(), rV = Math.max(1, Math.round(100/k.ruutu)), rL = Math.max(1, Math.round(150/k.ruutu)), ehd = [], pRaja = Math.max(20, raja);
+    var vahvaP = new Uint8Array(mask.length);
+    for (var qv0 = 0; qv0 < mask.length; qv0++) if (mask[qv0] && vk.vi[qv0] >= pRaja) vahvaP[qv0] = 1;
     for (var q2 = 0; q2 < mask.length; q2++){
-      if (!mask[q2] || vk.vi[q2] < Math.max(20, raja)) continue;
+      if (!mask[q2] || !fP || fP[q2] < REUNA_SYV) continue;
+      var lahV = false, i8 = q2 % W, j8 = (q2/W)|0;
+      for (var a8 = -rL; a8 <= rL && !lahV; a8++) for (var b8 = -rL; b8 <= rL && !lahV; b8++){
+        var ii8 = i8 + a8, jj8 = j8 + b8; if (ii8 < 0 || jj8 < 0 || ii8 >= W || jj8 >= H) continue;
+        if (vahvaP[jj8*W + ii8]) lahV = true;
+      }
+      if (!lahV) continue;
       var i2 = q2 % W, j2 = (q2/W)|0, ok = true;
       for (var a = -rV; a <= rV && ok; a++) for (var b = -rV; b <= rV && ok; b++){
         var ii = i2 + a, jj = j2 + b;
@@ -7131,7 +7249,7 @@ window.akVajoamaYhteenveto = function(aikaMs){
       var q3 = ehd[t], i3 = q3 % W, j3 = (q3/W)|0;
       var lat = k.pohjoisLat - (j3 + 0.5)*k.ruutu/111320, lon = k.lansiLon + (i3 + 0.5)*k.ruutu/(111320*Math.cos(lat*Math.PI/180));
       if (pisteet.some(function(p){ return Math.hypot((p.lat - lat)*111320, (p.lon - lon)*111320*Math.cos(lat*Math.PI/180)) < 1500; })) continue;
-      pisteet.push({ lat: +lat.toFixed(5), lon: +lon.toFixed(5), vi: Math.round(vk.vi[q3]), syv: Math.round(akSyvyys[q3]) });
+      pisteet.push({ lat: +lat.toFixed(5), lon: +lon.toFixed(5), vi: Math.round(vk.vi[q3]), syv: Math.round(fP[q3]*10)/10 });
     }
     // v149: kumpuaman vahvin osa samalla periaatteella
     var kx = 0, ky = 0, kn = 0, kRaja = 0.6*kk.viMax, ksektori = null;
@@ -7473,6 +7591,7 @@ function akNaytaPiste(){
                                         : akTila === 'vajoama' ? "Napauta karttaa: kertoo sen kohdan vajoamaindeksin"
                                          : akTila === 'kumpuama' ? "Napauta karttaa: kertoo sen kohdan kumpuamaindeksin"
                                          : akTila === 'konvergenssi' ? "Napauta karttaa: kertoo kasautumisen ja virtasaumat"
+                                         : akTila === 'syvyys' ? "Napauta karttaa: kertoo syvyyden"
                                          : "Napauta karttaa: kertoo sen kohdan virtauksen"; return;
   }
   var k = akViime.k, q = akValittu.j*k.W + akValittu.i;
@@ -7489,10 +7608,15 @@ function akNaytaPiste(){
       + " · pinta kulkee silti tuulen mukana";
     return;
   }
+  if (akTila === 'syvyys' && akViime.syvK){
+    el.innerHTML = "Syvyys tässä noin <b>" + akViime.syvK[q].toFixed(1).replace(".", ",") + " m</b> · " + akSyvyysLahde() + " · pehmennetty ±75 m, ei navigointiin";
+    return;
+  }
   if (akTila === 'konvergenssi' && akViime.kf){
     var kq = Math.round(akViime.kf[q]), lahS = akViime.saumat && akViime.saumat.lahella[q];
     el.innerHTML = (kq >= 4 ? "Vesi kasautuu ja painuu: <b>+" + kq + "</b>" : kq <= -4 ? "Vesi erkanee ja nousee: <b>" + kq + "</b>" : "Ei selvää kasautumista: <b>" + kq + "</b>")
       + (lahS ? "<br><b>Virtasauma alle 100 m päässä</b> (syvemmän veden virrat vastakkain, ≥ 2 cm/s)" : "")
+      + (akViime.reuna && akViime.reuna.reuna[q] ? "<br><b>Konvergenssin syvä reuna</b> (≥ 1,5 m, vahva kasautuminen 150 m sisällä)" : "")
       + " · malli, ei mittaus";
     return;
   }
@@ -7586,6 +7710,18 @@ function naytaTiedot(d){
       + '<div><span>Syvyydet</span><b>' + akSyvyysLahde() + '</b></div>'
       + $("akTaulu").innerHTML;
   }
+  if (akTila === 'syvyys' && akSyvyys){
+    var fS = akSileaSyvyys(), mx = 0, sm = 0, nS = 0;
+    for (var qS = 0; qS < mask.length; qS++){ if (!mask[qS]) continue; nS++; sm += fS[qS]; if (fS[qS] > mx) mx = fS[qS]; }
+    $("akLeima").innerHTML = '<span style="color:#0b2f55">' + Math.round(mx) + ' m</span><small>syvin (pehmennetty)</small>';
+    $("akTaulu").innerHTML =
+        '<div><span>Keskisyvyys</span><b>' + (nS ? (sm/nS).toFixed(1).replace('.', ',') : '–') + ' m</b></div>'
+      + '<div><span>Syvin ruutu (pehmennetty ±75 m)</span><b>' + mx.toFixed(1).replace('.', ',') + ' m</b></div>'
+      + '<div><span>Käyrät</span><b>pääkäyrät 3 / 10 / 20 / 30 m, zoomattuna kaikki; luvut zoomattuna</b></div>'
+      + '<div><span>Syvyydet</span><b>' + akSyvyysLahde() + '</b></div>'
+      + '<div><span>Käyttö</span><b>suunnitteluun ja Ozi-tausta­kartaksi, ei navigointikartta</b></div>';
+    return;
+  }
   if (akTila === 'konvergenssi' && typeof d.konvMax === 'number'){
     $("akLeima").innerHTML = '<span style="color:#b3302a">+' + Math.round(d.konvMax) + '</span>'
       + '<small>kasautuu · erkanee ' + Math.round(d.konvMin) + '</small>'
@@ -7596,6 +7732,7 @@ function naytaTiedot(d){
       + '<div><span>Erkanee (divergenssi), huippu</span><b>' + Math.round(d.konvMin) + '</b></div>'
       + '<div><span>Virtasaumat</span><b>' + (d.saumoja !== null ? d.saumoja + ' ruutua, ' + Math.round((d.saumaOsuus || 0)*100) + ' % järvestä alle 100 m päässä' : 'syvyysmalli puuttuu') + '</b></div>'
       + '<div><span>Sauman ehto</span><b>virrat vastakkain (yli 120°), molemmat ≥ 2 cm/s</b></div>'
+      + '<div><span>Syvä reuna (ruskea)</span><b>' + (typeof d.reunaOsuus === 'number' ? Math.round(d.reunaOsuus*100) + ' % järvestä · ≥ 1,5 m, vahva kasautuminen 150 m sisällä' : '–') + '</b></div>'
       + '<div><span>Vaahtojuovat</span><b>liian pieniä kartalle: etsi silmällä</b></div>'
       + '<div><span>Syvyydet</span><b>' + akSyvyysLahde() + '</b></div>'
       + $("akTaulu").innerHTML;
@@ -7983,7 +8120,11 @@ function lataa(avain){
 
 // ---- Käynnistys --------------------------------------------------------
 function piirraAsteikko(){
-  if (akTila === 'konvergenssi'){
+  if (akTila === 'syvyys'){
+    $("akAsteikko").innerHTML = RAJAT_S.map(function(raja, i){
+      return '<div style="background:' + VARIT_S[i] + ';color:' + (i >= 6 ? '#fff' : '#16211f') + '">' + String(raja).replace('.', ',') + '</div>';
+    }).join("");
+  } else if (akTila === 'konvergenssi'){
     $("akAsteikko").innerHTML = RAJAT_K.map(function(raja, i){
       return '<div style="background:' + VARIT_K[i] + ';color:' + (i <= 2 || i >= 9 ? '#fff' : '#16211f') + '">' + Math.round(raja/venytys) + '</div>';
     }).join("");
@@ -8000,7 +8141,8 @@ function piirraAsteikko(){
                          : akTila === 'syva'    ? "syvemmän veden kierto, km/h"
                          : akTila === 'vajoama' ? "vajoamaindeksi 0–100 (malli)"
                          : akTila === 'kumpuama' ? "kumpuamaindeksi 0–100 (malli)"
-                         : akTila === 'konvergenssi' ? "punainen kasautuu, sininen erkanee, violetti = virtasauma"
+                         : akTila === 'konvergenssi' ? "punainen kasautuu, sininen erkanee · violetti sauma · ruskea syvä reuna"
+                         : akTila === 'syvyys' ? "syvyys, m · ei navigointikartta"
                          : "merkitsevä aallonkorkeus, m";
 }
 piirraAsteikko();
@@ -8013,7 +8155,7 @@ function akPaivitaVirtausKytkin(){
     var o = sel.options[i];
     if (o.value === 'aalto') continue;
     o.disabled = !akSyvyys;
-    o.textContent = (o.value === 'virtaus' ? "Pintavirtaus" : o.value === 'vajoama' ? "Vajoama" : o.value === 'kumpuama' ? "Kumpuama" : o.value === 'konvergenssi' ? "Konvergenssi" : "Syvempi vesi")
+    o.textContent = (o.value === 'virtaus' ? "Pintavirtaus" : o.value === 'vajoama' ? "Vajoama" : o.value === 'kumpuama' ? "Kumpuama" : o.value === 'konvergenssi' ? "Konvergenssi" : o.value === 'syvyys' ? "Syvyyskartta" : "Syvempi vesi")
                   + (akSyvyys ? "" : " (ei syvyyskarttaa)");
   }
   if (!akSyvyys){ akTila = 'aalto'; sel.value = 'aalto'; }
@@ -9135,7 +9277,7 @@ lataa(eka);
         const lista = lataaSaaliit();
         lista.push(snap);
         const ok = tallennaSaaliit(lista);
-        const tiedostoOk = varmuuskopioiTiedostoon(lista);
+        const tiedostoOk = true;   // v151: ei automaattista CSV-latausta
         document.getElementById('kalaStatus').innerHTML = ok
           ? '<span style="color:var(--muted);">Nollareissu merkitty ' + nyt.toLocaleTimeString('fi-FI', {hour:'2-digit',minute:'2-digit'}) + '. Nämäkin ovat arvokasta dataa.' + (tiedostoOk ? ' Varmuuskopio tallennettu.' : '') + '</span>'
           : '<span style="color:var(--hard-red);">Tallennus epäonnistui.</span>';
@@ -9143,9 +9285,15 @@ lataa(eka);
         return;
       }
 
+      /* 4.10.2026 (v151) PIKAKIRJAUS: Hannu menetti paikkoja, kun kirjaus odotti Tallenna-nappia
+         (Peru tai seuraava kala ennen täydennystä hävitti edellisen). Nyt Kala kiinni tallentaa heti:
+         paikka, aika, olot ja laji (nykyinen valinta). Täydennys päivittää saman tietueen id:n mukaan. */
+      snap.laji = kalaLaji || null;
+      snap.taydennetty = false;
+      { const lista0 = lataaSaaliit(); lista0.push(snap); tallennaSaaliit(lista0); paivitaSaalisLista(); }
       keskenerainenSaalis = snap;
       document.getElementById('kalaStatus').innerHTML =
-        '<span style="color:var(--cyan);">✓ Olosuhteet tallennettu ' + nyt.toLocaleTimeString('fi-FI', {hour:'2-digit',minute:'2-digit'}) + '. Täydennä alla kun ehdit.</span>';
+        '<span style="color:var(--cyan);">✓ Kala tallennettu ' + nyt.toLocaleTimeString('fi-FI', {hour:'2-digit',minute:'2-digit'}) + ' (paikka ja olot). Täydennä alla jos ehdit, muuten valmis.</span>';
       document.getElementById('kalaTaydennaAika').textContent =
         nyt.toLocaleDateString('fi-FI') + ' klo ' + nyt.toLocaleTimeString('fi-FI', {hour:'2-digit',minute:'2-digit'}) +
         (snap.vesiC !== null ? ' · vesi ' + snap.vesiC.toFixed(1) + ' °C' : '') +
@@ -9180,13 +9328,14 @@ lataa(eka);
           snap.malliLapiSuunta = pyor(m.lapiSuunta, 0);
           snap.malliTuuliMs = pyor(m.tuuliMs, 1);
           snap.malliTuuliSuunta = pyor(m.tuuliSuunta, 0);
+          saalisPaivitaTalteen(snap);   // v151: tietue on jo tallessa, päivitetään mallikentät
         }).catch(function () {});
       }
       /* 4.10.2026 (v149): veden liike saaliin kohdalla (vajoama / kumpuama / pinkki kumpu / muu) ja
          järven osuus kussakin luokassa samalla hetkellä, jotta raportti voi verrata sattumaan. */
       snap.vesiLiike = null;
       if (typeof window.akVesiLiikePisteessa === 'function' && snap.lat !== null) {
-        window.akVesiLiikePisteessa(snap.lat, snap.lon, new Date(snap.aika).getTime()).then(function (v) { if (v) snap.vesiLiike = v; }).catch(function () {});
+        window.akVesiLiikePisteessa(snap.lat, snap.lon, new Date(snap.aika).getTime()).then(function (v) { if (v) { snap.vesiLiike = v; saalisPaivitaTalteen(snap); } }).catch(function () {});
       }
     }
 
@@ -9254,13 +9403,15 @@ lataa(eka);
       keskenerainenSaalis.esitystapa = (typeof vvTila === 'object' && vvTila && vvTila.tapa)
         ? (VV_TAVAT[vvTila.tapa] ? VV_TAVAT[vvTila.tapa].nimi : vvTila.tapa) : null;
 
+      keskenerainenSaalis.taydennetty = true;   // v151
       const lista = lataaSaaliit();
-      lista.push(keskenerainenSaalis);
+      const ix = lista.findIndex(function (x) { return x && x.id === keskenerainenSaalis.id; });
+      if (ix >= 0) lista[ix] = keskenerainenSaalis; else lista.push(keskenerainenSaalis);
       const ok = tallennaSaaliit(lista);
-      const tiedostoOk = varmuuskopioiTiedostoon(lista);
+      const tiedostoOk = true;   // v151: ei automaattista CSV-latausta (Chromen kysely veneessä); varmuuskopio: Raportit → Vie ja jaa
 
       document.getElementById('kalaStatus').innerHTML = ok
-        ? '<span style="color:var(--cyan);">✓ Saalis tallennettu (' + lista.length + ' kpl kirjanpidossa).' + (tiedostoOk ? ' Varmuuskopio Lataukset-kansioon.' : ' <strong style="color:var(--hard-red);">Huom: tiedostovarmuuskopio epäonnistui.</strong>') + '</span>'
+        ? '<span style="color:var(--cyan);">✓ Saalis täydennetty (' + lista.length + ' kpl kirjanpidossa).' + varmuuskopioMuistutus() + (tiedostoOk ? '' : ' <strong style="color:var(--hard-red);">Huom: tiedostovarmuuskopio epäonnistui.</strong>') + '</span>'
         : '<span style="color:var(--hard-red);">Tallennus epäonnistui — kirjaa tiedot muualle.</span>';
       keskenerainenSaalis = null;
       document.getElementById('kalaTaydennaBox').style.display = 'none';
@@ -9273,10 +9424,56 @@ lataa(eka);
       if (typeof koosteAutomaatti === 'function') koosteAutomaatti();
     }
 
-    function peruSaalis() {
+    function peruSaalis() {   // v151: "Sulje" — kala on jo tallessa ilman lisätietoja
       keskenerainenSaalis = null;
       document.getElementById('kalaTaydennaBox').style.display = 'none';
-      document.getElementById('kalaStatus').innerHTML = '<span style="color:var(--muted);">Peruttu.</span>';
+      document.getElementById('kalaStatus').innerHTML = '<span style="color:var(--muted);">Kala on tallessa ilman lisätietoja. Täydennä myöhemmin saalislistasta.</span>' + varmuuskopioMuistutus();
+    }
+    /* v151: apufunktiot pikakirjaukselle */
+    function saalisPaivitaTalteen(snap) {
+      try {
+        const lista = lataaSaaliit();
+        const ix = lista.findIndex(function (x) { return x && x.id === snap.id; });
+        if (ix < 0) return;
+        // säilytetään käyttäjän täydennykset, lisätään vain mallikentät ja veden liike
+        const t = lista[ix];
+        Object.keys(snap).forEach(function (k) { if (/^malli|^vesiLiike$/.test(k) && snap[k] !== undefined && snap[k] !== null) t[k] = snap[k]; });
+        tallennaSaaliit(lista);
+      } catch (e) {}
+    }
+    let poistoVahvistus = 0;
+    function poistaKeskenerainen(btn) {
+      if (!keskenerainenSaalis) return;
+      if (Date.now() - poistoVahvistus > 4000) { poistoVahvistus = Date.now(); if (btn) btn.textContent = 'Paina uudelleen: poista'; return; }
+      const id = keskenerainenSaalis.id;
+      const lista = lataaSaaliit().filter(function (x) { return !x || x.id !== id; });
+      tallennaSaaliit(lista);
+      keskenerainenSaalis = null; poistoVahvistus = 0;
+      if (btn) btn.textContent = 'Poista kirjaus';
+      document.getElementById('kalaTaydennaBox').style.display = 'none';
+      document.getElementById('kalaStatus').innerHTML = '<span style="color:var(--muted);">Kirjaus poistettu.</span>';
+      paivitaSaalisLista();
+    }
+    function saalisTaydenna(id) {
+      const t = lataaSaaliit().find(function (x) { return x && x.id === id; });
+      if (!t) return;
+      keskenerainenSaalis = t;
+      if (t.laji) kalaLaji = t.laji;
+      document.getElementById('kalaPituus').value = t.pituusCm || '';
+      const sEl = document.getElementById('kalaSyvyys'); sEl.value = typeof t.syvyysM === 'number' ? t.syvyysM : ''; sEl.dataset.lahde = t.syvyysLahde || '';
+      const vEl = document.getElementById('kalaVari'); if (vEl && t.vari) vEl.value = t.vari;
+      const d = new Date(t.aika);
+      document.getElementById('kalaTaydennaAika').textContent = d.toLocaleDateString('fi-FI') + ' klo ' + d.toLocaleTimeString('fi-FI', {hour:'2-digit',minute:'2-digit'}) + ' (täydennetään)';
+      document.getElementById('kalaTaydennaBox').style.display = 'block';
+      renderKalaLajit(); renderSaalisVieheet();
+      document.getElementById('kalaTaydennaBox').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    function varmuuskopioMuistutus() {
+      try {
+        const viim = parseInt(localStorage.getItem('uistelututka_viimeisin_vienti') || '0', 10);
+        const n = lataaSaaliit().filter(function (x) { return x && !x.nollareissu && x.id > viim; }).length;
+        return n >= 10 ? ' <span style="color:var(--amber);">💾 ' + n + ' kalaa viime varmuuskopion jälkeen: rannassa Raportit → Vie ja jaa.</span>' : '';
+      } catch (e) { return ''; }
     }
 
     /* ===== VANHA SAALIS JÄLKIKÄTEEN — 22.9.2026 =====
@@ -9406,7 +9603,7 @@ lataa(eka);
           osuma = ` <span style="color:${Math.abs(ero) <= 1.5 ? 'var(--cyan)' : 'var(--amber)'};">(malli ${ennuste.toFixed(1)} m, ero ${ero >= 0 ? '+' : ''}${ero.toFixed(1)})</span>`;
         }
         return `<div style="padding:6px 0;border-bottom:1px solid rgba(30,51,80,0.5);font-size:13px;">
-          <strong style="color:var(--text);">${pvm} · ${s.laji || '?'}</strong>${s.pituusCm ? ' ' + s.pituusCm + ' cm' : ''}${typeof s.syvyysM === 'number' ? ' · ' + s.syvyysM.toFixed(1) + ' m' : ''}${osuma}
+          <strong style="color:var(--text);">${pvm} · ${s.laji || '?'}</strong>${s.taydennetty === false ? ` <button class="chip" onclick="saalisTaydenna(${s.id})" style="padding:1px 8px;font-size:11px;border-color:var(--amber);color:var(--amber);">✏️ Täydennä</button>` : ''}${s.pituusCm ? ' ' + s.pituusCm + ' cm' : ''}${typeof s.syvyysM === 'number' ? ' · ' + s.syvyysM.toFixed(1) + ' m' : ''}${osuma}
           ${s.viehe ? `<br><span style="color:var(--amber);">${s.viehe}${s.vari ? ' · ' + s.vari : ''}${s.esitystapa ? ' · ' + s.esitystapa : ''}</span>` : ''}
           <br><span style="color:var(--muted);">${typeof s.vesiC === 'number' ? 'vesi ' + s.vesiC.toFixed(1) + ' °C · ' : ''}${typeof s.tuuliMs === 'number' ? 'tuuli ' + s.tuuliMs.toFixed(1) + ' m/s · ' : ''}${s.taimenkeli !== null && s.taimenkeli !== undefined ? 'taimenkeli ' + s.taimenkeli + ' %' : ''}</span>
         </div>`;
@@ -9519,7 +9716,7 @@ lataa(eka);
       const csv = saaliitCsv(lista);
 
       // Tallennetaan aina myös tiedostoksi — leikepöytä yksin ei riitä varmuuskopioksi.
-      const tiedostoOk = varmuuskopioiTiedostoon(lista);
+      const tiedostoOk = true;   // v151: ei automaattista CSV-latausta
 
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(csv).then(
@@ -10894,7 +11091,7 @@ lataa(eka);
       if (v.viMax >= 15 && v.sektori) {
         h += rivi('Malli', 'Vajoama on vahvin järven <b>' + v.sektori + '</b> (indeksi ' + v.viMax + ' / 100). Tuuli ' + Math.round(v.tuuliMs) + ' m/s on puhaltanut '
           + v.tunteja + ' h, ja pintavesi kulkee ' + kohti(v.pintaSuunta) + '. Siellä, missä virta kohtaa nousevan pohjan tai rannan, pintavesi painuu alas.'
-          + (v.pisteet.length ? '<br>Vahvimmat kohdat vähintään 200 m rannasta: ' + v.pisteet.map(function (p) { return p.lat + ', ' + p.lon + ' (' + p.vi + ', n. ' + p.syv + ' m)'; }).join(' · ') : ''));
+          + (v.pisteet.length ? '<br>Kohdat syvältä reunalta (≥ 1,5 m vettä, ≥ 100 m rannasta, vahva vajoama 150 m sisällä): ' + v.pisteet.map(function (p) { return p.lat + ', ' + p.lon + ' (' + p.vi + ', n. ' + p.syv + ' m)'; }).join(' · ') : ''));
       } else {
         h += rivi('Malli', 'Vajoama on heikko (indeksi ' + v.viMax + ' / 100). Tuuli ei nyt kasaa pintavettä merkittävästi.');
       }
@@ -10943,6 +11140,14 @@ lataa(eka);
         const ot = odotus === null ? '' : ' · sattumalta odottaisi ' + (Math.round(odotus * 10) / 10).toLocaleString('fi-FI');
         h += '<div>' + L[1] + ': <b>' + k + '</b>' + ot + (L[2] && k < 8 ? ' <span class="hint">(alle 8, ei johtopäätöstä)</span>' : '') + '</div>';
       });
+      // v152: konvergenssin syvä reuna (≥ 1,5 m) — Hannun havainto 4.10.: kalat punaisen syvältä puolelta
+      const rl = lista.filter(function (x) { return typeof x.vesiLiike.konvReuna === 'boolean'; });
+      if (rl.length) {
+        const kr = rl.filter(function (x) { return x.vesiLiike.konvReuna; }).length;
+        const orr = rl.reduce(function (s2, x) { return s2 + (x.vesiLiike.osuusKonvReuna || 0); }, 0);
+        h += '<div>konvergenssin syvä reuna: <b>' + kr + '</b> / ' + rl.length + ' · sattumalta odottaisi ' + (Math.round(orr * 10) / 10).toLocaleString('fi-FI')
+          + (kr < 8 ? ' <span class="hint">(alle 8, ei johtopäätöstä)</span>' : '') + '</div>';
+      }
       // v150: virtasauma (erillinen kysymys, voi olla päällekkäinen luokkien kanssa)
       const sl = lista.filter(function (x) { return typeof x.vesiLiike.sauma === 'boolean'; });
       if (sl.length) {
@@ -12342,7 +12547,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v150';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v152';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -18590,6 +18795,7 @@ async function vkVie(jaa) {
       document.body.appendChild(a); a.click();
       setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 3000);
     }
+    try { localStorage.setItem('uistelututka_viimeisin_vienti', String(Date.now())); } catch (e) {}   // v151: muistutuksen nollaus
     el.textContent = (jaettu ? 'Jaettu. ' : 'Tallennettu Latauksiin: ' + nimi + '. ') + yht
       + (jaa && !jaettu ? '\nSelain ei sallinut suoraa jakoa, joten tiedosto meni Latauksiin. Jaa se sieltä (Quick Share, WhatsApp).' : '');
   } catch (e) { el.textContent = 'Vienti epäonnistui: ' + (e && e.message || e); }
