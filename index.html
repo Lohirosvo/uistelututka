@@ -9155,6 +9155,11 @@ function akTaimenInfoPaivita(){
     el.textContent = 'Taimenpaikat on laskettu järvelle ' + (JARVET[K.avain] ? JARVET[K.avain].nimi : K.avain) + ', mutta kartalla on ' + (jarvi ? jarvi.nimi : '–') + '.'; return;
   }
   var t = new Date(K.hetki), pad = function(n){ return ("0"+n).slice(-2); };
+  if (!K.kohteet.length){   // v159: laskettu, mutta ehdokkaita ei tullut – kerrotaan miksi
+    el.textContent = 'Taimenpaikat (' + JARVET[K.avain].nimi + ', ' + t.getDate() + '.' + (t.getMonth()+1) + '. klo ' + pad(t.getHours()) + ':' + pad(t.getMinutes())
+      + '): ei ehdokkaita, koska ' + (K.syy || 'malli ei löytänyt kohtia') + '. Tarkemmin Raportit-ruudun taimenpaneelissa.';
+    return;
+  }
   el.innerHTML = 'Taimenpaikat hetkelle ' + t.getDate() + '.' + (t.getMonth()+1) + '. klo ' + pad(t.getHours()) + ':' + pad(t.getMinutes())
     + ': <b>valkoinen T-numero</b> on ehdokas harppauskerroksen mallista'
     + (K.kohteet.some(function(p){ return p.tyyppi === 'oma'; }) ? ', <b>sininen pallo</b> nimetty paikka, jolle malli antaa pisteitä (isoin paras)' : '')
@@ -13548,14 +13553,23 @@ lataa(eka);
     const TAIMEN_EHDOKKAITA = 20;
     let viimeisinTaimenEhdokkaat = [];   // saaliskirjaukselle
     let viimeisinTaimenKentta = null;    // { avain, hetkiMs, K } saaliskirjauksen harppaussyvyydelle
-    let taimenViimeArgs = null, taimenOdottaa = null;
+    let taimenViimeArgs = null, taimenOdottaa = null, taimenViimeAvain = null;
+    // v159: kun tämän paikan tuulihistoria saapuu, paneeli lasketaan uudelleen (vain jos sama järvi kuin analyysissa)
+    function taimenPaivitaTuulenJalkeen() {
+      const tp = document.getElementById('taimenPaneeli');
+      if (!tp || !taimenViimeArgs || typeof karttaAvain !== 'function' || karttaAvain() !== taimenViimeAvain) return;
+      tp.innerHTML = taimenHotspotHtml(taimenViimeArgs);
+    }
 
     // Tuuli 120 h taaksepäin analyysihetkestä: FMI- tai Open-Meteo-ennuste tunnille, muuten Open-Meteon
     // tuntisarja (7 vrk menneisyyttä + 1 vrk ennustetta, tuuliTunnit).
     function taimenTuuliSarja(hetkiMs) {
       const t0 = hetkiMs - 120 * 3600e3, kartta = {};
+      // v159: historia vain, jos se on haettu tämän paikan lähelle (≤ 30 km); muuten odotetaan uutta hakua
+      const omaHistoria = tuuliTunnitPaikka && currentLocation
+        && haversineDistMeters(tuuliTunnitPaikka.lat, tuuliTunnitPaikka.lon, currentLocation.lat, currentLocation.lon) <= 30000;
       try {
-        if (tuuliTunnit && tuuliTunnit.time) tuuliTunnit.time.forEach((s, i) => {
+        if (omaHistoria && tuuliTunnit && tuuliTunnit.time) tuuliTunnit.time.forEach((s, i) => {
           const t = new Date(s).getTime(), U = tuuliTunnit.wind_speed_10m[i], d = tuuliTunnit.wind_direction_10m[i];
           if (t >= t0 && t <= hetkiMs && typeof U === 'number' && typeof d === 'number') kartta[t] = { t, U, dir: d };
         });
@@ -13659,7 +13673,7 @@ lataa(eka);
       if (!avain || TAIMEN_HOTSPOTJARVET.indexOf(avain) < 0) {
         viimeisinTaimenEhdokkaat = []; viimeisinTaimenKentta = null; taimenKartalle(null, null, null); return '';
       }
-      taimenViimeArgs = o;
+      taimenViimeArgs = o; taimenViimeAvain = avain;
       const chip = t => '<span class="chip" style="padding:1px 7px;font-size:11px;margin-right:6px;">' + t + '</span>';
       const syyRivi = x => '<div style="margin:5px 0;">' + chip(x.taso) + x.teksti + (x.p ? ' <span class="hint">(+' + x.p + ')</span>' : '') + '</div>';
       const e = taimenHotspotit(o, avain);
@@ -13669,7 +13683,11 @@ lataa(eka);
       const alku = '<div class="spot-hero" style="margin-top:14px;"><div class="spot-title">🎣 Taimen: hotspotit harppauskerroksesta</div>';
       const p = t => '<p style="font-size:13px;line-height:1.45;margin:8px 0 0;">' + t + '</p>';
       if (!e || e.tila !== 'ok') {
-        taimenKartalle(null, null, null);
+        const lyhytSyy = !e ? '' : { lataus: 'syvyyskartta latautuu vielä', sekoittunut: 'järvi on sekoittunut, harppauskerrosta ei ole',
+          heikko: 'pinnan ja alusveden ero on alle 1 °C' + (e.pohjaOletus ? ' (alusvesi oletus 8 °C, ei mitattu)' : '') + ', kerros on liian heikko kallistumaan. Depth Raider -profiili tai oma mittaus tälle järvelle korjaa tämän',
+          eiKerrosta: 'harppauskerroksen tietoa ei ole', eiAlusvetta: 'harppauksen alla ei ole yhtenäistä alusvettä',
+          eiTuulta: 'tuulihistoria tälle paikalle ei ole vielä tullut, paneeli päivittyy itse kun se tulee' }[e.tila] || 'syvyysruudukkoa ei ole';
+        taimenKartalle(e && e.tila !== 'lataus' ? avain : null, o.hetki, [], lyhytSyy);
         const syy = !e ? '' : e.tila === 'lataus' ? 'Syvyyskartta latautuu vielä. Hotspotit tulevat tähän, kun se on valmis.'
           : e.tila === 'sekoittunut' ? chip(e.hp && e.hp.mitattu ? 'Mittaus' : 'Arvio') + 'Järvi on nyt sekoittunut (' + (e.hp && e.hp.lahde ? e.hp.lahde : 'lämpötieto') + '). Ilman harppauskerrosta ei synny kallistumaa, paluuheilahdusta eikä rintamaa, joten malli ei anna ehdokkaita. Malli koskee kerrostunutta kautta.'
           : e.tila === 'heikko' ? chip(e.pohjaOletus ? 'Arvio' : 'Mittaus') + 'Pinta on noin ' + n1(e.T1) + ' °C ja alusvesi ' + n1(e.T2) + ' °C' + (e.pohjaOletus ? ' (oletus, ei mitattu)' : '')
@@ -13688,7 +13706,7 @@ lataa(eka);
         + 'alapuolella painuu. Tuulen jälkeen kerros heilahtaa takaisin tai, leveällä järvellä, kiertää rantaa. Malli laskee tämän viiden vuorokauden tuulesta koko järvelle yhtenä kallistuvana tasona '
         + '(Stevens & Imberger 1996). Harppauksen lähde: ' + e.p.lahde + '.');
       if (K.vaihe === 'tyyni' || K.nousuMax < 0.5) {
-        taimenKartalle(avain, o.hetki, []);
+        taimenKartalle(avain, o.hetki, [], 'tuuli ei ole viiden vuorokauden aikana kallistanut kerrosta mainittavasti');
         return alku + meta + intro + p('Tuuli ei ole viiden vuorokauden aikana kallistanut kerrosta mainittavasti (nousu alle 0,5 m), joten hotspotteja ei synny. Kerros on noin ' + n1(K.h1) + ' metrissä koko järvellä.') + '</div>';
       }
       const tunnus = i => 'T' + (i + 1);
@@ -13728,8 +13746,9 @@ lataa(eka);
         + '<p class="hint" style="margin:8px 0 0;">' + huom.join(' ') + '</p></div>';
     }
 
-    function taimenKartalle(avain, hetki, kohteet) {
-      window.akTaimenKohteet = kohteet ? { avain, hetki: new Date(hetki).getTime(), kohteet } : null;
+    function taimenKartalle(avain, hetki, kohteet, syy) {
+      // v159: myös tyhjä tulos syineen kartalle, ettei kartta väitä "ei laskettu", kun malli laski eikä löytänyt
+      window.akTaimenKohteet = (avain && kohteet) ? { avain, hetki: new Date(hetki).getTime(), kohteet, syy: syy || '' } : null;
       if (typeof window.akPiirraUudelleen === 'function') { try { window.akPiirraUudelleen(); } catch (e) {} }
     }
     function taimenNaytaKartalla() {
@@ -14010,6 +14029,7 @@ lataa(eka);
     // Data on jo haettu tuulikertymää varten, joten tämä on vain esitystapa.
     // Kolme tuntia näkyy oletuksena yhdellä rivillä; 24 h avataan napista.
     let tuuliTunnit = null;
+    let tuuliTunnitPaikka = null;   // v159: minkä paikan tuulihistoria (taimenmalli ei käytä toisen järven tuulta)
 
     function tuuliNuoli(deg) {
       // Nuoli osoittaa MIHIN tuuli puhaltaa, koska se on veneessä olennaisempi
@@ -14185,7 +14205,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v158';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v159';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -18007,6 +18027,8 @@ lataa(eka);
         recentWindSummary = mixText;
         laskeTuuliKertyma(data, now);
         tuuliTunnit = data.hourly;   // talteen 3 h / 24 h ennustetta varten
+        tuuliTunnitPaikka = { lat, lon };   // v159
+        try { taimenPaivitaTuulenJalkeen(); } catch (e) {}   // v159: taimenpaneeli uudelleen oikealla tuulella
         piirraTuuliEnnuste(3);
         if (el) el.innerHTML = `Mennyt sää (3 vrk): keskituuli ${avgWind.toFixed(1)} m/s, huippu ${maxWind.toFixed(1)} m/s. ${mixText}`;
       } catch (err) {
