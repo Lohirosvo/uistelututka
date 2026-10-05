@@ -13689,7 +13689,7 @@ lataa(eka);
           eiTuulta: 'tuulihistoria tälle paikalle ei ole vielä tullut, paneeli päivittyy itse kun se tulee' }[e.tila] || 'syvyysruudukkoa ei ole';
         taimenKartalle(e && e.tila !== 'lataus' ? avain : null, o.hetki, [], lyhytSyy);
         const syy = !e ? '' : e.tila === 'lataus' ? 'Syvyyskartta latautuu vielä. Hotspotit tulevat tähän, kun se on valmis.'
-          : e.tila === 'sekoittunut' ? chip(e.hp && e.hp.mitattu ? 'Mittaus' : 'Arvio') + 'Järvi on nyt sekoittunut (' + (e.hp && e.hp.lahde ? e.hp.lahde : 'lämpötieto') + '). Ilman harppauskerrosta ei synny kallistumaa, paluuheilahdusta eikä rintamaa, joten malli ei anna ehdokkaita. Malli koskee kerrostunutta kautta.'
+          : e.tila === 'sekoittunut' ? chip(e.hp && e.hp.taso ? e.hp.taso : (e.hp && e.hp.mitattu ? 'Mittaus' : 'Arvio')) + 'Järvi on nyt sekoittunut (' + (e.hp && e.hp.lahde ? e.hp.lahde : 'lämpötieto') + '). Ilman harppauskerrosta ei synny kallistumaa, paluuheilahdusta eikä rintamaa, joten malli ei anna ehdokkaita. Malli koskee kerrostunutta kautta.'
           : e.tila === 'heikko' ? chip(e.pohjaOletus ? 'Arvio' : 'Mittaus') + 'Pinta on noin ' + n1(e.T1) + ' °C ja alusvesi ' + n1(e.T2) + ' °C' + (e.pohjaOletus ? ' (oletus, ei mitattu)' : '')
               + '. Ero on alle 1 °C, joten kerros on niin heikko, että tuuli sekoittaa sen eikä kallista. Malli ei anna ehdokkaita; se koskee kerrostunutta kautta. '
               + 'Harppauksen lähde: ' + (e.hp && e.hp.lahde ? e.hp.lahde : '–') + '. Depth Raider -profiili korvaa oletuksen 7 vuorokaudeksi.'
@@ -14205,7 +14205,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v159';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v160';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
