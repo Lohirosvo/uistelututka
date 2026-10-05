@@ -903,7 +903,7 @@
 .ak-raja span{font-family:ui-monospace,monospace;font-size:12px;min-width:52px;
   text-align:right}
 .ak-alarivi{display:flex;justify-content:space-between;align-items:center;
-    margin-top:4px;gap:10px}
+    margin-top:4px;gap:10px;flex-wrap:wrap;row-gap:6px}   /* v157: rivi rivittyy, ettei näyttövalikko jää ruudun ulkopuolelle */
 .ak-kytkin{font-size:.72rem;color:#4a5654;display:flex;align-items:center;gap:5px;
     cursor:pointer;user-select:none}
 .ak-kytkin input{accent-color:#16211f;width:15px;height:15px;margin:0}
@@ -9139,7 +9139,7 @@ function akPiirraTaimenMerkit(ctx, win, S){
     ctx.fillStyle = oma ? "#3d8fd6" : "#ffffff"; ctx.fill();
     ctx.lineWidth = (oma ? 1.6 : 2.6)*kerr; ctx.strokeStyle = oma ? "#0b2f52" : "#1c6fb8"; ctx.stroke();
     if (p.tunnus){
-      ctx.font = "700 " + Math.round(10*kerr) + "px system-ui, sans-serif";
+      ctx.font = "700 " + Math.round((p.tunnus.length >= 3 ? 8.5 : 10)*kerr) + "px system-ui, sans-serif";   // v158: T10–T20
       ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#0b2f52";
       ctx.fillText(p.tunnus, x, y + 0.5*kerr);
     }
@@ -13540,9 +13540,12 @@ lataa(eka);
          syöttikala: kuoreen mallisyvyys siirtyy kerroksen mukana taimenen syvyydelle 3 [Päätelmä; muikku
            seuraa harppausta (Świerzowski, Pluszne), kalat reagoivat seicheihin heikosti ja vain voimakkaimpiin
            (Jarić ym. 2023)]
-       Ehdokas tarvitsee fysiikasta ≥ 6 p. Valinta: 3 parasta, ≥ 1 km toisistaan ja ≥ 700 m nimetyistä
+       Ehdokas tarvitsee fysiikasta ≥ 6 p. Valinta: 20 parasta (v158; v156 3), ≥ 1 km toisistaan ja ≥ 700 m nimetyistä
        paikoista, aalto veneen rajan yli → pois (kuten kuha). Saaliit eivät vaikuta pisteisiin. */
     const TAIMEN_HOTSPOTJARVET = ['lappajarvi', 'kivijarvi', 'toisvesi'];
+    /* v158 (Hannu 5.10.2026): kolme on vähän, koska Lappajärvi on valtava ja päivän uistelualue on osa siitä.
+       20 ehdokasta kaikilla kolmella järvellä, järjestys pisteiden mukaan; paneelissa 3 parasta, kaikki kartalla. */
+    const TAIMEN_EHDOKKAITA = 20;
     let viimeisinTaimenEhdokkaat = [];   // saaliskirjaukselle
     let viimeisinTaimenKentta = null;    // { avain, hetkiMs, K } saaliskirjauksen harppaussyvyydelle
     let taimenViimeArgs = null, taimenOdottaa = null;
@@ -13587,35 +13590,35 @@ lataa(eka);
       const lowT = typeof o.lowT === 'number' ? o.lowT : 0.5, highT = typeof o.highT === 'number' ? o.highT : 4;
       const kmVrk = K.ci * 86400 / 1000, TiH = K.Ti ? K.Ti / 3600 : null;
       const pisteyta = x => {
-        const syyt = [], lisaa = (pp, taso, teksti) => syyt.push({ p: pp, taso, teksti });
+        const syyt = [], lisaa = (pp, taso, teksti, lyhyt) => syyt.push({ p: pp, taso, teksti, lyhyt });
         const hNyt = Math.max(0, x.hq);
         if (x.kylma && x.nousu >= 1 && x.hq <= syvRaja) {
           const pinta = x.hq <= 0.5 ? 'pintaan asti' : 'noin ' + n1(hNyt) + ' metriin';
           if (K.vaihe === 'tuuli')
             lisaa(6 + Math.min(6, Math.round(x.nousu)), 'Malli', 'Tuuli kallistaa harppauskerrosta: täällä se on noussut ' + pinta
-              + ' (tavallisesti ' + n1(K.h1) + ' m). Viileä alusvesi on lähellä pintaa ja taimenen ' + n1(lowT) + '–' + n1(highT) + ' metrin syvyyttä.');
+              + ' (tavallisesti ' + n1(K.h1) + ' m). Viileä alusvesi on lähellä pintaa ja taimenen ' + n1(lowT) + '–' + n1(highT) + ' metrin syvyyttä.', 'kallistuma');
           else if (K.vaihe === 'seiche')
             lisaa(5 + Math.min(5, Math.round(x.nousu)), 'Malli', 'Paluuheilahdus: tuuli lakkasi ' + Math.round(K.tunnitTuulesta) + ' h sitten, ja kerros heilahtaa takaisin (sisäinen seiche, jakso noin '
-              + Math.round(TiH) + ' h). Täällä se on nyt noussut ' + pinta + ' (tavallisesti ' + n1(K.h1) + ' m).');
+              + Math.round(TiH) + ' h). Täällä se on nyt noussut ' + pinta + ' (tavallisesti ' + n1(K.h1) + ' m).', 'paluuheilahdus');
           else if (K.vaihe === 'kelvin')
             lisaa(5 + Math.min(5, Math.round(x.nousu)), 'Malli', 'Kiertävä aalto: tuuli lakkasi ' + Math.round(K.tunnitTuulesta) + ' h sitten. Järvi on niin leveä, että maapallon pyöriminen ohjaa kerrosta: '
-              + 'kohonnut kerros kiertää rantaa vastapäivään noin ' + Math.round(kmVrk) + ' km vuorokaudessa (sisäinen Kelvin-aalto). Täällä se on nyt noussut ' + pinta + '.');
+              + 'kohonnut kerros kiertää rantaa vastapäivään noin ' + Math.round(kmVrk) + ' km vuorokaudessa (sisäinen Kelvin-aalto). Täällä se on nyt noussut ' + pinta + '.', 'kiertävä aalto');
         }
         if (x.pohjassa)
           lisaa(6 + Math.min(4, Math.round(x.g)), 'Malli', 'Harppauskerros on täällä noin ' + n1(hNyt) + ' metrissä, alle metrin päässä pohjasta (' + n1(x.f) + ' m), ja pohja laskee ' + n1(x.g)
-            + ' m sadan metrin matkalla. Sisäiset aallot jyrkkenevät ja murtuvat tällaisilla rinteillä (Horn ym. 2001); kalojen kannalta tämä on päätelmä.');
+            + ' m sadan metrin matkalla. Sisäiset aallot jyrkkenevät ja murtuvat tällaisilla rinteillä (Horn ym. 2001); kalojen kannalta tämä on päätelmä.', 'kerros pohjassa');
         if (x.rintama)
           lisaa(8, 'Päätelmä', 'Alle 150 metrin päässä kerros puhkeaa pintaan: siinä kylmä nousuvesi kohtaa lämpimän pintaveden, ja pintaan syntyy lämpörintama. '
-            + 'Ontariossa lohikalojen vetouistelusaaliit olivat rintamissa selvästi suuremmat (NAJFM 1993: 20 % ajasta, 37 % kaloista). Tulos koskee Ontarion lohikaloja, ei suoraan taimenta.');
+            + 'Ontariossa lohikalojen vetouistelusaaliit olivat rintamissa selvästi suuremmat (NAJFM 1993: 20 % ajasta, 37 % kaloista). Tulos koskee Ontarion lohikaloja, ei suoraan taimenta.', 'rintama');
         if (x.vasen)
           lisaa(4, 'Päätelmä', 'Tuuli on kestänyt ' + Math.round(K.viime.kestoH) + ' h. Maapallon pyörimisen takia pintavesi kääntyy tuulesta oikealle, joten kylmää vettä voi nousta myös tällä, '
-            + 'tuulen suunnasta katsoen vasemmalla rannalla (Valbuena ym. 2022, Lake Tahoe, 3D-malli).');
+            + 'tuulen suunnasta katsoen vasemmalla rannalla (Valbuena ym. 2022, Lake Tahoe, 3D-malli).', 'vasen ranta');
         const fysiikka = syyt.reduce((a, s) => a + s.p, 0);
         if (fysiikka > 0 && typeof o.syvyysKuore === 'number') {
           const b = o.syvyysKuore + (x.hq - K.h1);
           if (b >= lowT - 1 && b <= highT + 1 && b < x.f)
             lisaa(3, 'Päätelmä', 'Kuoreen mallisyvyys ' + n1(o.syvyysKuore) + ' m siirtyy kerroksen mukana noin ' + n1(Math.max(0, b)) + ' metriin, taimenen syvyydelle. '
-              + 'Muikku seuraa harppausta (Świerzowski, Pluszne-järvi), mutta kalojen on havaittu reagoivan seicheihin heikosti ja vain voimakkaimpiin (Jarić ym. 2023), joten paino on pieni.');
+              + 'Muikku seuraa harppausta (Świerzowski, Pluszne-järvi), mutta kalojen on havaittu reagoivan seicheihin heikosti ja vain voimakkaimpiin (Jarić ym. 2023), joten paino on pieni.', 'syöttikala');
         }
         return { c: x, syyt, fysiikka, pisteet: syyt.reduce((a, s) => a + s.p, 0) };
       };
@@ -13627,7 +13630,7 @@ lataa(eka);
       let suljettuja = 0;
       const samaKortti = !!K.samaKortti;
       for (const x of kaikki) {
-        if (lista.length >= 3) break;
+        if (lista.length >= TAIMEN_EHDOKKAITA) break;
         if (nimetyt.some(sp => haversineDistMeters(sp.lat, sp.lon, x.c.lat, x.c.lon) < 700)) continue;
         if (lista.some(v => haversineDistMeters(v.c.lat, v.c.lon, x.c.lat, x.c.lon) < 1000)) continue;
         const m = (samaKortti && typeof window.akMalliSync === 'function') ? window.akMalliSync(x.c.lat, x.c.lon, aikaMs) : null;
@@ -13689,13 +13692,14 @@ lataa(eka);
         return alku + meta + intro + p('Tuuli ei ole viiden vuorokauden aikana kallistanut kerrosta mainittavasti (nousu alle 0,5 m), joten hotspotteja ei synny. Kerros on noin ' + n1(K.h1) + ' metrissä koko järvellä.') + '</div>';
       }
       const tunnus = i => 'T' + (i + 1);
-      const rivit = e.lista.map((x, i) => '<div style="margin:9px 0 0;padding-top:7px;border-top:1px solid var(--line);">'
+      const rivit = e.lista.slice(0, 3).map((x, i) => '<div style="margin:9px 0 0;padding-top:7px;border-top:1px solid var(--line);">'
         + '<strong>Ehdokas ' + tunnus(i) + '</strong> <span class="hint">(' + x.pisteet + ' p, ' + x.c.lat.toFixed(5) + ', ' + x.c.lon.toFixed(5) + ', pohja ' + n1(x.c.f) + ' m)</span>'
         + x.syyt.slice().sort((a, b) => b.p - a.p).map(syyRivi).join('')
         + (x.lahin ? '<div class="hint" style="margin:3px 0 0;">Lähin nimetty paikka ' + x.lahin.sp.name + ', ' + (x.lahin.m >= 1000 ? n1(x.lahin.m / 1000) + ' km' : Math.round(x.lahin.m) + ' m') + '; ehdokas on siitä ' + x.lahin.suunta + '.</div>' : '')
         + '</div>').join('');
-      const ehdOsa = '<p style="font-size:14px;margin:12px 0 0;"><strong>Ehdokkaat</strong></p>'
+      const ehdOsa = '<p style="font-size:14px;margin:12px 0 0;"><strong>Ehdokkaat</strong>' + (e.lista.length > 3 ? ' <span class="hint">(3 parasta, kartalla kaikki ' + e.lista.length + ')</span>' : '') + '</p>'
         + (rivit ? '<div style="font-size:13px;line-height:1.45;">' + rivit + '</div>'
+          + (e.lista.length > 3 ? '<p class="hint" style="margin:8px 0 0;">Kartalla ovat kaikki ' + e.lista.length + ' ehdokasta (T1–T' + e.lista.length + ', parhaat ensin, vähintään 1 km toisistaan). Napauta merkkiä, niin näet pisteet ja syyt.</p>' : '')
                  : '<p class="hint" style="margin:4px 0 0;">Mallin ilmiöt eivät nyt osu yhteenkään kohtaan, joka on vähintään 100 m rannasta' + (e.avain === 'lappajarvi' ? ' ja 700 m nimetyistä paikoista' : '')
                    + (e.suljettuja ? ', ja ' + e.suljettuja + ' ehdokasta jäi pois aallon takia' : '') + '.</p>');
       let nimOsa = '';
@@ -13714,7 +13718,7 @@ lataa(eka);
       if (e.suljettuja) huom.push(e.suljettuja + ' parempaa ehdokasta jäi pois, koska aalto ylittää veneesi rajan.');
       huom.push('Malli on tarkistettava mittauksella: Depth Raider -lukema ehdokkaan kohdalla kertoo, onko kerros siellä missä malli sanoo.');
       const kartalle = e.lista.map((x, i) => ({ lat: x.c.lat, lon: x.c.lon, tyyppi: 'ehdokas', tunnus: tunnus(i), nimi: 'Taimen-ehdokas ' + tunnus(i),
-        teksti: 'harppauskerroksen malli, ' + x.pisteet + ' pistettä, harppaus ' + n1(Math.max(0, x.c.hq)) + ' m, pohja ' + n1(x.c.f) + ' m (malli, ei omaa saalista).' }))
+        teksti: x.pisteet + ' pistettä (' + x.syyt.slice().sort((a, b) => b.p - a.p).map(y => y.lyhyt).filter(Boolean).join(', ') + '), harppaus ' + n1(Math.max(0, x.c.hq)) + ' m, pohja ' + n1(x.c.f) + ' m. Malli, ei omaa saalista.' }))
         .concat(e.nimetyt.filter(x => x.pisteet > 0).slice(0, 3).map((x, i) => ({ lat: x.sp.lat, lon: x.sp.lon, tyyppi: 'oma', paras: i === 0, tunnus: '',
           nimi: x.sp.name, teksti: 'nimetty paikka, malli antaa ' + x.pisteet + ' pistettä (harppaus täällä ' + (x.c ? n1(Math.max(0, x.c.hq)) : '–') + ' m).' })));
       taimenKartalle(avain, o.hetki, kartalle);
@@ -14181,7 +14185,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v156';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v158';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
