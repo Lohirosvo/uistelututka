@@ -902,6 +902,14 @@
 .ak-raja input[type=range]{flex:1.2;min-width:0;height:26px;accent-color:#3faa62}
 .ak-raja span{font-family:ui-monospace,monospace;font-size:12px;min-width:52px;
   text-align:right}
+/* v166: raportin tiivistys */
+.tv-kokoon > :not(.tv-otsake):not(.tv-nakyy){display:none !important}
+.tv-piilo{display:none !important}
+.tv-otsake{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;margin:6px 0 0;padding:7px 0;background:none;border:0;border-top:1px dashed rgba(255,255,255,.14);color:var(--cyan);font:inherit;font-size:13px;text-align:left;cursor:pointer}
+.tv-nuoli{white-space:nowrap}
+.tv-lisaa{margin-top:6px;font-size:12px}
+.tv-rivi{display:flex;gap:9px;align-items:flex-start;padding:7px 0;border-top:1px solid var(--line);font-size:14px;line-height:1.4;cursor:pointer;text-align:left}
+.tv-rivi:first-of-type{border-top:0}
 .ak-alarivi{display:flex;justify-content:space-between;align-items:center;
     margin-top:4px;gap:10px;flex-wrap:wrap;row-gap:6px}   /* v157: rivi rivittyy, ettei näyttövalikko jää ruudun ulkopuolelle */
 .ak-kytkin{font-size:.72rem;color:#4a5654;display:flex;align-items:center;gap:5px;
@@ -1759,7 +1767,7 @@ body{padding-bottom:66px}
         <span class="idx">Pikasäätö</span>
         <h2 style="margin:2px 0 0;"><span style="color:var(--muted);">▸</span> Muuttuu joka reissulla</h2>
       </summary>
-      <p class="hint">Vesi, tuuli ja valo vaihtuvat jokaisella kerralla. Muut vastaukset muistetaan, joten näitä kolmea säätämällä pääset useimmiten suoraan analyysiin.</p>
+      <p class="hint">Tuuli ja valo vaihtuvat jokaisella kerralla. Muut vastaukset muistetaan. Veden lämpö tulee Lämpötieto-kortista.</p>
       <div id="pikaSisalto"></div>
       <button onclick="analyze(); document.getElementById('resultsSection').scrollIntoView({behavior:'smooth'});"
               style="width:100%; margin-top:12px; background:var(--amber); color:#1a1200; border:none; border-radius:10px; font-family:'Barlow Condensed',sans-serif; font-size:20px; font-weight:700; letter-spacing:.02em; padding:14px; cursor:pointer;">
@@ -1770,6 +1778,8 @@ body{padding-bottom:66px}
     <div id="questions"></div>
 
     <div id="result">
+      <!-- v166: tiivistelmä -->
+      <div class="result-panel" id="tiivistelmaPanel" style="display:none;"></div>
       <!-- HAPPI (v111) -->
       <div class="result-panel" id="happiPanel" style="display:none;"></div>
       <!-- LAJIKOHTAINEN YLEISNEUVO (v129): järville, joilla on kohdelajit -->
@@ -5551,11 +5561,10 @@ body{padding-bottom:66px}
       const pv = d => { const s = String(d).split('-'); return (+s[2]) + '.' + (+s[1]) + '.'; };
       const hd = new Date(ltMs(hetki)), hetkiTxt = hd.getDate() + '.' + (hd.getMonth() + 1) + '. klo ' + String(hd.getHours()).padStart(2, '0');
       let html = '<div style="margin-bottom:8px;">' + lpSel('lpJarvi', avaimet.map(k => ({ v: k, t: lpNimi(k) + ' (' + kaikki[k].prof.length + ' profiilia)' })), avain, 'avain') + '</div>';
-      const syotto = avain === ltAvainNyt()
-        ? '<div style="display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap;"><input id="lpPintaNyt" type="text" inputmode="decimal" placeholder="pinta °C" style="width:110px;font-size:15px;padding:5px 7px;">'
-          + '<button type="button" class="chip" onclick="lpTallennaPinta()" style="border-color:var(--cyan);color:var(--cyan);">Tallenna pintalukema</button></div>'
-          + '<p class="hint" style="margin:4px 0 0;">Esimerkiksi Lowrancen pintalukema. Tallentuu omaksi mittaukseksi tälle järvelle (kelpaa vastaavien vuosien hakuun 48 h).</p>'
-        : '<p class="hint" style="margin:6px 0 0;">Valitse ' + lpNimi(avain) + ' paikaksi Suunnittelussa, niin voit tallentaa pintalukeman.</p>';
+      const syotto = avain === ltAvainNyt()   // v166: syöttö vain Lämpötieto-kortissa
+        ? '<button type="button" class="chip" onclick="ltSyotaPinta()" style="margin-top:8px;border-color:var(--cyan);color:var(--cyan);">Syötä pintalukema Lämpötieto-kortissa</button>'
+          + '<p class="hint" style="margin:4px 0 0;">Esimerkiksi Lowrancen pintalukema. Kelpaa vastaavien vuosien hakuun 48 tuntia.</p>'
+        : '<p class="hint" style="margin:6px 0 0;">Valitse ' + lpNimi(avain) + ' paikaksi Suunnittelussa, niin voit syöttää pintalukeman.</p>';
       if (!an) return html + '<p style="font-size:13px;line-height:1.45;margin:0;">' + lpNimi(avain) + ': ei mitattua pintalämpöä 48 tunnin sisältä analyysihetkestä (' + hetkiTxt
         + '). Arvioitu pinta ei kelpaa: testissä ±1 °C:n virhe vei hyödyn lähes kokonaan. Sovellus käyttää nyt kaikkia vuosia ±20 vrk.</p>' + syotto;
       if (an.eiRiita) return html + '<p style="font-size:13px;line-height:1.45;margin:0;">Pinta nyt ' + ltN1(an.pinta) + ' °C (' + an.pintaLahde + '), mutta muilta vuosilta ±20 vrk ja ±1,5 °C:n sisältä löytyi alle '
@@ -14592,7 +14601,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v165';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v166';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -15778,7 +15787,7 @@ lataa(eka);
     }
 
     // Pikapaneeliin nostetut kysymykset: nämä kolme muuttuvat käytännössä joka reissulla.
-    const PIKA_KYSYMYKSET = ['temp', 'wind', 'light'];
+    const PIKA_KYSYMYKSET = ['wind', 'light'];   // v166: lämpö pois (Lämpötieto-kortti), Hannu 5.10.2026
 
     function renderPika() {
       const c = document.getElementById('pikaSisalto');
@@ -15835,12 +15844,8 @@ lataa(eka);
           <button class="chip" type="button" onclick="haeSamaViikko()" style="padding:4px 10px;font-size:12px;">Hae</button>
         </div>
         <div id="historiaTulos" style="font-size:13px;margin:-4px 0 12px;"></div>` : ''}
-      <div class="options" id="opts-${q.id}"></div>
-      ${q.id === 'temp' ? `<div class="numfield" style="margin-top:10px">
-        <label>Tarkka lämpötila (valinnainen)</label>
-        <input type="number" step="0.1" id="tempManual" placeholder="esim. 7.4">
-        <button class="chip" onclick="applyManualTemp()">Käytä</button>
-      </div>` : ''}
+      <div class="options" id="opts-${q.id}"${q.id === 'temp' ? ' style="display:none;"' : ''}></div>
+      ${q.id === 'temp' ? `<button class="chip" type="button" onclick="ltSyotaPinta()" style="margin-top:4px;border-color:var(--cyan);color:var(--cyan);">Syötä mitattu pinta Lämpötieto-kortissa</button>` : ''}
       ${q.id === 'windside' ? `<div id="windCompass" style="margin-top:14px;text-align:center;"></div>` : ''}
       ${q.numField ? `<div class="numfield" id="num-${q.id}" style="display:none;margin-top:10px">
         <label>${q.numField.label}</label>
@@ -15953,6 +15958,16 @@ lataa(eka);
       return null;
     }
 
+    /* v166: pintalämpö syötetään vain Lämpötieto-kortissa (Hannu 5.10.2026). Kyselyn luokat ja tarkka syöttö,
+       pikapaneelin lämpörivi ja profiilikortin syöttö poistettu; ne ohjaavat tänne. */
+    function ltSyotaPinta() {
+      const k = document.getElementById('lampotietoq');
+      if (!k) return;
+      const r = k.closest('[id^="ruutu-"]');
+      if (r && typeof window.naytaRuutu === 'function') window.naytaRuutu(r.id.slice(6));
+      setTimeout(() => { k.scrollIntoView({ behavior: 'smooth', block: 'start' }); const i = document.getElementById('ltOmaPinta'); if (i) setTimeout(() => i.focus(), 400); }, 60);
+    }
+    window.ltSyotaPinta = ltSyotaPinta;
     function applyManualTemp() {
       const el = document.getElementById('tempManual');
       const v = el ? parseFloat(el.value) : NaN;
@@ -19614,6 +19629,7 @@ lataa(eka);
         if (kp) kp.innerHTML = kuhaPaneeliHtml({ hetki: now, tunti: targetHour, tuuliSuunta: wDir, tuuliMs: wSpeed,
           lampo: curTemp, valoPorras: valoPorras(targetFractional), syvyysKuha: dKuha });
       } catch (e) { console.error('Kuhapaneeli epäonnistui:', e); }
+      window.tvSyvyydet = { taimen: dTaimen, jarvilohi: dJarvilohi, kuha: dKuha };   // v166: tiivistelmä
       try {   // v156: taimenen hotspotit harppauskerroksesta (Lappajärvi, Kivijärvi, Toisvesi)
         const tp = document.getElementById('taimenPaneeli');
         if (tp) tp.innerHTML = taimenHotspotHtml({ hetki: now, tunti: targetHour, lowT, highT, syvyysTaimen: dTaimen, syvyysKuore: dKuore,
@@ -20627,6 +20643,161 @@ lataa(eka);
       }, 2000);
     })();
   
+/* ===== RAPORTIN TIIVISTYS (v166, 5.10.2026) =====
+   Hannu 5.10.2026: Raportit-ruutu oli Lappajärvellä noin 12 700 näkyvää merkkiä (noin 12 puhelinnäyttöä; ottipaikka-
+   neuvonta 6 600, taimenkeli 3 100, veden liike 1 400). Valinta: "luotan Claudeen, erinomaista ollaan tavoittelemassa".
+   Toteutus: (1) tiivistelmä alkuun: paras paikka, syvyydet, taimenkeli, vesi, veden liike, kuha, taimenen hotspotit ja
+   Kuuntele; rivistä pääsee kohtaan. (2) Pitkät osat kokoon taitettaviksi otsikkonsa alle ja pitkistä listoista
+   kolme ensimmäistä + Näytä kaikki. Tila muistetaan (localStorage). Sisältöä ei poisteta. Jälkikäsittely ajetaan
+   aina, kun #result muuttuu (MutationObserver), koska paneelit piirretään innerHTML:llä uudelleen. */
+const TV_LS = 'uistelututka_raportti_auki';
+let tvAuki = {};
+try { tvAuki = JSON.parse(localStorage.getItem(TV_LS)) || {}; } catch (e) { tvAuki = {}; }
+function tvTallenna() { try { localStorage.setItem(TV_LS, JSON.stringify(tvAuki)); } catch (e) {} }
+function tvEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function tvTxt(e) { return e ? e.textContent.replace(/\s+/g, ' ').trim() : ''; }
+function tvTila(el, avain) {
+  const auki = !!tvAuki[avain], b = el.querySelector(':scope > .tv-otsake');
+  el.classList.toggle('tv-kokoon', !auki);
+  if (b) b.innerHTML = '<span>' + tvEsc(b.dataset.otsikko || '') + '</span><span class="tv-nuoli">' + (auki ? 'Piilota ▴' : 'Näytä ▾') + '</span>';
+}
+function tvKokoon(el, avain, otsikko, nakyvat) {
+  if (!el) return;
+  const nk = (nakyvat || []).filter(Boolean);
+  nk.forEach(n => n.classList.add('tv-nakyy'));
+  let b = el.querySelector(':scope > .tv-otsake');
+  if (!b) {
+    b = document.createElement('button'); b.type = 'button'; b.className = 'tv-otsake';
+    b.onclick = () => { tvAuki[avain] = !tvAuki[avain]; tvTallenna(); tvTila(el, avain); };
+    const viim = nk.length ? nk[nk.length - 1] : null;
+    if (viim && viim.parentNode === el) viim.after(b); else el.prepend(b);
+  }
+  b.dataset.otsikko = otsikko || '';
+  tvTila(el, avain);
+}
+function tvRajaa(el, avain, alku, n) {
+  if (!el) return;
+  const kohteet = [...el.children].filter(c => !c.classList.contains('tv-lisaa')).slice(alku);
+  let b = el.querySelector(':scope > .tv-lisaa');
+  if (kohteet.length <= n) { if (b) b.remove(); kohteet.forEach(c => c.classList.remove('tv-piilo')); return; }
+  const auki = !!tvAuki[avain];
+  kohteet.forEach((c, i) => c.classList.toggle('tv-piilo', !auki && i >= n));
+  if (!b) {
+    b = document.createElement('button'); b.type = 'button'; b.className = 'tv-lisaa chip';
+    b.onclick = () => { tvAuki[avain] = !tvAuki[avain]; tvTallenna(); tvRajaa(el, avain, alku, n); };
+    el.appendChild(b);
+  }
+  b.textContent = auki ? 'Näytä vähemmän' : 'Näytä kaikki (' + kohteet.length + ')';
+}
+function tvJalkikasittely() {
+  // Ääni ja jakaminen (Kuuntele on myös tiivistelmässä)
+  const puhe = document.getElementById('puheBtn');
+  if (puhe && puhe.parentElement) tvKokoon(puhe.parentElement, 'puhe', '🔊 Kuuntele, jaa ja ääniasetukset', []);
+  // Paras paikka: perusteluista 3, vaihtoehdoista 2
+  const hero = document.querySelector('#hotspotHeroContainer .spot-hero');
+  if (hero) {
+    const lapsi = re => [...hero.children].find(c => c.tagName === 'DIV' && c.previousElementSibling && re.test(tvTxt(c.previousElementSibling)));
+    tvRajaa(lapsi(/Miksi tämä paikka/), 'heroSyyt', 0, 3);
+    tvRajaa(lapsi(/Seuraavat vaihtoehdot/), 'heroVaihtoehdot', 0, 2);
+  }
+  // Kuha- ja taimenpaneeli: otsikko, meta ja kartta-nappi näkyvät
+  ['kuhaPaneeli', 'taimenPaneeli'].forEach(id => {
+    const h = document.querySelector('#' + id + ' > .spot-hero');
+    if (!h) return;
+    const nappi = h.querySelector(':scope > div > button[onclick*="NaytaKartalla"]');
+    tvKokoon(h, id, 'Perustelut ja ehdokkaat', [h.querySelector(':scope > .spot-title'), h.querySelector(':scope > .spot-meta'), nappi ? nappi.parentElement : null]);
+  });
+  // Päivän aikataulu
+  const tl = document.querySelector('#hotspotPanel .timeline');
+  if (tl) tvKokoon(tl, 'aikataulu', '', [tl.firstElementChild]);
+  // Taimenkeli: luku näkyy; erittely, kolmen päivän ennuste ja kauden pintaveto kokoon
+  const mit = document.getElementById('taimenkeliMeter');
+  if (mit) {
+    const erit = [...mit.children].find(c => /Mistä luku muodostuu/i.test(tvTxt(c)) && c.children.length > 1);
+    if (erit) tvKokoon(erit, 'kelierittely', '', [erit.firstElementChild]);
+  }
+  const tkp = document.getElementById('taimenkeliPanel');
+  if (tkp) [...tkp.children].forEach(c => {
+    if (c.querySelector('#taimenkeliForecast')) tvKokoon(c, 'kolmenpaivan', '', [c.firstElementChild]);
+    if (c.querySelector('#seasonForecast')) tvKokoon(c, 'kausi', '', [c.firstElementChild]);
+  });
+  // Valovyöhyke-kokeilu
+  document.querySelectorAll('#result > .result-panel.forecast').forEach(pn => tvKokoon(pn, 'valovyohyke', '', [pn.querySelector(':scope > h2')]));
+  // Veden liike: kaksi ensimmäistä riviä
+  const vl = document.getElementById('vedenLiikePanel');
+  if (vl && vl.style.display !== 'none') tvRajaa(vl, 'vedenliike', 1, 2);
+  // Happi ilman dataa: otsikko ja syy näkyvät
+  const hap = document.getElementById('happiPanel');
+  if (hap && /Happidataa ei saatu/.test(tvTxt(hap))) tvKokoon(hap, 'happi', '', [hap.querySelector(':scope > h2'), hap.querySelector(':scope > p')]);
+}
+function tvTiivistelma() {
+  const el = document.getElementById('tiivistelmaPanel');
+  if (!el) return;
+  const rivit = [];
+  const heroT = document.querySelector('#hotspotHeroContainer .spot-title');
+  if (heroT && tvTxt(heroT)) {
+    const pis = (tvTxt(document.querySelector('#hotspotHeroContainer .spot-hero')).match(/(\d+) pistettä/) || [])[1];
+    rivit.push(['⭐', 'Paras paikka nyt: <b>' + tvEsc(tvTxt(heroT).replace(/^⭐\s*Juuri Nyt:\s*/i, '')) + '</b>' + (pis ? ' (' + pis + ' p)' : ''), 'hotspotHeroContainer']);
+  }
+  const s = window.tvSyvyydet;
+  if (s) rivit.push(['🎣', 'Syvyydet: taimen ' + ltN1(s.taimen) + ' m · järvilohi ' + ltN1(s.jarvilohi) + ' m · kuha ' + ltN1(s.kuha) + ' m', 'lajiKontti']);
+  const mit = document.getElementById('taimenkeliMeter');
+  if (mit && mit.children.length >= 2 && /\d/.test(tvTxt(mit.children[0])))
+    rivit.push(['📈', 'Taimenkeli ' + tvEsc(tvTxt(mit.children[0])) + (tvTxt(mit.children[1]) ? ' (' + tvEsc(tvTxt(mit.children[1])) + ')' : ''), 'taimenkeliPanel']);
+  try {
+    const h = analyysiHetkiTaiNyt(), lp = ltPinta(h), hp = ltHarppaus(h);
+    const kerros = !hp ? 'kerros ei tiedossa' : hp.kerrostunut === false ? 'sekoittunut' : hp.kerrostunut ? 'kerrostunut' + (hp.h1 ? ', harppaus ' + ltN1(hp.h1) + ' m' : '') : 'kerros ei tiedossa';
+    rivit.push(['🌡', 'Vesi ' + (lp ? ltN1(lp.arvo) + ' °C (' + (lp.mitattu ? 'mitattu' : 'arvio') + ')' : '–') + ' · ' + kerros + (hp && (hp.lahdeLyhyt || hp.lahde) ? ' (' + tvEsc(hp.lahdeLyhyt || hp.lahde) + ')' : ''), 'lampotietoq']);
+  } catch (e) {}
+  const vl = document.getElementById('vedenLiikePanel');
+  if (vl && vl.style.display !== 'none') {
+    const r = [...vl.children].filter(c => c.tagName === 'DIV').slice(0, 2)
+      .map(c => tvTxt(c).replace(/^(Malli|Arvio|Tutkittu|Konsensus|Päätelmä|Tieto puuttuu|Mittaus)/, '').split(/\.\s/)[0].replace(/\.$/, '')).filter(Boolean);
+    if (r.length) rivit.push(['🌊', tvEsc(r.join(' · ')), 'vedenLiikePanel']);
+  }
+  const ku = document.querySelector('#kuhaPaneeli .spot-title'), kum = document.querySelector('#kuhaPaneeli .spot-meta');
+  if (ku && tvTxt(ku)) rivit.push(['🐟', tvEsc(tvTxt(ku).replace(/^🐟\s*/, '') + (kum && tvTxt(kum) ? ' · ' + tvTxt(kum).split(' · ').slice(0, 2).join(' · ') : '')), 'kuhaPaneeli']);
+  if (document.querySelector('#taimenPaneeli .spot-title')) {
+    const K = window.akTaimenKohteet;
+    const n = K && K.kohteet ? K.kohteet.filter(x => x.tyyppi === 'ehdokas').length : 0;
+    rivit.push(['🎯', 'Taimenen hotspotit: ' + (n ? n + ' ehdokasta kartalla' : K && K.syy ? 'ei ehdokkaita, koska ' + tvEsc(K.syy.split(/\.\s/)[0]) : 'katso paneeli'), 'taimenPaneeli']);
+  }
+  el.innerHTML = '<h2 style="margin:0 0 6px;">Tiivistelmä</h2>'
+    + rivit.map(r => '<div class="tv-rivi" onclick="tvMene(\'' + r[2] + '\')"><span>' + r[0] + '</span><span>' + r[1] + '</span></div>').join('')
+    + '<button type="button" class="chip" onclick="toistaPuhe()" style="margin-top:10px;width:100%;border-color:var(--cyan);color:var(--cyan);">▶ Kuuntele päivän tilanne</button>'
+    + '<p class="hint" style="margin:8px 0 0;">Napauta riviä, niin pääset sen kohtaan. Pitkät osat ovat kokoon taitettuina; avaa ne Näytä-napista.</p>';
+  el.style.display = rivit.length ? '' : 'none';
+}
+function tvMene(id) {
+  const e = document.getElementById(id);
+  if (!e) return;
+  const r = e.closest('[id^="ruutu-"]');
+  if (r && typeof window.naytaRuutu === 'function') window.naytaRuutu(r.id.slice(6));
+  let p = e;
+  while (p && p !== document.body) {
+    if (p.classList && p.classList.contains('tv-kokoon')) { const b = p.querySelector(':scope > .tv-otsake'); if (b) b.click(); }
+    p = p.parentElement;
+  }
+  setTimeout(() => e.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+}
+window.tvMene = tvMene;
+let tvAjastin = null, tvKasittelyssa = false;
+function tvAjasta() {
+  if (tvKasittelyssa) return;
+  clearTimeout(tvAjastin);
+  tvAjastin = setTimeout(() => {
+    tvKasittelyssa = true;
+    try { tvJalkikasittely(); } catch (e) { console.warn('Tiivistys:', e); }
+    try { tvTiivistelma(); } catch (e) { console.warn('Tiivistelmä:', e); }
+    setTimeout(() => { tvKasittelyssa = false; }, 0);
+  }, 120);
+}
+(function () {
+  const r = document.getElementById('result');
+  if (r && typeof MutationObserver === 'function') new MutationObserver(tvAjasta).observe(r, { childList: true, subtree: true });
+  tvAjasta();
+})();
+
 /* ===== KOLME RUUTUA — jako ajonaikaisesti =====
    Kortit tunnistetaan id:llä. Tuntemattomat menevät suunnitteluun, jotta
    myöhemmin lisätty osio ei katoa näkyvistä. */
