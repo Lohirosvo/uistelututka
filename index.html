@@ -2181,6 +2181,14 @@ body{padding-bottom:66px}
     </div>
 
     <!-- VARMUUSKOPIO JA SIIRTO (v130): kaikki tiedot ja API-avaimet yhteen tiedostoon -->
+    <!-- v161: SYKE-lämpöprofiilien selain -->
+    <div class="q" id="lampoProfiilit">
+      <div class="idx">Lämpö</div>
+      <h2>Lämpöprofiilit vuosittain</h2>
+      <p class="hint">SYKEn mittaamat lämpötilaprofiilit. Syvyys on pystyakselilla ja lämpötila vaaka-akselilla, ja jokainen
+        mittauspäivä on oma käyränsä. Napauta päivää, niin näet sen tiedot ja muiden vuosien mediaanin samalta ajalta.</p>
+      <div id="lampoProfiilitSisalto" style="font-size:14px;line-height:1.5;"></div>
+    </div>
     <div class="q" id="varmuuskopio">
       <div class="idx">Siirto</div>
       <h2>Varmuuskopio ja siirto toiseen puhelimeen</h2>
@@ -5303,6 +5311,167 @@ body{padding-bottom:66px}
                pohja: kerr.length ? ltMediaani(kerr.map(r => r.pohja)) : null,
                vuodet: Math.min(...v) + '–' + Math.max(...v) };
     }
+
+    /* ===== LÄMPÖPROFIILIT — SYKE-historian selain (v161, 5.10.2026) =====
+       Hannu 5.10.2026: Raportit-ruutuun oma kortti. Syvyys pystyakselilla (pinta ylhäällä), lämpötila
+       vaaka-akselilla. Valitun vuoden jokainen mittauspäivä omana käyränään, kaikki mittauspisteet samassa
+       kuvassa (piste erottuu viivatyylillä). Vertailu: monivuotinen mediaani valitulle päivälle (±15 vrk,
+       muut vuodet, kaikki pisteet) ja 25–75 %:n vaihteluväli varjona; mediaani syvyydellä vain, jos
+       vähintään 3 profiilia ulottuu sinne. Data: puhelimeen tallennettu SYKE VESLA -historia (ltHist).
+       Pintaa ei ekstrapoloida yli 2,5 m (sama raja kuin ltProfiili). */
+    const LP_NIMET = { lappajarvi: 'Lappajärvi', hirvijarvi: 'Hirvijärvi', ahtarinjarvi: 'Ähtärinjärvi', kivijarvi: 'Kivijärvi',
+      alajarvi: 'Alajärvi', evijarvi: 'Evijärvi', patana: 'Patana', toisvesi: 'Toisvesi', kyrkosjarvi: 'Kyrkösjärvi',
+      kalajarvi: 'Kalajärvi', saimaa_imatra: 'Saimaa (Imatra)' };
+    const LP_VARIT = ['#4ea8ff', '#ffb020', '#3ddc84', '#ff5c7a', '#b388ff', '#22d3ee', '#c6e05a', '#ff8a3d', '#f472b6', '#2dd4bf', '#facc15', '#a3a3ff'];
+    const LP_VIIVAT = ['', '7 4', '2 3', '9 3 2 3'];
+    let lpTila = { avain: null, vuosi: null, valittu: null };
+    function lpNimi(k) { return LP_NIMET[k] || (String(k).indexOf('paikka:') === 0 ? String(k).slice(7) : k); }
+    function lpPisteet(p) {
+      return (p.z || []).map((z, i) => ({ z: +z, t: +p.t[i] })).filter(x => isFinite(x.z) && isFinite(x.t)).sort((a, b) => a.z - b.z);
+    }
+    function lpInterp(pts, z) {
+      if (!pts.length) return null;
+      if (z < pts[0].z) return (pts[0].z <= 2.5) ? pts[0].t : null;
+      const vika = pts[pts.length - 1];
+      if (z > vika.z) return null;
+      for (let i = 1; i < pts.length; i++) if (z <= pts[i].z) {
+        const a = pts[i - 1], b = pts[i];
+        return b.z === a.z ? b.t : a.t + (b.t - a.t) * (z - a.z) / (b.z - a.z);
+      }
+      return vika.t;
+    }
+    function lpKvantiili(a, q) {
+      const s = a.slice().sort((x, y) => x - y), i = (s.length - 1) * q, lo = Math.floor(i), hi = Math.ceil(i);
+      return s[lo] + (s[hi] - s[lo]) * (i - lo);
+    }
+    function lpMediaani(H, vuosi, doy) {
+      const muut = H.prof.filter(p => +String(p.d).slice(0, 4) !== vuosi && ltDoyEro(ltDoy(p.d + 'T12:00'), doy) <= 15)
+                         .map(p => ({ d: p.d, pts: lpPisteet(p) })).filter(x => x.pts.length >= 2);
+      if (muut.length < 3) return null;
+      const zmax = Math.max(...muut.map(x => x.pts[x.pts.length - 1].z)), askel = zmax > 12 ? 1 : 0.5, rivit = [];
+      for (let z = 0; z <= zmax + 1e-9; z += askel) {
+        const v = muut.map(x => lpInterp(x.pts, z)).filter(t => t !== null);
+        if (v.length >= 3) rivit.push({ z, med: lpKvantiili(v, 0.5), q1: lpKvantiili(v, 0.25), q3: lpKvantiili(v, 0.75), n: v.length });
+      }
+      if (rivit.length < 2) return null;
+      const vv = muut.map(x => +String(x.d).slice(0, 4));
+      return { rivit, n: muut.length, vuodet: Math.min(...vv) + '–' + Math.max(...vv) };
+    }
+    function lpValitse(mita, arvo) {
+      if (mita === 'avain') { lpTila.avain = arvo; lpTila.vuosi = null; lpTila.valittu = null; }
+      else if (mita === 'vuosi') { lpTila.vuosi = +arvo; lpTila.valittu = null; }
+      else if (mita === 'siirto') { lpTila.vuosi = null; lpTila.siirto = +arvo; lpTila.valittu = null; }
+      else if (mita === 'valittu') lpTila.valittu = +arvo;
+      lpPiirra();
+    }
+    function lpHaeHistoria(nappi) {
+      if (nappi) { nappi.disabled = true; nappi.textContent = 'Haetaan SYKE-historiaa…'; }
+      Promise.resolve().then(() => ltRakennaHistoria()).catch(() => {}).then(() => lpPiirra());
+    }
+    function lpPiirra() {
+      const el = document.getElementById('lampoProfiilitSisalto');
+      if (!el) return;
+      const kaikki = ltHistKaikki().jarvet || {};
+      const avaimet = Object.keys(kaikki).filter(k => kaikki[k] && kaikki[k].prof && kaikki[k].prof.length);
+      if (!avaimet.length) {
+        el.innerHTML = '<p class="hint" style="margin:0;">SYKE-historiaa ei ole tässä puhelimessa. Haku kestää muutaman minuutin ja tallentaa kaikkien järvien profiilit.</p>'
+          + '<button class="chip" type="button" onclick="lpHaeHistoria(this)" style="margin-top:8px;border-color:var(--cyan);color:var(--cyan);">Hae SYKE-historia</button>';
+        return;
+      }
+      if (!lpTila.avain || avaimet.indexOf(lpTila.avain) < 0) {
+        const nyt = (typeof ltAvainNyt === 'function') ? ltAvainNyt() : null;
+        lpTila.avain = avaimet.indexOf(nyt) >= 0 ? nyt : avaimet[0];
+      }
+      const H = kaikki[lpTila.avain];
+      const paikat = {}; (H.paikat || []).forEach(p => { paikat[p.id] = p; });
+      const vuodet = [...new Set(H.prof.map(p => +String(p.d).slice(0, 4)))].filter(isFinite).sort((a, b) => b - a);
+      if (lpTila.siirto) {
+        const i = vuodet.indexOf(lpTila.vuosi0);
+        const j = Math.min(vuodet.length - 1, Math.max(0, (i < 0 ? 0 : i) - lpTila.siirto));
+        lpTila.vuosi = vuodet[j]; lpTila.siirto = 0;
+      }
+      if (!lpTila.vuosi || vuodet.indexOf(lpTila.vuosi) < 0) lpTila.vuosi = vuodet[0];
+      lpTila.vuosi0 = lpTila.vuosi;
+      const vuosi = lpTila.vuosi;
+      const prof = H.prof.filter(p => +String(p.d).slice(0, 4) === vuosi).map(p => ({ p, pts: lpPisteet(p), pr: ltProfiili(p) }))
+                        .filter(x => x.pts.length >= 2).sort((a, b) => (a.p.d < b.p.d ? -1 : a.p.d > b.p.d ? 1 : (a.p.p - b.p.p)));
+      prof.forEach((x, i) => { x.vari = LP_VARIT[i % LP_VARIT.length]; });
+      // mittauspisteiden viivatyyli: eniten mitattu yhtenäinen
+      const lask = {}; prof.forEach(x => { lask[x.p.p] = (lask[x.p.p] || 0) + 1; });
+      const pjarj = Object.keys(lask).sort((a, b) => lask[b] - lask[a]);
+      const tyyli = id => LP_VIIVAT[Math.min(pjarj.indexOf(String(id)), LP_VIIVAT.length - 1)];
+      const pNimi = id => { const n = (paikat[id] && paikat[id].nimi) || ('piste ' + id); return n.replace(/^\S+\s+/, '') || n; };
+      if (lpTila.valittu === null || lpTila.valittu >= prof.length) lpTila.valittu = prof.length - 1;
+      const val = prof[lpTila.valittu] || null;
+      const med = val ? lpMediaani(H, vuosi, ltDoy(val.p.d + 'T12:00')) : null;
+      // akselit
+      let tmin = Infinity, tmax = -Infinity, zmax = 0;
+      prof.forEach(x => x.pts.forEach(q => { tmin = Math.min(tmin, q.t); tmax = Math.max(tmax, q.t); zmax = Math.max(zmax, q.z); }));
+      if (med) med.rivit.forEach(r => { tmin = Math.min(tmin, r.q1); tmax = Math.max(tmax, r.q3); zmax = Math.max(zmax, r.z); });
+      if (!isFinite(tmin)) { tmin = 0; tmax = 20; }
+      tmin = Math.floor(tmin); tmax = Math.ceil(tmax);
+      if (tmax - tmin < 6) { const k = (6 - (tmax - tmin)) / 2; tmin = Math.floor(tmin - k); tmax = Math.ceil(tmax + k); }
+      if (tmin < 0 && tmin > -1) tmin = 0;
+      const zAskel = zmax <= 12 ? 2 : zmax <= 40 ? 5 : 10; zmax = Math.max(zAskel, Math.ceil(zmax / zAskel) * zAskel);
+      const tAskel = (tmax - tmin) <= 10 ? 2 : 5;
+      const W = 340, Hh = 360, ml = 34, mr = 10, mt = 28, mb = 8, pw = W - ml - mr, ph = Hh - mt - mb;
+      const X = t => ml + (t - tmin) / (tmax - tmin) * pw, Y = z => mt + z / zmax * ph;
+      let svg = '<svg viewBox="0 0 ' + W + ' ' + Hh + '" width="100%" style="display:block;max-width:520px;" role="img" aria-label="Lämpöprofiilit ' + lpNimi(lpTila.avain) + ' ' + vuosi + '">';
+      for (let t = Math.ceil(tmin / tAskel) * tAskel; t <= tmax + 1e-9; t += tAskel)
+        svg += '<line x1="' + X(t) + '" y1="' + mt + '" x2="' + X(t) + '" y2="' + (mt + ph) + '" stroke="rgba(255,255,255,.10)"/>'
+             + '<text x="' + X(t) + '" y="' + (mt - 8) + '" fill="var(--muted)" font-size="11" text-anchor="middle">' + t + '</text>';
+      for (let z = 0; z <= zmax + 1e-9; z += zAskel)
+        svg += '<line x1="' + ml + '" y1="' + Y(z) + '" x2="' + (ml + pw) + '" y2="' + Y(z) + '" stroke="rgba(255,255,255,.10)"/>'
+             + '<text x="' + (ml - 5) + '" y="' + (Y(z) + 4) + '" fill="var(--muted)" font-size="11" text-anchor="end">' + z + '</text>';
+      svg += '<text x="' + (ml + pw) + '" y="11" fill="var(--muted)" font-size="10.5" text-anchor="end">°C</text>'
+           + '<text x="4" y="11" fill="var(--muted)" font-size="10.5">m</text>'
+           + '<rect x="' + ml + '" y="' + mt + '" width="' + pw + '" height="' + ph + '" fill="none" stroke="rgba(255,255,255,.25)"/>';
+      if (med) {
+        const yla = med.rivit.map(r => X(r.q3).toFixed(1) + ',' + Y(r.z).toFixed(1)), ala = med.rivit.slice().reverse().map(r => X(r.q1).toFixed(1) + ',' + Y(r.z).toFixed(1));
+        svg += '<polygon points="' + yla.concat(ala).join(' ') + '" fill="rgba(210,220,225,.16)" stroke="none"/>'
+             + '<polyline points="' + med.rivit.map(r => X(r.med).toFixed(1) + ',' + Y(r.z).toFixed(1)).join(' ') + '" fill="none" stroke="#d6dee2" stroke-width="2.6" stroke-linejoin="round"/>';
+      }
+      prof.forEach((x, i) => {
+        const on = i === lpTila.valittu;
+        svg += '<polyline points="' + x.pts.map(q => X(q.t).toFixed(1) + ',' + Y(q.z).toFixed(1)).join(' ') + '" fill="none" stroke="' + x.vari + '" stroke-width="' + (on ? 3.2 : 1.6)
+             + '" stroke-opacity="' + (on ? 1 : 0.6) + '"' + (tyyli(x.p.p) ? ' stroke-dasharray="' + tyyli(x.p.p) + '"' : '') + ' stroke-linejoin="round"/>';
+        if (on) x.pts.forEach(q => { svg += '<circle cx="' + X(q.t).toFixed(1) + '" cy="' + Y(q.z).toFixed(1) + '" r="2.6" fill="' + x.vari + '"/>'; });
+      });
+      svg += '</svg>';
+      // ohjaimet
+      const sel = (id, opts, arvo, mita) => '<select id="' + id + '" onchange="lpValitse(\'' + mita + '\', this.value)" style="font-size:14px;padding:4px 6px;">'
+        + opts.map(o => '<option value="' + o.v + '"' + (String(o.v) === String(arvo) ? ' selected' : '') + '>' + o.t + '</option>').join('') + '</select>';
+      const ohj = '<div style="margin-bottom:6px;">' + sel('lpJarvi', avaimet.map(k => ({ v: k, t: lpNimi(k) + ' (' + kaikki[k].prof.length + ' profiilia)' })), lpTila.avain, 'avain') + '</div>'
+        + '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">'
+        + '<button class="chip" type="button" onclick="lpValitse(\'siirto\', -1)"' + (vuodet.indexOf(vuosi) >= vuodet.length - 1 ? ' disabled' : '') + ' aria-label="Edellinen vuosi">◀</button>'
+        + sel('lpVuosi', vuodet.map(v => ({ v, t: v })), vuosi, 'vuosi')
+        + '<button class="chip" type="button" onclick="lpValitse(\'siirto\', 1)"' + (vuodet.indexOf(vuosi) <= 0 ? ' disabled' : '') + ' aria-label="Seuraava vuosi">▶</button></div>';
+      const pv = d => { const s = String(d).split('-'); return (+s[2]) + '.' + (+s[1]) + '.'; };
+      const chipit = '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;">' + prof.map((x, i) =>
+        '<button type="button" class="chip" onclick="lpValitse(\'valittu\', ' + i + ')" style="font-size:12px;padding:3px 8px;'
+        + (i === lpTila.valittu ? 'border-color:' + x.vari + ';color:#fff;background:rgba(255,255,255,.08);' : '') + '">'
+        + '<span style="display:inline-block;width:14px;height:3px;background:' + x.vari + ';vertical-align:middle;margin-right:5px;"></span>' + pv(x.p.d)
+        + (pjarj.length > 1 ? ' ' + pNimi(x.p.p) : '') + '</button>').join('') + '</div>';
+      const pisteSelite = pjarj.length > 1 ? '<p class="hint" style="margin:6px 0 0;">Viivatyyli kertoo pisteen: ' + pjarj.slice(0, LP_VIIVAT.length).map((id, i) =>
+        ['yhtenäinen', 'katkoviiva', 'pisteviiva', 'pistekatko'][i] + ' = ' + pNimi(id) + ' (' + lask[id] + ')').join(', ') + (pjarj.length > LP_VIIVAT.length ? ', muut pistekatko' : '') + '.</p>' : '';
+      let tieto = '';
+      if (val) {
+        const v = val.pts, pinta = v[0].z <= 2.5 ? v[0].t : null, pohja = v[v.length - 1];
+        const mz = z => { if (!med) return null; let b = null; med.rivit.forEach(r => { if (!b || Math.abs(r.z - z) < Math.abs(b.z - z)) b = r; }); return b && Math.abs(b.z - z) <= 1 ? b.med : null; };
+        const mp = mz(v[0].z), mb = mz(pohja.z);
+        tieto = '<p style="font-size:13px;line-height:1.45;margin:10px 0 0;"><strong>' + pv(val.p.d) + vuosi + '</strong> · ' + ((paikat[val.p.p] && paikat[val.p.p].nimi) || '') + '<br>'
+          + (pinta !== null ? 'Pinta ' + ltN1(pinta) + ' °C' + (mp !== null ? ' (mediaani ' + ltN1(mp) + ')' : '') + ' · ' : '')
+          + 'pohja ' + ltN1(pohja.t) + ' °C ' + ltN1(pohja.z) + ' m:ssä' + (mb !== null ? ' (mediaani ' + ltN1(mb) + ')' : '') + ' · '
+          + (val.pr.kerrostunut === null ? 'kerrostuneisuus ei selviä' : val.pr.kerrostunut ? 'kerrostunut' + (val.pr.harppaus !== null ? ', harppaus noin ' + ltN1(val.pr.harppaus) + ' m' : '') : 'sekoittunut (ero alle 1 °C)') + '</p>'
+          + '<p class="hint" style="margin:4px 0 0;">' + (med ? 'Harmaa viiva: mediaani ' + med.n + ' profiilista muilta vuosilta ±15 vrk tästä päivästä (' + med.vuodet + '), varjo 25–75 % vaihteluväli. Mediaani näkyy syvyyksillä, joille ulottuu vähintään 3 profiilia.'
+            : 'Mediaania ei voi laskea: muilta vuosilta on alle 3 profiilia ±15 vrk tästä päivästä.') + '</p>';
+      }
+      el.innerHTML = ohj + (prof.length ? svg + chipit + pisteSelite + tieto
+        : '<p class="hint">Tältä vuodelta ei ole profiileja, joissa on vähintään kaksi syvyyttä.</p>')
+        + '<p class="hint" style="margin:8px 0 0;">Lähde: SYKE, VESLA-rajapinta (Tutkittu), haettu ' + String(H.haettu || '').slice(0, 10) + '. Syvyys pystyakselilla, pinta ylhäällä.</p>';
+    }
+    window.lpPiirra = lpPiirra; window.lpValitse = lpValitse; window.lpHaeHistoria = lpHaeHistoria;
+
     function ltIlmasto(avain, hetki) {
       // järven pintalämpö tälle ajankohdalle ilman tämän vuoden mittauksia
       const h = ltMs(hetki), doy = ltDoy(h), yleinen = avgTempForDate(ltYmd(h));
@@ -14205,7 +14374,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v160';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v161';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -20231,7 +20400,7 @@ lataa(eka);
 
   var JAKO = {
     vesilla:   ['whatsappNappi','vesillaPaneeli','speedMonitorSection'],
-    raportit:  ['result','malliOsuvuus','pyyntiRaportti','varmuuskopio']
+    raportit:  ['result','malliOsuvuus','pyyntiRaportti','lampoProfiilit','varmuuskopio']
     /* loput -> suunnittelu */
   };
   var RUUDUT = [
@@ -20298,6 +20467,7 @@ lataa(eka);
       if(id === 'vesilla' && typeof paivitaVesilla === 'function') aja(paivitaVesilla);
       if(id === 'raportit' && typeof laskeOsuvuus === 'function') aja(laskeOsuvuus);
       if(id === 'raportit' && typeof pyyntiRaportti === 'function') aja(pyyntiRaportti);
+      if(id === 'raportit' && typeof lpPiirra === 'function') aja(lpPiirra);   // v161
     }
     if (lykkaa) setTimeout(paivita, 0); else paivita();
     window.scrollTo(0,0);
