@@ -1457,6 +1457,7 @@ body{padding-bottom:66px}
             style="font:inherit; font-size:.8rem; padding:3px 6px; border-radius:6px;
                    border:1px solid #c4ccca; background:#fff; color:#16211f;">
       <option value="aalto">Aallonkorkeus</option>
+      <option value="murtuva">Murtuva aallokko</option>
       <option value="virtaus">Pintavirtaus</option>
       <option value="syva">Syvempi vesi</option>
         <option value="vajoama">Vajoama</option>
@@ -7694,6 +7695,127 @@ function jonswapTp(F, U){ return 0.286*Math.cbrt(g*F/(U*U))*U/g; }
 function syvyysKatto(d, U){ return 0.283*(U*U/g)*Math.tanh(0.53*Math.pow(g*d/(U*U),0.75)); }
 function kestonPyyhkaisy(t, U){ return Math.pow(t*Math.pow(U,0.34)*Math.pow(g,0.33)/77.23, 1/0.67); }
 
+/* ===== MURTUVA AALLOKKO JA PAIKALLINEN SYVYYSRAJA (v167, 5.10.2026) =====
+   Hannu 5.10.2026: murtuvan ja hankalan aallokon paikallistaminen (jyrkkyys, pohjan gradientti, murtumisindeksi,
+   vastavirta, MCDA-taso; SWAN on liian raskas puhelimeen). Valinnat: paikallinen syvyysraja myös aaltokarttaan ja
+   veneen rajaan; vaara omana karttatilana ja napautuksessa; tarkistus kartalta (tunnettuja pahoja paikkoja ei ole).
+   Ennen: Hs = min(JONSWAP(F, U), SPM-syvyysraja järven YHDELLÄ syvyydellä), joten matalikoilla yliarvio.
+   Nyt ruuduittain (akAaltoRuutu):
+   - Madaltuminen Ks = √(cg0/cg), lineaarinen teoria; aallonpituus Fenton & McKee 1990 -likiarvolla.
+   - Syvyysraja Hs ≤ γ·d: γ = 0,55 tasaisella pohjalla (Nelson 1994: vaakapohjalla H/d ≤ 0,55 myös epäsäännöllisillä
+     aalloilla), 0,73 rinteellä (Battjes & Janssen 1978 / Battjes & Stive 1985, SWANin oletus); välissä lineaarisesti
+     kaltevuuden 0,5–3 % mukaan (Arvio). Kaltevuus pehmennetystä syvyydestä (±75 m).
+   Murtuva-tila (akMurtuvaKentta):
+   - Murtumisindeksi B = Hs_tuleva/(γ·d); jyrkkyys S = Hmax/(0,142·L·tanh(kd)) eli suhde Michen rajaan;
+     Hmax = 1,86·Hs (sama kerroin kuin "Suurin yksittäinen"). Jyrkkyys lasketaan riskiin vain, kun syvyys tai
+     vastavirta on jyrkentänyt sitä ≥ 15 % avoveteen verrattuna (muuten koko selkä ja lyhyen pyyhkäisyn ranta-alue
+     näkyisivät vaahtopäiden takia "murtuvina", mikä ei ole paikallinen vaara).
+   - Vastavirta: syvemmän veden kierto + läpivirtaus aallon kulkua vastaan; syvän veden ratkaisu c/c0 = (1+√(1−4V/c0))/2,
+     H/H0 = c0/√(c(c−2V)) (Longuet-Higgins & Stewart 1961). V ≥ c0/4: aalto ei etene, murtuu. Järvessä yleensä pieni.
+   - Penkka: syvyyden lasku aallon kulkusuuntaan → Iribarrenin luku ξ = tanβ/√(H/L0) (Battjes 1974): alle 0,5 kuohuva,
+     0,5–3,3 syöksyvä ("seinä"), yli 3,3 nouseva.
+   - Luokat (Arvio): R = max(B, S): < 0,6 ei; 0,6–0,8 jyrkkenevä; 0,8–1 osa murtuu; ≥ 1 murtuu; syöksyvä erikseen.
+     Värit vain, kun Hmax ≥ max(0,15 m, puolet veneen rajasta).
+   Rajoitukset: syvyydet osin luokkina; ei taittumista eikä aallon kiertymistä saarten taakse (sen tekisi SWAN). */
+var AK_GAMMA_TASA = 0.55, AK_GAMMA_RINNE = 0.73, AK_HMAX = 1.86;
+var AK_MURT_VARIT = ['#d7e4e8', '#ffe066', '#ff9f40', '#e8453c', '#7a1446'];
+var AK_MURT_NIMET = ['ei murru', 'jyrkkenevä', 'osa murtuu', 'murtuu', 'syöksyvä'];
+var akGradVM = null;
+function akGradientti(){
+  var sl = akSileaSyvyys(); if (!sl) return null;
+  if (akGradVM && akGradVM.jarvi === jarvi) return akGradVM;
+  var k = jarvi.kartta, W = k.W, H = k.H, R = k.ruutu, n = mask.length;
+  var gx = new Float32Array(n), gy = new Float32Array(n), jyrk = new Float32Array(n);
+  for (var q = 0; q < n; q++){
+    if (!mask[q]) continue;
+    var i = q % W, j = (q/W)|0;
+    var qe = (i < W-1 && mask[q+1]) ? q+1 : q, qw = (i > 0 && mask[q-1]) ? q-1 : q;
+    var qs = (j < H-1 && mask[q+W]) ? q+W : q, qn = (j > 0 && mask[q-W]) ? q-W : q;
+    var dxm = ((qe !== q ? 1 : 0) + (qw !== q ? 1 : 0))*R, dym = ((qs !== q ? 1 : 0) + (qn !== q ? 1 : 0))*R;
+    gx[q] = dxm ? (sl[qe] - sl[qw])/dxm : 0;    // syvyys kasvaa itään
+    gy[q] = dym ? (sl[qn] - sl[qs])/dym : 0;    // syvyys kasvaa pohjoiseen
+    jyrk[q] = Math.sqrt(gx[q]*gx[q] + gy[q]*gy[q]);
+  }
+  akGradVM = { jarvi: jarvi, gx: gx, gy: gy, jyrk: jyrk };
+  return akGradVM;
+}
+function akAallonpituus(T, d){
+  var L0 = g*T*T/(2*Math.PI);
+  if (!(d > 0)) return L0;
+  return L0*Math.pow(Math.tanh(Math.pow(2*Math.PI*Math.sqrt(d/g)/T, 1.5)), 2/3);
+}
+function akMadaltuminen(T, L, d){
+  var kd = 2*Math.PI*d/L;
+  if (!(kd > 0) || kd > 3) return 1;
+  var n = 0.5*(1 + 2*kd/Math.sinh(2*kd));
+  return Math.sqrt((g*T/(4*Math.PI))/(n*L/T));
+}
+function akGamma(q){
+  var G = akGradientti(); if (!G) return AK_GAMMA_RINNE;
+  var t = Math.min(1, Math.max(0, (G.jyrk[q] - 0.005)/0.025));
+  return AK_GAMMA_TASA + (AK_GAMMA_RINNE - AK_GAMMA_TASA)*t;
+}
+function akAaltoRuutu(q, Fq, U, katto){
+  var F = Math.max(Fq, 50), hs0 = Math.min(jonswapHs(F, U), katto), Tp = jonswapTp(F, U);
+  var r = { hs: hs0, hsIn: hs0, hs0: hs0, Tp: Tp, d: null, L: g*Tp*Tp/(2*Math.PI), Ks: 1, gamma: null, B: 0, rajattu: false };
+  if (!akSyvyys) return r;
+  var dq = Math.max(0.2, akSyvyys[q]), L = akAallonpituus(Tp, dq), Ks = akMadaltuminen(Tp, L, dq), ga = akGamma(q);
+  r.d = dq; r.L = L; r.Ks = Ks; r.gamma = ga;
+  r.hsIn = hs0*Ks; r.B = r.hsIn/(ga*dq);
+  r.rajattu = r.hsIn > ga*dq; r.hs = r.rajattu ? ga*dq : r.hsIn;
+  return r;
+}
+function akVirtaVektori(q, d, kd, lp){   // m/s: syvemmän veden kierto (sama skaalaus kuin akMalliLaske) + läpivirtaus
+  var ue = 0, un = 0;
+  if (kd){
+    var U = Math.max(0.5, d.U), ta = (d.dir + 180)*Math.PI/180, tx = Math.sin(ta), ty = Math.cos(ta);
+    var ker = AK_ILMA*AK_CD*U*U/AK_VESI*(1 - Math.exp(-d.tunteja*3600*AK_KITKA_R/kd.hKesk)), P = kd.pohjat;
+    ue += (tx*P.ita.ue[q] + ty*P.pohjoinen.ue[q])*ker; un += (tx*P.ita.un[q] + ty*P.pohjoinen.un[q])*ker;
+  }
+  if (lp){ ue += lp.ue[q]; un += lp.un[q]; }
+  return { ue: ue, un: un };
+}
+function akMurtuvaKentta(d, kentta, Fkesto, U, katto){
+  var n = mask.length, G = akGradientti();
+  var luokka = new Uint8Array(n), B = new Float32Array(n), S = new Float32Array(n), xi = new Float32Array(n), vasta = new Float32Array(n), hsU = new Float32Array(n), est = new Uint8Array(n);
+  var kd = null, lp = null;
+  try { kd = akKierto(); } catch(e){ kd = null; }
+  try { lp = akLapiNyt(d.aika.getTime()); } catch(e){ lp = null; }
+  var ta = (d.dir + 180)*Math.PI/180, ex = Math.sin(ta), ey = Math.cos(ta);   // aallon kulkusuunta (itä, pohjoinen)
+  var kynnys = Math.max(0.15, 0.5*akKalaRaja()), lkm = [0, 0, 0, 0, 0];
+  for (var q = 0; q < n; q++){
+    if (!mask[q]) continue;
+    var a = akAaltoRuutu(q, Math.min(kentta[q], Fkesto), U, katto);
+    hsU[q] = a.hs; B[q] = a.B;
+    if (a.d === null) continue;
+    var V = 0;
+    if (kd || lp){ var vv = akVirtaVektori(q, d, kd, lp); V = Math.max(0, -(vv.ue*ex + vv.un*ey)); }
+    vasta[q] = V;
+    var c0 = g*a.Tp/(2*Math.PI), hf = 1, lf = 1;
+    if (V > 0.005){
+      var dis = 1 - 4*V/c0;
+      if (dis <= 0) est[q] = 1;
+      else { var cc = c0*(1 + Math.sqrt(dis))/2, den = cc*(cc - 2*V); lf = cc/c0; hf = den > 0 ? Math.min(2, c0/Math.sqrt(den)) : 2; }
+    }
+    var Lv = a.L*lf, Hmax = AK_HMAX*a.hs*hf, raja = 0.142*Lv*Math.tanh(2*Math.PI*a.d/Lv);
+    S[q] = est[q] ? 2 : Hmax/raja;
+    /* Kovalla tuulella nuori aallokko on jyrkkää koko selällä ja lyhyellä pyyhkäisyllä rannan tuntumassa (vaahtopäät),
+       joten jyrkkyys lasketaan riskiin vain, kun syvyys tai vastavirta on jyrkentänyt sitä ≥ 15 % avoveteen verrattuna. */
+    var S0 = AK_HMAX*a.hs0/(0.142*g*a.Tp*a.Tp/(2*Math.PI)), Srel = S0 > 0 ? S[q]/S0 : 1;
+    var Sk = (est[q] || Srel >= 1.15) ? S[q] : 0;
+    var R = Math.max(a.B, Sk);
+    var tb = G ? -(G.gx[q]*ex + G.gy[q]*ey) : 0, L0 = g*a.Tp*a.Tp/(2*Math.PI);
+    xi[q] = (tb > 0.002 && a.hsIn > 0) ? tb/Math.sqrt(a.hsIn/L0) : 0;
+    var c = 0;
+    if (Hmax >= kynnys){
+      c = R >= 1 ? 3 : R >= 0.8 ? 2 : R >= 0.6 ? 1 : 0;
+      if (c >= 2 && xi[q] >= 0.5 && xi[q] <= 3.3) c = 4;
+    }
+    luokka[q] = c; lkm[c]++;
+  }
+  return { luokka: luokka, B: B, S: S, xi: xi, vasta: vasta, hs: hsU, est: est, lkm: lkm, kynnys: kynnys, kierto: !!kd, lapi: !!lp };
+}
+
 function kompassi(dir){
   var n = ["pohjoisesta","koillisesta","idästä","kaakosta","etelästä",
            "lounaasta","lännestä","luoteesta"];
@@ -7793,7 +7915,7 @@ function piirra(){
   for (var q = 0; q < mask.length; q++){
     if (!mask[q]) continue;
     var Fq = Math.min(kentta[q], Fkesto);
-    hs[q] = Math.min(jonswapHs(Math.max(Fq, 50), U), katto);
+    hs[q] = akAaltoRuutu(q, Fq, U, katto).hs;   // v167: madaltuminen ja paikallinen syvyysraja
     if (hs[q] > korkein) korkein = hs[q];
     vesiruutuja++;
     if (hs[q] <= kalaRaja) kelpaa++;
@@ -7842,6 +7964,8 @@ function piirra(){
   var reunaK = konv ? akKonvReuna(kf) : null;   // v152
   if (konv) d.reunaOsuus = reunaK ? reunaK.osuus : null;
   var syvK = (akTila === 'syvyys' && akSyvyys) ? akSileaSyvyys() : null;   // v152 syvyyskartta
+  var murt = (akTila === 'murtuva' && akSyvyys) ? akMurtuvaKentta(d, kentta, Fkesto, U, katto) : null;   // v167
+  if (murt) d.murtLkm = murt.lkm;
   var virtaus = (akTila === 'virtaus' && vir);
   var arvot = syvK ? syvK : konv ? kf : vajoama ? vi : syva ? kv : virtaus ? vir : hs;
   var huippu = syvK ? 1 : konv ? Math.max(d.konvMax || 0, -(d.konvMin || 0)) : vajoama ? viMax : syva ? kvMax : virtaus ? virMax : korkein;
@@ -7916,7 +8040,10 @@ function piirra(){
       }
       var arvo = paino > 0 ? summa/paino : arvot[nj*k.W + ni];
       var t = rgb(arvo);
-      if (!virtaus && !syva && !vajoama && !konv && !syvK && arvo > kalaRaja){
+      if (murt){   // v167: murtuva aallokko luokittain, lähin ruutu (terävät reunat)
+        var mv = AK_MURT_VARIT[murt.luokka[nj*k.W + ni]];
+        kuva.data[o] = parseInt(mv.substr(1,2),16); kuva.data[o+1] = parseInt(mv.substr(3,2),16); kuva.data[o+2] = parseInt(mv.substr(5,2),16);
+      } else if (!virtaus && !syva && !vajoama && !konv && !syvK && arvo > kalaRaja){
         /* Rajan yli: himmennetään kohti tummaa. Väri jää luettavaksi mutta
            kelvollinen alue hyppää esiin. Turvarajan yli vielä enemmän. */
         var kerroin = arvo > akVene().turva ? 0.30 : 0.55;
@@ -8016,7 +8143,7 @@ function piirra(){
 
   /* Talteen napautusta varten: nämä ovat piirron paikallisia, mutta napautus
      tarvitsee ne piirron jälkeen. */
-  akViime = { hs:hs, vir:vir, vi:vi, kf:kf, saumat:saumat, reuna:reunaK, syvK:syvK, kue:kue, kun:kun, kv:kv, kentta:kentta, k:k, S:S, win:win, kalaRaja:kalaRaja, turva:akVene().turva, dir:d.dir };
+  akViime = { murt:murt, hs:hs, vir:vir, vi:vi, kf:kf, saumat:saumat, reuna:reunaK, syvK:syvK, kue:kue, kun:kun, kv:kv, kentta:kentta, k:k, S:S, win:win, kalaRaja:kalaRaja, turva:akVene().turva, dir:d.dir };
   akPiirraKuhaMerkit(ctx, win, S);   // v153
   akPiirraTaimenMerkit(ctx, win, S);   // v156
   akPiirraMerkki(ctx, S);
@@ -8681,6 +8808,7 @@ function akNaytaPisteSisalto(){
                                          : akTila === 'kumpuama' ? "Napauta karttaa: kertoo sen kohdan kumpuamaindeksin"
                                          : akTila === 'konvergenssi' ? "Napauta karttaa: kertoo kasautumisen ja virtasaumat"
                                          : akTila === 'syvyys' ? "Napauta karttaa: kertoo syvyyden"
+                                         : akTila === 'murtuva' ? "Napauta karttaa: kertoo, murtuuko aalto ja miksi"
                                          : "Napauta karttaa: kertoo sen kohdan virtauksen"; return;
   }
   var k = akViime.k, q = akValittu.j*k.W + akValittu.i;
@@ -8695,6 +8823,20 @@ function akNaytaPisteSisalto(){
       + " km/h</b> " + akKohti(suunta) + " · <b>" + (myota ? "tuulen mukana" : "vastatuuleen") + "</b>"
       + "<br>vesipatsaan keskiarvo" + (sy2 !== null ? ", syvyys noin " + Math.round(sy2) + " m" : "")
       + " · pinta kulkee silti tuulen mukana";
+    return;
+  }
+  if (akTila === 'murtuva' && akViime.murt){   // v167
+    var M = akViime.murt, lk = M.luokka[q], hq = M.hs[q], f2 = function(x, n){ return x.toFixed(n === undefined ? 2 : n).replace(".", ","); };
+    var sy7 = akSyvyys ? akSyvyys[q] : null, ga7 = akGamma(q);
+    var syyt = [];
+    if (M.B[q] >= 0.6) syyt.push("syvyys: tuleva aalto on " + Math.round(M.B[q]*100) + " % murtumisrajasta (Hs ≤ " + f2(ga7) + " × syvyys" + (ga7 < 0.6 ? ", tasainen pohja" : ga7 > 0.7 ? ", rinne" : "") + ")");
+    if (M.S[q] >= 0.6 && (lk > 0 || M.est[q])) syyt.push(M.est[q] ? "vastavirta pysäyttää aallon" : "jyrkkyys: huippuaalto on " + Math.round(M.S[q]*100) + " % jyrkkyysrajasta");
+    if (M.xi[q] >= 0.5 && lk >= 2) syyt.push("penkka nousee aallon edessä (ξ = " + f2(M.xi[q], 1) + ")" + (M.xi[q] <= 3.3 ? ": syöksyvä murtuminen, aalto nousee seinäksi" : ""));
+    if (M.vasta[q] >= 0.03) syyt.push("vastavirta " + f2(M.vasta[q]) + " m/s");
+    el.innerHTML = "Tässä: <b>" + AK_MURT_NIMET[lk] + "</b> · Hs " + f2(hq) + " m, huiput noin " + f2(hq*AK_HMAX) + " m"
+      + (sy7 !== null ? " · syvyys noin " + f2(sy7, 1) + " m" : "")
+      + (syyt.length ? "<br>" + syyt.join(" · ") : (lk === 0 && hq*AK_HMAX < M.kynnys ? "<br>aallot alle " + f2(M.kynnys) + " m, ei väriä" : ""))
+      + "<br>malli, ei mittaus" + (M.kierto || M.lapi ? "" : " · vastavirta ei mukana (kiertoa ei laskettu)");
     return;
   }
   if (akTila === 'syvyys' && akViime.syvK){
@@ -8730,7 +8872,8 @@ function akNaytaPisteSisalto(){
   el.innerHTML = "Tässä kohdassa <b>" + h.toFixed(2).replace(".", ",") + " m</b> · " + tila
     + "<br>avointa vettä tuulen suuntaan "
     + (F >= 1000 ? (F/1000).toFixed(1).replace(".", ",") + " km" : Math.round(F) + " m")
-    + " · huiput noin " + (h*1.86).toFixed(2).replace(".", ",") + " m";
+    + " · huiput noin " + (h*1.86).toFixed(2).replace(".", ",") + " m"
+    + (akSyvyys && akSyvyys[q] > 0 && h >= 0.98*akGamma(q)*Math.max(0.2, akSyvyys[q]) ? "<br>syvyys rajaa aallon tässä: aallot murtuvat (katso Murtuva aallokko)" : "");   // v167
 }
 
 function akSyvyysLahde(){   // v145: syvyyslähde järven mukaan (ennen DataDeck kaikille)
@@ -8963,7 +9106,7 @@ function akMalliLaske(lat, lon, aikaMs){
             // tuuli jolla malliarvot laskettiin (FMI:n editoitu ennuste, havaintokorjattu):
             // saalisrivin tuuliMs tulee Open-Meteosta, joten tämä tallennetaan erikseen
             tuuliMs: d.U, tuuliSuunta: d.dir,
-            aaltoM: Math.min(jonswapHs(Math.max(Fq, 50), U), syvyysKatto(jarvi.syvyys, U)) };
+            aaltoM: akAaltoRuutu(q, Fq, U, syvyysKatto(jarvi.syvyys, U)).hs };   // v167: paikallinen syvyysraja
   if (akSyvyys){
     var syvK = 1 + (5 - Math.min(akSyvyys[q], 5))*0.15, pyyK = 0.4 + 0.6*Math.min(1, Fq/3000);
     t.pintaKmh = U*2*syvK*pyyK*0.036;
@@ -9706,6 +9849,10 @@ function piirraAsteikko(){
     $("akAsteikko").innerHTML = RAJAT_S.map(function(raja, i){
       return '<div style="background:' + VARIT_S[i] + ';color:' + (i >= 6 ? '#fff' : '#16211f') + '">' + String(raja).replace('.', ',') + '</div>';
     }).join("");
+  } else if (akTila === 'murtuva'){   // v167
+    $("akAsteikko").innerHTML = AK_MURT_NIMET.map(function(nimi, i){
+      return '<div style="background:' + AK_MURT_VARIT[i] + ';color:' + (i >= 3 ? '#fff' : '#16211f') + ';font-size:.62rem;">' + nimi + '</div>';
+    }).join("");
   } else if (akTila === 'konvergenssi'){
     $("akAsteikko").innerHTML = RAJAT_K.map(function(raja, i){
       return '<div style="background:' + VARIT_K[i] + ';color:' + (i <= 2 || i >= 9 ? '#fff' : '#16211f') + '">' + Math.round(raja/venytys) + '</div>';
@@ -9725,6 +9872,7 @@ function piirraAsteikko(){
                          : akTila === 'kumpuama' ? "kumpuamaindeksi 0–100 (malli)"
                          : akTila === 'konvergenssi' ? "punainen kasautuu, sininen erkanee · violetti sauma · ruskea syvä reuna"
                          : akTila === 'syvyys' ? "syvyys, m · ei navigointikartta"
+                         : akTila === 'murtuva' ? "murtuva aallokko: syvyys, jyrkkyys, penkka, vastavirta · malli"
                          : "merkitsevä aallonkorkeus, m";
 }
 piirraAsteikko();
@@ -9737,14 +9885,14 @@ function akPaivitaVirtausKytkin(){
     var o = sel.options[i];
     if (o.value === 'aalto') continue;
     o.disabled = !akSyvyys;
-    o.textContent = (o.value === 'virtaus' ? "Pintavirtaus" : o.value === 'vajoama' ? "Vajoama" : o.value === 'kumpuama' ? "Kumpuama" : o.value === 'konvergenssi' ? "Konvergenssi" : o.value === 'syvyys' ? "Syvyyskartta" : "Syvempi vesi")
+    o.textContent = (o.value === 'virtaus' ? "Pintavirtaus" : o.value === 'vajoama' ? "Vajoama" : o.value === 'kumpuama' ? "Kumpuama" : o.value === 'konvergenssi' ? "Konvergenssi" : o.value === 'syvyys' ? "Syvyyskartta" : o.value === 'murtuva' ? "Murtuva aallokko" : "Syvempi vesi")
                   + (akSyvyys ? "" : " (ei syvyyskarttaa)");
   }
   if (!akSyvyys){ akTila = 'aalto'; sel.value = 'aalto'; }
 }
 if ($("akNaytto")) $("akNaytto").addEventListener("change", function(){
   akTila = akSyvyys ? this.value : 'aalto';
-  if (akTila === 'syva' && !akKiertoData) $("akLeima").innerHTML = '<small>lasketaan kiertoa…</small>';
+  if ((akTila === 'syva' || akTila === 'murtuva') && !akKiertoData) $("akLeima").innerHTML = '<small>lasketaan kiertoa…</small>';
   // annetaan leiman piirtyä ennen raskasta laskentaa
   setTimeout(piirra, 30);
 });
@@ -14601,7 +14749,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v166';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v167';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
