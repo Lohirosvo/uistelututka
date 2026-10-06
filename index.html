@@ -5304,7 +5304,8 @@ body{padding-bottom:66px}
        Testattu 5.10. jättämällä vuosi kerrallaan pois (1808 profiilia, touko–loka, 10 järveä, Hannun historia):
        lämpö 5–20 m:ssä keskivirhe 1,41 → 0,99 °C, kerrostuneisuus osui 84 → 85 % (Brier 0,121 → 0,105),
        harppaus 3,33 → 3,21 m. Kyrkösjärvi (82 → 77 %) ja Ähtärinjärvi (81 → 79 %) heikkenivät; Hannu valitsi
-       käytön kaikilla järvillä ja kaikkialle (harppaus → kumpu, taimen, kuha, syvyydet). Hyöty katoaa, jos pinta
+       käytön kaikilla järvillä. v163-korjaus: arvio menee ltHarppauksen kautta kumpuamiseen, taimen- ja
+       kuhapaneeleihin ja kerrostuneisuuteen, EI syvyyssuosituksiin (ne käyttävät vain itse mitattua harppausta). Hyöty katoaa, jos pinta
        on arvio (virhe ±1 °C: 1,21 °C; ±2 °C: 1,48 °C eli huonompi kuin ilman), joten pinnan pitää olla MITATTU
        enintään 48 h analyysihetkestä: oma tarkka mittaus tai profiili, SYKEn luotaus tai pinta-asema. */
     const LT_ANALOGI_TOL = [0.5, 1.0, 1.5], LT_ANALOGI_MIN = 4, LT_ANALOGI_IKA_MS = 48 * 3600e3;
@@ -5402,7 +5403,7 @@ body{padding-bottom:66px}
       const vv = muut.map(x => +String(x.d).slice(0, 4));
       return { rivit, n: muut.length, vuodet: Math.min(...vv) + '–' + Math.max(...vv) };
     }
-    function lpSvg(prof, med, valittu, tyyli, otsikko, pintaNyt) {
+    function lpSvg(prof, med, valittu, tyyli, otsikko, pintaNyt, kaista) {
       // akselit
       let tmin = Infinity, tmax = -Infinity, zmax = 0;
       prof.forEach(x => x.pts.forEach(q => { tmin = Math.min(tmin, q.t); tmax = Math.max(tmax, q.t); zmax = Math.max(zmax, q.z); }));
@@ -5437,6 +5438,10 @@ body{padding-bottom:66px}
              + '" stroke-opacity="' + (on ? 1 : 0.6) + '"' + (tyyli(x.p.p) ? ' stroke-dasharray="' + tyyli(x.p.p) + '"' : '') + ' stroke-linejoin="round"/>';
         if (on) x.pts.forEach(q => { svg += '<circle cx="' + X(q.t).toFixed(1) + '" cy="' + Y(q.z).toFixed(1) + '" r="2.6" fill="' + x.vari + '"/>'; });
       });
+      if (kaista && kaista.hi > tmin && kaista.lo < tmax) {   // v164: taimenen ottilämpö pystykaistana
+        const x1 = X(Math.max(tmin, kaista.lo)), x2 = X(Math.min(tmax, kaista.hi));
+        svg = svg.replace('<rect x="' + ml + '"', '<rect x="' + x1.toFixed(1) + '" y="' + mt + '" width="' + (x2 - x1).toFixed(1) + '" height="' + ph + '" fill="rgba(61,220,132,.10)"/><rect x="' + ml + '"');
+      }
       if (typeof pintaNyt === 'number')   // mitattu pinta nyt: kolmio pinnassa
         svg += '<path d="M' + X(pintaNyt).toFixed(1) + ',' + (mt + 1) + ' l-6,-9 h12 z" fill="#fff" stroke="#000" stroke-width=".8"/>';
       svg += '</svg>';
@@ -5561,7 +5566,8 @@ body{padding-bottom:66px}
       prof.forEach((x, i) => { x.vari = LP_VARIT[i % LP_VARIT.length]; });
       if (lpTila.valittu === null || lpTila.valittu >= prof.length) lpTila.valittu = 0;
       const med = lpMediaaniProf(an.prof), val = prof[lpTila.valittu];
-      html += lpSvg(prof, med, lpTila.valittu, () => '', lpNimi(avain) + ' vastaavat vuodet', an.pinta);
+      const ot = taimenOttiLampo();
+      html += lpSvg(prof, med, lpTila.valittu, () => '', lpNimi(avain) + ' vastaavat vuodet', an.pinta, ot);
       html += '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;">' + prof.map((x, i) =>
         '<button type="button" class="chip" onclick="lpValitse(\'valittu\', ' + i + ')" style="font-size:12px;padding:3px 8px;'
         + (i === lpTila.valittu ? 'border-color:' + x.vari + ';color:#fff;background:rgba(255,255,255,.08);' : '') + '">'
@@ -5573,11 +5579,83 @@ body{padding-bottom:66px}
         + 'Pinta nyt <strong>' + ltN1(an.pinta) + ' °C</strong> (' + an.pintaLahde + '). Mukana ' + an.n + ' profiilia muilta vuosilta, joiden pinta oli ±' + ltN1(an.tol) + ' °C tästä ja ajankohta ±20 vrk ('
         + an.vuodet + '). Niistä kerrostuneita ' + an.kerrostuneita + '/' + an.n
         + (an.harppaus !== null ? ', harppaus mediaani ' + ltN1(an.harppaus) + ' m' : '') + (an.pohja !== null ? ', alusvesi ' + ltN1(an.pohja) + ' °C' : '') + '.</p>'
-        + '<p class="hint" style="margin:4px 0 0;">Valkoinen kolmio = pinta nyt, harmaa viiva = näiden profiilien mediaani ja varjo 25–75 %. Sovellus käyttää tätä harppauksen arviona (kumpuaminen, taimen, kuha, syvyydet), '
-        + 'kun omaa tai SYKEn tuoretta harppausmittausta ei ole. Testi 5.10.: lämpö 5–20 m:ssä keskivirhe 1,41 → 0,99 °C verrattuna kaikkiin vuosiin.</p>';
+        + (med ? (() => { const k = ottiKaista(med.rivit, ot); return '<p style="font-size:13px;line-height:1.45;margin:6px 0 0;"><span class="chip" style="padding:1px 7px;font-size:11px;margin-right:6px;">' + ot.taso + '</span>'
+            + 'Vihreä kaista = taimenen ottilämpö ' + ltN1(ot.lo) + '–' + ltN1(ot.hi) + ' °C. Mediaanin mukaan ' + (k.tila === 'kaikki' ? 'koko vesipatsas on tässä lämmössä, joten lämpö ei rajaa syvyyttä' : k.tila === 'kylma' ? 'koko vesipatsas on sitä kylmempää, joten lähin vastine on pinta'
+            : k.tila === 'lammin' ? 'koko vesipatsas on sitä lämpimämpää' : 'se on noin ' + (k.a === k.b ? ltN1(k.a) : ltN1(k.a) + '–' + ltN1(k.b)) + ' metrissä') + '. Vertailu, ei vielä syvyyssuosituksessa.</p>'; })() : '')
+        + '<p class="hint" style="margin:4px 0 0;">Valkoinen kolmio = pinta nyt, harmaa viiva = näiden profiilien mediaani ja varjo 25–75 %. Sovellus käyttää tätä harppauksen arviona kumpuamisessa, taimen- ja kuhapaneeleissa ja kerrostuneisuudessa, '
+        + 'kun omaa tai SYKEn tuoretta harppausmittausta ei ole. Syvyyssuositukset käyttävät harppausta vain itse mitattuna. Testi 5.10.: lämpö 5–20 m:ssä keskivirhe 1,41 → 0,99 °C verrattuna kaikkiin vuosiin.</p>';
       return html;
     }
 
+
+
+    /* ===== TAIMENEN OTTILÄMPÖ PROFIILISTA — VERTAILU RINNALLA (v164, 5.10.2026) =====
+       Hannu 5.10.2026: taimenen syvyyssuositus katsoo vain pintalämmön luokkaa. Kokeillaan rinnalla syvyyttä,
+       jossa vesi on taimenen ottilämmössä lämpöprofiilin mukaan. Hannun valinnat: (1) ottilämpö = "se kun ottaa
+       uistimeen", luultavasti alempi kuin kasvuoptimit → omista taimensaaliista, kun niitä on ≥ 8 (validointisääntö),
+       siihen asti 6,5–12 °C (Elliott & Hurley 2000, Freshw Biol 44:605: kalaa syövän taimenen ravinnon hyötysuhde
+       yli 40 % välillä 6,5–12 °C, huippu 9,3 °C; kasvun tehokkuus, ei suoraan otti); (2) profiili vastaavista
+       vuosista, kun pinta on mitattu (lämpö 5–20 m:ssä keskivirhe 0,99 °C ristiinvalidoinnissa), muuten kaikkien
+       muiden vuosien mediaani ±20 vrk (1,41 °C); (3) ensin vertailuna rinnalla, ei muuta suositusta.
+       Omat saaliit: laji taimen, pintaLtMitattu (pinta mitattu ≤ 48 h, tallennetaan v164 alkaen), syvyys ≤ 3 m tai
+       tuntematon (pintalämpö kuvaa uistimen lämpöä vain pinnan tuntumassa). Keskimmäiset 80 % (10.–90. persentiili). */
+    const TAIMEN_OTTI_OLETUS = { lo: 6.5, hi: 12, huippu: 9.3, taso: 'Tutkittu', lyhyt: 'Elliott & Hurley 2000, ravinnon hyötysuhde',
+      lahde: 'Elliott & Hurley 2000: kalaa syövän taimenen ravinnon hyötysuhde paras 6,5–12 °C (huippu 9,3 °C); kasvun tehokkuus, ei suoraan otti' };
+    function taimenOttiLampo() {
+      let v = [];
+      try {
+        v = lataaSaaliit().filter(x => !x.nollareissu && x.laji === 'taimen' && x.pintaLtMitattu === true && typeof x.pintaLtC === 'number'
+                                       && !(typeof x.syvyysM === 'number' && x.syvyysM > 3))
+                          .map(x => x.pintaLtC).sort((a, b) => a - b);
+      } catch (e) {}
+      if (v.length >= 8) {
+        const q = f => v[Math.min(v.length - 1, Math.max(0, Math.round(f * (v.length - 1))))];
+        return { lo: q(0.1), hi: q(0.9), huippu: q(0.5), n: v.length, taso: 'Oma saalis', lyhyt: 'omat taimensaaliit ' + v.length + ' kpl',
+                 lahde: 'omat taimensaaliit ' + v.length + ' kpl: pintalämpö ottihetkellä, keskimmäiset 80 %' };
+      }
+      return Object.assign({ n: v.length }, TAIMEN_OTTI_OLETUS);
+    }
+    // Matalin yhtenäinen syvyysväli, jossa mediaaniprofiilin lämpö on ottilämmössä
+    function ottiKaista(rivit, ot) {
+      let a = null, b = null;
+      for (const r of rivit) {
+        const sis = r.med >= ot.lo && r.med <= ot.hi;
+        if (sis) { if (a === null) a = r.z; b = r.z; } else if (a !== null) break;
+      }
+      if (a !== null) return { a, b, tila: (a <= 0.5 && b >= rivit[rivit.length - 1].z - 1) ? 'kaikki' : 'vali' };   // koko patsas kaistalla
+      if (rivit.every(r => r.med < ot.lo)) return { a: 0, b: 0, tila: 'kylma' };
+      if (rivit.every(r => r.med > ot.hi)) { const z = rivit[rivit.length - 1].z; return { a: z, b: z, tila: 'lammin' }; }
+      for (let i = 1; i < rivit.length; i++)   // kaista ohittui ruutuvälien välissä: ylityskohta
+        if ((rivit[i - 1].med > ot.hi && rivit[i].med < ot.lo) || (rivit[i - 1].med < ot.lo && rivit[i].med > ot.hi)) return { a: rivit[i].z, b: rivit[i].z, tila: 'vali' };
+      return { a: 0, b: 0, tila: 'kylma' };
+    }
+    function taimenProfiiliVertailu(hetki) {
+      const avain = ltAvainNyt(), H = ltHist(avain);
+      if (!H || !H.prof || !H.prof.length) return null;
+      const an = ltAnalogit(avain, hetki);
+      let lista, tyyppi, virhe;
+      if (an && !an.eiRiita) { lista = an.prof; tyyppi = 'vastaavat vuodet, pinta ' + ltN1(an.pinta) + ' °C mitattu'; virhe = 1.0; }
+      else {
+        const doy = ltDoy(ltMs(hetki)), vNyt = new Date(ltMs(hetki)).getFullYear();
+        lista = H.prof.filter(p => +String(p.d).slice(0, 4) !== vNyt && ltDoyEro(ltDoy(p.d + 'T12:00'), doy) <= 20);
+        tyyppi = 'kaikki vuodet ±20 vrk'; virhe = 1.4;
+      }
+      const med = lpMediaaniProf(lista);
+      if (!med) return null;
+      const ot = taimenOttiLampo(), k = ottiKaista(med.rivit, ot), r = med.rivit;
+      return Object.assign({ ot, tyyppi, virhe, n: med.n, pinta: r[0].z <= 0.5 ? r[0].med : null, zmax: r[r.length - 1].z, pohja: r[r.length - 1].med }, k);
+    }
+    function taimenVertailuTeksti(v, dNyt) {
+      if (!v) return '';
+      const f = ltN1, kaista = f(v.ot.lo) + '–' + f(v.ot.hi) + ' °C';
+      const missa = v.tila === 'kaikki' ? 'koko vesipatsas pinnasta ' + f(v.zmax) + ' metriin on tässä lämmössä, joten lämpö ei rajaa syvyyttä vaan valo ja syöttikala ratkaisevat'
+        : v.tila === 'kylma' ? 'koko vesipatsas on sitä kylmempää' + (v.pinta !== null ? ' (pinta noin ' + f(v.pinta) + ' °C)' : '') + ', joten lähin vastine on pinta'
+        : v.tila === 'lammin' ? 'koko vesipatsas on sitä lämpimämpää, joten lähin vastine on pohjan tuntuma noin ' + f(v.zmax) + ' m'
+        : (v.a === v.b ? 'se on noin ' + f(v.a) + ' metrissä' : 'se on noin ' + f(v.a) + '–' + f(v.b) + ' metrissä');
+      return 'VERTAILU (ei vielä suosituksessa): taimenen ottilämpö ' + kaista + ' (' + v.ot.taso + ', ' + (v.ot.lyhyt || v.ot.lahde) + '). Lämpöprofiilin mukaan ' + missa
+        + ' (' + v.tyyppi + ', ' + v.n + ' profiilia, ±' + f(v.virhe) + ' °C). Nykyinen suositus ' + f(dNyt) + ' m.'
+        + (v.ot.taso !== 'Oma saalis' ? ' Omat saaliit korvaavat ottilämmön, kun mitatulla pinnalla kirjattuja taimenia on 8 (nyt ' + v.ot.n + ').' : '');
+    }
 
     function ltIlmasto(avain, hetki) {
       // järven pintalämpö tälle ajankohdalle ilman tämän vuoden mittauksia
@@ -5738,11 +5816,13 @@ body{padding-bottom:66px}
           ? 'SYKEn näytteet vastaavilta vuosilta (pinta nyt ' + ltN1(hist.pinta) + ' °C, ' + hist.pintaLahde + '; mukana ±' + ltN1(hist.tol) + ' °C): '
             + hist.kerrostuneita + '/' + hist.n + ' profiilia kerrostuneita ±20 vrk, vuodet ' + hist.vuodet
           : 'SYKEn näytteet tältä järveltä: ' + hist.kerrostuneita + '/' + hist.n + ' profiilia kerrostuneita ±20 vrk, vuodet ' + hist.vuodet;
-        if (hist.osuus < 0.5) return { h1: null, kerrostunut: false, vali: hist.analogi ? 'vastaavina vuosina sekoittunut tähän aikaan' : 'yleensä sekoittunut tähän aikaan', taso: 'Tutkittu', mitattu: false, lahde: hl };
+        // v163: lyhyt lähde raportteihin; pitkä jää Lämpötieto-korttiin
+        const hy = (hist.analogi ? 'vastaavat vuodet (pinta ' + ltN1(hist.pinta) + ' °C mitattu): ' : 'SYKE-historia: ') + hist.kerrostuneita + '/' + hist.n + ' kerrostuneita';
+        if (hist.osuus < 0.5) return { h1: null, kerrostunut: false, vali: hist.analogi ? 'vastaavina vuosina sekoittunut tähän aikaan' : 'yleensä sekoittunut tähän aikaan', taso: 'Tutkittu', mitattu: false, lahde: hl, lahdeLyhyt: hy };
         if (hist.harppaus !== null)
-          return { h1: hist.harppaus, kerrostunut: true, vali: ltN1(hist.harppaus) + ' m (mediaani)', pohja: hist.pohja, taso: 'Tutkittu', mitattu: false, lahde: hl };
-        if (malli && malli.h1) return Object.assign({}, malli, { kerrostunut: true, pohja: hist.pohja, lahde: hl + '; syvyys: ' + malli.lahde });
-        return { h1: null, kerrostunut: true, vali: 'kerrostunut, syvyys ei tiedossa', pohja: hist.pohja, taso: 'Tutkittu', mitattu: false, lahde: hl };
+          return { h1: hist.harppaus, kerrostunut: true, vali: ltN1(hist.harppaus) + ' m (mediaani)', pohja: hist.pohja, taso: 'Tutkittu', mitattu: false, lahde: hl, lahdeLyhyt: hy + ', syvyys niiden mediaani' };
+        if (malli && malli.h1) return Object.assign({}, malli, { kerrostunut: true, pohja: hist.pohja, lahde: hl + '; syvyys: ' + malli.lahde, lahdeLyhyt: hy + ', syvyys mallista' });
+        return { h1: null, kerrostunut: true, vali: 'kerrostunut, syvyys ei tiedossa', pohja: hist.pohja, taso: 'Tutkittu', mitattu: false, lahde: hl, lahdeLyhyt: hy };
       }
       return malli;
     }
@@ -5756,6 +5836,16 @@ body{padding-bottom:66px}
       return best;
     }
     function ltSynkkaaThermo() {
+      try {   // v163: kerrotaan Lämpötiedon tila kysymyksen alla, ettei "ei mitattu" näytä väitteeltä sekoittumisesta
+        const o2 = document.getElementById('opts-thermo');
+        if (o2 && o2.parentNode) {
+          let n = document.getElementById('thermoTila');
+          if (!n) { n = document.createElement('p'); n.id = 'thermoTila'; n.className = 'hint'; n.style.margin = '6px 0 0'; o2.parentNode.insertBefore(n, o2.nextSibling); }
+          const hp = ltHarppaus(analyysiHetkiTaiNyt()), l = hp ? (hp.lahdeLyhyt || hp.lahde) : '';
+          n.textContent = !hp ? '' : hp.kerrostunut === false ? 'Lämpötieto: sekoittunut (' + l + ').'
+            : hp.kerrostunut ? 'Lämpötieto: kerrostunut' + (hp.h1 ? ', harppaus noin ' + ltN1(hp.h1) + ' m' : '') + ' (' + l + '). Syvyyssuositus käyttää harppausta vasta, kun syötät mitatun syvyyden.' : '';
+        }
+      } catch (e) {}
       const q = questions.find(x => x.id === 'thermo'), opts = document.getElementById('opts-thermo');
       if (q && opts) [...opts.children].forEach((ch, i) => ch.classList.toggle('selected', !!q.options[i] && q.options[i].v === answers.thermo));
       const nf = document.getElementById('num-thermo');
@@ -6088,7 +6178,7 @@ body{padding-bottom:66px}
           const T1 = dp.pinta, T2 = dp.pohja;
           if (T1 > T2) {
             const h1 = dp.termokliini || 4, r1 = vedenTiheys(T1), r2 = vedenTiheys(T2);
-            return { gp: 9.81 * (r2 - r1) / r2, h1: h1, h2: Math.max(1, maxD - h1), rho: r1, mitattu: true, lahde: 'mitattu lämpöprofiili' };
+            return { gp: 9.81 * (r2 - r1) / r2, h1: h1, h2: Math.max(1, maxD - h1), rho: r1, mitattu: true, lahde: 'mitattu lämpöprofiili', lahdeLyhyt: 'mitattu lämpöprofiili', taso: 'Mittaus' };
           }
         }
         const hp = ltHarppaus(hetki);
@@ -6096,8 +6186,11 @@ body{padding-bottom:66px}
         const T1 = ltPinta(hetki).arvo, pohjaMitattu = typeof hp.pohja === 'number', T2 = pohjaMitattu ? hp.pohja : 8;
         if (!(T1 > T2 + 1)) return null;
         const r1 = vedenTiheys(T1), r2 = vedenTiheys(T2);
+        const lyh = hp.lahdeLyhyt || (/^Kirillin/.test(hp.lahde || '') ? 'malli (Kirillin & Shatwell 2016)' : hp.lahde);
         return { gp: 9.81 * (r2 - r1) / r2, h1: hp.h1, h2: Math.max(1, maxD - hp.h1), rho: r1, mitattu: !!hp.mitattu,
-                 lahde: (hp.mitattu ? '' : 'arvio: ') + hp.lahde + (pohjaMitattu ? '' : ', alusvesi 8 °C oletus') };
+                 lahde: (hp.mitattu ? '' : 'arvio: ') + hp.lahde + (pohjaMitattu ? '' : ', alusvesi 8 °C oletus'),
+                 lahdeLyhyt: lyh + (pohjaMitattu ? '' : ', alusvesi oletus 8 °C'),   // v163
+                 taso: hp.taso || (hp.mitattu ? 'Mittaus' : 'Arvio') };
       } catch (e) { return null; }
     }
     function analyysiHetkiTaiNyt() { try { return analyysiHetki(); } catch (e) { return new Date(); } }
@@ -9868,18 +9961,22 @@ lataa(eka);
         : '<span style="color:var(--muted);">Asennus peruttiin.</span>';
     }
 
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
+    /* v165: hiekkalaatikossa (esim. tiedoston esikatselu sovelluksessa) pelkkä navigator.serviceWorker-luku
+       heittää SecurityErrorin. GitHub Pagesissa sitä ei tapahdu, mutta virhe ei saa näkyä punaisena palkkina. */
+    function swSaatavilla() {
+      try { return ('serviceWorker' in navigator) && !!navigator.serviceWorker; } catch (e) { return false; }
+    }
+    window.addEventListener('load', () => {
+      if (!swSaatavilla()) { pwaTila(); return; }
+      try {
         navigator.serviceWorker.register('sw.js')
           .then(() => pwaTila())
           .catch(err => {
             console.warn('Service worker ei rekisteröitynyt:', err);
             pwaTila();
           });
-      });
-    } else {
-      window.addEventListener('load', pwaTila);
-    }
+      } catch (e) { pwaTila(); }
+    });
 
     // Väritaulukko käyttöön heti: valintalista täytetään ennen ensimmäistä
     // saaliskirjausta, jotta nimet pysyvät vakioina alusta asti.
@@ -10739,6 +10836,15 @@ lataa(eka);
       /* 5.10.2026 (v156): lähin taimenen hotspot-ehdokas ja mallin harppaussyvyys saaliin kohdalla. Malli ei
          sovita saaliisiin; vertailu tehdään myöhemmin pyyntisyvyyden mukaan. Harppaus vain, jos kenttä on
          laskettu samalle järvelle enintään 3 h päässä kirjaushetkestä. */
+      /* v164: pintalämpö Lämpötiedosta ja onko se mitattu ≤ 48 h (ottilämpö omista saaliista), sekä profiilivertailun
+         syvyysväli taimenelle kirjaushetkellä (myöhempää vertailua varten; ei vaikuta mihinkään nyt). */
+      snap.pintaLtC = null; snap.pintaLtLahde = null; snap.pintaLtMitattu = null; snap.taimenProfiiliSyvA = null; snap.taimenProfiiliSyvB = null; snap.taimenProfiiliLahde = null;
+      try {
+        const nytH = new Date(), lp = ltPinta(nytH);
+        if (lp && typeof lp.arvo === 'number') { snap.pintaLtC = Math.round(lp.arvo * 10) / 10; snap.pintaLtLahde = lp.lahde; snap.pintaLtMitattu = !!ltPintaMitattu(ltAvainNyt(), nytH.getTime()); }
+        const tv = taimenProfiiliVertailu(nytH);
+        if (tv) { snap.taimenProfiiliSyvA = tv.a; snap.taimenProfiiliSyvB = tv.b; snap.taimenProfiiliLahde = tv.tyyppi + '; ottilämpö ' + tv.ot.lo + '–' + tv.ot.hi + ' °C ' + tv.ot.taso; }
+      } catch (e) {}
       snap.taimenEhdokasLahinM = null; snap.taimenEhdokasTunnus = null; snap.taimenHarppausMalliM = null; snap.taimenMalliVaihe = null;
       try {
         if (viimeisinTaimenEhdokkaat && viimeisinTaimenEhdokkaat.length && typeof snap.lat === 'number') {
@@ -11119,7 +11225,9 @@ lataa(eka);
       // 4.10.2026 (v153)
       'kuhaEhdokasLahinM','kuhaEhdokasTunnus',
       // 5.10.2026 (v156)
-      'taimenEhdokasLahinM','taimenEhdokasTunnus','taimenHarppausMalliM','taimenMalliVaihe'];
+      'taimenEhdokasLahinM','taimenEhdokasTunnus','taimenHarppausMalliM','taimenMalliVaihe',
+      // 5.10.2026 (v164)
+      'pintaLtC','pintaLtLahde','pintaLtMitattu','taimenProfiiliSyvA','taimenProfiiliSyvB','taimenProfiiliLahde'];
 
     function saaliitCsv(lista) {
       return [SAALIS_KENTAT.join(';')].concat(
@@ -12149,7 +12257,7 @@ lataa(eka);
         hint: 'Kaikuluotain/lämpömittari — syötä syvyys jos näkyy selvä pudotus.',
         options: [
           { l: 'Kyllä, tiedän syvyyden', v: 'known' },
-          { l: 'Ei selvää rajaa / sekoittunut', v: 'none' },
+          { l: 'Ei mitattu / ei selvää rajaa', v: 'none' },   // v163: ei tarkoita sekoittunutta
         ],
         defaultVal: 'none',
         numField: { show: 'known', label: 'Syvyys (m)', id: 'thermoDepth' }
@@ -12465,7 +12573,7 @@ lataa(eka);
        muualla sovelluksessa (ei uusia väitteitä ilman lähdettä):
          Malli     – sovelluksen lajisyvyys (sama kuin syvyysasteikossa)
          Tutkittu  – kuha ja hämärä (Luchiari ym. 2006, nuoret kalat), taimenen lämpö
-                     (Larsson 2005: hakeutuu kasvuoptimiinsa, kalaa syövällä 16,6–17,4 °C)
+                     (Larsson 2005: hakeutuu kasvuoptimiinsa; kalaa syövän optimi 16,6–17,4 °C Elliott & Hurley 2000)
          Konsensus – kuhan tuuliranta (uistelijat; mekanismi sameus tutkittu, käytös ei),
                      syksyn 4–10 °C rantaikkuna (Harri Hotti), järvilohi ulapan parvikalan
                      perässä (uistelijoiden yleinen käsitys; en tarkistanut tutkimuslähdettä)
@@ -12501,7 +12609,7 @@ lataa(eka);
           if (syksy)
             r.push(rivi('Konsensus', 'Syksyn 4–10 °C -ikkunassa (Harri Hotti) taimen on aktiivisin lähellä rantaa, erityisesti maatuulen suojassa: järven ' + suoja.jarvi + ' tai saaren ' + suoja.saari + '.'));
           if (o.lampo > 17)
-            r.push(rivi('Tutkittu', 'Pintavesi on yli 17 °C. Taimen hakeutuu kasvuoptimiinsa (kalaa syövällä 16,6–17,4 °C, Larsson 2005), joten se on viileämmässä kerroksessa.'));
+            r.push(rivi('Tutkittu', 'Pintavesi on yli 17 °C. Taimen hakeutuu kasvuoptimiinsa (Larsson 2005), joka kalaa syövällä taimenella on 16,6–17,4 °C (Elliott & Hurley 2000), joten se on viileämmässä kerroksessa.'));
           r.push(rivi('Oma käytäntö', 'Matalikolla (pohja 0,5–8 m) pintaharava 0,1–0,7 m. Veneen kohdan pohja näkyy Vesillä-ruudulla.'));
         }
         if (laji === 'kirjolohi') {   // v140: lähteet samat kuin Hirvijärven kirjolohitekstissä
@@ -12565,7 +12673,7 @@ lataa(eka);
                      (kumpuaminen) nousee; W ≤ 1 -> nousee pintaan (Stevens & Imberger 1996; Monismith 1986)
          Päätelmä  – lajimerkitys = tämä fysiikka + sovelluksen lähteistetyt lämpötiedot:
                      kuhan ruoansulatus tehokkain n. 19 °C (Frisk ym. 2013); kalaa syövän taimenen
-                     kasvuoptimi 16,6–17,4 °C (Larsson 2005)
+                     kasvuoptimi 16,6–17,4 °C (Elliott & Hurley 2000; Larsson 2005: hakeutuu siihen)
          Konsensus – sekoittuneessa järvessä tuuli kasaa pintaveden ja ajelehtivan ravinnon tuulen alapuolelle
        Kerrostuneisuus kumpuParametrit():sta (mitattu profiili; Lappajärvellä harppausennuste 2027). */
     var vajoamaViime = null;   // puheelle ja kuulutuksille: viimeisin yhteenveto
@@ -12598,7 +12706,7 @@ lataa(eka);
         + 'Napauta kohtaa, niin näet sen arvon. Vahva kumpuaminen näkyy pinkkinä kaikissa kartan tiloissa.</p>';
       // harppaus + kumpuaminen
       if (kp) {
-        h += rivi('Tutkittu', 'Harppauskerros noin ' + n1(kp.h1) + ' m (' + kp.lahde + '). Tuuli kallistaa sitä: vajoama-alueella harppaus painuu syvemmälle, '
+        h += rivi(kp.taso || 'Arvio', 'Harppauskerros noin ' + n1(kp.h1) + ' m (' + (kp.lahdeLyhyt || kp.lahde) + '). Tuuli kallistaa sitä: vajoama-alueella harppaus painuu syvemmälle, '
           + 'tuulen yläpuolella se nousee. Kallistus on sitä suurempi, mitä pienempi Wedderburn-luku on.');
         const kup = (typeof kumpuPuhe === 'function') ? kumpuPuhe() : '';
         h += rivi(kp.mitattu ? 'Tutkittu' : 'Arvio', kup || 'Kumpuamista ei nyt synny: tuuli ei riitä nostamaan harppausta pintaan.');
@@ -12609,7 +12717,7 @@ lataa(eka);
       h += '<div style="margin-top:10px;"><strong>Merkitys kaloille</strong>';
       if (kp) {
         h += rivi('Päätelmä', '<b>Kuha ja ahven</b> (lämpimän veden lajit): vajoama-alueella lämmin pintavesi ulottuu syvemmälle, joten kuha voi saalistaa syvemmällä vajoamarannan reunoilla. Kuhan ruoansulatus on tehokkain noin 19 °C:ssa (Frisk ym. 2013). Sama ranta on uistelijoiden "tuuliranta".')
-          + rivi('Päätelmä', '<b>Taimen, järvilohi ja kirjolohi</b> (viileän veden lajit): viileä vesi on kumpuamisrannalla lähempänä pintaa ja vajoamarannalla syvemmällä. Kalaa syövän taimenen kasvuoptimi on 16,6–17,4 °C (Larsson 2005), joten kesällä lohikalaa kannattaa etsiä kumpuamisrannalta matalammalta ja vajoamarannalta harppauksen alta.')
+          + rivi('Päätelmä', '<b>Taimen, järvilohi ja kirjolohi</b> (viileän veden lajit): viileä vesi on kumpuamisrannalla lähempänä pintaa ja vajoamarannalla syvemmällä. Kalaa syövän taimenen kasvuoptimi on 16,6–17,4 °C (Elliott & Hurley 2000), ja taimen hakeutuu siihen (Larsson 2005), joten kesällä lohikalaa kannattaa etsiä kumpuamisrannalta matalammalta ja vajoamarannalta harppauksen alta.')
           + rivi('Päätelmä', '<b>Syöttikala</b> (muikku ja kuore, viileän veden parvikaloja) siirtyy harppauksen mukana: kumpuamisalueella ylemmäs, vajoama-alueella alemmas. Petokalat seuraavat parvia.')
           + rivi('Konsensus', '<b>Hauki</b> ei seuraa lämpörajoja yhtä tarkasti. Tuulen kasaama ravinto rannalla tuo saalista sen väijymäpaikoille.');
       } else {
@@ -13983,7 +14091,7 @@ lataa(eka);
         + (K.Ti ? ' · seichen jakso ' + Math.round(K.Ti / 3600) + ' h' : '') + '</div>';
       const intro = p(chip('Malli') + 'Teoreettinen malli, jota ei ole sovitettu saaliisiin, koska otit ovat tulleet pääosin pinnasta. Tuuli kallistaa harppauskerrosta: tuulen yläpuolella se nousee, '
         + 'alapuolella painuu. Tuulen jälkeen kerros heilahtaa takaisin tai, leveällä järvellä, kiertää rantaa. Malli laskee tämän viiden vuorokauden tuulesta koko järvelle yhtenä kallistuvana tasona '
-        + '(Stevens & Imberger 1996). Harppauksen lähde: ' + e.p.lahde + '.');
+        + '(Stevens & Imberger 1996). Harppauksen lähde: ' + (e.p.lahdeLyhyt || e.p.lahde) + '.');
       if (K.vaihe === 'tyyni' || K.nousuMax < 0.5) {
         taimenKartalle(avain, o.hetki, [], 'tuuli ei ole viiden vuorokauden aikana kallistanut kerrosta mainittavasti');
         return alku + meta + intro + p('Tuuli ei ole viiden vuorokauden aikana kallistanut kerrosta mainittavasti (nousu alle 0,5 m), joten hotspotteja ei synny. Kerros on noin ' + n1(K.h1) + ' metrissä koko järvellä.') + '</div>';
@@ -14484,18 +14592,19 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v162';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v165';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
-      if (!('serviceWorker' in navigator)) {
+      if (!swSaatavilla()) {   // v165
         if (el()) el().textContent = APP_VERSIO;
         if (st()) st().textContent = 'ei service workeria'; return;
       }
       /* Aktiivisen service workerin versio. Jos se ei vastaa sekunnissa
          (vanha versio ilman viestikäsittelijää), käytetään sivun omaa lukua. */
       const kaytossa = await new Promise(res => {
-        const sw = navigator.serviceWorker.controller;
+        let sw = null;
+        try { sw = navigator.serviceWorker.controller; } catch (e) { return res(null); }   // v165
         if (!sw) return res(null);
         const kanava = ev => {
           if (ev.data && ev.data.swVersio) {
@@ -16490,7 +16599,7 @@ lataa(eka);
 
       // Lämpötila: Elliott 1975 — optimi 13 °C, kasvualue 3,5–19,5 °C.
       if (c.temp !== undefined) {
-        if (c.temp >= 10 && c.temp <= 16) { score += 10; parts.push({ t: `Vesi ${c.temp} °C — taimenen optimialueella (Elliott: optimi 13 °C)`, v: +10, src: 'tutkimus' }); }
+        if (c.temp >= 10 && c.temp <= 16) { score += 10; parts.push({ t: `Vesi ${c.temp} °C — lähellä taimenen kasvuoptimia (Elliott 1975: 13 °C selkärangattomia syövällä; kalaa syövällä 17 °C, Elliott & Hurley 2000)`, v: +10, src: 'tutkimus' }); }
         else if (c.temp > 19) { score -= 15; parts.push({ t: `Vesi ${c.temp} °C — yli kasvun ylärajan (19,5 °C), syönti heikkenee voimakkaasti`, v: -15, src: 'tutkimus' }); }
         else if (c.temp > 16) { score -= 6; parts.push({ t: `Vesi ${c.temp} °C — yli optimin, kasvu ja syönti laskussa`, v: -6, src: 'tutkimus' }); }
         else if (c.temp < 3.5) { score -= 10; parts.push({ t: `Vesi ${c.temp} °C — alle kasvun alarajan (3,5 °C)`, v: -10, src: 'tutkimus' }); }
@@ -18250,7 +18359,23 @@ lataa(eka);
         const maxTuore = tuoreet.length ? Math.max(...tuoreet) : maxWind;
 
         let mixText;
-        if (maxTuore >= 8) mixText = "Viimeisen 2 vrk aikana kova tuuli (" + maxTuore.toFixed(0) + " m/s) — vesi todennäköisesti sekoittunut, harppauskerros voi olla heikko tai hajonnut.";
+        /* v163: kova tuuli ei sekoita kerrostunutta järveä, jos kerros on vahva (Wedderburn W > 1). Tarkistetaan
+           Lämpötiedosta ja kumpuArviosta; yleissääntö jää vain, kun järven tilaa ei tiedetä. */
+        let kerrTila = null, kaW = null;
+        try { kerrTila = kerrostuneisuus(); } catch (e) {}
+        try {
+          const ss = saaNyt();
+          const Lk = (typeof window.akSuunnattuMitta === 'function' && ss && ss.tuuliSuunta != null) ? window.akSuunnattuMitta(ss.tuuliSuunta, currentLocation && currentLocation.name) : null;
+          if (Lk) kaW = kumpuArvio(maxTuore, Lk, null);
+        } catch (e) {}
+        if (maxTuore >= 8 && kerrTila === true)
+          mixText = "Viimeisen 2 vrk aikana kova tuuli (" + maxTuore.toFixed(0) + " m/s), mutta Lämpötiedon mukaan järvi on kerrostunut. "
+            + (kaW ? (kaW.W > 1 ? "Kerros on niin vahva (Wedderburn W = " + kaW.W.toFixed(1).replace('.', ',') + "), että tuuli kallistaa sitä mutta ei sekoita."
+                                : "Tuuli on voinut nostaa kerroksen pintaan tuulen yläpäässä ja sekoittaa sitä (W = " + kaW.W.toFixed(1).replace('.', ',') + ").")
+                   : "Tuuli kallistaa kerrosta ja voi ohentaa sitä.");
+        else if (maxTuore >= 8 && kerrTila === false)
+          mixText = "Viimeisen 2 vrk aikana kova tuuli (" + maxTuore.toFixed(0) + " m/s), ja Lämpötiedon mukaan järvi on sekoittunut.";
+        else if (maxTuore >= 8) mixText = "Viimeisen 2 vrk aikana kova tuuli (" + maxTuore.toFixed(0) + " m/s) — vesi todennäköisesti sekoittunut, harppauskerros voi olla heikko tai hajonnut.";
         else if (maxTuore >= 5) mixText = "Viimeisen 2 vrk aikana kohtalaista tuulta (" + maxTuore.toFixed(0) + " m/s) — jonkin verran sekoittumista.";
         else if (maxWind >= 8) mixText = "Viimeiset 2 vrk tyyniä, mutta viikon sisällä kova tuuli (" + maxWind.toFixed(0) + " m/s) — kerrostuneisuus rakentuu uudelleen.";
         else mixText = "Viikko melko tyyntä (huippu " + maxWind.toFixed(0) + " m/s, keskiarvo " + avgWind.toFixed(1) + " m/s) — kerrostuneisuus on päässyt vahvistumaan.";
@@ -19035,6 +19160,7 @@ lataa(eka);
       if (a.temp !== undefined && a.temp <= 8) reasonsJarvilohi.push('KORJATTU AIEMMASTA: kylmässä vedessä järvilohi EI painu syvemmälle. Aiempi malli väitti loppusyksyn suunnan kääntyvän 5–15 metriin, mutta telemetria osoittaa kalan pysyvän pintakerroksessa ja siirtyvän vaakasuunnassa ulapalle. Loppusyksyn syvemmät otit selittyvät saaliskalan vetäytymisellä, eivät lämpöhakuisuudella.');
 
       reasonsTaimen.push(`Selkävesillä ja syvänteiden yllä taimenen optimi-iskusyvyys on tällä hetkellä n. ${dTaimen.toFixed(1)} m.`);
+      try { const tv = taimenVertailuTeksti(taimenProfiiliVertailu(now), dTaimen); if (tv) reasonsTaimen.push(tv); } catch (e) {}   // v164
       // POIKKEUSSÄÄNNÖN RAJA LAAJENNETTU 0,5-8 METRIIN — 10.9.2026.
       // Aiemmin poikkeus koski vain 1,5-3,0 metrin käyrää. Käyttäjän oma
       // käytäntö on laajempi: kun pohjaa on 0,5-8 m, vieheet menevät liki
