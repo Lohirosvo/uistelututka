@@ -3637,7 +3637,10 @@ async function olLueSl2(file, edistys){
   var fmt = head.getUint16(0, true);
   if (fmt !== 2) throw new Error(fmt === 3 ? 'SL3-tallennetta ei vielä tueta. Lähetä lyhyt .sl3-näyte Claudelle, niin tuki lisätään.' : 'tiedosto ei ole Lowrancen sl2-tallenne (muoto ' + fmt + ')');
   var R = 6356752.3142, pos = 8, kehyksia = 0, hyl = 0;
-  var lat = [], lon = [], syv = [], tMin = null, tMax = null, lMin = null, lMax = null, viimeT = -1e9, vLat = null, vLon = null, alku = null;
+  var lat = [], lon = [], syv = [], lMin = null, lMax = null, viimeT = -1e9, vLat = null, vLon = null, alku = null;
+  // v175: ensimmäisen pisteen aika (alkuhetkeen) ja ajoaika pisteiden välisistä askelista. Aika saa hypätä taaksepäin:
+  // v174:ssä yksi poikkeava aikaleima jumitti tuonnin yhteen pisteeseen (Hannu 7.10.: gigan tallenteista 1 piste).
+  var t0 = null, kestoMs = 0, d = { aikaOhi: 0, matkaOhi: 0, taakse: 0, sijMuuttui: 0 }, edE = null, edN = null;
   while (pos + 144 <= size){
     var buf = await file.slice(pos, Math.min(size, pos + CH)).arrayBuffer(), dv = new DataView(buf), off = 0;
     while (off + 144 <= buf.byteLength){
@@ -3651,14 +3654,17 @@ async function olLueSl2(file, edistys){
       if (alku === null){ var us = dv.getUint32(off + 60, true); if (us > 1.5e9 && us < 2.2e9) alku = us*1000 - t; }   // v173: tallenteen alkuhetki
       off += koko;
       if (!(ft > 1 && ft < 500) || !(la > 40 && la < 80) || !(lo > -30 && lo < 60) || !(kn >= 0 && kn < 32)) { hyl++; continue; }
-      if (t - viimeT < 1000) continue;
+      if (e !== edE || n !== edN){ if (edE !== null) d.sijMuuttui++; edE = e; edN = n; }
+      var dt = t - viimeT;
+      if (dt >= 0 && dt < 1000){ d.aikaOhi++; continue; }
       if (vLat !== null){
         var dy = (la - vLat)*111320, dx = (lo - vLon)*111320*Math.cos(la*Math.PI/180);
-        if (dx*dx + dy*dy < 25) continue;   // alle 5 m edellisestä
+        if (dx*dx + dy*dy < 25){ d.matkaOhi++; continue; }   // alle 5 m edellisestä
       }
+      if (dt < 0 && vLat !== null) d.taakse++;
       lat.push(Math.round(la*1e6)); lon.push(Math.round(lo*1e6)); syv.push(Math.round(ft*0.3048*100));
+      if (t0 === null) t0 = t; else if (dt > 0 && dt < 120000) kestoMs += dt;   // yli 2 min katkoja ei lasketa ajoajaksi
       viimeT = t; vLat = la; vLon = lo;
-      if (tMin === null || t < tMin) tMin = t; if (tMax === null || t > tMax) tMax = t;
       if (lt > -2 && lt < 35){ if (lMin === null || lt < lMin) lMin = lt; if (lMax === null || lt > lMax) lMax = lt; }
     }
     if (off === 0) throw new Error('tallenne on rikki kohdassa ' + pos);
@@ -3667,8 +3673,9 @@ async function olLueSl2(file, edistys){
     await new Promise(function(res){ setTimeout(res, 0); });
   }
   if (!lat.length) throw new Error('tallenteessa ei ole sijaintia ja syvyyttä yhtä aikaa (' + kehyksia + ' kehystä)');
-  return { lat: lat, lon: lon, syv: syv, kehyksia: kehyksia, hylatty: hyl, kestoS: Math.round(((tMax || 0) - (tMin || 0))/1000),
-           alku: alku !== null ? alku + (tMin || 0) : null,
+  d.hylatty = hyl;
+  return { lat: lat, lon: lon, syv: syv, kehyksia: kehyksia, hylatty: hyl, kestoS: Math.round(kestoMs/1000), diag: d,
+           alku: alku !== null ? alku + (t0 || 0) : null,
            lampoMin: lMin, lampoMax: lMax };
 }
 async function olTunnistaJarvi(lat, lon){
@@ -3729,6 +3736,14 @@ async function olTuo(files){
       var tulos = await olLueSl2(file, function(o){ if (tila) tila.textContent = 'Luetaan ' + nimi + ': ' + Math.round(o*100) + ' % (' + olN1(file.size*o/1e6) + ' / ' + olN1(file.size/1e6) + ' Mt)'; });
       var tunniste = nimi + '|' + file.size + '|' + tulos.lat[0] + '|' + tulos.lon[0];
       var vanha = d.tuonnit.filter(function(x){ return x.tunniste === tunniste; })[0];
+      if (vanha && tulos.lat.length > vanha.lat.length){   // v175: v174:n jumittunut tuonti korvataan
+        var ennen = vanha.lat.length;
+        ['lat','lon','syv','kehyksia','kestoS','lampoMin','lampoMax'].forEach(function(k){ vanha[k] = tulos[k]; });
+        if (tulos.alku) vanha.alku = tulos.alku;
+        vanha.tuotu = Date.now(); uusia++;
+        viestit.push(nimi + ' tuotiin uudelleen: ' + ennen + ' → ' + tulos.lat.length + ' pistettä.' + olDiagTeksti(tulos));
+        continue;
+      }
       if (vanha){
         if (!vanha.alku && tulos.alku){ vanha.alku = tulos.alku; uusia++; viestit.push(nimi + ' oli jo tuotu; lisättiin tallenteen päivä ' + olAika(tulos.alku) + '.'); }   // v173: v172:ssa tuoduille
         else viestit.push(nimi + ' oli jo tuotu, ei tuotu uudelleen.');
@@ -3740,7 +3755,7 @@ async function olTuo(files){
                 kehyksia: tulos.kehyksia, kestoS: tulos.kestoS, alku: tulos.alku, lampoMin: tulos.lampoMin, lampoMax: tulos.lampoMax,
                 lat: tulos.lat, lon: tulos.lon, syv: tulos.syv };
       d.tuonnit.push(t); uusia++;
-      viestit.push(nimi + ': ' + t.lat.length + ' pistettä, ' + olJarviNimi(jarviAv) + (t.alku ? ', ' + olAika(t.alku) : '') + (jarviAv ? '' : ' (ei osu sovelluksen järviin, tallennetaan silti)'));
+      viestit.push(nimi + ': ' + t.lat.length + ' pistettä, ' + olJarviNimi(jarviAv) + (t.alku ? ', ' + olAika(t.alku) : '') + (jarviAv ? '' : ' (ei osu sovelluksen järviin, tallennetaan silti)') + olDiagTeksti(tulos));
     } catch (e) {
       viestit.push(nimi + ': ' + (e && e.message ? e.message : e));
     }
@@ -3753,6 +3768,14 @@ async function olTuo(files){
     + (uusia ? '<div style="margin-top:4px;color:var(--amber);">Mallit käyttävät luotausta, kun sovellus käynnistetään uudelleen.</div>' : '');
   if (uusia) olValmisUudelleen();
   olPiirraLista();
+}
+// v175: mihin kehykset jäivät (näytetään tuonnin jälkeen, jotta vähäisen pistemäärän syy näkyy)
+function olDiagTeksti(r){
+  var d = r && r.diag; if (!d) return '';
+  var f = function(x){ return x.toLocaleString('fi-FI'); };
+  return ' [' + f(r.kehyksia) + ' kehystä: ei syvyyttä/sijaintia ' + f(d.hylatty) + ', alle 1 s ' + f(d.aikaOhi) + ', alle 5 m ' + f(d.matkaOhi)
+    + ', sijainti vaihtui ' + f(d.sijMuuttui) + ' kertaa' + (d.taakse ? ', aika taaksepäin ' + f(d.taakse) + ' pisteessä' : '') + ']'
+    + (d.sijMuuttui === 0 ? ' Sijainti ei muutu tallenteessa: GPS-tieto puuttui tallennuksen aikana.' : '');
 }
 function olPoista(id){
   var d = JSON.parse(JSON.stringify(omaLuotausLue()));
@@ -15450,7 +15473,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v174';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v175';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
