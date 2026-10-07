@@ -2200,6 +2200,23 @@ body{padding-bottom:66px}
         mittauspäivä on oma käyränsä. Napauta päivää, niin näet sen tiedot ja muiden vuosien mediaanin samalta ajalta.</p>
       <div id="lampoProfiilitSisalto" style="font-size:14px;line-height:1.5;"></div>
     </div>
+    <div class="q" id="omaLuotaus">
+      <div class="idx">Luotaus</div>
+      <h2>Oma luotaus kaikuluotaimelta</h2>
+      <p class="hint">Lowrancen .sl2-tallenne muistikortilta. Puhelin lukee sen itse ilman verkkoa, ja syvyysmallit (aalto, virtaus,
+        syvyyskartta, kuha- ja taimenehdokkaat) käyttävät omaa luotausta MML:n syvyysluokkien sijaan niissä ruuduissa, joista sitä on.
+        Luotain mittaa anturista, joten anturin syvyys lisätään. Myös Clauden kanssa käsitellyt .json-pisteet tuodaan tästä.</p>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <label style="font-size:13px;">Anturi pinnan alla
+          <input type="number" id="olAnturi" step="0.05" min="0" max="3" value="0.25" style="width:72px;" onchange="olTallennaAnturi()"> m</label>
+        <label class="chip" style="border-color:var(--amber); color:var(--amber); cursor:pointer;">Tuo .sl2 tai .json
+          <input type="file" id="olTiedosto" multiple style="display:none;" onchange="olTuo(this.files); this.value='';">
+        </label>
+        <button class="chip" id="olLataa" onclick="location.reload()" style="display:none; border-color:var(--olive); color:var(--olive);">Käynnistä sovellus uudelleen</button>
+      </div>
+      <div id="olTila" style="margin-top:10px; font-size:13px; line-height:1.45;"></div>
+      <div id="olLista" style="margin-top:6px; font-size:13px; line-height:1.45;"></div>
+    </div>
     <div class="q" id="varmuuskopio">
       <div class="idx">Siirto</div>
       <h2>Varmuuskopio ja siirto toiseen puhelimeen</h2>
@@ -3509,6 +3526,283 @@ body{padding-bottom:66px}
       if (!arvioita) return null;   // ei MML-tietoa 300 m sisällä -> varalle
       return { min: Math.min.apply(null, arvot), max: Math.max.apply(null, arvot), n: arvot.length, lahde: 'MML' };
     }
+/* ===== OMA LUOTAUS KAIKULUOTAIMELTA — 7.10.2026 (v172) =====
+   Hannu 7.10.2026 (vertailu muihin, idea 2: oma luotausdata syvyyspohjaksi; valinta "1, mutta 2
+   on edelleen mahdollinen"): Lowrancen .sl2-tallenne luetaan puhelimessa ilman verkkoa, ja
+   syvyysmallit käyttävät omaa luotausta MML:n syvyysluokkien sijaan niissä ruuduissa, joista sitä on.
+   Vaihtoehto 2 (tallenteet käsitellään Clauden kanssa) tuodaan samaan paikkaan .json-tiedostona.
+   SL2-RAKENNE (avoimesti dokumentoitu, tarkistettu Hannun tallenteella Sonar0012.sl2: 7443 kehystä,
+   15 369 624 tavua luettu loppuun): tiedoston otsake 8 tavua (muoto u16 = 2), sitten kehykset,
+   kaikki little-endian, kehyksen alusta: +28 kehyksen koko u16, +32 kanava u16, +64 syvyys f32
+   (jalkaa, anturista), +100 GPS-nopeus f32 (solmua), +104 veden lämpö f32 (°C), +108/+112 itä/
+   pohjoinen i32 (Lowrancen pallomercator, R = 6 356 752,3142 m), +140 aika u32 (ms tallenteen
+   alusta). +60 u32: alkukehyksissä tallenteen alkuhetki unix-sekunteina, sen jälkeen sama kuin +140
+   (v173: varmistettu Sonar0012.sl2 → 12.9.2026 12.35.37 UTC, Hannun ilmoitus 12.36).
+   TALLENNUS: localStorage 'uistelututka_omaluotaus' (kulkee varmuuskopiossa), pisteet noin 5 m
+   välein (≥ 1 s), syvyys anturista senttimetreinä ja anturin syvyys tuonnin mukana, jotta korjauksen
+   voi myöhemmin muuttaa. Tunnin uistelu ≈ 700 pistettä ≈ 15 kt.
+   SIJAINTI: tämä osa on pääkoodissa (kortti ja tuonti toimivat ennen kuin karttamoduuli on ladattu);
+   karttapiirto akPiirraOmaLuotaus on moduulissa aaltokarttaAlusta.
+   KÄYTTÖ: puraSyvyysLuokat korvaa ruudun syvyyden luotausten mediaanilla (kaikki karttamallit:
+   aalto, virtaus, syvyyskartta, kuha- ja taimenehdokkaat), syvyysPisteessa yhdistää luotauksen
+   MML-arvioon (nimettyjen paikkojen syvyysrivit), kiertomallin tallennusavaimeen tulee
+   luotauksen tarkiste (kierto lasketaan uudelleen). Jälki näkyy kartan Syvyyskartta-tilassa. */
+var OL_LS = 'uistelututka_omaluotaus', OL_ANTURI_LS = 'uistelututka_anturi_m';
+function omaLuotausLue(){
+  if (window.__olData !== undefined) return window.__olData;
+  var d = null;
+  // literaali, ei OL_LS: funktiota voidaan kutsua ennen kuin var-rivi on suoritettu
+  try { d = JSON.parse(localStorage.getItem('uistelututka_omaluotaus') || 'null'); } catch (e) { d = null; }
+  if (!d || !Array.isArray(d.tuonnit)) d = { versio: 1, tuonnit: [] };
+  window.__olData = d;
+  return d;
+}
+function omaLuotausNollaa(){ window.__olData = undefined; window.__olPisteet = null; window.__olSolut = null; }
+function omaLuotausPisteet(){   // kaikki pisteet anturikorjattuina
+  if (window.__olPisteet) return window.__olPisteet;
+  var out = [];
+  omaLuotausLue().tuonnit.forEach(function(t){
+    var a = typeof t.anturiM === 'number' ? t.anturiM : 0;
+    for (var i = 0; i < t.lat.length; i++) out.push({ lat: t.lat[i] / 1e6, lon: t.lon[i] / 1e6, syv: t.syv[i] / 100 + a });
+  });
+  window.__olPisteet = out;
+  return out;
+}
+// Ruudukon k ruudut, joissa on luotausta: { solut: {q: mediaani}, soluja, pisteita, tarkiste }
+function omaLuotausSolut(k){
+  if (!k || !k.W) return null;
+  var vm = window.__olSolut || (window.__olSolut = new WeakMap());
+  if (vm.has(k)) return vm.get(k);
+  var P = omaLuotausPisteet(), arvot = {}, n = 0, t = 0;
+  for (var a = 0; a < P.length; a++){
+    var p = P[a];
+    var i = Math.floor((p.lon - k.lansiLon)*111320*Math.cos(p.lat*Math.PI/180)/k.ruutu), j = Math.floor((k.pohjoisLat - p.lat)*111320/k.ruutu);
+    if (i < 0 || j < 0 || i >= k.W || j >= k.H) continue;
+    var q = j*k.W + i;
+    (arvot[q] || (arvot[q] = [])).push(p.syv);
+    n++; t = (t*31 + Math.round(p.syv*100) + q) % 1000000007;
+  }
+  var solut = {}, m = 0;
+  Object.keys(arvot).forEach(function(q){
+    var v = arvot[q].sort(function(x, y){ return x - y; }), h = v.length >> 1;
+    solut[q] = v.length % 2 ? v[h] : (v[h - 1] + v[h]) / 2; m++;
+  });
+  var r = { solut: solut, soluja: m, pisteita: n, tarkiste: n ? n + ':' + t : '' };
+  vm.set(k, r);
+  return r;
+}
+// Kutsutaan puraSyvyysLuokat-funktiosta: vain vesiruudut (s > 0) korvataan
+function omaLuotausKorvaa(k, s){
+  var r = omaLuotausSolut(k);
+  if (!r || !r.soluja) return 0;
+  var c = 0;
+  for (var q in r.solut){ var qi = +q; if (s[qi] > 0){ s[qi] = r.solut[q]; c++; } }
+  return c;
+}
+// Pisteen ympäriltä (sadeM) luotausten min/max; vähintään 3 pistettä
+function omaLuotausMinMax(lat, lon, sadeM){
+  var P = omaLuotausPisteet(); if (!P.length) return null;
+  var r = sadeM || 300, dLat = r/111320, kx = 111320*Math.cos(lat*Math.PI/180), dLon = r/kx, mn = Infinity, mx = -Infinity, n = 0;
+  for (var a = 0; a < P.length; a++){
+    var p = P[a];
+    if (Math.abs(p.lat - lat) > dLat || Math.abs(p.lon - lon) > dLon) continue;
+    var dy = (p.lat - lat)*111320, dx = (p.lon - lon)*kx;
+    if (dx*dx + dy*dy > r*r) continue;
+    if (p.syv < mn) mn = p.syv; if (p.syv > mx) mx = p.syv; n++;
+  }
+  return n >= 3 ? { min: mn, max: mx, n: n, lahde: 'oma luotaus' } : null;
+}
+function omaLuotausYhdista(a, oma){
+  if (!oma) return a;
+  if (!a) return oma;
+  return { min: Math.min(a.min, oma.min), max: Math.max(a.max, oma.max), n: (a.n || 0) + oma.n, lahde: (a.lahde || '') + ' + oma luotaus' };
+}
+function omaLuotausTarkiste(k){ try { var r = omaLuotausSolut(k); return r ? r.tarkiste : ''; } catch (e) { return ''; } }
+
+/* ---- TUONTI ---- */
+function olAnturi(){
+  var el = document.getElementById('olAnturi'), v = el ? parseFloat(String(el.value).replace(',', '.')) : NaN;
+  if (!(v >= 0 && v <= 3)) { v = 0.25; try { var s = parseFloat(localStorage.getItem(OL_ANTURI_LS)); if (s >= 0 && s <= 3) v = s; } catch (e) {} }
+  return v;
+}
+function olTallennaAnturi(){
+  var el = document.getElementById('olAnturi'), v = el ? parseFloat(String(el.value).replace(',', '.')) : NaN;
+  if (v >= 0 && v <= 3) try { localStorage.setItem(OL_ANTURI_LS, String(v)); } catch (e) {}
+}
+function olN1(x){ return (Math.round(x*10)/10).toLocaleString('fi-FI'); }
+function olAika(ms){ var d = new Date(ms), p = function(x){ return String(x).padStart(2, '0'); }; return d.getDate() + '.' + (d.getMonth() + 1) + '.' + d.getFullYear() + ' klo ' + p(d.getHours()) + '.' + p(d.getMinutes()); }
+async function olLueSl2(file, edistys){
+  var size = file.size, CH = 8*1024*1024;
+  var head = new DataView(await file.slice(0, 8).arrayBuffer());
+  var fmt = head.getUint16(0, true);
+  if (fmt !== 2) throw new Error(fmt === 3 ? 'SL3-tallennetta ei vielä tueta. Lähetä lyhyt .sl3-näyte Claudelle, niin tuki lisätään.' : 'tiedosto ei ole Lowrancen sl2-tallenne (muoto ' + fmt + ')');
+  var R = 6356752.3142, pos = 8, kehyksia = 0, hyl = 0;
+  var lat = [], lon = [], syv = [], tMin = null, tMax = null, lMin = null, lMax = null, viimeT = -1e9, vLat = null, vLon = null, alku = null;
+  while (pos + 144 <= size){
+    var buf = await file.slice(pos, Math.min(size, pos + CH)).arrayBuffer(), dv = new DataView(buf), off = 0;
+    while (off + 144 <= buf.byteLength){
+      var koko = dv.getUint16(off + 28, true);
+      if (koko < 144) throw new Error('tallenne on rikki kohdassa ' + (pos + off) + ' (kehyksen koko ' + koko + ')');
+      if (off + koko > buf.byteLength) break;
+      kehyksia++;
+      var ft = dv.getFloat32(off + 64, true), kn = dv.getFloat32(off + 100, true), lt = dv.getFloat32(off + 104, true);
+      var e = dv.getInt32(off + 108, true), n = dv.getInt32(off + 112, true), t = dv.getUint32(off + 140, true);
+      var la = (2*Math.atan(Math.exp(n/R)) - Math.PI/2)*180/Math.PI, lo = e/R*180/Math.PI;
+      if (alku === null){ var us = dv.getUint32(off + 60, true); if (us > 1.5e9 && us < 2.2e9) alku = us*1000 - t; }   // v173: tallenteen alkuhetki
+      off += koko;
+      if (!(ft > 1 && ft < 500) || !(la > 40 && la < 80) || !(lo > -30 && lo < 60) || !(kn >= 0 && kn < 32)) { hyl++; continue; }
+      if (t - viimeT < 1000) continue;
+      if (vLat !== null){
+        var dy = (la - vLat)*111320, dx = (lo - vLon)*111320*Math.cos(la*Math.PI/180);
+        if (dx*dx + dy*dy < 25) continue;   // alle 5 m edellisestä
+      }
+      lat.push(Math.round(la*1e6)); lon.push(Math.round(lo*1e6)); syv.push(Math.round(ft*0.3048*100));
+      viimeT = t; vLat = la; vLon = lo;
+      if (tMin === null || t < tMin) tMin = t; if (tMax === null || t > tMax) tMax = t;
+      if (lt > -2 && lt < 35){ if (lMin === null || lt < lMin) lMin = lt; if (lMax === null || lt > lMax) lMax = lt; }
+    }
+    if (off === 0) throw new Error('tallenne on rikki kohdassa ' + pos);
+    pos += off;
+    if (edistys) edistys(pos/size);
+    await new Promise(function(res){ setTimeout(res, 0); });
+  }
+  if (!lat.length) throw new Error('tallenteessa ei ole sijaintia ja syvyyttä yhtä aikaa (' + kehyksia + ' kehystä)');
+  return { lat: lat, lon: lon, syv: syv, kehyksia: kehyksia, hylatty: hyl, kestoS: Math.round(((tMax || 0) - (tMin || 0))/1000),
+           alku: alku !== null ? alku + (tMin || 0) : null,
+           lampoMin: lMin, lampoMax: lMax };
+}
+async function olTunnistaJarvi(lat, lon){
+  try {
+    if (typeof window.akOnVetta !== 'function' && typeof window.akKaynnistaHiljaa === 'function') window.akKaynnistaHiljaa();
+    for (var w = 0; w < 60 && typeof window.akOnVetta !== 'function'; w++) await new Promise(function(r){ setTimeout(r, 250); });
+    if (typeof window.akValmiina === 'function') await window.akValmiina();
+    if (typeof window.akJarviAvaimet !== 'function' || typeof window.akOnVetta !== 'function') return null;
+    var avaimet = window.akJarviAvaimet(), laskuri = {}, askel = Math.max(1, Math.floor(lat.length/60));
+    for (var i = 0; i < lat.length; i += askel)
+      for (var a = 0; a < avaimet.length; a++)
+        if (window.akOnVetta(avaimet[a], lat[i]/1e6, lon[i]/1e6)){ laskuri[avaimet[a]] = (laskuri[avaimet[a]] || 0) + 1; break; }
+    var paras = Object.keys(laskuri).sort(function(x, y){ return laskuri[y] - laskuri[x]; })[0];
+    return paras || null;
+  } catch (e) { return null; }
+}
+function olJarviNimi(av, varalla){
+  try { var n = av && typeof window.akJarviNimi === 'function' ? window.akJarviNimi(av) : null; if (n) return n; } catch (e) {}
+  return varalla || av || 'ei tunnistettu järvi';
+}
+function olMatka(t){
+  var m = 0;
+  for (var i = 1; i < t.lat.length; i++){
+    var dy = (t.lat[i] - t.lat[i-1])/1e6*111320, dx = (t.lon[i] - t.lon[i-1])/1e6*111320*Math.cos(t.lat[i]/1e6*Math.PI/180);
+    m += Math.sqrt(dx*dx + dy*dy);
+  }
+  return m;
+}
+function olTallenna(d){
+  localStorage.setItem('uistelututka_omaluotaus', JSON.stringify(d));   // heittää, jos tila loppuu
+  omaLuotausNollaa();
+}
+function olValmisUudelleen(){
+  var b = document.getElementById('olLataa'); if (b) b.style.display = '';
+}
+async function olTuo(files){
+  var tila = document.getElementById('olTila'); if (!files || !files.length) return;
+  olTallennaAnturi();
+  var d = JSON.parse(JSON.stringify(omaLuotausLue())), uusia = 0, viestit = [];
+  for (var f = 0; f < files.length; f++){
+    var file = files[f], nimi = file.name || 'tallenne';
+    try {
+      if (/\.json$/i.test(nimi)){
+        var j = JSON.parse(await file.text()), lista = Array.isArray(j.tuonnit) ? j.tuonnit : (j.lat ? [j] : []);
+        if (!lista.length) throw new Error('JSON-tiedostossa ei ole luotauspisteitä');
+        for (var li = 0; li < lista.length; li++){
+          var t = lista[li];
+          if (!(Array.isArray(t.lat) && Array.isArray(t.lon) && Array.isArray(t.syv) && t.lat.length === t.lon.length && t.lat.length === t.syv.length)) throw new Error('JSON-tiedoston rakenne ei kelpaa');
+          if (!t.id) t.id = 'json-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+          if (d.tuonnit.some(function(x){ return x.id === t.id || (t.tunniste && x.tunniste === t.tunniste); })) { viestit.push(nimi + ': ' + (t.nimi || t.id) + ' oli jo tuotu, ei tuotu uudelleen.'); continue; }
+          if (!t.jarvi && t.lat.length){ t.jarvi = await olTunnistaJarvi(t.lat, t.lon); t.jarviNimi = t.jarvi ? olJarviNimi(t.jarvi) : null; }   // Clauden tiedostossa ei ole järveä
+          if (typeof t.anturiM !== 'number') t.anturiM = olAnturi();
+          d.tuonnit.push(t); uusia++; viestit.push(nimi + ': ' + (t.nimi || t.id) + ', ' + t.lat.length + ' pistettä, ' + olJarviNimi(t.jarvi, t.jarviNimi));
+        }
+        continue;
+      }
+      if (tila) tila.textContent = 'Luetaan ' + nimi + '…';
+      var tulos = await olLueSl2(file, function(o){ if (tila) tila.textContent = 'Luetaan ' + nimi + ': ' + Math.round(o*100) + ' % (' + olN1(file.size*o/1e6) + ' / ' + olN1(file.size/1e6) + ' Mt)'; });
+      var tunniste = nimi + '|' + file.size + '|' + tulos.lat[0] + '|' + tulos.lon[0];
+      var vanha = d.tuonnit.filter(function(x){ return x.tunniste === tunniste; })[0];
+      if (vanha){
+        if (!vanha.alku && tulos.alku){ vanha.alku = tulos.alku; uusia++; viestit.push(nimi + ' oli jo tuotu; lisättiin tallenteen päivä ' + olAika(tulos.alku) + '.'); }   // v173: v172:ssa tuoduille
+        else viestit.push(nimi + ' oli jo tuotu, ei tuotu uudelleen.');
+        continue;
+      }
+      if (tila) tila.textContent = nimi + ': tunnistetaan järvi…';
+      var jarviAv = await olTunnistaJarvi(tulos.lat, tulos.lon);
+      var t = { id: 'sl2-' + Date.now() + '-' + f, tunniste: tunniste, nimi: nimi, tuotu: Date.now(), jarvi: jarviAv, jarviNimi: jarviAv ? olJarviNimi(jarviAv) : null, anturiM: olAnturi(),
+                kehyksia: tulos.kehyksia, kestoS: tulos.kestoS, alku: tulos.alku, lampoMin: tulos.lampoMin, lampoMax: tulos.lampoMax,
+                lat: tulos.lat, lon: tulos.lon, syv: tulos.syv };
+      d.tuonnit.push(t); uusia++;
+      viestit.push(nimi + ': ' + t.lat.length + ' pistettä, ' + olJarviNimi(jarviAv) + (t.alku ? ', ' + olAika(t.alku) : '') + (jarviAv ? '' : ' (ei osu sovelluksen järviin, tallennetaan silti)'));
+    } catch (e) {
+      viestit.push(nimi + ': ' + (e && e.message ? e.message : e));
+    }
+  }
+  if (uusia){
+    try { olTallenna(d); }
+    catch (e) { viestit.push('Tallennus ei onnistunut: puhelimen tila loppui (' + (e && e.name) + '). Poista vanhoja tuonteja tai varmuuskopioi ja tyhjennä.'); uusia = 0; }
+  }
+  if (tila) tila.innerHTML = viestit.map(function(v){ return '<div>' + v.replace(/</g, '&lt;') + '</div>'; }).join('')
+    + (uusia ? '<div style="margin-top:4px;color:var(--amber);">Mallit käyttävät luotausta, kun sovellus käynnistetään uudelleen.</div>' : '');
+  if (uusia) olValmisUudelleen();
+  olPiirraLista();
+}
+function olPoista(id){
+  var d = JSON.parse(JSON.stringify(omaLuotausLue()));
+  d.tuonnit = d.tuonnit.filter(function(t){ return t.id !== id; });
+  try { olTallenna(d); } catch (e) {}
+  var tila = document.getElementById('olTila');
+  if (tila) tila.innerHTML = '<div style="color:var(--amber);">Tuonti poistettu. Mallit päivittyvät, kun sovellus käynnistetään uudelleen.</div>';
+  olValmisUudelleen();
+  olPiirraLista();
+}
+window.olTuo = olTuo; window.olPoista = olPoista; window.olTallennaAnturi = olTallennaAnturi;
+function olPiirraLista(){
+  var el = document.getElementById('olLista'); if (!el) return;
+  var an = document.getElementById('olAnturi');
+  if (an && !an.dataset.alustettu){ an.dataset.alustettu = '1'; try { var s = parseFloat(localStorage.getItem(OL_ANTURI_LS)); if (s >= 0 && s <= 3) an.value = String(s); } catch (e) {} }
+  var d = omaLuotausLue();
+  if (!d.tuonnit.length){ el.innerHTML = '<p class="hint" style="margin:0;">Ei tuotuja tallenteita. Mallit käyttävät MML:n syvyysluokkia.</p>'; return; }
+  var pad = function(x){ return String(x).padStart(2, '0'); };
+  var rivit = d.tuonnit.map(function(t){
+    var a = typeof t.anturiM === 'number' ? t.anturiM : 0, mn = Infinity, mx = -Infinity;
+    t.syv.forEach(function(v){ v = v/100 + a; if (v < mn) mn = v; if (v > mx) mx = v; });
+    var tt = new Date(t.tuotu || 0), m = olMatka(t);
+    return '<div style="margin:6px 0;padding-top:6px;border-top:1px solid var(--line);"><strong>' + String(t.nimi || t.id).replace(/</g, '&lt;') + '</strong> · ' + olJarviNimi(t.jarvi, t.jarviNimi)
+      + (t.alku ? ' · ' + olAika(t.alku) : '')
+      + '<br>' + t.lat.length + ' pistettä, ' + (m >= 1000 ? olN1(m/1000) + ' km' : Math.round(m) + ' m') + (t.kestoS ? ', ' + Math.round(t.kestoS/60) + ' min' : '')
+      + ' · syvyys ' + olN1(mn) + '–' + olN1(mx) + ' m (anturi +' + a.toLocaleString('fi-FI', { maximumFractionDigits: 2 }) + ' m)'
+      + (typeof t.lampoMin === 'number' ? ' · vesi ' + olN1(t.lampoMin) + (t.lampoMax - t.lampoMin >= 0.1 ? '–' + olN1(t.lampoMax) : '') + ' °C' : '')
+      + ' · tuotu ' + tt.getDate() + '.' + (tt.getMonth() + 1) + '. klo ' + pad(tt.getHours()) + '.' + pad(tt.getMinutes())
+      + ' <button type="button" class="chip" style="padding:1px 8px;font-size:12px;margin-left:4px;" onclick="olPoista(\'' + t.id + '\')">Poista</button></div>';
+  });
+  var kaytossa = '';
+  try {
+    var jarvet = {}; d.tuonnit.forEach(function(t){ if (t.jarvi) jarvet[t.jarvi] = 1; });
+    kaytossa = Object.keys(jarvet).map(function(av){
+      var k = typeof window.akJarviKartta === 'function' ? window.akJarviKartta(av) : null; if (!k) return '';
+      var r = omaLuotausSolut(k);
+      return r && r.soluja ? olJarviNimi(av) + ': ' + r.soluja + ' ruutua (' + k.ruutu + ' m) saa syvyyden omasta luotauksesta' : '';
+    }).filter(Boolean).join(' · ');
+  } catch (e) {}
+  el.innerHTML = (kaytossa ? '<p style="margin:0 0 4px;">' + kaytossa + '.</p>' : '') + rivit.join('');
+}
+window.addEventListener('load', function(){
+  try { olPiirraLista(); } catch (e) {}
+  // järven nimi ja käytössä olevat ruudut tarvitsevat karttamoduulin: piirretään uudelleen, kun se on ladattu
+  var kerrat = 0, ajastin = setInterval(function(){
+    kerrat++;
+    if (typeof window.akJarviKartta === 'function' || kerrat > 30){ clearInterval(ajastin); try { olPiirraLista(); } catch (e) {} }
+  }, 2000);
+});
+
     function syvyysPisteessa(lat, lon, sadeM) {
       // v142: järvellä, jonka syvyys on vain oletus, pisteen syvyyttä ei anneta
       if (currentLocation && currentLocation.syvyysTuntematon) return null;
@@ -3517,7 +3811,8 @@ body{padding-bottom:66px}
         const av0 = (typeof karttaAvain === 'function') ? karttaAvain() : null;
         if (av0 && window.akKatettu(av0, lat, lon) === false) return null;
       }
-      try { var m = mmlMinMax(lat, lon, sadeM || 300); if (m) return m; } catch (e) { console.warn('MML-syvyys:', e.message); }
+      var oma = null; try { oma = omaLuotausMinMax(lat, lon, sadeM || 300); } catch (e) {}   // v172
+      try { var m = mmlMinMax(lat, lon, sadeM || 300); if (m) return omaLuotausYhdista(m, oma); } catch (e) { console.warn('MML-syvyys:', e.message); }
       var avain = (typeof karttaAvain === 'function') ? karttaAvain() : null;
       if (avain && typeof window.akSyvyysJarvessa !== 'function' && typeof window.akKaynnistaHiljaa === 'function') {
         try { window.akKaynnistaHiljaa(); } catch (e) {}
@@ -3527,13 +3822,17 @@ body{padding-bottom:66px}
       else if (typeof window.akSyvyysPisteessa === 'function') a = window.akSyvyysPisteessa(lat, lon, sadeM);
       // v128: varalähteen nimi järven mukaan (Ähtäri ja Kivijärvi: MML:stä rakennettu ruudukko)
       if (a) a.lahde = avain === 'hirvijarvi' ? 'oma kartta' : ['ahtarinjarvi', 'kivijarvi', 'alajarvi', 'evijarvi', 'patana', 'kyrkosjarvi', 'kalajarvi'].indexOf(avain) >= 0 ? 'MML-ruudukko' : (avain === 'toisvesi' || avain === 'saimaa_imatra') ? 'karttakuva' : avain === 'lappajarvi' ? 'MML-ruudukko' : 'DataDeck';
-      return a;
+      return omaLuotausYhdista(a, oma);   // v172
     }
     function syvyysValmis() {
       return !!mmlSyvData || typeof window.akSyvyysJarvessa === 'function'
         || (typeof window.akValmis === 'function' && window.akValmis());
     }
-    function syvLahde(sy) { return sy && sy.lahde && sy.lahde.indexOf('MML') === 0 ? ' (MML)' : ''; }
+    function syvLahde(sy) {   // v172: oma luotaus mukaan
+      if (!sy || !sy.lahde) return '';
+      var oma = sy.lahde.indexOf('oma luotaus') >= 0;
+      return sy.lahde.indexOf('MML') === 0 ? ' (MML' + (oma ? ' + oma luotaus' : '') + ')' : oma ? ' (' + sy.lahde + ')' : '';
+    }
     setTimeout(function () { if ('indexedDB' in window) mmlIdbHae(); }, 3000);   // MML-syvyydet muistiin, jos ladattu
 
     /* ===== JÄRVIKARTAN RAKENNUS MML:STÄ — 1.10.2026 (v126) =====
@@ -7473,7 +7772,7 @@ function akKiertoAvain(){
   var k = jarvi.kartta, t = 0, sl = k.syvyysLuokat || '', ms = k.maski || '';
   for (var i = 0; i < sl.length; i += 7) t = (t*31 + sl.charCodeAt(i)) % 1000000007;
   for (var j = 0; j < ms.length; j += 7) t = (t*31 + ms.charCodeAt(j)) % 1000000007;
-  return jarvi.nimi + '|' + k.W + 'x' + k.H + '|' + k.ruutu + '|' + t;
+  return jarvi.nimi + '|' + k.W + 'x' + k.H + '|' + k.ruutu + '|' + t + '|' + omaLuotausTarkiste(k);   // v172: oma luotaus muuttaa syvyyttä
 }
 function akKiertoDb(){
   return new Promise(function(ok, ei){
@@ -7625,6 +7924,25 @@ window.akLapiPaivita = function(){
   piirra();
 };
 
+/* v172: oma luotaus kartalle (pääosa pääkoodissa, ks. OMA LUOTAUS KAIKULUOTAIMELTA). */
+// Kartta: jälki pisteinä Syvyyskartta-tilassa
+function akPiirraOmaLuotaus(ctx, win, S){
+  if (akTila !== 'syvyys' || !jarvi || !jarvi.kartta) return;
+  var P = omaLuotausPisteet(); if (!P.length) return;
+  var k = jarvi.kartta, kerr = akVientiKerroin > 1 ? akVientiKerroin : 1, r = 1.5*kerr;
+  ctx.fillStyle = 'rgba(45,18,80,.9)';
+  for (var a = 0; a < P.length; a++){
+    var p = P[a];
+    var i = (p.lon - k.lansiLon)*111320*Math.cos(p.lat*Math.PI/180)/k.ruutu, j = (k.pohjoisLat - p.lat)*111320/k.ruutu;
+    if (i < win.i0 || j < win.j0 || i >= win.i0 + win.w || j >= win.j0 + win.h) continue;
+    ctx.beginPath(); ctx.arc((i - win.i0)*S, (j - win.j0)*S, r, 0, 6.2832); ctx.fill();
+  }
+}
+
+// v172: pääkoodi tarvitsee järven nimen ja ruudukon (JARVET on tämän moduulin sisällä)
+window.akJarviNimi = function(av){ return JARVET[av] ? JARVET[av].nimi : null; };
+window.akJarviKartta = function(av){ return JARVET[av] ? JARVET[av].kartta : null; };
+
 function puraSyvyysLuokat(k){
   if (!k || !k.syvyysLuokat) return null;
   var raaka = atob(k.syvyysLuokat), n = k.W*k.H, s = new Float32Array(n);
@@ -7635,6 +7953,7 @@ function puraSyvyysLuokat(k){
     var l = (i & 1) ? (tavu & 15) : (tavu >> 4);
     s[i] = l < luokat.length ? luokat[l] + anturi : 0;
   }
+  try { omaLuotausKorvaa(k, s); } catch (e) { console.warn('Oma luotaus:', e && e.message); }   // v172
   return s;
 }
 
@@ -8146,6 +8465,7 @@ function piirra(){
   akViime = { murt:murt, hs:hs, vir:vir, vi:vi, kf:kf, saumat:saumat, reuna:reunaK, syvK:syvK, kue:kue, kun:kun, kv:kv, kentta:kentta, k:k, S:S, win:win, kalaRaja:kalaRaja, turva:akVene().turva, dir:d.dir };
   akPiirraKuhaMerkit(ctx, win, S);   // v153
   akPiirraTaimenMerkit(ctx, win, S);   // v156
+  try { akPiirraOmaLuotaus(ctx, win, S); } catch (e) {}   // v172
   akPiirraMerkki(ctx, S);
   akKuhaInfoPaivita();
   akTaimenInfoPaivita();   // v156
@@ -15127,7 +15447,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v171';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v173';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -21351,7 +21671,7 @@ function tvAjasta() {
 
   var JAKO = {
     vesilla:   ['whatsappNappi','vesillaPaneeli','speedMonitorSection'],
-    raportit:  ['result','malliOsuvuus','pyyntiRaportti','lampoProfiilit','varmuuskopio']
+    raportit:  ['result','malliOsuvuus','pyyntiRaportti','lampoProfiilit','omaLuotaus','varmuuskopio']
     /* loput -> suunnittelu */
   };
   var RUUDUT = [
