@@ -12616,7 +12616,10 @@ lataa(eka);
       karvala: {
         id: "karvala",
         name: "Karvala (10 m Länsituulilinja)",
-        lat: 63.14251, lon: 23.53963,
+        // KORJATTU 7.10.2026 (v170): oli 63.14251, 23.53963, joka on MML-ruudukon mukaan noin 400 m maalla,
+        // joten paikka ei saanut syvyyspisteitä. Siirretty samalla leveydellä 10 m rajalle (MML-syvyysluokka
+        // ≥ 10 m alkaa 23.5540, noin 300 m rannasta). Hannun valinta 7.10.
+        lat: 63.14251, lon: 23.5540,
         type: "10.0 m kovuuskäyrä (14–17.5 m syvänteen laita)",
         hardness: "Kovuuden vaihettumislinja (Kova/Pehmeä)",
         targetSpecies: "Järvilohi & Taimen",
@@ -12624,11 +12627,39 @@ lataa(eka);
         idealWind: "Länsituuli (W/SW/NW) = Maatuuli",
         reason: "Länsituulella Karvalan puoli on maatuulessa (korjattu 22.9.2026: luki itätuuli, vaikka idealWind ja valinta ovat länsi). Syvänteestä nouseva kylmä vesi osuu 10 metrin kovuusseinämään houkutellen lohet."
       },
+      /* UUSI 7.10.2026 (v170): Hannun loppukauden taimenpaikat, Oma saalis (Hannun valinta 7.10.).
+         Sijainti Lowrancen sivukaikukuvista 30.7.2026: kursorin koordinaatti + kaistan keskilinja
+         kuvan mittakaavasta (20 m = 63 px, pohjoinen ylös), tarkkuus noin ±15 m. Nimet Hannun
+         karttasovelluksesta (lähin rannan tai lahden nimi); paikka varmistettu MML-rantaviivan muodosta. */
+      kotalahti: {
+        id: "kotalahti",
+        name: "Kotalahti (länsirannan kaista)",
+        lat: 63.1529, lon: 23.5485,
+        type: "Rantakaista 60–110 m rannasta, 2–4,5 m vettä; sivukaikukuvissa kiviä rannan puolella. Kaista n. 63,1505–63,1551 N",
+        hardness: "Kiviä rannan puolella (sivukaiku)",
+        targetSpecies: "Taimen",
+        tactic: "Aja rannan suuntaisesti kaistan keskilinjaa (63,1505–63,1551 N). Pohjaa alle 8 m, joten pintaharava 0,1–0,7 m; takilat pinnan tuntumaan, rannan puolella on kiviä.",
+        idealWind: "Länsi / Lounas (W/SW) = Maatuuli — sama geometria kuin Luoteisrannalla ja Karvalalla.",
+        reason: "Oma saalis: loppukauden taimenpaikkasi. Merkinnöissä ei ole päivämääriä eikä määriä."
+      },
+      tervasenkari: {
+        id: "tervasenkari",
+        name: "Tervasenkari (karin itäreuna)",
+        lat: 63.1349, lon: 23.5541,
+        type: "Tervasenkarin matalan laakion itäreuna, 2–4,5 m vettä; karin kivikko rannan puolella. Kaista n. 63,1336–63,1362 N",
+        hardness: "Kivikko karin puolella (sivukaiku, karttamerkit)",
+        targetSpecies: "Taimen",
+        tactic: "Aja karin reunaa (63,1336–63,1362 N), laakio rannan puolella. Pintaharava 0,1–0,7 m; laakiolla kiviä, takilat ylös.",
+        idealWind: "Länsi / Lounas (W/SW) = Maatuuli — länsirannan geometria (avovesi itään).",
+        reason: "Oma saalis: loppukauden taimenpaikkasi. Merkinnöissä ei ole päivämääriä eikä määriä."
+      },
       taimen_a: {
         id: "taimen_a",
-        name: "Taimenalue A",
+        // v171 (Hannu 7.10.2026): nimi rannalta. Lähin karttanimi Hannun karttakuvassa on Tervasenkari
+        // (noin 660 m); paikka on 12,5–17,5 m selkävedessä noin 1 km länsirannasta (MML). Vanha nimi suluissa.
+        name: "Tervasenkarin selkä (Taimenalue A)",
         lat: 63.1396, lon: 23.5674,
-        type: "Ei vielä tiedossa — tarkista pohjanmuoto Genesikseltä",
+        type: "Selkävesi 12,5–17,5 m noin 1 km länsirannasta (MML) — pohjanmuoto tarkistettava Genesikseltä",
         hardness: "Ei vielä tiedossa",
         targetSpecies: "Taimen",
         tactic: "Painopiste 23 GPS-merkitystä taimensaaliista. Aja alueen läpi ja katso mitä pohja/kovuus näyttää.",
@@ -12637,9 +12668,10 @@ lataa(eka);
       },
       taimen_b: {
         id: "taimen_b",
-        name: "Taimenalue B",
+        // v171: lähin ranta Kärnänsaari (noin 900 m pohjoiseen); 2–4,5 m matalikko (MML). Vanha nimi suluissa.
+        name: "Kärnänsaaren lounaismatala (Taimenalue B)",
         lat: 63.1383, lon: 23.6374,
-        type: "Ei vielä tiedossa — tarkista pohjanmuoto Genesikseltä",
+        type: "Matalikko 2–4,5 m noin 900 m Kärnänsaaren etelärannasta (MML) — pohjanmuoto tarkistettava Genesikseltä",
         hardness: "Ei vielä tiedossa",
         targetSpecies: "Taimen",
         tactic: "Painopiste 6 GPS-merkitystä taimensaaliista. Idempänä pääalueesta.",
@@ -13052,6 +13084,8 @@ lataa(eka);
       kuolio:       { maatuuli: 250 },
       selkasaaret:  { maatuuli: null, suosiTuuli: 330 },
       luodeisranta: { maatuuli: 250 },
+      kotalahti:    { maatuuli: 250 },   // v170
+      tervasenkari: { maatuuli: 250 },   // v170
       karvala:      { maatuuli: 270 },
       taimen_a:     { maatuuli: null },
       taimen_b:     { maatuuli: null },
@@ -13093,13 +13127,20 @@ lataa(eka);
         // 2 Oma ennätys
         if (key === 'pihlajasaari' && o.kausi === 'autumn' && o.lampo >= 4 && o.lampo <= 10 && ilta)
           lisaa(35, 'Oma saalis', 'Oma ennätystaimen nousi täältä 2.11.2025 auringonlaskun aikaan, samanlaisessa kylmässä syysvedessä. Parempaa perustetta ei ole kuin oma kala.');
+        // 2c v171: omien GPS-saaliiden painopisteet (Hannu 7.10.2026: sama peruste kuin 2b:ssä). Päivämäärät puuttuvat,
+        // joten kausi on tuntematon ja pisteet tulevat aina; määrä ratkaisee painon (A 23 kalaa → 12, B 6 kalaa → 6).
+        if (key === 'taimen_a') lisaa(12, 'Oma saalis', 'Omien GPS-merkittyjen taimensaaliidesi suurin keskittymä: 23 kalaa. Merkinnöissä ei ole päivämääriä, joten kautta ei tiedetä, ja pisteet ovat samat ympäri vuoden.');
+        if (key === 'taimen_b') lisaa(6, 'Oma saalis', 'Toistuva oma taimenkeskittymä: 6 GPS-merkittyä kalaa. Merkinnöissä ei ole päivämääriä, joten kautta ei tiedetä.');
+        // 2b v170: loppukauden omat taimenpaikat (Hannu 7.10.2026). Ei päivämääriä eikä määriä → maltillinen paino.
+        if ((key === 'kotalahti' || key === 'tervasenkari') && o.kausi === 'autumn' && typeof o.lampo === 'number' && o.lampo <= 14)
+          lisaa(12, 'Oma saalis', 'Loppukauden taimenpaikkasi: olet saanut täältä taimenta syksyllä, kun vesi on viilennyt. Merkinnöissä ei ole päivämääriä eikä määriä, joten paino on maltillinen.');
         // 3 Maatuuli: suunta, voima ja kesto — ja onko kylmää vettä nousemassa
         if (lisa.maatuuli !== null && typeof o.tuuliSuunta === 'number') {
           if (kulmaEro(o.tuuliSuunta, lisa.maatuuli) <= 60) {
             const voima = Math.max(0, Math.min(1, (o.tuuliMs - 1) / 3));      // 1 m/s → 0, 4 m/s → täysi
             const pysyva = tuuliKertyma && tuuliKertyma.luotettava && kulmaEro(tuuliKertyma.suunta, lisa.maatuuli) <= 60;
             const kesto = pysyva ? 1 : 0.6;
-            const perus = key === 'kuolio' ? (ilta ? 30 : 22) : (key === 'karvala' ? (ilta ? 22 : 30) : (key === 'luodeisranta' ? 24 : 30));
+            const perus = key === 'kuolio' ? (ilta ? 30 : 22) : (key === 'karvala' ? (ilta ? 22 : 30) : (key === 'luodeisranta' || key === 'kotalahti' || key === 'tervasenkari' ? 24 : 30));
             const pp = Math.round(perus * voima * kesto);
             if (voima === 0)
               lisaa(0, 'Konsensus', 'Maatuulen suunta on oikea, mutta ' + n1(o.tuuliMs) + ' m/s on liian heikko liikuttamaan vettä. Tästä ei tule pisteitä.');
@@ -15086,7 +15127,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v168';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v171';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -17182,7 +17223,19 @@ lataa(eka);
             };
             const dt = new Date(H.time[i]);
             const r = taimenkeliCore(cond, dt, hour, sunRise, sunSet);
-            const valoisa = !(hour < sunRise - 1.5 || hour > sunSet + 1.5);
+            /* v169: valoisa = aurinko yli −6° (siviilihämärä). Ennen ±1,5 h nousun ja laskun
+               ympärillä, mikä lokakuussa ulottui pimeään (8.10. klo 20 aurinko −10°).
+               auringonKorkeus on 63°N:llä noin puoli tuntia myöhässä (ei aikayhtälöä eikä
+               taittumista), joten korkeus ankkuroidaan Open-Meteon todelliseen nousuun
+               (aamu) tai laskuun (ilta), jossa aurinko on −0,83°. */
+            let valoisa;
+            try {
+              const pv = new Date(dateStr + 'T12:00');
+              const doy = Math.floor((pv - new Date(pv.getFullYear(), 0, 0)) / 86400000), tz = -pv.getTimezoneOffset() / 60;
+              const ank = hour < 12 ? sunRise : sunSet;
+              const k = auringonKorkeus(hour, doy, coords.lat, coords.lon, tz) - auringonKorkeus(ank, doy, coords.lat, coords.lon, tz) - 0.83;
+              valoisa = isFinite(k) ? k > -6 : !(hour < sunRise - 1.5 || hour > sunSet + 1.5);
+            } catch (e) { valoisa = !(hour < sunRise - 1.5 || hour > sunSet + 1.5); }
             hourly[hour] = { score: r.score, valoisa };
             // Paras tunti valitaan vain valoisalta ajalta.
             if (valoisa && (!best || r.score > best.score)) {
@@ -17282,7 +17335,7 @@ lataa(eka);
               <span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${p.v > 0 ? 'var(--cyan)' : 'var(--hard-red)'};white-space:nowrap;">${p.v > 0 ? '+' : ''}${p.v}</span>
             </div>`).join('')}
           </div>
-          <p class="hint" style="margin-top:10px;">Iso luku on <strong>koko päivän mittari</strong>: parhaan yhtenäisen kuuden tunnin jakson keskiarvo valoisana aikana. Se erottaa päivän jossa on yksi hyvä hetki päivästä joka kantaa koko reissun. Huipputunti näkyy erikseen — se on useimmiten hämärässä ja korkea lähes joka päivä, joten se ei yksin kerro paljon. Veden lämpötila oletetaan samaksi koko jaksolle, ja sääennusteen epävarmuus kasvaa selvästi kolmatta päivää kohti.</p>`;
+          <p class="hint" style="margin-top:10px;">Iso luku on <strong>koko päivän mittari</strong>: parhaan yhtenäisen kuuden tunnin jakson keskiarvo valoisana aikana ja hämärässä (aurinko yli −6°). Se erottaa päivän jossa on yksi hyvä hetki päivästä joka kantaa koko reissun. Huipputunti näkyy erikseen — se on useimmiten hämärässä ja korkea lähes joka päivä, joten se ei yksin kerro paljon. Veden lämpötila oletetaan samaksi koko jaksolle, ja sääennusteen epävarmuus kasvaa selvästi kolmatta päivää kohti.</p>`;
       } catch (err) {
         console.error('Taimenkeli-ennuste epäonnistui:', err);
         el.innerHTML = '<p class="hint" style="color:var(--hard-red);">Ennusteen haku epäonnistui.</p>';
@@ -18915,8 +18968,10 @@ lataa(eka);
               } else {
                 mixText += " — viittaa kumpuamiseen tai sekoittumiseen.";
               }
-            } else if (puoli === 'alatuuli' && maxTuore >= 5) {
-              /* Tämä on se tapaus jonka yksi mittari piilottaa kokonaan. */
+            } else if (puoli === 'alatuuli' && maxTuore >= 5 && kerrTila !== false) {
+              /* Tämä on se tapaus jonka yksi mittari piilottaa kokonaan.
+                 v169: ei sekoittuneelle järvelle — siinä ei ole kallistuvaa harppauskerrosta
+                 (Hannu 7.10.: raportti sanoi samaan aikaan "sekoittunut" ja "kallistuva kerros"). */
               mixText += " HUOM: " + asemaNimi + " on alatuulen rannalla, jossa lämmin päällysvesi"
                       +  " kasautuu. Tasainen tai nouseva lämpötila siellä EI sulje pois kumpuamista"
                       +  " vastarannalla — päinvastoin, kallistuva harppauskerros tuottaa molemmat"
@@ -19993,7 +20048,7 @@ lataa(eka);
 
       document.getElementById('hotspotHeroContainer').innerHTML = `
     <div class="spot-hero">
-      <div class="spot-title">⭐ Juuri Nyt: ${hotspotResult.topSpot.name}</div>
+      <div class="spot-title">⭐ ${ennusteTila ? paivaStr + 'klo ' + timeStr : 'Juuri Nyt'}: ${hotspotResult.topSpot.name}</div>
       <div class="spot-meta">🎯 Kohde: ${hotspotResult.topSpot.targetSpecies} · Tuuli: ${wDir ? wDir.toFixed(0) + '°' : 'W'} (${wSpeed.toFixed(1)} m/s)</div>
       <div class="spot-grid">
         <div class="stat-box"><div class="lbl">Pohjanmuoto</div><div class="val">${hotspotResult.topSpot.type}</div></div>
@@ -21222,7 +21277,10 @@ function tvTiivistelma() {
   const heroT = document.querySelector('#hotspotHeroContainer .spot-title');
   if (heroT && tvTxt(heroT)) {
     const pis = (tvTxt(document.querySelector('#hotspotHeroContainer .spot-hero')).match(/(\d+) pistettä/) || [])[1];
-    rivit.push(['⭐', 'Paras paikka nyt: <b>' + tvEsc(tvTxt(heroT).replace(/^⭐\s*Juuri Nyt:\s*/i, '')) + '</b>' + (pis ? ' (' + pis + ' p)' : ''), 'hotspotHeroContainer']);
+    let milloin = 'nyt';   // v169: ennustepäivänä päivä ja kello, ei "nyt"
+    try { if (typeof ennusteTila !== 'undefined' && ennusteTila) { const h = analyysiHetkiTaiNyt();
+      milloin = ['su','ma','ti','ke','to','pe','la'][h.getDay()] + ' ' + h.getDate() + '.' + (h.getMonth() + 1) + '. klo ' + String(h.getHours()).padStart(2, '0'); } } catch (e) {}
+    rivit.push(['⭐', 'Paras paikka ' + milloin + ': <b>' + tvEsc(tvTxt(heroT).replace(/^⭐\s*[^:]*:\s*/, '')) + '</b>' + (pis ? ' (' + pis + ' p)' : ''), 'hotspotHeroContainer']);
   }
   const s = window.tvSyvyydet;
   if (s) rivit.push(['🎣', 'Syvyydet: taimen ' + ltN1(s.taimen) + ' m · järvilohi ' + ltN1(s.jarvilohi) + ' m · kuha ' + ltN1(s.kuha) + ' m', 'lajiKontti']);
