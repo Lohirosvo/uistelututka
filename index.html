@@ -7621,8 +7621,12 @@ function akSileaSyvyys(){
   if (!akSyvyys || !jarvi) return null;
   if (akSileaVM && akSileaVM.jarvi === jarvi) return akSileaVM.kentta;
   var k = jarvi.kartta, W = k.W, H = k.H, r = Math.max(1, Math.round(75/k.ruutu)), out = new Float32Array(mask.length);
+  // v176 (Hannu 7.10.: "sais vain korjata karttaa"): omalla luotauksella mitattua ruutua ei tasoiteta naapureihin,
+  // vaan kartta näyttää mitatun mediaanin sellaisenaan. Muut ruudut tasoitetaan kuten ennen (mitatut mukana).
+  var oma = null; try { var ro = omaLuotausSolut(k); oma = ro && ro.soluja ? ro.solut : null; } catch (e) {}
   for (var q = 0; q < mask.length; q++){
     if (!mask[q]) continue;
+    if (oma && oma[q] !== undefined){ out[q] = akSyvyys[q]; continue; }
     var i = q % W, j = (q/W)|0, s = 0, n = 0;
     for (var a = -r; a <= r; a++) for (var b = -r; b <= r; b++){
       var ii = i + a, jj = j + b; if (ii < 0 || jj < 0 || ii >= W || jj >= H) continue;
@@ -7953,7 +7957,7 @@ function akPiirraOmaLuotaus(ctx, win, S){
   if (akTila !== 'syvyys' || !jarvi || !jarvi.kartta) return;
   var P = omaLuotausPisteet(); if (!P.length) return;
   var k = jarvi.kartta, kerr = akVientiKerroin > 1 ? akVientiKerroin : 1, r = 1.5*kerr;
-  ctx.fillStyle = 'rgba(45,18,80,.9)';
+  ctx.fillStyle = 'rgba(45,18,80,.16)';   // v176: himmeä, kertoo vain mistä mitattu syvyys on (Hannu 7.10.)
   for (var a = 0; a < P.length; a++){
     var p = P[a];
     var i = (p.lon - k.lansiLon)*111320*Math.cos(p.lat*Math.PI/180)/k.ruutu, j = (k.pohjoisLat - p.lat)*111320/k.ruutu;
@@ -9183,7 +9187,9 @@ function akNaytaPisteSisalto(){
     return;
   }
   if (akTila === 'syvyys' && akViime.syvK){
-    el.innerHTML = "Syvyys tässä noin <b>" + akViime.syvK[q].toFixed(1).replace(".", ",") + " m</b> · " + akSyvyysLahde() + " · pehmennetty ±75 m, ei navigointiin";
+    var omaQ = null; try { var ro2 = omaLuotausSolut(jarvi.kartta); omaQ = ro2 && ro2.solut ? ro2.solut[q] : null; } catch (e) {}   // v176
+    el.innerHTML = "Syvyys tässä noin <b>" + akViime.syvK[q].toFixed(1).replace(".", ",") + " m</b> · "
+      + (omaQ !== null && omaQ !== undefined ? "oma luotaus, ruudun (" + jarvi.kartta.ruutu + " m) mediaani, ei tasoitettu" : akSyvyysLahde() + " · pehmennetty ±75 m") + ", ei navigointiin";
     return;
   }
   if (akTila === 'konvergenssi' && akViime.kf){
@@ -15473,7 +15479,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v175';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v176';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
