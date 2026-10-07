@@ -9656,12 +9656,14 @@ function akPiirraTaimenMerkit(ctx, win, S){
   K.kohteet.forEach(function(p){
     var i = (p.lon - k.lansiLon)*111320*Math.cos(p.lat*Math.PI/180)/k.ruutu, j = (k.pohjoisLat - p.lat)*111320/k.ruutu;
     if (i < win.i0 || j < win.j0 || i >= win.i0 + win.w || j >= win.j0 + win.h) return;
-    var x = (i - win.i0)*S, y = (j - win.j0)*S, oma = p.tyyppi === 'oma';
+    var x = (i - win.i0)*S, y = (j - win.j0)*S, oma = p.tyyppi === 'oma', vt = p.tyyppi === 'vaihtoehto';   // v168: V = ennusteiden vaihtoehto
     var r = (oma ? (p.paras ? 9 : 7.5) : 9.5)*kerr;
     ctx.beginPath(); ctx.arc(x, y, r + 2.2*kerr, 0, 6.2832); ctx.fillStyle = "rgba(255,255,255,.92)"; ctx.fill();
     ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832);
-    ctx.fillStyle = oma ? "#3d8fd6" : "#ffffff"; ctx.fill();
+    ctx.fillStyle = oma ? "#3d8fd6" : vt ? "#dbe9f7" : "#ffffff"; ctx.fill();
+    if (vt && ctx.setLineDash) ctx.setLineDash([4*kerr, 4*kerr]);
     ctx.lineWidth = (oma ? 1.6 : 2.6)*kerr; ctx.strokeStyle = oma ? "#0b2f52" : "#1c6fb8"; ctx.stroke();
+    if (vt && ctx.setLineDash) ctx.setLineDash([]);
     if (p.tunnus){
       ctx.font = "700 " + Math.round((p.tunnus.length >= 3 ? 8.5 : 10)*kerr) + "px system-ui, sans-serif";   // v158: T10–T20
       ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#0b2f52";
@@ -9684,9 +9686,12 @@ function akTaimenInfoPaivita(){
       + '): ei ehdokkaita, koska ' + (K.syy || 'malli ei löytänyt kohtia') + '. Tarkemmin Raportit-ruudun taimenpaneelissa.';
     return;
   }
+  var osat = [];   // v168: selite niistä merkeistä, joita on
+  if (K.kohteet.some(function(p){ return p.tyyppi === 'ehdokas'; })) osat.push('<b>valkoinen T-numero</b> on ehdokas harppauskerroksen mallista');
+  if (K.kohteet.some(function(p){ return p.tyyppi === 'oma'; })) osat.push('<b>sininen pallo</b> nimetty paikka, jolle malli antaa pisteitä (isoin paras)');
+  if (K.kohteet.some(function(p){ return p.tyyppi === 'vaihtoehto'; })) osat.push('<b>katkoviivainen V</b> kohta, joka toistuu yli puolessa ensemble-ennusteista');
   el.innerHTML = 'Taimenpaikat hetkelle ' + t.getDate() + '.' + (t.getMonth()+1) + '. klo ' + pad(t.getHours()) + ':' + pad(t.getMinutes())
-    + ': <b>valkoinen T-numero</b> on ehdokas harppauskerroksen mallista'
-    + (K.kohteet.some(function(p){ return p.tyyppi === 'oma'; }) ? ', <b>sininen pallo</b> nimetty paikka, jolle malli antaa pisteitä (isoin paras)' : '')
+    + ': ' + osat.join(', ')
     + '. Napauta merkkiä. Paikat lasketaan Analysoi-napista, eivät vaihdu kartan tunnin mukana.';
 }
 window.akAsetaTaimenMerkit = function(paalla){
@@ -14127,7 +14132,19 @@ lataa(eka);
       return Object.values(kartta).sort((a, b) => a.t - b.t);
     }
 
-    function taimenHotspotit(o, avain) {
+    /* v168: kolmas parametri v (valinnainen) ennusteen varmuutta varten:
+       v.tuuli = tuulisarja, joka korvaa taimenTuuliSarjan (ensemble-jäsen),
+       v.sivuton = ei kirjoiteta viimeisinTaimenKenttaa (saaliskirjaus käyttää sitä),
+       v.aaltoMuisti = Map, johon aaltosuodattimen tulos muistetaan ruuduittain saman ajon sisällä.
+       Ilman v:tä toiminta on täsmälleen sama kuin v167:ssä. */
+    function taimenAalto(lat, lon, aikaMs, muisti) {
+      if (typeof window.akMalliSync !== 'function') return null;
+      if (!muisti) return window.akMalliSync(lat, lon, aikaMs);
+      const k = lat.toFixed(5) + ',' + lon.toFixed(5);
+      if (!muisti.has(k)) muisti.set(k, window.akMalliSync(lat, lon, aikaMs));
+      return muisti.get(k);
+    }
+    function taimenHotspotit(o, avain, v) {
       if (TAIMEN_HOTSPOTJARVET.indexOf(avain) < 0) return null;
       if (typeof window.akTaimenKentta !== 'function') return { tila: 'lataus', lista: [] };
       const hetki = new Date(o.hetki), aikaMs = hetki.getTime();
@@ -14141,10 +14158,10 @@ lataa(eka);
         return { tila: (hp && hp.kerrostunut === false) ? 'sekoittunut' : 'eiKerrosta', lista: [], hp, avain };
       }
       const syvRaja = (typeof o.highT === 'number' ? o.highT : 4) + 2;
-      const K = window.akTaimenKentta({ avain, h1: p.h1, gp: p.gp, tuuli: taimenTuuliSarja(aikaMs), aikaMs, syvRaja });
+      const K = window.akTaimenKentta({ avain, h1: p.h1, gp: p.gp, tuuli: (v && v.tuuli) || taimenTuuliSarja(aikaMs), aikaMs, syvRaja });
       if (!K) return { tila: 'eiKarttaa', lista: [], avain };
       if (K.tila !== 'ok') return { tila: K.tila, lista: [], p, avain };
-      viimeisinTaimenKentta = { avain, hetkiMs: aikaMs, K };
+      if (!(v && v.sivuton)) viimeisinTaimenKentta = { avain, hetkiMs: aikaMs, K };
       const lowT = typeof o.lowT === 'number' ? o.lowT : 0.5, highT = typeof o.highT === 'number' ? o.highT : 4;
       const kmVrk = K.ci * 86400 / 1000, TiH = K.Ti ? K.Ti / 3600 : null;
       const pisteyta = x => {
@@ -14191,7 +14208,7 @@ lataa(eka);
         if (lista.length >= TAIMEN_EHDOKKAITA) break;
         if (nimetyt.some(sp => haversineDistMeters(sp.lat, sp.lon, x.c.lat, x.c.lon) < 700)) continue;
         if (lista.some(v => haversineDistMeters(v.c.lat, v.c.lon, x.c.lat, x.c.lon) < 1000)) continue;
-        const m = (samaKortti && typeof window.akMalliSync === 'function') ? window.akMalliSync(x.c.lat, x.c.lon, aikaMs) : null;
+        const m = samaKortti ? taimenAalto(x.c.lat, x.c.lon, aikaMs, v && v.aaltoMuisti) : null;
         if (m && typeof m.aaltoM === 'number' && typeof m.raja === 'number' && m.aaltoM > m.raja) { suljettuja++; continue; }
         let lahin = null;
         nimetyt.forEach(sp => { const e = haversineDistMeters(sp.lat, sp.lon, x.c.lat, x.c.lon); if (!lahin || e < lahin.m) lahin = { sp, m: e }; });
@@ -14214,6 +14231,7 @@ lataa(eka);
 
     function taimenHotspotHtml(o) {
       const avain = (typeof karttaAvain === 'function') ? karttaAvain() : null;
+      window.taimenVarmuusLyhyt = null;   // v168: tiivistelmän rivi, asetetaan alla jos tulos on valmis
       if (!avain || TAIMEN_HOTSPOTJARVET.indexOf(avain) < 0) {
         viimeisinTaimenEhdokkaat = []; viimeisinTaimenKentta = null; taimenKartalle(null, null, null); return '';
       }
@@ -14249,13 +14267,17 @@ lataa(eka);
       const intro = p(chip('Malli') + 'Teoreettinen malli, jota ei ole sovitettu saaliisiin, koska otit ovat tulleet pääosin pinnasta. Tuuli kallistaa harppauskerrosta: tuulen yläpuolella se nousee, '
         + 'alapuolella painuu. Tuulen jälkeen kerros heilahtaa takaisin tai, leveällä järvellä, kiertää rantaa. Malli laskee tämän viiden vuorokauden tuulesta koko järvelle yhtenä kallistuvana tasona '
         + '(Stevens & Imberger 1996). Harppauksen lähde: ' + (e.p.lahdeLyhyt || e.p.lahde) + '.');
+      const ev = ensvPaneeli(o, e, avain, chip);   // v168: ennusteen varmuus (tyhjä, jos hetki ei ole tulevaisuudessa)
       if (K.vaihe === 'tyyni' || K.nousuMax < 0.5) {
-        taimenKartalle(avain, o.hetki, [], 'tuuli ei ole viiden vuorokauden aikana kallistanut kerrosta mainittavasti');
-        return alku + meta + intro + p('Tuuli ei ole viiden vuorokauden aikana kallistanut kerrosta mainittavasti (nousu alle 0,5 m), joten hotspotteja ei synny. Kerros on noin ' + n1(K.h1) + ' metrissä koko järvellä.') + '</div>';
+        taimenKartalle(avain, o.hetki, ev.merkit, 'tuuli ei ole viiden vuorokauden aikana kallistanut kerrosta mainittavasti');
+        return alku + meta
+          + (ev.lyhyt ? '<div style="margin-top:8px;"><button type="button" class="chip" onclick="taimenNaytaKartalla()">🗺 Näytä kartalla</button>' + ev.lyhyt + '</div>' : '')
+          + intro + p('Tuuli ei ole viiden vuorokauden aikana kallistanut kerrosta mainittavasti (nousu alle 0,5 m), joten hotspotteja ei synny. Kerros on noin ' + n1(K.h1) + ' metrissä koko järvellä.') + ev.tarkka + '</div>';
       }
       const tunnus = i => 'T' + (i + 1);
       const rivit = e.lista.slice(0, 3).map((x, i) => '<div style="margin:9px 0 0;padding-top:7px;border-top:1px solid var(--line);">'
         + '<strong>Ehdokas ' + tunnus(i) + '</strong> <span class="hint">(' + x.pisteet + ' p, ' + x.c.lat.toFixed(5) + ', ' + x.c.lon.toFixed(5) + ', pohja ' + n1(x.c.f) + ' m)</span>'
+        + (ev.pysyy ? ' <span class="hint">· ' + ensvPysyyTxt(ev, i) + '</span>' : '')
         + x.syyt.slice().sort((a, b) => b.p - a.p).map(syyRivi).join('')
         + (x.lahin ? '<div class="hint" style="margin:3px 0 0;">Lähin nimetty paikka ' + x.lahin.sp.name + ', ' + (x.lahin.m >= 1000 ? n1(x.lahin.m / 1000) + ' km' : Math.round(x.lahin.m) + ' m') + '; ehdokas on siitä ' + x.lahin.suunta + '.</div>' : '')
         + '</div>').join('');
@@ -14280,13 +14302,15 @@ lataa(eka);
       if (e.suljettuja) huom.push(e.suljettuja + ' parempaa ehdokasta jäi pois, koska aalto ylittää veneesi rajan.');
       huom.push('Malli on tarkistettava mittauksella: Depth Raider -lukema ehdokkaan kohdalla kertoo, onko kerros siellä missä malli sanoo.');
       const kartalle = e.lista.map((x, i) => ({ lat: x.c.lat, lon: x.c.lon, tyyppi: 'ehdokas', tunnus: tunnus(i), nimi: 'Taimen-ehdokas ' + tunnus(i),
-        teksti: x.pisteet + ' pistettä (' + x.syyt.slice().sort((a, b) => b.p - a.p).map(y => y.lyhyt).filter(Boolean).join(', ') + '), harppaus ' + n1(Math.max(0, x.c.hq)) + ' m, pohja ' + n1(x.c.f) + ' m. Malli, ei omaa saalista.' }))
+        teksti: x.pisteet + ' pistettä (' + x.syyt.slice().sort((a, b) => b.p - a.p).map(y => y.lyhyt).filter(Boolean).join(', ') + '), harppaus ' + n1(Math.max(0, x.c.hq)) + ' m, pohja ' + n1(x.c.f) + ' m. Malli, ei omaa saalista.'
+          + (ev.pysyy ? ' Ennusteen varmuus: ' + ensvPysyyTxt(ev, i) + '.' : '') }))
         .concat(e.nimetyt.filter(x => x.pisteet > 0).slice(0, 3).map((x, i) => ({ lat: x.sp.lat, lon: x.sp.lon, tyyppi: 'oma', paras: i === 0, tunnus: '',
-          nimi: x.sp.name, teksti: 'nimetty paikka, malli antaa ' + x.pisteet + ' pistettä (harppaus täällä ' + (x.c ? n1(Math.max(0, x.c.hq)) : '–') + ' m).' })));
+          nimi: x.sp.name, teksti: 'nimetty paikka, malli antaa ' + x.pisteet + ' pistettä (harppaus täällä ' + (x.c ? n1(Math.max(0, x.c.hq)) : '–') + ' m).' })))
+        .concat(ev.merkit);
       taimenKartalle(avain, o.hetki, kartalle);
       return alku + meta
-        + '<div style="margin-top:8px;"><button type="button" class="chip" onclick="taimenNaytaKartalla()">🗺 Näytä kartalla</button></div>'
-        + intro + ehdOsa + nimOsa
+        + '<div style="margin-top:8px;"><button type="button" class="chip" onclick="taimenNaytaKartalla()">🗺 Näytä kartalla</button>' + ev.lyhyt + '</div>'
+        + intro + ehdOsa + ev.tarkka + nimOsa
         + '<p class="hint" style="margin:8px 0 0;">' + huom.join(' ') + '</p></div>';
     }
 
@@ -14320,6 +14344,319 @@ lataa(eka);
             if (tp && taimenViimeArgs === o) tp.innerHTML = taimenHotspotHtml(o);
           }, 0);
         }).catch(function () {});
+    }
+
+    /* ===== ENNUSTEEN VARMUUS ENSEMBLESTÄ — 7.10.2026 (v168) =====
+       Hannu 6.10.2026 (vertailu muihin, "positiivinen kateus"): Fishing DataDeck näyttää
+       painekäyrässä kahden mallin rinnalla ennusteen vaihteluvälin. Uistelututkassa 48H-
+       suunnittelun taimenhotspotit (kallistuma, paluuheilahdus, kiertävä aalto, rintama)
+       laskettiin YHDESTÄ tuuliennusteesta, ja sen virhe kertautui mallin läpi näkymättömänä.
+       Hannun valinta: "Tee 1" (ehdotus: lasketaan hotspotit ensemblen jäsenillä ja kerrotaan
+       muodossa "T1 pysyy 9/10 ennusteessa").
+       - Lähde: Open-Meteo Ensemble API (ensemble-api.open-meteo.com/v1/ensemble), ei avainta,
+         ilmainen ei-kaupalliseen käyttöön. Ensisijainen ECMWF IFS 0,25° (51 jäsentä, 3 h välein,
+         Open-Meteo interpoloi tunneittain); jos malli ei vastaa, DWD ICON EPS (40). Tunnusta
+         kokeillaan kahdella nimellä, koska lähteissä on kaksi nimeämistapaa (ecmwf_ifs025_ensemble /
+         ecmwf_ifs025). Jäsenten avaimet wind_speed_10m ja wind_speed_10m_memberNN (Tutkittu: ohje
+         ja asiakaskirjastot 6.–7.10.2026). Oikeaa vastausta ei ole voitu hakea testikoneelta
+         (verkko estetty); paneelin Arvio-rivi kertoo, mikä tunnus puhelimessa toimi.
+       - Keskikohta on SAMA deterministinen ennuste ja menneen tuulen historia kuin muualla
+         (taimenTuuliSarja). Ensemblestä otetaan vain poikkeama jäsenten keskiarvosta:
+         U' = max(0, U_det + (U_j − Ū)), suunta d' = d_det + (d_j − d̄), d̄ nopeudella painotettu.
+         Näin 25 km:n ruudun taso (maa vs. järvi) ei siirrä kaikkia jäseniä samaan suuntaan,
+         vaan mitataan ennusteen epävarmuus (Arvio). Tunneille, joilla deterministinen ennuste
+         puuttuu, jäsen sellaisenaan. Menneisyys (≤ nyt) on kaikissa sama.
+       - Pysyvyys: ehdokas Tn pysyy jäsenessä, jos jäsenen omissa 20 ehdokkaassa on kohta 1 km:n
+         sisällä (= ehdokkaiden vähimmäisväli). Vankka ≥ 80 %, kohtalainen 50–79 %, herkkä < 50 %
+         (Arvio). Vaihtoehdot V1–V3: kohdat, jotka toistuvat yli puolessa jäsenistä mutta ovat yli
+         1 km kaikista T-ehdokkaista.
+       - Aaltosuodatus käyttää keskiennustetta kaikille jäsenille (rajoitus).
+       - Ajetaan vain, kun analyysihetki on ≥ 3 h tulevaisuudessa (ennustepäivä); nykyhetken
+         analyysi nojaa mitattuun menneeseen tuuleen. Yksi jäsen kerrallaan (setTimeout), ettei
+         puhelin jäädy; tulos välimuistiin (avain = järvi, hetki, kerros, ehdokkaiden paikat).
+         Ensemble talteen localStorageen (uistelututka_ensemble): jos verkko ei vastaa, alle
+         vuorokauden vanha haku kelpaa, ja se kerrotaan. Virhe yritetään uudelleen 2 min jälkeen. */
+    const ENSV_MALLIT = [
+      { id: 'ecmwf_ifs025_ensemble', nimi: 'ECMWF' },
+      { id: 'ecmwf_ifs025', nimi: 'ECMWF' },
+      { id: 'icon_seamless_eps', nimi: 'DWD ICON' },
+      { id: 'icon_seamless', nimi: 'DWD ICON' }
+    ];
+    const ENSV_LS = 'uistelututka_ensemble';
+    const ENSV_SADE_M = 1000, ENSV_MIN_H = 3, ENSV_TUORE_H = 6, ENSV_VANHA_H = 24, ENSV_UUSINTA_MS = 120e3;
+    let ensvData = null;       // { haettu, lat, lon, malli, nimi, aika: [ms], jasenet: [{ nro, U: [], d: [] }] }
+    let ensvTulokset = {};     // avain -> { id, tila: 'laskee'|'valmis'|'virhe', n, N, tulos, virhe }
+    let ensvAjo = null, ensvLaskuri = 0;
+    const ENSV_SUUNNAT = ['pohjoisesta', 'koillisesta', 'idästä', 'kaakosta', 'etelästä', 'lounaasta', 'lännestä', 'luoteesta'];
+    const ENSV_VAIHEET = { tuuli: 'tuuli kallistaa', seiche: 'paluuheilahdus', kelvin: 'kiertävä aalto', tyyni: 'tyyntä', muu: 'ei laskettu' };
+    function ensvKulma(a, b) { return ((a - b) % 360 + 540) % 360 - 180; }   // etumerkillinen ero, −180…180
+    function ensvM(la1, lo1, la2, lo2) {   // nopea etäisyys (m), riittää 1 km:n vertailuun
+      const dy = (la2 - la1) * 111320, dx = (lo2 - lo1) * 111320 * Math.cos((la1 + la2) * Math.PI / 360);
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+    function ensvLuokka(n, N) { const q = N ? n / N : 0; return q >= 0.8 ? 'vankka' : q >= 0.5 ? 'kohtalainen' : 'herkkä'; }
+    function ensvEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+    function ensvKlo(ms) {
+      const d = new Date(ms), pad = n => String(n).padStart(2, '0');
+      return ['su', 'ma', 'ti', 'ke', 'to', 'pe', 'la'][d.getDay()] + ' klo ' + pad(d.getHours());
+    }
+    function ensvVali(a, b) {   // "ke klo 23 – to klo 01" tai "to klo 01–04"
+      return new Date(a).toDateString() === new Date(b).toDateString()
+        ? ensvKlo(a) + '–' + String(new Date(b).getHours()).padStart(2, '0') : ensvKlo(a) + ' – ' + ensvKlo(b);
+    }
+
+    // Open-Meteon ensemble-vastaus jäseniksi. Avaimet: wind_speed_10m (kontrolli) ja _memberNN.
+    function ensvJasenet(j, nyt) {
+      const h = j && j.hourly;
+      if (!h || !Array.isArray(h.time)) return null;
+      const aika = h.time.map(x => typeof x === 'number' ? x * 1000 : new Date(String(x) + (/Z$|[+-]\d\d:?\d\d$/.test(String(x)) ? '' : 'Z')).getTime());
+      const alku = aika.findIndex(t => t >= nyt - 6 * 3600e3);
+      if (alku < 0) return null;
+      const yks = (j.hourly_units || {});
+      const jasenet = [];
+      Object.keys(h).forEach(k => {
+        const m = /^wind_speed_10m(?:_member(\d+))?(?:_[a-z0-9_]+)?$/.exec(k);
+        if (!m || !Array.isArray(h[k])) return;
+        const kd = k.replace('wind_speed_10m', 'wind_direction_10m');
+        if (!Array.isArray(h[kd])) return;
+        const kerroin = /km/i.test(yks[k] || '') ? 1 / 3.6 : 1;   // varmistus, jos yksikkö ei ole m/s
+        jasenet.push({ nro: m[1] ? parseInt(m[1], 10) : 0,
+          U: h[k].slice(alku).map(x => typeof x === 'number' ? Math.round(x * kerroin * 10) / 10 : null),
+          d: h[kd].slice(alku).map(x => typeof x === 'number' ? Math.round(x) : null) });
+      });
+      jasenet.sort((a, b) => a.nro - b.nro);
+      return { aika: aika.slice(alku), jasenet };
+    }
+
+    async function ensvHae(lat, lon, astiMs) {
+      const nyt = Date.now();
+      const sopii = (d, ikaH) => d && d.aika && d.aika.length && d.aika[d.aika.length - 1] >= astiMs - 1800e3
+        && Math.abs(d.lat - lat) < 0.15 && Math.abs(d.lon - lon) < 0.3 && nyt - d.haettu < ikaH * 3600e3 && d.jasenet && d.jasenet.length >= 10;
+      let talletettu = null;
+      try { talletettu = JSON.parse(localStorage.getItem(ENSV_LS) || 'null'); } catch (e) {}
+      if (sopii(ensvData, ENSV_TUORE_H)) return Object.assign(ensvData, { vanha: false });
+      if (sopii(talletettu, ENSV_TUORE_H)) { ensvData = talletettu; ensvData.vanha = false; return ensvData; }
+      const paivia = Math.min(15, Math.max(3, Math.ceil((astiMs - nyt) / 86400e3) + 2));
+      let syy = null;
+      for (const m of ENSV_MALLIT) {
+        const url = 'https://ensemble-api.open-meteo.com/v1/ensemble?latitude=' + lat.toFixed(3) + '&longitude=' + lon.toFixed(3)
+          + '&hourly=wind_speed_10m,wind_direction_10m&models=' + m.id + '&wind_speed_unit=ms&timeformat=unixtime&forecast_days=' + paivia;
+        let r = null, j = null;
+        const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+        const ajastin = ctrl ? setTimeout(() => ctrl.abort(), 25000) : null;   // hidas verkko järvellä
+        try {
+          r = await fetch(url, ctrl ? { signal: ctrl.signal } : undefined);
+          j = await r.json().catch(() => null);
+        } catch (e) {
+          syy = (e && e.name === 'AbortError') ? 'verkko ei vastannut 25 sekunnissa' : 'ei verkkoyhteyttä';
+          break;   // verkkovirhe: muut mallit eivät auta
+        } finally { if (ajastin) clearTimeout(ajastin); }
+        if (!r.ok || !j || j.error) { syy = 'rajapinta: ' + ((j && j.reason) || 'HTTP ' + r.status); continue; }   // väärä mallin nimi → seuraava
+        const d = ensvJasenet(j, nyt);
+        if (!d || d.jasenet.length < 10) { syy = 'ennusteita alle 10'; continue; }
+        Object.assign(d, { haettu: nyt, lat, lon, malli: m.id, nimi: m.nimi, vanha: false });
+        ensvData = d;
+        try { localStorage.setItem(ENSV_LS, JSON.stringify(d)); } catch (e) { console.warn('Ensemble: tallennus ei mahtunut', e && e.name); }
+        return d;
+      }
+      // Verkko ei auttanut: alle vuorokauden vanha haku kelpaa, ja se kerrotaan
+      const vara = sopii(ensvData, ENSV_VANHA_H) ? ensvData : sopii(talletettu, ENSV_VANHA_H) ? talletettu : null;
+      if (vara) { ensvData = vara; ensvData.vanha = true; return ensvData; }
+      throw new Error(syy || 'ei vastausta');
+    }
+
+    // Jäsenistä tuulisarjat: menneisyys sama kuin perussarjassa, tulevaisuus = perus + jäsenen poikkeama.
+    function ensvSkenaariot(D, perus, nytMs, hetkiMs) {
+      const H = 3600e3, det = {}, idx = {}, ka = {};
+      perus.forEach(w => { det[Math.round(w.t / H)] = w; });
+      D.aika.forEach((t, i) => { idx[Math.round(t / H)] = i; });
+      Object.keys(idx).forEach(hk => {
+        const i = idx[hk]; let su = 0, sx = 0, sy = 0, n = 0;
+        D.jasenet.forEach(j => {
+          const U = j.U[i], d = j.d[i];
+          if (typeof U !== 'number' || typeof d !== 'number') return;
+          su += U; sx += U * Math.sin(d * Math.PI / 180); sy += U * Math.cos(d * Math.PI / 180); n++;
+        });
+        if (n) ka[hk] = { U: su / n, d: (Math.atan2(sx, sy) * 180 / Math.PI + 360) % 360 };
+      });
+      const menneet = perus.filter(w => w.t <= nytMs);
+      const tulevat = [];
+      for (let t = Math.floor(nytMs / H) * H + H; t <= hetkiMs; t += H) tulevat.push(Math.round(t / H));
+      return D.jasenet.map(j => {
+        const s = menneet.slice();
+        tulevat.forEach(hk => {
+          const i = idx[hk], dt = det[hk], k = ka[hk];
+          const Uj = i !== undefined ? j.U[i] : null, dj = i !== undefined ? j.d[i] : null;
+          if (typeof Uj !== 'number' || typeof dj !== 'number' || !k) { if (dt) s.push(dt); return; }
+          if (dt) s.push({ t: hk * H, U: Math.max(0, dt.U + (Uj - k.U)), dir: ((dt.dir + ensvKulma(dj, k.d)) % 360 + 360) % 360 });
+          else s.push({ t: hk * H, U: Uj, dir: dj });
+        });
+        return { nro: j.nro, sarja: s };
+      });
+    }
+
+    function ensvAvain(e, hetkiMs) {
+      return e.avain + '|' + Math.round(hetkiMs / 600e3) + '|' + (e.p ? e.p.h1 + '/' + Number(e.p.gp).toFixed(6) : '') + '|' + (e.K ? e.K.vaihe : '')
+        + '|' + (e.lista || []).map(x => x.c.lat.toFixed(4) + ',' + x.c.lon.toFixed(4)).join(';');
+    }
+
+    function ensvYhteenveto(e, tul, perus, nytMs, hetkiMs) {
+      const N = tul.length, R = ENSV_SADE_M, okt = tul.filter(r => r.t && r.t.tila === 'ok');
+      const lista = e.lista || [];
+      const pysyy = lista.map(x => okt.filter(r => (r.t.lista || []).some(y => ensvM(x.c.lat, x.c.lon, y.c.lat, y.c.lon) <= R)).length);
+      const vaiheet = {};
+      tul.forEach(r => {
+        const v = (r.t && r.t.tila === 'ok' && r.t.K) ? ((r.t.K.vaihe === 'tyyni' || r.t.K.nousuMax < 0.5) ? 'tyyni' : r.t.K.vaihe) : 'muu';
+        vaiheet[v] = (vaiheet[v] || 0) + 1;
+      });
+      const ehdokkaita = okt.filter(r => r.t.lista && r.t.lista.length).length;
+      // tuuli analyysihetkellä ja hetki, jolloin tuuli viimeksi oli ≥ 3 m/s (mallin raja kallistukselle)
+      const viimeinen = s => { let w = null; s.forEach(x => { if (x.t <= hetkiMs + 1800e3) w = x; }); return w; };
+      const tuulet = tul.map(r => viimeinen(r.sarja)).filter(Boolean), dw = viimeinen(perus);
+      const Us = tuulet.map(w => w.U).sort((a, b) => a - b);
+      const pct = (arr, q) => arr.length ? arr[Math.min(arr.length - 1, Math.max(0, Math.round(q * (arr.length - 1))))] : null;
+      const suuntaSama = dw ? tuulet.filter(w => Math.abs(ensvKulma(w.dir, dw.dir)) <= 45).length : null;
+      const loput = tul.map(r => { let t = null; r.sarja.forEach(x => { if (x.t > nytMs && x.t <= hetkiMs + 1800e3 && x.U >= 3) t = x.t; }); return t; })
+        .filter(x => x !== null).sort((a, b) => a - b);
+      // vaihtoehdot: kohdat yli puolessa jäsenistä, yli 1 km kaikista T-ehdokkaista
+      const pisteet = [];
+      okt.forEach((r, si) => (r.t.lista || []).forEach(y => pisteet.push({ lat: y.c.lat, lon: y.c.lon, f: y.c.f, si })));
+      pisteet.forEach(pt => { const s = new Set(); pisteet.forEach(q => { if (ensvM(pt.lat, pt.lon, q.lat, q.lon) <= R) s.add(q.si); }); pt.n = s.size; });
+      pisteet.sort((a, b) => b.n - a.n);
+      const vaihtoehdot = [];
+      for (const pt of pisteet) {
+        if (pt.n * 2 <= N) break;
+        if (lista.some(x => ensvM(pt.lat, pt.lon, x.c.lat, x.c.lon) <= R)) continue;
+        if (vaihtoehdot.some(v => ensvM(pt.lat, pt.lon, v.lat, v.lon) <= R)) continue;
+        vaihtoehdot.push(pt);
+        if (vaihtoehdot.length >= 3) break;
+      }
+      const nimetyt = (e.nimetyt || []).map(x => ({ nimi: x.sp.name, perus: x.pisteet,
+        n: okt.filter(r => (r.t.nimetyt || []).some(y => y.sp === x.sp && y.pisteet > 0)).length }));
+      return { N, pysyy, vaiheet, ehdokkaita, vaihtoehdot, nimetyt,
+               tuuli: { p10: pct(Us, 0.1), p90: pct(Us, 0.9), det: dw, suuntaSama, n: tuulet.length },
+               loppu: loput.length >= Math.max(3, N / 2) ? { p10: pct(loput, 0.1), p90: pct(loput, 0.9), n: loput.length } : null };
+    }
+
+    async function ensvAloita(k, o, e, avain) {
+      ensvAjo = k;
+      const r = ensvTulokset[k], hetkiMs = new Date(o.hetki).getTime(), nytMs = Date.now();
+      let laskuAlku = null;
+      try {
+        const c = currentLocation;
+        const D = await ensvHae(c.lat, c.lon, hetkiMs);
+        if (ensvAjo !== k) return;   // uusi analyysi ohitti tämän
+        const perus = taimenTuuliSarja(hetkiMs);
+        const sk = ensvSkenaariot(D, perus, nytMs, hetkiMs);
+        Object.assign(r, { N: sk.length, nimi: D.nimi, malli: D.malli, haettu: D.haettu, vanha: !!D.vanha });
+        ensvEdistys(k);
+        const muisti = new Map(), tul = [];
+        laskuAlku = performance.now();
+        for (let i = 0; i < sk.length; i++) {
+          if (ensvAjo !== k) return;
+          let t = null;
+          try { t = taimenHotspotit(o, avain, { tuuli: sk[i].sarja, sivuton: true, aaltoMuisti: muisti }); } catch (er) { console.warn('Ensemble-jäsen ' + sk[i].nro + ':', er && er.message); }
+          tul.push({ nro: sk[i].nro, t, sarja: sk[i].sarja });
+          r.n = i + 1;
+          ensvEdistys(k);
+          await new Promise(res => setTimeout(res, 0));   // yksi jäsen kerrallaan: näyttö ei jäädy
+        }
+        r.tulos = ensvYhteenveto(e, tul, perus, nytMs, hetkiMs);
+        r.tila = 'valmis'; r.valmiina = Date.now(); r.kestoMs = Math.round(performance.now() - laskuAlku);   // laskenta ilman hakua
+      } catch (er) {
+        r.tila = 'virhe'; r.virhe = (er && er.message) || String(er); r.virheAika = Date.now();
+      }
+      if (ensvAjo === k) ensvAjo = null;
+      try { taimenPaivitaTuulenJalkeen(); }   // piirtää paneelin uudelleen (sama avain → tulos välimuistista)
+      catch (er) { console.warn('Ennusteen varmuus, piirto:', er && er.message); }
+    }
+
+    // Edistyminen tekstisolmuun (characterData ei käynnistä raportin tiivistystä uudelleen)
+    function ensvEdistys(k) {
+      const r = ensvTulokset[k], el = document.getElementById('taimenVarmuusTila');
+      if (!r || !el || el.dataset.ensv !== String(r.id) || !el.firstChild) return;
+      el.firstChild.nodeValue = r.N ? 'Ennusteen varmuus: lasketaan ' + r.n + '/' + r.N + ' ennustetta (' + r.nimi + ')…' : 'Ennusteen varmuus: haetaan ensemble-ennustetta…';
+    }
+    function ensvUudelleen() {
+      Object.keys(ensvTulokset).forEach(k => { if (ensvTulokset[k].tila === 'virhe') delete ensvTulokset[k]; });
+      taimenPaivitaTuulenJalkeen();
+    }
+    window.ensvUudelleen = ensvUudelleen;
+
+    function ensvPysyyTxt(ev, i) {
+      const t = ev.pysyy; if (!t || t.pysyy[i] === undefined) return '';
+      return 'ennusteissa ' + t.pysyy[i] + '/' + t.N + ' (' + ensvLuokka(t.pysyy[i], t.N) + ')';
+    }
+
+    /* Paneelin osat: lyhyt (näkyy kokoon taitettunakin, kartta-napin vieressä), tarkka (perusteluissa),
+       karttamerkit (V1–V3) ja tulos ehdokasriveille. Käynnistää laskennan, jos tulosta ei ole. */
+    function ensvPaneeli(o, e, avain, chip) {
+      const tyhja = { lyhyt: '', tarkka: '', merkit: [], pysyy: null };
+      if (!e || e.tila !== 'ok' || !e.K || !currentLocation) return tyhja;
+      const hetkiMs = new Date(o.hetki).getTime();
+      if (!(hetkiMs - Date.now() >= ENSV_MIN_H * 3600e3)) return tyhja;
+      const k = ensvAvain(e, hetkiMs);
+      let r = ensvTulokset[k];
+      if (r && r.tila === 'valmis' && Date.now() - r.valmiina > ENSV_TUORE_H * 3600e3) { delete ensvTulokset[k]; r = null; }
+      if (r && r.tila === 'virhe' && Date.now() - r.virheAika > ENSV_UUSINTA_MS) { delete ensvTulokset[k]; r = null; }
+      if (!r) {
+        const avaimet = Object.keys(ensvTulokset);
+        if (avaimet.length >= 12) delete ensvTulokset[avaimet[0]];
+        r = ensvTulokset[k] = { id: ++ensvLaskuri, tila: 'laskee', n: 0, N: 0 };
+        ensvAloita(k, o, e, avain);
+      }
+      const kuori = s => '<div id="taimenVarmuus" style="margin-top:8px;font-size:12.5px;line-height:1.45;">' + s + '</div>';
+      if (r.tila === 'laskee')
+        return Object.assign(tyhja, { lyhyt: kuori('<span class="hint" id="taimenVarmuusTila" data-ensv="' + r.id + '">'
+          + (r.N ? 'Ennusteen varmuus: lasketaan ' + r.n + '/' + r.N + ' ennustetta (' + ensvEsc(r.nimi) + ')…' : 'Ennusteen varmuus: haetaan ensemble-ennustetta…') + '</span>') });
+      if (r.tila === 'virhe')
+        return Object.assign(tyhja, { lyhyt: kuori(chip('Tieto puuttuu') + 'Ennusteen varmuutta ei saatu (' + ensvEsc(r.virhe) + '), joten hotspotit nojaavat yhteen tuuliennusteeseen. '
+          + '<button type="button" class="chip" style="padding:2px 9px;font-size:12px;" onclick="ensvUudelleen()">Yritä uudelleen</button>') });
+      const T = r.tulos, N = T.N, lista = e.lista || [], pad = n => String(n).padStart(2, '0');
+      const hk = new Date(r.haettu), haettuTxt = 'haettu ' + (new Date().toDateString() === hk.toDateString() ? '' : hk.getDate() + '.' + (hk.getMonth() + 1) + '. ') + 'klo ' + pad(hk.getHours()) + ':' + pad(hk.getMinutes());
+      const tw = T.tuuli, dw = tw.det;
+      const tuuliTxt = (tw.p10 !== null ? 'Tuuli ' + ensvKlo(hetkiMs) + ': ' + Math.round(tw.p10) + '–' + Math.round(tw.p90) + ' m/s 80 %:ssa ennusteista' : '')
+        + (dw && tw.suuntaSama !== null ? '; suunta ' + ENSV_SUUNNAT[Math.round(((dw.dir % 360) + 360) % 360 / 45) % 8] + ' ±45° ' + tw.suuntaSama + '/' + N + ':ssä' : '') + '.';
+      const perusVaihe = (e.K.vaihe === 'tyyni' || e.K.nousuMax < 0.5) ? 'tyyni' : e.K.vaihe;
+      const vaiheTxt = (perusVaihe === 'tyyni' ? 'Tyyntä' : 'Vaihe ' + ENSV_VAIHEET[perusVaihe]) + ' ' + (T.vaiheet[perusVaihe] || 0) + '/' + N + ':ssä.';
+      let ydin;
+      if (lista.length) {
+        const kolme = lista.slice(0, 3).map((x, i) => 'T' + (i + 1) + ' ' + T.pysyy[i] + '/' + N + ' (' + ensvLuokka(T.pysyy[i], N) + ')').join(', ');
+        const vankat = T.pysyy.map((n, i) => ({ n, i })).filter(x => x.i >= 3 && x.n >= 0.8 * N).sort((a, b) => b.n - a.n).slice(0, 3);
+        ydin = kolme + (vankat.length ? '; vankkoja myös ' + vankat.map(x => 'T' + (x.i + 1) + ' ' + x.n + '/' + N).join(', ') : '') + '.';
+        window.taimenVarmuusLyhyt = 'ennusteissa T1 ' + T.pysyy[0] + '/' + N + ' (' + ensvLuokka(T.pysyy[0], N) + ')';
+      } else {
+        ydin = 'ehdokkaita syntyy ' + T.ehdokkaita + '/' + N + ' ennusteessa.';
+        window.taimenVarmuusLyhyt = 'ehdokkaita ' + T.ehdokkaita + '/' + N + ' ennusteessa';
+      }
+      const lyhyt = kuori(chip('Malli') + '<b>Ennusteen varmuus</b> (' + ensvEsc(r.nimi) + ', ' + N + ' ennustetta' + (r.vanha ? ', ' + haettuTxt + ', uudempaa ei saatu' : '') + '): '
+        + ydin + ' ' + tuuliTxt + ' ' + vaiheTxt
+        + (T.vaihtoehdot.length ? ' Kartalla myös V-merkit: kohdat, jotka toistuvat useimmissa ennusteissa.' : ''));
+      // tarkka osa perusteluihin
+      const rivi = (taso, s) => '<div style="margin:5px 0;">' + chip(taso) + s + '</div>';
+      const osat = [];
+      if (lista.length) {
+        const ryhma = ehto => T.pysyy.map((n, i) => ({ n, i })).filter(x => ehto(x.n)).map(x => 'T' + (x.i + 1)).join(', ') || 'ei yhtään';
+        osat.push(rivi('Malli', 'Kaikki ehdokkaat (/' + N + '): ' + T.pysyy.map((n, i) => 'T' + (i + 1) + ' ' + n).join(', ') + '. '
+          + 'Vankat (≥ 80 %): ' + ryhma(n => n >= 0.8 * N) + '. Herkät (< 50 %): ' + ryhma(n => n < 0.5 * N) + '.'));
+      }
+      osat.push(rivi('Malli', 'Vaiheet: ' + Object.keys(T.vaiheet).sort((a, b) => T.vaiheet[b] - T.vaiheet[a]).map(v => ENSV_VAIHEET[v] + ' ' + T.vaiheet[v]).join(', ') + ' (/' + N + ').'
+        + (T.loppu && (perusVaihe === 'seiche' || perusVaihe === 'kelvin') ? ' Tuuli heikkenee alle 3 m/s 80 %:ssa ennusteista välillä ' + ensvVali(T.loppu.p10, T.loppu.p90)
+          + '. Siitä riippuu, kuinka pitkälle paluuheilahdus tai kiertävä aalto on ehtinyt.' : '')));
+      if (T.vaihtoehdot.length)
+        osat.push(rivi('Malli', 'Vaihtoehdot (toistuvat yli puolessa ennusteista, yli 1 km T-ehdokkaista): '
+          + T.vaihtoehdot.map((v, i) => 'V' + (i + 1) + ' ' + v.n + '/' + N + ' (' + v.lat.toFixed(5) + ', ' + v.lon.toFixed(5) + ', pohja ' + n1(v.f) + ' m)').join('; ') + '.'));
+      const nimP = T.nimetyt.filter(x => x.n > 0);
+      if (nimP.length)
+        osat.push(rivi('Malli', 'Nimetyt paikat saavat pisteitä: ' + nimP.sort((a, b) => b.n - a.n).slice(0, 4).map(x => ensvEsc(x.nimi) + ' ' + x.n + '/' + N).join(', ') + '.'));
+      osat.push(rivi('Arvio', 'Hajonta on ' + ensvEsc(r.nimi) + ':n ensemble-ennusteesta (' + ensvEsc(r.malli) + ', ' + haettuTxt + '), keskikohta sama tuuliennuste ja tuulihistoria kuin muualla sovelluksessa. '
+        + 'Ehdokas pysyy, kun ennusteen omissa 20 ehdokkaassa on kohta 1 km:n sisällä. Rajat vankka 80 % ja herkkä 50 % ovat arvioita. Pysyvyys kertoo, kuinka herkkä tulos on tuuliennusteen virheelle, ei kalojen määrää. '
+        + 'Aaltosuodatus käyttää keskiennustetta. Kumpuamisen, vajoaman ja konvergenssin kartat käyttävät samaa keskiennustetta: kun tuulen suunta hajoaa, niidenkin paikat vaihtelevat.'));
+      const tarkka = '<p style="font-size:14px;margin:12px 0 0;"><strong>Ennusteen varmuus</strong> <span class="hint">(' + N + ' ennustetta)</span></p>'
+        + '<div style="font-size:13px;line-height:1.45;">' + osat.join('') + '</div>';
+      const merkit = T.vaihtoehdot.map((v, i) => ({ lat: v.lat, lon: v.lon, tyyppi: 'vaihtoehto', tunnus: 'V' + (i + 1), nimi: 'Ennusteiden vaihtoehto V' + (i + 1),
+        teksti: 'toistuu ' + v.n + '/' + N + ' ensemble-ennusteessa, mutta keskiennuste ei nosta sitä 20 parhaan joukkoon. Pohja ' + n1(v.f) + ' m. Malli, ei omaa saalista.' }));
+      return { lyhyt, tarkka, merkit, pysyy: T };
     }
 
     /* Ennuste tunnille: FMI ensin, Open-Meteo varalla, muuten null.
@@ -14749,7 +15086,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v167';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v168';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -20908,7 +21245,8 @@ function tvTiivistelma() {
   if (document.querySelector('#taimenPaneeli .spot-title')) {
     const K = window.akTaimenKohteet;
     const n = K && K.kohteet ? K.kohteet.filter(x => x.tyyppi === 'ehdokas').length : 0;
-    rivit.push(['🎯', 'Taimenen hotspotit: ' + (n ? n + ' ehdokasta kartalla' : K && K.syy ? 'ei ehdokkaita, koska ' + tvEsc(K.syy.split(/\.\s/)[0]) : 'katso paneeli'), 'taimenPaneeli']);
+    rivit.push(['🎯', 'Taimenen hotspotit: ' + (n ? n + ' ehdokasta kartalla' : K && K.syy ? 'ei ehdokkaita, koska ' + tvEsc(K.syy.split(/\.\s/)[0]) : 'katso paneeli')
+      + (window.taimenVarmuusLyhyt ? ' · ' + tvEsc(window.taimenVarmuusLyhyt) : ''), 'taimenPaneeli']);   // v168: ennusteen varmuus
   }
   el.innerHTML = '<h2 style="margin:0 0 6px;">Tiivistelmä</h2>'
     + rivit.map(r => '<div class="tv-rivi" onclick="tvMene(\'' + r[2] + '\')"><span>' + r[0] + '</span><span>' + r[1] + '</span></div>').join('')
