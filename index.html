@@ -13035,12 +13035,15 @@ lataa(eka);
         id: "pihlajasaari",
         name: "Pihlajasaaren eteläkärki",
         lat: 63.09062, lon: 23.66932,
-        type: "Ei vielä tiedossa — tarkista pohjanmuoto Genesikseltä",
-        hardness: "Ei vielä tiedossa",
+        // v174 (7.10.2026): pohjanmuoto Hannun omasta luotauksesta, luettu Genesis-syvyyskartasta (käyrät 0,25 m välein),
+        // sijainti sovitettu Pihlajasaaren eteläkärkeen ja Rämäkkösaaren pohjoiskärkeen ilmakuvasta. Vedenkorkeus luotauspäivänä
+        // enintään 5 cm alle 7.10.2026 tason (Hannu). Ajolinjat ovat päätelmä pohjanmuodosta, eivät saaliista.
+        type: "Saarten välinen satula 2,4–3,9 m (Pihlajasaari–Rämäkkösaari, 280 m); itäreunalla pohjois–eteläsuuntainen harjanne 1,6 m, sen länsipuolella pohja laskee 6 metriin noin 180 metrissä. Pihlajasaaren länsiranta putoaa jyrkästi 3–5 metriin, itäranta loivemmin 3 metriin. Kärjen 250 m:n säteellä puolet pohjasta on 1,2–4 m (oma luotaus)",
+        hardness: "Ei vielä tiedossa (sivukaikukuva PIHLAJASAARI.smf on olemassa, kovuutta ei ole arvioitu)",
         targetSpecies: "Taimen",
-        tactic: "Oma ennätystaimen nostettu täältä auringonlaskun aikaan.",
-        idealWind: "Ei vielä tiedossa",
-        reason: "Oma dokumentoitu ennätyssaalis."
+        tactic: "Oma ennätystaimen nostettu täältä auringonlaskun aikaan 2.11.2025. Opeteltavat linjat (päätelmä pohjanmuodosta): harjanteen länsireuna 2–3 m:n kohdalla, satulan keskilinja ja Pihlajasaaren länsirannan pudotus. Kirjaa myös tyhjät ajot.",
+        idealWind: "Ei vielä tiedossa — saaressa ei ole yhtä maatuulen suuntaa",
+        reason: "Oma saalis, vähän otantaa: ennätystaimen ja muutama muu kala harvoilla ajoilla. Konsensus: läheltä tiedetään saadun hyvänkokoisia."
       },
     };
 
@@ -13378,7 +13381,7 @@ lataa(eka);
       karnawest: `Syksyn 4–10 °C -ikkunassa (Harri Hotti) tai itätuulella Kärnän länsiranta on maatuulen suojassa (maa idässä, vesi lännessä) / rantavyöhyke on kalan aktiivisin alue. Tyyni pinta kumpuaa kylmää vettä ja muodostaa puhdasta lohivettä.`,
       kuolio: `Syksyn 4–10 °C -ikkunassa tai länsituulella Kuolionniemi nauttii maatuulesta ja rantaläheisyydestä — niemi on järven länsirannalla, joten maa on lännessä ja avovesi idässä. Viileän veden kumpuaminen ja 1.6 m kivipatin suoma näkösuoja kokoaa alueen isot taimenet.`,
       karna: `Yli 8 °C vedellä (kevät/kesä-suuntaisesti lämpenevänä) kala loittonee matalimmista lahdista. Kärnän kärjen 10–16 m syvä pudotus jakaa kraatterin virtaukset ja toimii turvallisena yleispaikkana myös silloin, kun tuulesta ei nouse selvää suuntaa.`,
-      pihlajasaari: `Nykyiset olosuhteet (syksy, 4–10 °C, ilta/hämärä) vastaavat tarkasti niitä, joissa nostit oman ennätystaimenesi täältä 2.11.2025 auringonlaskun aikaan. Tämä on ainoa paikka jolla on oma dokumentoitu saaliisi näissä olosuhteissa — vahvin mahdollinen peruste.`,
+      pihlajasaari: `Nykyiset olosuhteet (syksy, 4–10 °C, ilta/hämärä) vastaavat tarkasti niitä, joissa nostit oman ennätystaimenesi täältä 2.11.2025 auringonlaskun aikaan. Tämä on ainoa paikka jolla on oma dokumentoitu saaliisi näissä olosuhteissa — vahvin mahdollinen peruste. Saarten välinen satula on 2,4–3,9 m ja harjanne 1,6 m, ja 6 metrin syvänne on vieressä: kala pääsee kylmässä vedessä nousemaan matalalle lyhyen matkan päästä (oma luotaus).`,
       tarvolanniemi: `Suurkalarekisterin (16.6.2015) tuottoisin haukipaikka: järven kaksi suurinta haukea, 11,89 kg ja 10,62 kg, molemmat vetouistelulla.`,
     };
 
@@ -13446,7 +13449,7 @@ lataa(eka);
         }
         // 2 Oma ennätys
         if (key === 'pihlajasaari' && o.kausi === 'autumn' && o.lampo >= 4 && o.lampo <= 10 && ilta)
-          lisaa(35, 'Oma saalis', 'Oma ennätystaimen nousi täältä 2.11.2025 auringonlaskun aikaan, samanlaisessa kylmässä syysvedessä. Parempaa perustetta ei ole kuin oma kala.');
+          lisaa(35, 'Oma saalis', 'Oma ennätystaimen nousi täältä 2.11.2025 auringonlaskun aikaan, samanlaisessa kylmässä syysvedessä, ja muutama muu kala harvoilla ajoilla. Läheltä tiedetään saadun hyvänkokoisia (konsensus). Ajoja on vähän, joten paikka on vielä opettelussa.');
         // 2c v171: omien GPS-saaliiden painopisteet (Hannu 7.10.2026: sama peruste kuin 2b:ssä). Päivämäärät puuttuvat,
         // joten kausi on tuntematon ja pisteet tulevat aina; määrä ratkaisee painon (A 23 kalaa → 12, B 6 kalaa → 6).
         if (key === 'taimen_a') lisaa(12, 'Oma saalis', 'Omien GPS-merkittyjen taimensaaliidesi suurin keskittymä: 23 kalaa. Merkinnöissä ei ole päivämääriä, joten kautta ei tiedetä, ja pisteet ovat samat ympäri vuoden.');
@@ -15447,7 +15450,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v173';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v174';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
