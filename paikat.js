@@ -244,3 +244,25 @@ function karttaAvainNimesta(n) {
   if (n.startsWith('Saimaa')) return 'saimaa_imatra';   // v142
   return null;
 }
+
+/* LÄHTÖPAIKAT — 10.10.2026 (v181). Hannun valinta: tallennettu, järvikohtainen lähtöpaikka päivän suunnitelman
+   siirtymälle ja paluulle. Asetetaan tilannekuvassa (napautus kartalla → ⚓) tai etusivun suunnitelmasta
+   nykyisestä sijainnista. localStorage 'uistelututka_lahtopaikat' = { järvi: { lat, lon, aika, tapa } }. */
+const LAHTOPAIKAT_LS = 'uistelututka_lahtopaikat';
+function lahtopaikatLue() {
+  try { const L = JSON.parse(localStorage.getItem(LAHTOPAIKAT_LS) || '{}'); return (L && typeof L === 'object') ? L : {}; } catch (e) { return {}; }
+}
+function lahtopaikkaLue(avain) {
+  const L = lahtopaikatLue()[avain];
+  return (L && typeof L.lat === 'number' && typeof L.lon === 'number') ? L : null;
+}
+function lahtopaikkaTallenna(avain, lat, lon, tapa) {
+  if (!avain || typeof lat !== 'number' || typeof lon !== 'number') return false;
+  const L = lahtopaikatLue();
+  L[avain] = { lat: Math.round(lat * 1e6) / 1e6, lon: Math.round(lon * 1e6) / 1e6, aika: new Date().toISOString(), tapa: tapa || 'kartta' };
+  try { localStorage.setItem(LAHTOPAIKAT_LS, JSON.stringify(L)); return true; } catch (e) { return false; }
+}
+function lahtopaikkaPoista(avain) {
+  const L = lahtopaikatLue(); delete L[avain];
+  try { localStorage.setItem(LAHTOPAIKAT_LS, JSON.stringify(L)); return true; } catch (e) { return false; }
+}

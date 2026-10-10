@@ -2385,13 +2385,13 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=180" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=180" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=180" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=180" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=180" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="aaltomalli.js?v=180" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=180" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=181" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=181" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=181" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=181" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=181" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="aaltomalli.js?v=181" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=181" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     // Viimeisimmät arvot saaliskirjausta varten (päivittyvät GPS:stä ja analyysistä).
     let viimeisinGps = null;      // { lat, lon }
@@ -6339,22 +6339,13 @@ window.addEventListener('load', function(){
       } catch (e) { return null; }
     }
     function analyysiHetkiTaiNyt() { try { return analyysiHetki(); } catch (e) { return new Date(); } }
-    function kumpuArvio(U, L, tunteja) {
-      const p = kumpuParametrit();
-      if (!p || !(U > 0) || !(L > 0)) return null;
-      const Cd = U >= 5 ? 0.0015 : 0.001, uStar = Math.sqrt(Cd * 1.225 * U * U / p.rho);
-      const W = p.gp * p.h1 * p.h1 / (uStar * uStar * L);
-      const ci = Math.sqrt(p.gp * p.h1 * p.h2 / (p.h1 + p.h2)), kestoH = (2 * L / ci) / 4 / 3600;
-      const riittaa = typeof tunteja === 'number' ? tunteja >= kestoH : false;
-      return { W: W, kestoH: kestoH, riittaa: riittaa, vahva: W <= 1 && riittaa, mitattu: !!p.mitattu, lahde: p.lahde };
+    function kumpuArvio(U, L, tunteja) {   // v181: kaava kirjaus.js:ssä (kumpuArvioParam), sama tilannekuvassa
+      return kumpuArvioParam(kumpuParametrit(), U, L, tunteja);
     }
     window.kumpuArvio = kumpuArvio;   // aaltokartan moduuli käyttää tätä
     // Havaittu tuulen kesto (tuuliKertyma), jos suunta on sama kuin ennusteen alussa (±45°)
-    window.kumpuHistoriaTunteja = function (dir) {
-      try {
-        if (!tuuliKertyma || !tuuliKertyma.luotettava || typeof tuuliKertyma.suunta !== 'number') return 0;
-        return Math.abs(((tuuliKertyma.suunta - dir + 540) % 360) - 180) <= 45 ? tuuliKertyma.tunteja : 0;
-      } catch (e) { return 0; }
+    window.kumpuHistoriaTunteja = function (dir) {   // v181: kirjaus.js (kumpuHistoriaParam)
+      try { return kumpuHistoriaParam(tuuliKertyma, dir); } catch (e) { return 0; }
     };
     function kumpuPuhe() {
       try {
@@ -6951,6 +6942,120 @@ window.addEventListener('load', function(){
     }
     window.addEventListener('load', windyAlusta);
 
+/* ===== SUMURISKI: LASKENTA ===== v181 (10.10.2026): laskenta erotettu piirrosta sellaisenaan, jotta päivän
+   suunnitelma käyttää samaa tulosta (Hannun valinta 10.10.: sumu on suunnitelmassa vain varoitus). Piirto on
+   sumuriskiAlusta-funktiossa kuten ennen. Sama fysiikka kuin TrollingProssa; FMI Harmonie -näkyvyys rinnalla,
+   näytetään huonompi. */
+const SUMU_TASOT = [
+  {n:1, vari:"#1f7a4d", nimi:"Normaali",           kuvaus:"Näkyvyys yli 4 km."},
+  {n:2, vari:"#c4a000", nimi:"Utua",               kuvaus:"1–4 km. Kaukainen ranta häviää."},
+  {n:3, vari:"#e07b00", nimi:"Varovaisuutta",      kuvaus:"0,5–1 km. Pidä ranta näkyvissä."},
+  {n:4, vari:"#c8452c", nimi:"Vain tuttu jälki",   kuvaus:"n. 100–500 m. Hidas vauhti."},
+  {n:5, vari:"#8f1414", nimi:"Veneily mahdotonta", kuvaus:"alle 100 m."}
+];
+// Veden lämpötila: KYTKETTY 11.9.2026: alkuperäinen etsi window.uistelututka.olosuhteet.vesiLampo,
+// jota ei ole olemassa. Pintaveden lämpötila elää answers.temp-arvossa, johon
+// se tulee SYKEltä, DepthRider-profiilista tai kyselystä.
+function sumuVesi(){
+  try { if (typeof answers === "object" && typeof answers.temp === "number") return answers.temp; }
+  catch(e){}
+  return null;
+}
+function sumuTasoNakyvyydesta(m){
+  if (m == null) return null;
+  return m < 100 ? 5 : m < 500 ? 4 : m < 1000 ? 3 : m < 4000 ? 2 : 1;
+}
+// Sama fysiikka kuin TrollingProssa
+function sumuOmaTaso(T, Td, tuuli, pilvi, vesi, yo){
+  if (T == null || Td == null || tuuli == null) return null;
+  var p = 0, ero = T - Td, syyt = [];
+
+  if (ero <= 2){ p += (2-ero)*2; if (ero <= 1) syyt.push("kastepiste lähellä lämpötilaa"); }
+  if (yo && pilvi != null && pilvi < 40){ p += 1; syyt.push("selkeä yö"); }
+
+  if (vesi != null){
+    var d = vesi - T;
+    if (d >= 9){ p += 2.5; syyt.push("vesi paljon ilmaa lämpimämpi"); }
+    else if (d >= 7){ p += 1.5; syyt.push("vesi ilmaa lämpimämpi"); }
+    else if (d >= 5){ p += 0.7; }
+  }
+
+  if (tuuli < 1){ p += 2; syyt.push("tyyntä"); }
+  else if (tuuli < 2){ p += 1.5; syyt.push("heikko tuuli"); }
+  else if (tuuli < 3){ p += 0.8; }
+  else if (tuuli < 4){ p += 0.2; }
+  else { p *= 0.2; syyt = ["tuuli hajottaa sumun"]; }
+
+  return {taso: p >= 5.0 ? 5 : p >= 3.8 ? 4 : p >= 2.6 ? 3 : p >= 1.5 ? 2 : 1, syyt: syyt};
+}
+// alku = ensimmäinen tunti (Date, tasatunti UTC), tunnit = montako tuntia
+function sumuFmiUrl(lat, lon, alku, tunnit){
+  var z = new Date(alku.getTime() + (tunnit-1)*3600*1000);
+  return "https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature"
+    + "&storedquery_id=fmi::forecast::harmonie::surface::point::timevaluepair"
+    + "&latlon=" + lat + "," + lon
+    + "&parameters=Temperature,DewPoint,WindSpeedMS,TotalCloudCover,Visibility"
+    + "&timestep=60"
+    + "&starttime=" + alku.toISOString().slice(0,19) + "Z"
+    + "&endtime="   + z.toISOString().slice(0,19) + "Z";
+}
+function sumuParsi(txt){
+  var doc = new DOMParser().parseFromString(txt, "text/xml");
+  if (doc.querySelector("parsererror")) throw new Error("XML-jäsennys epäonnistui");
+  var kaikki = doc.getElementsByTagName("*"), ulos = {};
+  for (var i = 0; i < kaikki.length; i++){
+    if (kaikki[i].localName !== "MeasurementTimeseries") continue;
+    var id = kaikki[i].getAttribute("gml:id") || kaikki[i].getAttribute("id") || "";
+    var nimi = id.toLowerCase().split("-").pop(), sarja = [];
+    var tvp = kaikki[i].getElementsByTagName("*");
+    for (var j = 0; j < tvp.length; j++){
+      if (tvp[j].localName !== "MeasurementTVP") continue;
+      var aika = null, arvo = null, c = tvp[j].children;
+      for (var k = 0; k < c.length; k++){
+        if (c[k].localName === "time")  aika = c[k].textContent.trim();
+        if (c[k].localName === "value") arvo = parseFloat(c[k].textContent);
+      }
+      sarja.push({aika: new Date(aika), arvo: isNaN(arvo) ? null : arvo});
+    }
+    ulos[nimi] = sarja;
+  }
+  return ulos;
+}
+function sumuYhdista(s, tunnit){
+  var pohja = s.temperature || s.visibility;
+  if (!pohja || !pohja.length) throw new Error("Ennusteessa ei ollut arvoja");
+  var vesi = sumuVesi(), rivit = [];
+  for (var i = 0; i < pohja.length && i < tunnit; i++){
+    var g = function(n){ return s[n] && s[n][i] ? s[n][i].arvo : null; };
+    var aika = pohja[i].aika, h = aika.getHours();
+    var T = g("temperature"), Td = g("dewpoint"), w = g("windspeedms"),
+        pilvi = g("totalcloudcover"), nak = g("visibility");
+    var tFmi = sumuTasoNakyvyydesta(nak);
+    var oma  = sumuOmaTaso(T, Td, w, pilvi, vesi, (h >= 21 || h <= 8));
+    rivit.push({
+      aika:aika, T:T, Td:Td, tuuli:w, pilvi:pilvi, vesi:vesi, nakyvyys:nak,
+      tasoFmi:tFmi, tasoOma:oma ? oma.taso : null, syyt:oma ? oma.syyt : [],
+      taso: Math.max(tFmi || 1, (oma && oma.taso) || 1)
+    });
+  }
+  return rivit;
+}
+// Haku välimuistilla (30 min): sama paikka, sama alkutunti ja pituus haetaan kerran.
+var sumuValimuisti = {};
+function sumuHae(lat, lon, alku, tunnit){
+  var avain = lat + "," + lon + "," + alku.toISOString() + "," + tunnit, v = sumuValimuisti[avain];
+  if (v && Date.now() - v.t < 30*60e3) return v.p;
+  var p = fetch(sumuFmiUrl(lat, lon, alku, tunnit))
+    .then(function(r){
+      if (!r.ok) throw new Error("Ilmatieteen laitos vastasi virheellä " + r.status);
+      return r.text();
+    })
+    .then(function(txt){ return sumuYhdista(sumuParsi(txt), tunnit); });
+  sumuValimuisti[avain] = { t: Date.now(), p: p };
+  p.catch(function(){ delete sumuValimuisti[avain]; });
+  return p;
+}
+
 function sumuriskiAlusta(){
   "use strict";
 
@@ -6959,111 +7064,9 @@ function sumuriskiAlusta(){
   var LAT = (window.currentLocation && currentLocation.lat != null) ? currentLocation.lat : 63.130;
   var LON = (window.currentLocation && currentLocation.lon != null) ? currentLocation.lon : 23.670;
   var HOURS = 24;
-
-  // Veden lämpötila: kytke tähän uistelututkan SYKE-arvo.
-  function veden_lampotila(){
-    // KYTKETTY 11.9.2026: alkuperäinen etsi window.uistelututka.olosuhteet.vesiLampo,
-    // jota ei ole olemassa. Pintaveden lämpötila elää answers.temp-arvossa, johon
-    // se tulee SYKEltä, DepthRider-profiilista tai kyselystä.
-    try { if (typeof answers === "object" && typeof answers.temp === "number") return answers.temp; }
-    catch(e){}
-    return null;
-  }
-
-  var TASOT = [
-    {n:1, vari:"#1f7a4d", nimi:"Normaali",           kuvaus:"Näkyvyys yli 4 km."},
-    {n:2, vari:"#c4a000", nimi:"Utua",               kuvaus:"1–4 km. Kaukainen ranta häviää."},
-    {n:3, vari:"#e07b00", nimi:"Varovaisuutta",      kuvaus:"0,5–1 km. Pidä ranta näkyvissä."},
-    {n:4, vari:"#c8452c", nimi:"Vain tuttu jälki",   kuvaus:"n. 100–500 m. Hidas vauhti."},
-    {n:5, vari:"#8f1414", nimi:"Veneily mahdotonta", kuvaus:"alle 100 m."}
-  ];
+  var TASOT = SUMU_TASOT;
 
   var pad = function(n){ return ("0" + n).slice(-2); };
-
-  function tasoNakyvyydesta(m){
-    if (m == null) return null;
-    return m < 100 ? 5 : m < 500 ? 4 : m < 1000 ? 3 : m < 4000 ? 2 : 1;
-  }
-
-  // Sama fysiikka kuin TrollingProssa
-  function omaTaso(T, Td, tuuli, pilvi, vesi, yo){
-    if (T == null || Td == null || tuuli == null) return null;
-    var p = 0, ero = T - Td, syyt = [];
-
-    if (ero <= 2){ p += (2-ero)*2; if (ero <= 1) syyt.push("kastepiste lähellä lämpötilaa"); }
-    if (yo && pilvi != null && pilvi < 40){ p += 1; syyt.push("selkeä yö"); }
-
-    if (vesi != null){
-      var d = vesi - T;
-      if (d >= 9){ p += 2.5; syyt.push("vesi paljon ilmaa lämpimämpi"); }
-      else if (d >= 7){ p += 1.5; syyt.push("vesi ilmaa lämpimämpi"); }
-      else if (d >= 5){ p += 0.7; }
-    }
-
-    if (tuuli < 1){ p += 2; syyt.push("tyyntä"); }
-    else if (tuuli < 2){ p += 1.5; syyt.push("heikko tuuli"); }
-    else if (tuuli < 3){ p += 0.8; }
-    else if (tuuli < 4){ p += 0.2; }
-    else { p *= 0.2; syyt = ["tuuli hajottaa sumun"]; }
-
-    return {taso: p >= 5.0 ? 5 : p >= 3.8 ? 4 : p >= 2.6 ? 3 : p >= 1.5 ? 2 : 1, syyt: syyt};
-  }
-
-  // --- FMI-haku ----------------------------------------------------------
-  function fmiUrl(){
-    var a = new Date(Date.now() + 30*60*1000); a.setUTCMinutes(0,0,0);
-    var z = new Date(a.getTime() + (HOURS-1)*3600*1000);
-    return "https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature"
-      + "&storedquery_id=fmi::forecast::harmonie::surface::point::timevaluepair"
-      + "&latlon=" + LAT + "," + LON
-      + "&parameters=Temperature,DewPoint,WindSpeedMS,TotalCloudCover,Visibility"
-      + "&timestep=60"
-      + "&starttime=" + a.toISOString().slice(0,19) + "Z"
-      + "&endtime="   + z.toISOString().slice(0,19) + "Z";
-  }
-
-  function parsi(txt){
-    var doc = new DOMParser().parseFromString(txt, "text/xml");
-    if (doc.querySelector("parsererror")) throw new Error("XML-jäsennys epäonnistui");
-    var kaikki = doc.getElementsByTagName("*"), ulos = {};
-    for (var i = 0; i < kaikki.length; i++){
-      if (kaikki[i].localName !== "MeasurementTimeseries") continue;
-      var id = kaikki[i].getAttribute("gml:id") || kaikki[i].getAttribute("id") || "";
-      var nimi = id.toLowerCase().split("-").pop(), sarja = [];
-      var tvp = kaikki[i].getElementsByTagName("*");
-      for (var j = 0; j < tvp.length; j++){
-        if (tvp[j].localName !== "MeasurementTVP") continue;
-        var aika = null, arvo = null, c = tvp[j].children;
-        for (var k = 0; k < c.length; k++){
-          if (c[k].localName === "time")  aika = c[k].textContent.trim();
-          if (c[k].localName === "value") arvo = parseFloat(c[k].textContent);
-        }
-        sarja.push({aika: new Date(aika), arvo: isNaN(arvo) ? null : arvo});
-      }
-      ulos[nimi] = sarja;
-    }
-    return ulos;
-  }
-
-  function yhdista(s){
-    var pohja = s.temperature || s.visibility;
-    if (!pohja || !pohja.length) throw new Error("Ennusteessa ei ollut arvoja");
-    var vesi = veden_lampotila(), rivit = [];
-    for (var i = 0; i < pohja.length && i < HOURS; i++){
-      var g = function(n){ return s[n] && s[n][i] ? s[n][i].arvo : null; };
-      var aika = pohja[i].aika, h = aika.getHours();
-      var T = g("temperature"), Td = g("dewpoint"), w = g("windspeedms"),
-          pilvi = g("totalcloudcover"), nak = g("visibility");
-      var tFmi = tasoNakyvyydesta(nak);
-      var oma  = omaTaso(T, Td, w, pilvi, vesi, (h >= 21 || h <= 8));
-      rivit.push({
-        aika:aika, T:T, Td:Td, tuuli:w, pilvi:pilvi, vesi:vesi, nakyvyys:nak,
-        tasoFmi:tFmi, tasoOma:oma ? oma.taso : null, syyt:oma ? oma.syyt : [],
-        taso: Math.max(tFmi || 1, (oma && oma.taso) || 1)
-      });
-    }
-    return rivit;
-  }
 
   // --- Piirto ------------------------------------------------------------
   var chart = document.getElementById("srChart"),
@@ -7160,12 +7163,10 @@ function sumuriskiAlusta(){
     return '<span><i style="background:' + t.vari + '"></i>' + t.n + " " + t.nimi + '</span>';
   }).join("");
 
-  fetch(fmiUrl())
-    .then(function(r){
-      if (!r.ok) throw new Error("Ilmatieteen laitos vastasi virheellä " + r.status);
-      return r.text();
-    })
-    .then(function(txt){ piirra(yhdista(parsi(txt))); })
+  // Seuraavat 24 h puolen tunnin päästä alkavasta tasatunnista (kuten ennen v181:tä)
+  var a = new Date(Date.now() + 30*60*1000); a.setUTCMinutes(0,0,0);
+  sumuHae(LAT, LON, a, HOURS)
+    .then(function(rivit){ piirra(rivit); })
     .catch(function(e){
       verdict.className = "sr-err";
       verdict.textContent = "Ennustetta ei saatu: " + e.message
@@ -8112,6 +8113,8 @@ function sumuriskiAlusta(){
       try {
         const P = kirjauspohjaNyt(new Date(), KIRJAUSPOHJA_TUNNIT);
         if (P.taimenKentta) delete P.taimenKentta.K;   // funktio: tilannekuva laskee kentän syötteestä
+        // v181: pinkki kumpuamisalue tilannekuvaan (sama Wedderburn-arvio: kirjaus.js kumpuArvioParam)
+        try { const kk = tuuliKertyma; P.kumpu = { p: kumpuParametrit(), kertyma: kk ? { luotettava: !!kk.luotettava, suunta: kk.suunta, tunteja: kk.tunteja } : null }; } catch (e) { P.kumpu = null; }
         (typeof locations !== 'undefined' ? locations : []).forEach(l => {
           const k = karttaAvainNimesta(l.name);
           if (!k) return;
@@ -10210,7 +10213,7 @@ function sumuriskiAlusta(){
       tarvolanniemi: `Suurkalarekisterin (16.6.2015) tuottoisin haukipaikka: järven kaksi suurinta haukea, 11,89 kg ja 10,62 kg, molemmat vetouistelulla.`,
     };
 
-    const hotspotTimeSlots = [
+    const hotspotTimeSlots = [   // v180 ja aiemmat: kiinteät jaksot; v181 alkaen paivanSuunnitelma (ei enää käytössä)
       { time: "05:00 – 09:00" },
       { time: "10:00 – 16:00" },
       { time: "17:00 – 22:00" },
@@ -11838,7 +11841,7 @@ function sumuriskiAlusta(){
     /* Ennuste tunnille: FMI ensin, Open-Meteo varalla, muuten null.
        Täytetään taustalla (paivitaLahdeVarasto) ja päivää vaihdettaessa. */
     let tuoreEnnuste = { fmi: {}, om: {} };
-    function paivitaTuore(lahde, tunnit) { Object.assign(tuoreEnnuste[lahde], tunnit || {}); }
+    function paivitaTuore(lahde, tunnit) { Object.assign(tuoreEnnuste[lahde], tunnit || {}); try { suunnTuoreTuli(); } catch (e) {} }   // v181: suunnitelma tuntien omalla tuulella
     function ennusteTunnille(hetki) {
       const k = new Date(hetki).toISOString().slice(0, 13);
       const f = tuoreEnnuste.fmi[k], o = tuoreEnnuste.om[k];
@@ -11847,26 +11850,314 @@ function sumuriskiAlusta(){
       return null;
     }
 
+
+    /* ===== PÄIVÄN SUUNNITELMA RAJAUKSIN — 10.10.2026 (v181) =====
+       Hannun ehdotus 10.10. ("Paranna"): suunnitelma ei saa edes harkita aikoja ja paikkoja, joissa uistelu ei ole
+       mahdollista, jotta veneessä jää ajateltavaksi vain se, mikä on mahdollista. Rajaukset:
+         AIKA      vain valoisa aika ja hämärä: aurinko yli rajan. Asetus: siviilihämärä −6° (oletus, sama kuin
+                   vvPaivanTunnit), auringon nousu–lasku 0° tai merihämärä −12°. Pimeä aika ei tule laskentaan.
+         PAIKKA    paikan oma aalto mallista (akMalliSync, ruudun pyyhkäisy, kesto ja syvyys) yli veneen kalastusrajan
+                   → hylätään. Tämä oli jo pisteytyksessä (suljettu); nyt se näkyy syineen.
+         SIIRTYMÄ  reitti vettä pitkin (akReitti: A* järven maskilla) lähtöpaikasta tai veneestä ensimmäiselle paikalle ja
+                   paikasta toiseen. Suurin aalto reitin ruuduissa sillä tunnilla yli veneen AJORAJAN (turva: kestääkö
+                   runko) → paikka hylätään sille tunnille. Kalastusraja koskee vain uistelupaikkaa.
+         PALUU     aikaikkunan lopussa viimeiseltä paikalta lähtöpaikkaan samalla säännöllä. Jos ei mene, kerrotaan
+                   viimeinen tunti, jolta paluu menee ajorajan alle.
+         SUMU      vain varoitus (Hannun valinta 10.10.): taso 3–5 näkyy jaksossa (sama laskenta kuin sumuriskissä).
+       Hylätyt vaihtoehdot näytetään syineen: paikat, joilla olisi ollut enemmän pisteitä, mutta aalto tai reitti esti.
+       LÄHTÖPAIKKA (Hannun valinta 10.10.): tallennettu järvikohtaisesti (paikat.js), asetetaan tilannekuvassa
+       napauttamalla karttaa tai tässä nykyisestä sijainnista. Vesillä ensimmäinen siirtymä alkaa veneestä.
+       Ilman lähtöpaikkaa ensimmäistä siirtymää ja paluuta ei tarkisteta, ja se sanotaan.
+       Todisteen taso: Malli (aalto ja reitti ovat mallin arvioita, eivät mittauksia). */
+    const SUUNN_LS = 'uistelututka_suunnitelma';
+    const SUUNN_VAIHTO_P = 5;   // paikkaa vaihdetaan vain, jos toinen on vähintään näin monta pistettä parempi (siirtymä maksaa aikaa)
+    const SUUNN_HAMARAT = [
+      { v: -6, nimi: 'siviilihämärä', selite: 'aurinko yli −6°' },
+      { v: 0, nimi: 'auringon nousu–lasku', selite: 'aurinko horisontin yllä' },
+      { v: -12, nimi: 'merihämärä', selite: 'aurinko yli −12°' }
+    ];
+    let suunnViimeO = null, suunnViimeinen = null;   // viimeisin laskenta, jotta asetuksen muutos laskee uudelleen ilman analyysia
+    function suunnAsetukset() {
+      let a = {};
+      try { a = JSON.parse(localStorage.getItem(SUUNN_LS) || '{}') || {}; } catch (e) { a = {}; }
+      return { hamara: SUUNN_HAMARAT.some(x => x.v === a.hamara) ? a.hamara : -6 };
+    }
+    function suunnTallennaHamara(v) {
+      const a = suunnAsetukset(); a.hamara = Number(v);
+      try { localStorage.setItem(SUUNN_LS, JSON.stringify(a)); } catch (e) {}
+      suunnPaivita();
+    }
+    const suunnPad = n => String(n).padStart(2, '0');
+    const suunnKlo = min => Math.floor(min / 60) + '.' + suunnPad(Math.round(min % 60));
+    // Aikaikkuna: aurinko yli rajan, 5 min tarkkuudella. Tunnit: tasatunnit, joiden tunnista vähintään puolet on ikkunassa.
+    function suunnIkkuna(paiva, raja) {
+      if (!currentLocation || typeof auringonKorkeus !== 'function') return null;
+      const doy = Math.floor((paiva - new Date(paiva.getFullYear(), 0, 0)) / 86400000);
+      const tz = -paiva.getTimezoneOffset() / 60;
+      let alku = null, loppu = null;
+      for (let m = 0; m <= 24 * 60; m += 5) {
+        let k = -90; try { k = auringonKorkeus(m / 60, doy, currentLocation.lat, currentLocation.lon, tz); } catch (e) {}
+        if (k > raja) { if (alku === null) alku = m; loppu = m; }
+      }
+      if (alku === null) return null;
+      const tunnit = [];
+      for (let h = Math.floor(alku / 60); h <= Math.min(23, Math.floor(loppu / 60)); h++)
+        if (Math.min(loppu, h * 60 + 60) - Math.max(alku, h * 60) >= 30) tunnit.push(h);
+      return { alkuMin: alku, loppuMin: loppu, tunnit };
+    }
+    // Reitti vettä pitkin ja sen suurin aalto tunnilla. ok: true / false (yli ajorajan) / null (ei tiedetä).
+    function suunnReitti(avain, mista, mihin, hetki, rajat) {
+      if (!mista || !mihin || !rajat || typeof window.akReitti !== 'function') return null;
+      if (haversineDistMeters(mista.lat, mista.lon, mihin.lat, mihin.lon) < 150) return { ok: true, pituusM: 0, max: null, lyhyt: true };
+      const R = window.akReitti(avain, mista.lat, mista.lon, mihin.lat, mihin.lon);
+      if (!R) return { ok: null, syy: 'reittiä vettä pitkin ei löytynyt' };
+      const A = window.akReittiAalto(R, hetki.getTime());
+      if (!A) return { ok: null, pituusM: R.pituusM, syy: 'reitin aaltoa ei tiedetä (ei ennustetta tälle tunnille)' };
+      return { ok: !(A.max > rajat.turva), pituusM: R.pituusM, max: A.max, lat: A.lat, lon: A.lon };
+    }
+    function paivanSuunnitelma(o) {
+      suunnViimeO = o;
+      const as = suunnAsetukset(), avain = (typeof karttaAvain === 'function') ? karttaAvain() : null;
+      const rajat = (typeof window.akVeneRajat === 'function') ? window.akVeneRajat() : null;
+      const paiva = new Date(o.hetki), nyt = new Date(), tanaan = paiva.toDateString() === nyt.toDateString();
+      const ik = suunnIkkuna(paiva, as.hamara);
+      const L = (avain && typeof lahtopaikkaLue === 'function') ? lahtopaikkaLue(avain) : null;
+      const lahto = L ? { lat: L.lat, lon: L.lon, nimi: 'lähtöpaikka' } : null;
+      let vene = null;
+      try {
+        const g = (tanaan && typeof klooniLahto === 'function') ? klooniLahto() : null;
+        if (g && typeof window.akJarviPisteessa === 'function' && window.akJarviPisteessa(g.lat, g.lon) === avain) vene = { lat: g.lat, lon: g.lon, nimi: 'veneestä' };
+      } catch (e) {}
+      const tunnit = ik ? ik.tunnit.filter(h => !tanaan || h >= nyt.getHours()) : [];
+      const S = { avain, rajat, ik, as, lahto, vene, tanaan, tunnit, rivit: [], jaksot: [], paluu: null, hetki: paiva.toISOString(), sumu: null, timeline: [] };
+      const alkuPiste = vene || lahto;
+      let ed = null;   // edellisen tunnin paikka (pisteytyksen rivi)
+      tunnit.forEach(h => {
+        const hetki = new Date(o.hetki); hetki.setHours(h, 0, 0, 0);
+        const e = ennusteTunnille(hetki);
+        const oo = Object.assign({}, o, { tunti: h, hetki,
+          tuuliMs: e ? e.ws : o.tuuliMs, tuuliSuunta: e && typeof e.wd === 'number' ? e.wd : o.tuuliSuunta,
+          valoPorras: (typeof valoPorras === 'function') ? valoPorras(h) : o.valoPorras });
+        const lista = pisteytaPaikat(oo);
+        const hyl = [];
+        let val = null, valReitti = null;
+        // lista: avoimet pisteiden mukaan, sitten suljetut. Suljetut käydään kaikki läpi (hylätyt syineen),
+        // avoimista valitaan ensimmäinen, jonka siirtymä mahtuu ajorajaan.
+        for (const x of lista) {
+          if (x.suljettu) {
+            const m = (typeof window.akMalliSync === 'function') ? window.akMalliSync(x.spot.lat, x.spot.lon, hetki.getTime()) : null;
+            hyl.push({ x, syy: 'aalto', aalto: m ? m.aaltoM : null, raja: m ? m.raja : null, h });
+            continue;
+          }
+          if (val) continue;
+          const mista = (ed && ed.key === x.key) ? null : (ed ? { lat: ed.spot.lat, lon: ed.spot.lon, nimi: ed.spot.name } : alkuPiste);
+          const r = mista ? suunnReitti(avain, mista, x.spot, hetki, rajat) : null;
+          if (r && r.ok === false) { hyl.push({ x, syy: 'reitti', r, mista, h }); continue; }
+          val = x; valReitti = r ? Object.assign({ mista }, r) : null;
+        }
+        // Pysytään paikalla, jos se on yhä auki ja enintään SUUNN_VAIHTO_P pistettä parhaasta (ei edestakaista ajoa)
+        let pysyi = null;
+        if (ed && val && val.key !== ed.key) {
+          const nyky = lista.find(y => y.key === ed.key && !y.suljettu);
+          if (nyky && nyky.pisteet >= val.pisteet - SUUNN_VAIHTO_P) { pysyi = { paras: val, ero: val.pisteet - nyky.pisteet }; val = nyky; valReitti = null; }
+        }
+        const perus = y => y.pisteet + (y.suljettu ? 100 : 0);
+        const m = val && typeof window.akMalliSync === 'function' ? window.akMalliSync(val.spot.lat, val.spot.lon, hetki.getTime()) : null;
+        S.rivit.push({ h, hetki, e, oo, val, valReitti, pysyi, aalto: m ? m.aaltoM : null,
+                       hylatyt: hyl.filter(y => !val || perus(y.x) > val.pisteet) });
+        if (val) ed = val;
+      });
+      // jaksot: peräkkäiset tunnit samalla paikalla
+      S.rivit.forEach(r => {
+        const j = S.jaksot[S.jaksot.length - 1], k = r.val ? r.val.key : null;
+        if (j && j.key === k) { j.rivit.push(r); j.loppuH = r.h + 1; }
+        else S.jaksot.push({ key: k, alkuH: r.h, loppuH: r.h + 1, rivit: [r], val: r.val, siirtyma: r.valReitti });
+      });
+      // paluu ikkunan lopussa (tai viimeinen tunti, jolta se menee ajorajan alle)
+      const viim = S.rivit.slice().reverse().find(r => r.val);
+      // paluu lähtee tunnin lopussa: aalto lasketaan seuraavalle tasatunnille (malli ottaa lähimmän ennustetunnin)
+      if (viim && lahto && rajat) {
+        const lopussa = suunnReitti(avain, viim.val.spot, lahto, new Date(viim.hetki.getTime() + 3600e3), rajat);
+        S.paluu = { h: viim.h + 1, klo: suunnKlo(Math.min((viim.h + 1) * 60, ik.loppuMin)), spot: viim.val.spot, r: lopussa, viimeinenOk: null };
+        if (lopussa && lopussa.ok === false) {
+          for (const r of S.rivit.slice().reverse()) {
+            if (!r.val || r.h >= viim.h) continue;
+            const t = suunnReitti(avain, r.val.spot, lahto, new Date(r.hetki.getTime() + 3600e3), rajat);
+            if (t && t.ok) { S.paluu.viimeinenOk = { h: r.h + 1, spot: r.val.spot, r: t }; break; }
+          }
+        }
+      }
+      // aikajana puheelle ja vanhoille lukijoille (time, spot, desc)
+      S.timeline = S.jaksot.map(j => ({ time: suunnPad(j.alkuH) + ':00 – ' + suunnPad(j.loppuH) + ':00', spot: j.val ? j.val.spot.name : '—',
+                                        desc: '', alkuH: j.alkuH, loppuH: j.loppuH }));
+      suunnViimeinen = S;
+      suunnSumuHae(S);
+      // Malli latautuu vielä (aalto ja reitti tuntemattomia): lasketaan uudelleen, kun ennuste on tullut
+      if (typeof window.akValmis === 'function' && !window.akValmis() && typeof window.akValmiina === 'function') {
+        S.odottaaMallia = true;
+        window.akValmiina().then(() => { if (suunnViimeinen === S) suunnPaivita(); }).catch(() => {});
+      }
+      return S;
+    }
+    // Sumu: varoitus jaksoon (taso ≥ 3). Haetaan taustalla; kun tulee, aikajana piirretään uudelleen.
+    function suunnSumuHae(S) {
+      if (!S.tunnit.length || typeof sumuHae !== 'function' || !currentLocation) return;
+      const alku = new Date(S.rivit[0].hetki), loppu = S.rivit[S.rivit.length - 1].hetki;
+      if (alku.getTime() - Date.now() > 60 * 3600e3) { S.sumu = { tila: 'kaukana' }; return; }   // Harmonie ulottuu noin 2,5 vrk
+      alku.setUTCMinutes(0, 0, 0);
+      const tunnit = Math.min(66, Math.round((loppu - alku) / 3600e3) + 1);
+      S.sumu = { tila: 'haetaan' };
+      sumuHae(currentLocation.lat, currentLocation.lon, alku, tunnit)
+        .then(rivit => { S.sumu = { tila: 'ok', rivit }; if (suunnViimeinen === S) suunnPiirra(S); })
+        .catch(e => { S.sumu = { tila: 'virhe', virhe: String(e && e.message || e) }; if (suunnViimeinen === S) suunnPiirra(S); });
+    }
+    function suunnSumuTunnille(S, hetki) {
+      if (!S.sumu || S.sumu.tila !== 'ok') return null;
+      return S.sumu.rivit.find(r => Math.abs(r.aika.getTime() - hetki.getTime()) < 1800e3) || null;
+    }
+    // Asetusrivi: aikaikkuna, vene ja lähtöpaikka
+    function suunnAsetusHtml(S) {
+      const sel = '<select onchange="suunnTallennaHamara(this.value)" style="font:inherit;font-size:13px;padding:2px 4px;border-radius:6px;background:var(--panel-alt);color:var(--text);border:1px solid var(--line);">'
+        + SUUNN_HAMARAT.map(x => '<option value="' + x.v + '"' + (x.v === S.as.hamara ? ' selected' : '') + '>' + x.nimi + ' (' + x.selite + ')</option>').join('') + '</select>';
+      const ik = S.ik ? 'klo ' + suunnKlo(S.ik.alkuMin) + '–' + suunnKlo(S.ik.loppuMin) : 'aurinko ei nouse rajan yli tänä päivänä';
+      const ve = S.rajat ? 'Vene ' + String(S.rajat.vene).split(' · ')[0] + ': kalastusraja ' + n2(S.rajat.raja) + ' m, ajoraja ' + n2(S.rajat.turva) + ' m (aallonkorkeuskortin valinta).' : 'Veneen rajat puuttuvat (aallonkorkeusmalli ei ole vielä latautunut).';
+      const L = S.avain && typeof lahtopaikkaLue === 'function' ? lahtopaikkaLue(S.avain) : null;
+      const nappi = (t, f) => ' <button type="button" class="chip" style="padding:2px 9px;font-size:12px;" onclick="' + f + '">' + t + '</button>';
+      const la = L ? '⚓ Lähtöpaikka asetettu ' + new Date(L.aika).toLocaleDateString('fi-FI') + (L.tapa === 'gps' ? ' (GPS)' : ' (kartalta)') + '.' + nappi('Nykyinen sijainti', 'suunnLahtoNykyinen()') + nappi('Poista', 'suunnLahtoPoista()')
+        : '⚓ <b>Lähtöpaikka puuttuu</b>: ensimmäistä siirtymää ja paluuta ei tarkisteta. Aseta tilannekuvassa (napauta karttaa → ⚓) tai' + nappi('Käytä nykyistä sijaintia', 'suunnLahtoNykyinen()');
+      return '<div style="font-size:13px;line-height:1.5;margin:0 0 8px;color:var(--muted);">Aikaikkuna ' + sel + ' ' + ik + '. ' + ve + '<br>' + la
+        + '<span id="suunnLahtoTila"></span></div>';
+    }
+    function suunnLahtoNykyinen() {
+      const el = document.getElementById('suunnLahtoTila');
+      const avain = (typeof karttaAvain === 'function') ? karttaAvain() : null;
+      let g = null;
+      try { g = (typeof klooniLahto === 'function') ? klooniLahto() : null; } catch (e) {}
+      if (!g && viimeisinGps && viimeisinGpsAika && Date.now() - viimeisinGpsAika <= 10 * 60e3) g = viimeisinGps;
+      if (!avain) { if (el) el.textContent = ' Valitulla paikalla ei ole järvikarttaa.'; return; }
+      if (!g) { if (el) el.textContent = ' Sijaintia ei ole: käynnistä mittari tai avaa tilannekuva rannassa.'; return; }
+      if (typeof window.akReitti === 'function' && !window.akReitti(avain, g.lat, g.lon, g.lat, g.lon)) { if (el) el.textContent = ' Sijainti on yli 400 m järven vesialueesta.'; return; }
+      lahtopaikkaTallenna(avain, g.lat, g.lon, 'gps');
+      suunnPaivita();
+    }
+    function suunnLahtoPoista() {
+      const avain = (typeof karttaAvain === 'function') ? karttaAvain() : null;
+      if (avain) lahtopaikkaPoista(avain);
+      suunnPaivita();
+    }
+    // Etusivun tuntiennuste (FMI/Open-Meteo) tuli myöhemmin kuin analyysi: lasketaan suunnitelma uudelleen tuntien omalla tuulella
+    let suunnTuoreAj = null;
+    function suunnTuoreTuli() {
+      const S = suunnViimeinen;
+      if (!S || !S.rivit.some(r => !r.e)) return;
+      clearTimeout(suunnTuoreAj); suunnTuoreAj = setTimeout(suunnPaivita, 1000);
+    }
+    window.addEventListener('storage', e => { if (e.key === LAHTOPAIKAT_LS) suunnPaivita(); });   // tilannekuva toisessa välilehdessä
+    function suunnPaivita() {
+      if (!suunnViimeO) return;
+      try {
+        const S = paivanSuunnitelma(suunnViimeO);
+        if (viimeisinOttipaikka && viimeisinOttipaikka.suunnitelma) { viimeisinOttipaikka.suunnitelma = S; viimeisinOttipaikka.timeline = S.timeline; }
+        suunnPiirra(S);
+      } catch (e) { console.error('Suunnitelma:', e); }
+    }
+    // Ottipaikkakortin huomautus: suunnitelman nykyinen tunti valitsee toisen paikan (reitti tai tunnin oma ennuste)
+    function suunnHeroHuomio(hr) {
+      const S = hr && hr.suunnitelma;
+      if (!S || !S.tanaan || !S.rivit.length || S.rivit[0].h !== new Date().getHours()) return '';
+      const r = S.rivit[0], tyyli = 'font-size:14px;line-height:1.45;margin:8px 0 0;color:var(--amber);';
+      if (!r.val) return '<p style="' + tyyli + '">⚠ Tälle tunnille ei löydy uisteltavaa paikkaa: aalto paikalla tai reitillä ylittää veneen rajan. Katso päivän suunnitelma.</p>';
+      if (!hr.paras || r.val.key === hr.paras.key) return '';
+      const y = r.hylatyt.find(z => z.x.key === hr.paras.key);
+      const syy = !y ? 'tämän tunnin tuuliennusteella pisteet menevät toisin'
+        : y.syy === 'aalto' ? 'aalto paikalla ylittää kalastusrajan'
+        : 'reitillä aalto ' + n2(y.r.max) + ' m ylittää ajorajan ' + n2(S.rajat.turva) + ' m';
+      return '<p style="' + tyyli + '">⚠ Päivän suunnitelma valitsee tälle tunnille <b>' + r.val.spot.name + '</b>: ' + syy + '.</p>';
+    }
+    // Aikajana HTML:ksi (#hotspotTimelineContainer)
+    function suunnPiirra(S) {
+      const el = document.getElementById('hotspotTimelineContainer');
+      if (!el) return;
+      const chip = t => '<span class="chip" style="padding:1px 7px;font-size:11px;margin-right:6px;">' + t + '</span>';
+      const km = m => m >= 1000 ? n1(m / 1000) + ' km' : Math.round(m / 10) * 10 + ' m';
+      const reittiTxt = (r, mista) => !r ? '' : r.lyhyt ? '' : r.ok === null
+        ? ' Siirtymä ' + (mista && mista.nimi === 'veneestä' ? 'veneestä' : mista && mista.nimi === 'lähtöpaikka' ? 'lähtöpaikasta' : 'paikasta ' + (mista && mista.nimi || '')) + ': ' + r.syy + '.'
+        : ' Siirtymä ' + (mista && mista.nimi === 'veneestä' ? 'veneestä' : mista && mista.nimi === 'lähtöpaikka' ? 'lähtöpaikasta' : 'paikasta ' + (mista && mista.nimi || '')) + ' ' + km(r.pituusM)
+          + ' vettä pitkin, reitillä enintään ' + n2(r.max) + ' m (ajoraja ' + n2(S.rajat.turva) + ' m).';
+      let h = suunnAsetusHtml(S);
+      if (!S.ik) h += '<p class="hint">Aurinko ei nouse rajan yli tänä päivänä, joten suunnitelmaa ei tehdä.</p>';
+      else if (!S.tunnit.length) h += '<p class="hint">Tämän päivän aikaikkuna on jo ohi (päättyi klo ' + suunnKlo(S.ik.loppuMin) + '). Valitse seuraava päivä.</p>';
+      const perusteltu = {};   // paikka → tunti, jolla peruste jo näytettiin
+      S.jaksot.forEach((j, i) => {
+        const r0 = j.rivit[0], e = r0.e, tuulet = j.rivit.map(r => r.oo.tuuliMs).filter(x => typeof x === 'number');
+        const tu = tuulet.length ? 'Tuuli ' + Math.round(Math.min(...tuulet)) + (Math.round(Math.max(...tuulet)) !== Math.round(Math.min(...tuulet)) ? '–' + Math.round(Math.max(...tuulet)) : '') + ' m/s '
+          + kompassiMista(r0.oo.tuuliSuunta) + ' (' + (e ? e.lahde : 'nykyinen, ennustetta ei vielä ladattu') + '). ' : '';
+        let d = tu;
+        if (j.val) {
+          const syy = r0.val.syyt.filter(x => x.p > 0).sort((a, b) => b.p - a.p)[0];
+          if (perusteltu[j.key] !== undefined) d += 'Peruste kuten klo ' + perusteltu[j.key] + '. ';
+          else if (syy) { d += syy.teksti + ' <span class="hint">[' + syy.taso + ']</span>'; perusteltu[j.key] = j.alkuH; }
+          const py = j.rivit.find(r => r.pysyi);
+          if (py) d += '<br><span class="hint">Pysytään paikalla: ' + py.pysyi.paras.spot.name + ' olisi klo ' + py.h + ' alkaen ' + py.pysyi.ero + ' p parempi, mutta vaihto vaatii yli ' + SUUNN_VAIHTO_P + ' p (siirtymä vie kalastusaikaa).</span>';
+          const aallot = j.rivit.map(r => r.aalto).filter(x => typeof x === 'number');
+          if (aallot.length) d += '<br>' + chip('Malli') + 'Aalto paikalla enintään ' + n2(Math.max(...aallot)) + ' m (kalastusraja ' + n2(S.rajat ? S.rajat.raja : 0) + ' m).';
+          if (j.siirtyma) d += reittiTxt(j.siirtyma, j.siirtyma.mista);
+          else if (i === 0 && !S.lahto && !S.vene) d += ' Siirtymää lähtöpaikasta ei tarkistettu (lähtöpaikka puuttuu).';
+        } else d += 'Jokaisella paikalla aalto ylittää kalastusrajan tai reitti sinne ajorajan.';
+        // hylätyt syineen (paikka kerran, ensimmäinen syy)
+        // hylätyt syineen, ryhmiteltynä syyn mukaan (paikka kerran, ensimmäinen tunti)
+        const nahty = new Set(), ryhmat = {};
+        const mistaTxt = mm => mm && mm.nimi === 'veneestä' ? 'veneestä' : mm && mm.nimi === 'lähtöpaikka' ? 'lähtöpaikasta' : 'paikasta ' + (mm && mm.nimi || '');
+        j.rivit.forEach(r => r.hylatyt.forEach(y => {
+          if (nahty.has(y.x.key)) return; nahty.add(y.x.key);
+          const avain = y.syy === 'aalto' ? 'Aalto paikalla yli kalastusrajan ' + n2(S.rajat ? S.rajat.raja : 0) + ' m' : 'Reitillä ' + mistaTxt(y.mista) + ' yli ajorajan ' + n2(S.rajat.turva) + ' m';
+          (ryhmat[avain] = ryhmat[avain] || []).push('<b>' + y.x.spot.name + '</b> (' + (y.x.pisteet + (y.x.suljettu ? 100 : 0)) + ' p, '
+            + (y.syy === 'aalto' ? (typeof y.aalto === 'number' ? n2(y.aalto) + ' m' : '?') : n2(y.r.max) + ' m') + ' klo ' + y.h + ')');
+        }));
+        const rk = Object.keys(ryhmat);
+        if (rk.length) d += '<div style="margin-top:4px;font-size:12.5px;color:var(--muted);">Ei valittu' + (j.val ? ' (enemmän pisteitä, mutta raja esti)' : '') + ':'
+          + rk.map(k => '<br>' + k + ': ' + ryhmat[k].join(', ') + '.').join('') + '</div>';
+        // sumu
+        const su = j.rivit.map(r => ({ h: r.h, s: suunnSumuTunnille(S, r.hetki) })).filter(x => x.s && x.s.taso >= 3);
+        if (su.length) {
+          const mx = su.reduce((a, x) => Math.max(a, x.s.taso), 0), t = SUMU_TASOT[mx - 1];
+          const selite = { 3: 'näkyvyys 0,5–1 km, pidä ranta näkyvissä', 4: 'näkyvyys 100–500 m, vain tuttu jälki ja hidas vauhti', 5: 'näkyvyys alle 100 m, veneily mahdotonta' }[mx];
+          d += '<div style="margin-top:4px;font-size:12.5px;color:' + t.vari + ';">🌫 Sumuriski klo ' + su[0].h + (su.length > 1 ? '–' + su[su.length - 1].h : '') + ' (taso ' + mx + '): ' + selite
+            + '. Varoitus, ei rajausta; tarkista sumuriskikortista.</div>';
+        }
+        S.timeline[i].desc = d;
+        h += '<div class="timeline-item"><div class="timeline-time">' + S.timeline[i].time + '</div><div class="timeline-desc"><strong>' + (j.val ? S.timeline[i].spot : 'Ei uisteltavaa paikkaa') + '</strong><br>' + d + '</div></div>';
+      });
+      // paluu
+      if (S.paluu) {
+        const p = S.paluu, r = p.r;
+        let d;
+        if (!r || r.ok === null) d = 'Paluuta paikasta ' + p.spot.name + ' ei voitu tarkistaa' + (r && r.syy ? ': ' + r.syy : '') + '.';
+        else if (r.ok) d = '✓ Paluu paikasta ' + p.spot.name + (r.lyhyt ? ': lähtöpaikka on vieressä.' : ' ' + km(r.pituusM) + ' vettä pitkin, reitillä enintään ' + n2(r.max) + ' m (ajoraja ' + n2(S.rajat.turva) + ' m).');
+        else d = '<b style="color:var(--hard-red);">⚠ Paluu klo ' + p.klo + ' paikasta ' + p.spot.name + ': reitillä aalto ' + n2(r.max) + ' m ylittää ajorajan ' + n2(S.rajat.turva) + ' m.</b> '
+          + (p.viimeinenOk ? 'Viimeinen paluu ajorajan alla: <b>klo ' + p.viimeinenOk.h + '</b> paikasta ' + p.viimeinenOk.spot.name + ' (reitillä ' + n2(p.viimeinenOk.r.max) + ' m).'
+                            : 'Mikään suunnitelman tunti ei anna paluuta ajorajan alla. Harkitse suojaisampaa aluetta tai toista päivää.');
+        h += '<div class="timeline-item"><div class="timeline-time">Paluu klo ' + p.klo + '</div><div class="timeline-desc"><strong>Lähtöpaikalle</strong><br>' + d + '</div></div>';
+      } else if (S.jaksot.length && !S.lahto) {
+        h += '<p class="hint" style="margin:6px 0 0;">Paluuta ei tarkistettu: lähtöpaikka puuttuu.</p>';
+      }
+      if (S.ik) h += '<p class="hint" style="margin:8px 0 0;">Pimeä aika on rajattu pois (aurinko alle ' + (S.as.hamara === 0 ? '0' : '−' + Math.abs(S.as.hamara)) + '°: klo ' + suunnKlo(S.ik.loppuMin) + '–' + suunnKlo(S.ik.alkuMin) + ').'
+        + (S.odottaaMallia ? ' Aalto- ja reittitiedot latautuvat vielä; suunnitelma päivittyy itsestään.' : '')
+        + (S.sumu && S.sumu.tila === 'haetaan' ? ' Sumuriskiä haetaan…' : S.sumu && S.sumu.tila === 'virhe' ? ' Sumuriskiä ei saatu (' + S.sumu.virhe + ').' : S.sumu && S.sumu.tila === 'kaukana' ? ' Sumuennuste ei ulotu tähän päivään.' : '')
+        + ' Jokainen tunti on laskettu sen tunnin omalla tuuliennusteella. Aalto ja reitti ovat mallin arvioita.</p>';
+      el.innerHTML = h;
+    }
+
     function evaluateHotspots(o) {
       const tulos = pisteytaPaikat(o);
       const kaytossa = tulos.filter(x => !x.suljettu);
       const paras = kaytossa[0] || tulos[0];
       const topSpot = paras.spot;
-      // Aikataulu: jokainen jakso omalla tuulellaan (ennuste, muuten nykyinen)
-      const repHours = [7, 12, 19];
-      const timeline = hotspotTimeSlots.map((slot, i) => {
-        const h = repHours[i], hetki = new Date(o.hetki); hetki.setHours(h, 0, 0, 0);
-        const e = ennusteTunnille(hetki);
-        const oo = Object.assign({}, o, { tunti: h, hetki,
-          tuuliMs: e ? e.ws : o.tuuliMs, tuuliSuunta: e && typeof e.wd === 'number' ? e.wd : o.tuuliSuunta,
-          valoPorras: (typeof valoPorras === 'function') ? valoPorras(h) : o.valoPorras });
-        const t = pisteytaPaikat(oo).filter(x => !x.suljettu)[0];
-        const syy = t ? t.syyt.filter(x => x.p > 0).sort((a, b) => b.p - a.p)[0] : null;
-        return { time: slot.time, spot: t ? t.spot.name : '—',
-          desc: 'Tuuli ' + Math.round(oo.tuuliMs) + ' m/s ' + kompassiMista(oo.tuuliSuunta) + ' (' + (e ? e.lahde : 'nykyinen, ennustetta ei vielä ladattu') + '). '
-              + (syy ? syy.teksti + ' <span class="hint">[' + syy.taso + ']</span>' : '') };
-      });
-      return { topSpot, whyChosen: '', timeline, pisteytys: tulos, vaihtoehdot: kaytossa.slice(1, 3), paras,
+      /* v181: aikajana on päivän suunnitelma rajauksin (aika, paikan aalto, siirtymä ja paluu ajorajaan, sumu, hylätyt).
+         Ennen v181:tä kolme kiinteää jaksoa (05–09, 10–16, 17–22) yhdellä edustavalla tunnilla. */
+      let S = null;
+      try { S = paivanSuunnitelma(o); } catch (e) { console.error('Suunnitelma:', e); }
+      return { topSpot, whyChosen: '', timeline: S ? S.timeline : [], suunnitelma: S, pisteytys: tulos, vaihtoehdot: kaytossa.slice(1, 3), paras,
                hetki: new Date(o.hetki).toISOString() };
     }
     function kompassiMista(d) {
@@ -12266,7 +12557,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v180';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v181';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -13166,15 +13457,17 @@ function sumuriskiAlusta(){
 
       // 5 Päivän kulku: aikataulun jaksot, peräkkäiset samat yhdistetään
       if (top && Array.isArray(top.timeline) && top.timeline.length) {
-        const nimet = ['Aamulla', 'Päivällä', 'Illalla'];
-        const jaksot = top.timeline.map((t, i) => ({ nimi: nimet[i] || t.time, paikka: String(t.spot).replace(/\s*\(.*\)/, '') }));
+        const nimet = ['Aamulla', 'Päivällä', 'Illalla'];   // v180 ja aiemmat: kolme kiinteää jaksoa
+        const jaksot = top.timeline.map((t, i) => ({ nimi: typeof t.alkuH === 'number' ? 'Kello ' + t.alkuH + ' alkaen' : (nimet[i] || t.time), paikka: String(t.spot).replace(/\s*\(.*\)/, '') }));
         const lauseet = [];
         for (let i = 0; i < jaksot.length; i++) {
           let j = i; while (j + 1 < jaksot.length && jaksot[j + 1].paikka === jaksot[i].paikka) j++;
           lauseet.push((j > i ? jaksot[i].nimi + ' ja ' + jaksot[j].nimi.toLowerCase() : jaksot[i].nimi) + ' ' + jaksot[i].paikka + '.');
           i = j;
         }
-        osat.push('Päivän kulku. ' + lauseet.join(' ') + ' Jaksot on laskettu kunkin ajan omalla tuuliennusteella.');
+        const PL = top.suunnitelma && top.suunnitelma.paluu;   // v181: paluuvaroitus puheeseen
+        const paluuPuhe = (PL && PL.r && PL.r.ok === false) ? (PL.viimeinenOk ? ' Palaa viimeistään kello ' + PL.viimeinenOk.h + '. Myöhemmin paluureitillä aalto ylittää veneen ajorajan.' : ' Paluureitillä aalto ylittää veneen ajorajan koko päivän.') : '';
+        osat.push('Päivän kulku. ' + lauseet.join(' ') + ' Jaksot on laskettu kunkin ajan omalla tuuliennusteella.' + paluuPuhe);
       }
 
       // 6 Syöntiikkuna, kuu ja paine
@@ -17228,6 +17521,7 @@ function sumuriskiAlusta(){
     <div class="spot-hero">
       <div class="spot-title">⭐ ${ennusteTila ? paivaStr + 'klo ' + timeStr : 'Juuri Nyt'}: ${hotspotResult.topSpot.name}</div>
       <div class="spot-meta">🎯 Kohde: ${hotspotResult.topSpot.targetSpecies} · Tuuli: ${wDir ? wDir.toFixed(0) + '°' : 'W'} (${wSpeed.toFixed(1)} m/s)</div>
+      ${suunnHeroHuomio(hotspotResult)}
       <div class="spot-grid">
         <div class="stat-box"><div class="lbl">Pohjanmuoto</div><div class="val">${hotspotResult.topSpot.type}</div></div>
         <div class="stat-box"><div class="lbl">Pohjankovuus</div><div class="val" style="color:var(--hard-red)">${hotspotResult.topSpot.hardness}</div></div>
@@ -17341,7 +17635,8 @@ function sumuriskiAlusta(){
       </div>
     `;
       });
-      document.getElementById('hotspotTimelineContainer').innerHTML = timelineHtml;
+      if (hotspotResult.suunnitelma) suunnPiirra(hotspotResult.suunnitelma);   // v181
+      else document.getElementById('hotspotTimelineContainer').innerHTML = timelineHtml;
       try {
         const kp = document.getElementById('kuhaPaneeli');
         if (kp) kp.innerHTML = kuhaPaneeliHtml({ hetki: now, tunti: targetHour, tuuliSuunta: wDir, tuuliMs: wSpeed,
@@ -20251,7 +20546,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=180';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=181';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })

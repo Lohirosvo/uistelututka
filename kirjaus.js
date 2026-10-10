@@ -4,6 +4,7 @@
    etäisyys (haversineDistMeters) ja pyyntilokin tallennus (LS_PYYNTI*, pyyntiLue, pyyntiKirjoita). Uutta:
    kirjauspohja ja yhteinen saalisrivin rakentaja (rakennaSaalis), mallikenttien täydennys (saalisMalliTaydennys,
    siirretty kalaKiinnistä) ja GPS-piste avoimeen reissuun (pyyntiLisaaPiste, pyyntiGpsAvoimeen).
+   v181: kumpuamisen Wedderburn-arvio parametreilla (kumpuArvioParam, kumpuHistoriaParam) etusivulle ja tilannekuvalle.
    VERSIO: sivut lataavat tiedoston nimellä kirjaus.js?v=NNN; NNN = sw.js:n VERSIO-numero. */
 
 // Saalisloki: kaikki kirjaukset yhdessä taulukossa (etusivu ja tilannekuva).
@@ -289,4 +290,22 @@ function pyyntiGpsAvoimeen(lat, lon, t) {   // palauttaa avoimen reissun tai nul
   if (!r || !Array.isArray(r.pisteet) || Date.now() - r.alku > PYYNTI_AUKI_MAX_H * 3600000) return null;
   if (pyyntiLisaaPiste(r, lat, lon, t)) pyyntiKirjoita(LS_PYYNTI_AUKI, r);
   return r;
+}
+
+/* KUMPUAMINEN TILANNEKUVAAN — 10.10.2026 (v181). Aaltokartan pinkki kumpuamisalue tarvitsee etusivun lämpötiedot
+   (kumpuParametrit: g', h1, h2, tiheys) ja havaitun tuulen keston (tuuliKertyma). Etusivu tallentaa ne
+   kirjauspohjaan (kumpu: { p, kertyma }), ja molemmat sivut laskevat Wedderburn-arvion samalla funktiolla.
+   Kaava ja lähteet: index.html, KUMPUAMINEN KARTALLE JA PUHEESEEN (v136) ja kumpuamisAnalyysi. */
+function kumpuArvioParam(p, U, L, tunteja) {
+  if (!p || !(U > 0) || !(L > 0)) return null;
+  const Cd = U >= 5 ? 0.0015 : 0.001, uStar = Math.sqrt(Cd * 1.225 * U * U / p.rho);
+  const W = p.gp * p.h1 * p.h1 / (uStar * uStar * L);
+  const ci = Math.sqrt(p.gp * p.h1 * p.h2 / (p.h1 + p.h2)), kestoH = (2 * L / ci) / 4 / 3600;
+  const riittaa = typeof tunteja === 'number' ? tunteja >= kestoH : false;
+  return { W: W, kestoH: kestoH, riittaa: riittaa, vahva: W <= 1 && riittaa, mitattu: !!p.mitattu, lahde: p.lahde };
+}
+// Havaittu tuulen kesto (tuuliKertyma), jos suunta on sama kuin ennusteen alussa (±45°)
+function kumpuHistoriaParam(kertyma, dir) {
+  if (!kertyma || !kertyma.luotettava || typeof kertyma.suunta !== 'number') return 0;
+  return Math.abs(((kertyma.suunta - dir + 540) % 360) - 180) <= 45 ? kertyma.tunteja : 0;
 }

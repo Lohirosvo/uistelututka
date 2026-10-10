@@ -9,6 +9,8 @@
    Tarvitsee pääkoodista: TM35, omaLuotausSolut/-Korvaa, haversine ym. (globaalit, kutsuhetkellä).
    v179: toimii myös ilman aaltokorttia (PIILORUNKO) ja antaa tilannekuvalle pohjakuvan (akRenderoi);
    oma sijainti (window.utOmaSijainti) piirretään aaltokarttaan.
+   v181: reitti vettä pitkin ja sen aalto (akReitti, akReittiAalto) päivän suunnitelmalle, veneen rajat (akVeneRajat),
+   tilannekuvalle selite ja napautusteksti (akRenderoi.asteikko, akPisteTeksti).
    VERSIO: sivut lataavat tiedoston nimellä aaltomalli.js?v=NNN; NNN = sw.js:n VERSIO-numero. */
 function aaltokarttaAlusta(){
 "use strict";
@@ -2893,16 +2895,20 @@ window.akRenderoi = function(o){
     akKuhaMerkit = false; akTaimenMerkit = false; akKlooniMerkit = false; akOmaNakyy = false;
     akKayraLeveys = { paa: 1.3, muu: 0.7 };
     piirra();
+    akRenderoiTila = { viime: akViime, tila: akTila, jarvi: jarvi };   // v181: napautusteksti tälle kuvalle (akPisteTeksti)
+    var ast = '', yks = '';
+    try { piirraAsteikko(); ast = $("akAsteikko").innerHTML; yks = $("akYksikko") ? $("akYksikko").textContent : ''; } catch (e) {}   // v181: selite
     var c = $("akKuva"), kopio = document.createElement('canvas');
     kopio.width = c.width; kopio.height = c.height; kopio.getContext('2d').drawImage(c, 0, 0);
     var d = data[valittu];
     return { tila: 'ok', kuva: kopio, k: akViime.k, win: akViime.win, S: akViime.S, avain: akNykyAvain(), jarvi: jarvi.nimi,
              naytto: akTila, tunti: valittu, ennuste: !tyhja, aika: tyhja ? null : d.aika, U: tyhja ? null : d.U, dir: tyhja ? null : d.dir,
              puuska: tyhja ? null : d.puuska, tunteja: tyhja ? null : d.tunteja, korkein: d.korkein, osuus: d.osuus, virMax: d.virMax,
-             raja: akKalaRaja(), turva: akVene().turva, vene: akVene().nimi, syvyysLahde: akSyvyysLahde() };
+             raja: akKalaRaja(), turva: akVene().turva, vene: akVene().nimi, syvyysLahde: akSyvyysLahde(), asteikko: ast, yksikko: yks };
   } finally {
     data = t.data; akTila = t.tila; valittu = t.valittu; akZoom = t.zoom; akZoomKeski = t.keski; akValittu = t.sel;
     akVientiKerroin = t.kerroin; akKuhaMerkit = t.kuha; akTaimenMerkit = t.taimen; akKlooniMerkit = t.klooni; akOmaNakyy = t.oma; akKayraLeveys = t.kayra;
+    try { piirraAsteikko(); } catch(e){}   // v181: kortin oma selite takaisin
     if (!akPiilorunko){ try { if (data.length) piirra(); } catch(e){} }   // aaltokortti näyttää taas omaa tilaansa
   }
 };
@@ -2932,6 +2938,116 @@ window.akPiirraSijainti = function(){
   var nyt = Date.now(); if (nyt - akSijaintiPiirtoT < 8000) return;
   akSijaintiPiirtoT = nyt;
   try { piirra(); } catch(e){}
+};
+
+/* ===== SUUNNITELMAN JA TILANNEKUVAN RAJAPINNAT — 10.10.2026 (v181) =====
+   akVeneRajat()               → { vene, raja (kalastusraja), turva (ajoraja: kestääkö runko) }, sama kuin aaltokortin valinta
+   akReitti(avain, lat1, lon1, lat2, lon2)
+                               → { avain, pisteet: [[lat, lon], …], ruudut, pituusM } tai null. Reitti vettä pitkin:
+                                 A* järven maskilla, 8 suuntaa, kulmaa ei oikaista maan yli. Alku ja loppu siirretään
+                                 lähimpään vesiruutuun enintään 400 m:n päästä (laituri ja ranta ovat maaruudussa).
+   akReittiAalto(reitti, aikaMs) → { max, lat, lon, aika, U, dir } suurin merkitsevä aalto reitin ruuduissa lähimmällä
+                                 ennustetunnilla (täsmälleen sama kaava kuin akMalliSync.aaltoM), tai null (ei ennustetta
+                                 ±3 h tai kartalla on toinen järvi).
+   akPisteTeksti(lat, lon)     → aaltokortin napautusteksti viimeisimmästä akRenderoi-kuvasta (sama tila ja tunti).
+   akRenderoi palauttaa lisäksi selitteen: asteikko (HTML) ja yksikko. */
+var akRenderoiTila = null;
+window.akPisteTeksti = function(lat, lon){
+  var R = akRenderoiTila;
+  if (!R || !R.viime || !jarvi || R.jarvi !== jarvi || !jarvi.kartta) return null;
+  var k = R.viime.k;
+  var i = Math.floor((lon - k.lansiLon)*111320*Math.cos(lat*Math.PI/180)/k.ruutu), j = Math.floor((k.pohjoisLat - lat)*111320/k.ruutu);
+  if (i < 0 || j < 0 || i >= k.W || j >= k.H) return null;
+  var t = { viime: akViime, tila: akTila, sel: akValittu };
+  try {
+    akViime = R.viime; akTila = R.tila; akValittu = { i: i, j: j };
+    akNaytaPisteSisalto();
+    var el = $("akPiste");
+    return el ? el.innerHTML : null;
+  } catch (e) { return null; }
+  finally { akViime = t.viime; akTila = t.tila; akValittu = t.sel; }
+};
+window.akVeneRajat = function(){ var v = akVene(); return { vene: v.nimi, raja: akKalaRaja(), turva: v.turva }; };
+
+var akReittiMuisti = {};
+window.akReitti = function(avain, lat1, lon1, lat2, lon2){
+  var J = JARVET[avain];
+  if (!J || !J.kartta || !J.kartta.maski || ![lat1, lon1, lat2, lon2].every(function(x){ return typeof x === 'number' && isFinite(x); })) return null;
+  var k = J.kartta, c = akJarviPurku[avain] || (akJarviPurku[avain] = { s: puraSyvyysLuokat(k), m: puraMaski(k) }), M = c.m, W = k.W, H = k.H;
+  function ruutu(lat, lon){
+    var i0 = Math.floor((lon - k.lansiLon)*111320*Math.cos(lat*Math.PI/180)/k.ruutu), j0 = Math.floor((k.pohjoisLat - lat)*111320/k.ruutu);
+    var r = Math.max(1, Math.ceil(400/k.ruutu)), paras = -1, pd = Infinity;
+    for (var dj = -r; dj <= r; dj++) for (var di = -r; di <= r; di++){
+      var ii = i0 + di, jj = j0 + dj;
+      if (ii < 0 || jj < 0 || ii >= W || jj >= H || !M[jj*W + ii]) continue;
+      var d = di*di + dj*dj;
+      if (d <= r*r && d < pd){ pd = d; paras = jj*W + ii; }
+    }
+    return paras;
+  }
+  var a = ruutu(lat1, lon1), b = ruutu(lat2, lon2);
+  if (a < 0 || b < 0) return null;
+  var avainM = avain + ':' + a + ':' + b;
+  if (akReittiMuisti[avainM] !== undefined) return akReittiMuisti[avainM];
+  var n = W*H, g = new Float32Array(n), mista = new Int32Array(n), kiinni = new Uint8Array(n);
+  for (var q0 = 0; q0 < n; q0++){ g[q0] = Infinity; mista[q0] = -1; }
+  var bi = b % W, bj = (b/W) | 0;
+  var arvio = function(q){ var di = Math.abs(q % W - bi), dj = Math.abs(((q/W) | 0) - bj); return Math.max(di, dj) + 0.41421356*Math.min(di, dj); };
+  // binäärikeko: [prioriteetti, ruutu]
+  var kp = [], kq = [];
+  function lisaa(p, q){ var x = kp.length; kp.push(p); kq.push(q);
+    while (x > 0){ var y = (x - 1) >> 1; if (kp[y] <= p) break; kp[x] = kp[y]; kq[x] = kq[y]; x = y; } kp[x] = p; kq[x] = q; }
+  function ota(){ var q = kq[0], lp = kp.pop(), lq = kq.pop(), m = kp.length;
+    if (m){ var x = 0; while (true){ var l = 2*x + 1, r2 = l + 1, s = x, sp = lp;
+        if (l < m && kp[l] < sp){ s = l; sp = kp[l]; } if (r2 < m && kp[r2] < sp){ s = r2; sp = kp[r2]; }
+        if (s === x) break; kp[x] = kp[s]; kq[x] = kq[s]; x = s; } kp[x] = lp; kq[x] = lq; }
+    return q; }
+  var DI = [1, -1, 0, 0, 1, 1, -1, -1], DJ = [0, 0, 1, -1, 1, -1, 1, -1];
+  g[a] = 0; lisaa(arvio(a), a);
+  while (kp.length){
+    var q = ota();
+    if (q === b) break;
+    if (kiinni[q]) continue;
+    kiinni[q] = 1;
+    var qi = q % W, qj = (q/W) | 0;
+    for (var s = 0; s < 8; s++){
+      var ni = qi + DI[s], nj = qj + DJ[s];
+      if (ni < 0 || nj < 0 || ni >= W || nj >= H) continue;
+      var q2 = nj*W + ni;
+      if (!M[q2] || kiinni[q2]) continue;
+      if (s >= 4 && (!M[qj*W + ni] || !M[nj*W + qi])) continue;   // ei oikaista niemen kärjen yli
+      var ng = g[q] + (s >= 4 ? 1.41421356 : 1);
+      if (ng < g[q2]){ g[q2] = ng; mista[q2] = q; lisaa(ng + arvio(q2), q2); }
+    }
+  }
+  var tulos = null;
+  if (isFinite(g[b])){
+    var ruudut = [], p = b;
+    while (p >= 0){ ruudut.push(p); if (p === a) break; p = mista[p]; }
+    ruudut.reverse();
+    tulos = { avain: avain, ruudut: Int32Array.from(ruudut), pituusM: g[b]*k.ruutu,
+              pisteet: ruudut.map(function(q){ var i = q % W, j = (q/W) | 0, la = k.pohjoisLat - (j + 0.5)*k.ruutu/111320;
+                return [la, k.lansiLon + (i + 0.5)*k.ruutu/(111320*Math.cos(la*Math.PI/180))]; }) };
+  }
+  var avaimet = Object.keys(akReittiMuisti); if (avaimet.length > 200) delete akReittiMuisti[avaimet[0]];
+  akReittiMuisti[avainM] = tulos;
+  return tulos;
+};
+window.akReittiAalto = function(R, aikaMs){
+  if (!R || !R.ruudut || !R.ruudut.length || !jarvi || jarvi !== JARVET[R.avain] || !mask || !data.length) return null;
+  var idx = 0, pe = Infinity;
+  for (var n = 0; n < data.length; n++){ var e = Math.abs(data[n].aika.getTime() - aikaMs); if (e < pe){ pe = e; idx = n; } }
+  if (pe > 3*3600e3) return null;
+  var d = data[idx], U = Math.max(0.5, d.U), ke = akKentta(Math.round(d.dir/5)*5);
+  var F0 = kestonPyyhkaisy(d.tunteja*3600, U), katto = syvyysKatto(jarvi.syvyys, U);
+  var mx = -1, mi = -1;
+  for (var m = 0; m < R.ruudut.length; m++){
+    var q = R.ruudut[m]; if (!mask[q]) continue;
+    var hs = akAaltoRuutu(q, Math.min(ke[q], F0), U, katto).hs;
+    if (hs > mx){ mx = hs; mi = m; }
+  }
+  if (mi < 0) return null;
+  return { max: mx, lat: R.pisteet[mi][0], lon: R.pisteet[mi][1], aika: d.aika, U: d.U, dir: d.dir };
 };
 
 /* Napautus: lähin kuhamerkki kerrotaan pisteen tietojen perään (myös syvyys- ja aaltotilassa). */

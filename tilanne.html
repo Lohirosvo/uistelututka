@@ -32,7 +32,11 @@
     - Rivillä lisäksi kirjausLahde 'tilanne', kirjauspohjaAika ja gpsIkaS, jotta lähde ja tuoreus näkyvät.
     - Syvyyslukema sama kuin etusivulla (MML + oma luotaus, syvyys.js), päivän saaliit kartalla, ja avoimeen
       uistelureissuun (etusivun Aloita uistelu) kirjautuu GPS-piste kerran minuutissa myös tällä sivulla.
-  TULOSSA: suunnitelman rajaukset (v181).
+  v181 (10.10.2026): Hannu "haluan nyt kaikki": kaikki aaltokortin tilat (aalto, murtuva, pintavirta, syvempi vesi,
+    vajoama, kumpuama, konvergenssi, syvyys) valikosta, väriselite kartan reunassa, napautus kertoo kohdan arvon
+    samalla tekstillä kuin aaltokortti (akPisteTeksti), pinkki kumpuamisalue etusivun lämpötiedoista (kirjauspohja),
+    ja lähtöpaikka päivän suunnitelmalle (napautus → ⚓, näkyy ankkurina).
+  TULOSSA: vaaka-asettelu (Hannu 10.10.: puhelin telineessä vaakana; KALA oikeaan reunaan).
   -->
   <style>
     :root { --bg:#060B14; --panel:#0E1B2E; --panel-alt:#13253D; --line:#1E3350; --text:#E7EEF6; --muted:#7E93AC;
@@ -95,6 +99,22 @@
     #kirjaus .rivi button { flex: 1 1 0; min-height: 42px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-alt); font-size: 16px; font-weight: 700; }
     #kirjaus .rivi .poista { color: #ff8a80; border-color: #5b2a2a; }
     #kirjaus.virhe { border-color: var(--puna); }
+    /* v181: tilavalikko ja väriselite */
+    #valikko { position: absolute; right: 8px; top: 8px; z-index: 7; background: rgba(14,27,46,.98); border: 1px solid var(--line);
+               border-radius: 12px; padding: 6px; display: none; grid-template-columns: 1fr 1fr; gap: 6px; width: min(300px, calc(100% - 16px)); }
+    #valikko button { min-height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-alt); font-size: 17px; font-weight: 700; }
+    #valikko button.valittu { border-color: var(--vihrea); color: var(--vihrea); }
+    #valikko button:disabled { opacity: .35; }
+    #valikko .huom { grid-column: 1 / -1; color: var(--muted); font-size: 13px; padding: 2px 4px; }
+    #selite { position: absolute; left: 6px; top: 52px; z-index: 3; background: rgba(4,10,18,.78); border-radius: 8px; padding: 4px; display: none;
+              font-size: 11px; color: var(--muted); max-width: calc(100% - 110px); cursor: pointer; }
+    #selite .nimi { font-weight: 700; color: var(--text); font-size: 12px; margin: 0 1px 3px; }
+    #seliteVarit { display: flex; flex-direction: column-reverse; border-radius: 3px; overflow: hidden; width: max-content; }
+    #seliteVarit div { min-width: 34px; padding: 0 4px; height: 16px; line-height: 16px; font-size: 10px; text-align: center; color: #fff;
+                       text-shadow: 0 0 2px rgba(0,0,0,.6); white-space: nowrap; }
+    #seliteYks { display: none; margin-top: 4px; max-width: 220px; line-height: 1.3; }
+    #selite.auki #seliteYks { display: block; }
+    #tieto .ankkuri { margin-top: 6px; min-height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-alt); font-size: 15px; font-weight: 700; }
     #kirjaus.virhe .otsikko { color: var(--puna); }
   </style>
 </head>
@@ -117,6 +137,8 @@
     <div id="tila">Käynnistetään…</div>
     <div id="tieto"><button id="tietoSulje" aria-label="Sulje">✕</button><div id="tietoSisalto"></div></div>
     <div id="kirjaus" aria-live="polite"></div>
+    <div id="selite" title="Napauta: selitys"><div class="nimi" id="seliteNimi"></div><div id="seliteVarit"></div><div id="seliteYks"></div></div>
+    <div id="valikko" role="menu"></div>
     <button id="kalaNappi" aria-label="Kala kiinni: kirjaa saalis"><span class="iso">🐟</span><span class="pieni">KALA</span><span id="kalaLaji">taimen</span></button>
     <div id="virhe"></div>
   </div>
@@ -145,28 +167,30 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=180" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=180" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=180" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=180" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=180" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="aaltomalli.js?v=180" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=180" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=181" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=181" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=181" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=181" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=181" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="aaltomalli.js?v=181" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=181" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v180';
+    const APP_VERSIO = 'v181';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
-    const TILAT = [['aalto', 'Aalto'], ['syvyys', 'Syvyys'], ['virtaus', 'Virta'], ['murtuva', 'Murtuva']];
+    // v181: kaikki aaltokortin tilat samassa järjestyksessä kuin siellä; [tila, napin teksti, valikon teksti]
+    const TILAT = [['aalto', 'Aalto', 'Aalto'], ['murtuva', 'Murtuva', 'Murtuva aallokko'], ['virtaus', 'Virta', 'Pintavirtaus'], ['syva', 'Syvä', 'Syvempi vesi'],
+                   ['vajoama', 'Vajoama', 'Vajoama'], ['kumpuama', 'Kumpuama', 'Kumpuama'], ['konvergenssi', 'Konverg.', 'Konvergenssi'], ['syvyys', 'Syvyys', 'Syvyyskartta']];
     const PV = ['su', 'ma', 'ti', 'ke', 'to', 'pe', 'la'];
     const n1 = x => (Math.round(x * 10) / 10).toFixed(1).replace('.', ',');
     const n2 = x => (Math.round(x * 100) / 100).toFixed(2).replace('.', ',');
     const kk = n => String(n).padStart(2, '0');
     const ilmansuunta = deg => ['P', 'KO', 'I', 'KA', 'E', 'LO', 'L', 'LU'][Math.round((((deg % 360) + 360) % 360) / 45) % 8];   // mistä tuulee
 
-    let as = { tila: 'aalto', kloonit: true, yo: false, laji: null };
+    let as = { tila: 'aalto', kloonit: true, yo: false, laji: null, selite: false };
     try { as = Object.assign(as, JSON.parse(localStorage.getItem(AS_LS) || '{}')); } catch (e) {}
     const tallennaAs = () => { try { localStorage.setItem(AS_LS, JSON.stringify(as)); } catch (e) {} };
 
@@ -325,6 +349,15 @@
         }
       }
 
+      // v181: lähtöpaikka (päivän suunnitelman siirtymä ja paluu)
+      const lp = (typeof lahtopaikkaLue === 'function') ? lahtopaikkaLue(avain) : null;
+      if (lp) {
+        const q = naytolle(lp.lat, lp.lon);
+        if (nakyy(q, 30)) { ctx.beginPath(); ctx.arc(q.x, q.y, 11, 0, 6.2832); ctx.fillStyle = 'rgba(255,255,255,.95)'; ctx.fill();
+          ctx.font = '700 15px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#0b2f55'; ctx.fillText('⚓', q.x, q.y + 1);
+          if (nimet) teksti('lähtöpaikka', q.x + 14, q.y, '#cfe3ff', 12); }
+      }
+
       // mittakaava ja pohjoinen
       const m = mPerPx(), tavoite = 110 * m, porr = [50, 100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000];
       const pit = porr.find(x => x >= tavoite * 0.6) || 10000, px = pit / m, y0 = h - 34;
@@ -349,12 +382,24 @@
             sovitaJarvi();
             if (oma && window.akJarviPisteessa(oma.lat, oma.lon) === avain) keskita(oma.lat, oma.lon, 3000);
           }
-          paivitaYla(); paivitaLukemat(); tila(r.ennuste ? '' : 'Ei tuuliennustetta (ei verkkoa?): näytetään syvyyskartta.');
+          paivitaYla(); paivitaLukemat(); paivitaSelite(); tila(r.ennuste ? '' : 'Ei tuuliennustetta (ei verkkoa?): näytetään syvyyskartta.');
           pyydaPiirto();
         } catch (e) { tila('Virhe kartassa: ' + (e && e.message || e)); }
         finally { laskee = false; }
       }, 20);
     }
+    // v181: väriselite samasta piirrosta kuin aaltokortin asteikko; napautus näyttää yksikön ja selityksen
+    function paivitaSelite() {
+      const el = $('selite');
+      if (!pohja || !pohja.asteikko) { el.style.display = 'none'; return; }
+      const t = TILAT.find(x => x[0] === pohja.naytto);
+      $('seliteNimi').textContent = t ? t[2] : '';
+      $('seliteVarit').innerHTML = pohja.asteikko;
+      $('seliteYks').textContent = (pohja.yksikko || '') + (pohja.naytto === 'kumpuama' ? '. Pinkki alue: vahva kumpuaminen (Wedderburn), kun etusivun lämpötieto riittää.' : '');
+      el.classList.toggle('auki', !!as.selite);
+      el.style.display = 'block';
+    }
+    $('selite').onclick = () => { as.selite = !as.selite; tallennaAs(); $('selite').classList.toggle('auki', as.selite); };
     function nykyTunti() {
       const T = window.akTunnit ? window.akTunnit() : [];
       if (!T.length) return 0;
@@ -685,22 +730,29 @@
       }
       if (ehd.length) { ehd.sort((a, b) => a.e - b.e); const x = ehd[0]; nayttoTieto(x.html + '<br><span style="color:#7E93AC">' + etaisyysVeneesta(x.lat, x.lon).replace(/^ · /, '') + '</span>'); return; }
       const p = latLon(sx, sy);
-      if (window.akOnVetta && window.akOnVetta(avain, p.lat, p.lon) !== true) { nayttoTieto('Maata tai järven ulkopuolella.' + etaisyysVeneesta(p.lat, p.lon)); return; }
-      const o = [];
-      try {
-        const sy2 = syvyysTeksti(p.lat, p.lon, true);   // v180: lähde pisteen mukaan (MML, oma luotaus, ruudukko)
-        if (sy2) o.push(sy2);
-        if (pohja.ennuste) {
-          const m = window.akMalliSync(p.lat, p.lon, pohja.aika.getTime());
-          if (m) {
-            o.push('aalto ' + n2(m.aaltoM) + ' m' + (m.aaltoM > m.raja ? ' — yli kalastusrajan ' + n2(m.raja) + ' m' : ''));
-            if (typeof m.pintaKmh === 'number') o.push('pintavirta ' + n2(m.pintaKmh) + ' km/h ' + klooniKohti(m.pintaSuunta));
-          }
-        }
-      } catch (e) {}
       const asteet = (v, pos, neg) => { const a = Math.abs(v), d = Math.floor(a); return (v >= 0 ? pos : neg) + ' ' + d + '°' + ((a - d) * 60).toFixed(3).replace('.', ',') + '′'; };
-      nayttoTieto('<b>Tässä</b> (malli, klo ' + (pohja.aika ? kk(pohja.aika.getHours()) + ':00' : '–') + '): ' + (o.join(' · ') || 'ei tietoa') + etaisyysVeneesta(p.lat, p.lon)
-        + '<br><span style="color:#7E93AC">' + asteet(p.lat, 'N', 'S') + ' ' + asteet(p.lon, 'E', 'W') + '</span>');
+      const koord = '<br><span style="color:#7E93AC">' + asteet(p.lat, 'N', 'S') + ' ' + asteet(p.lon, 'E', 'W') + '</span>';
+      // v181: lähtöpaikka päivän suunnitelmalle (vesi tai ranta enintään 400 m vedestä)
+      const ankkuri = (typeof lahtopaikkaTallenna === 'function' && window.akReitti && window.akReitti(avain, p.lat, p.lon, p.lat, p.lon))
+        ? '<br><button class="ankkuri" id="ankkuriNappi">⚓ Aseta lähtöpaikaksi</button>' : '';
+      if (window.akOnVetta && window.akOnVetta(avain, p.lat, p.lon) !== true) {
+        nayttoTieto('Maata tai järven ulkopuolella.' + etaisyysVeneesta(p.lat, p.lon) + koord + ankkuri); asetaAnkkuri(p); return;
+      }
+      const o = [];
+      let malli = null;
+      try { if (window.akPisteTeksti) malli = window.akPisteTeksti(p.lat, p.lon); } catch (e) {}   // v181: sama teksti kuin aaltokortissa
+      try { const sy2 = syvyysTeksti(p.lat, p.lon, true); if (sy2) o.push(sy2); } catch (e) {}   // v180: lähde pisteen mukaan
+      const tilaNimi = (TILAT.find(t => t[0] === pohja.naytto) || ['', '', ''])[2];
+      nayttoTieto('<b>' + tilaNimi + '</b> <span style="color:#7E93AC">(malli' + (pohja.aika ? ', klo ' + kk(pohja.aika.getHours()) + ':00' : '') + ')</span><br>'
+        + (malli || 'ei tietoa') + (o.length ? '<br>' + o.join(' · ') : '') + etaisyysVeneesta(p.lat, p.lon) + koord + ankkuri);
+      asetaAnkkuri(p);
+    }
+    function asetaAnkkuri(p) {
+      const b = document.getElementById('ankkuriNappi'); if (!b) return;
+      b.onclick = () => {
+        if (!lahtopaikkaTallenna(avain, p.lat, p.lon, 'kartta')) { ilmoita('Tallennus epäonnistui'); return; }
+        b.textContent = '⚓ Lähtöpaikka asetettu'; b.disabled = true; ilmoita('⚓ Lähtöpaikka asetettu'); pyydaPiirto();
+      };
     }
 
     /* ---------- kosketus: siirto, nipistys, napautus (myös hiiri ja rulla) ---------- */
@@ -751,10 +803,16 @@
     };
     $('klooniNappi').onclick = () => { as.kloonit = !as.kloonit; tallennaAs(); $('klooniNappi').classList.toggle('paalla', as.kloonit); paivitaKerros(); pyydaPiirto(); };
     $('yoNappi').onclick = () => { as.yo = !as.yo; tallennaAs(); $('yoNappi').classList.toggle('paalla', as.yo); pyydaPiirto(); };
-    $('tilaNappi').onclick = () => {
-      if (pohja && !pohja.ennuste) { ilmoita('Ilman ennustetta vain syvyyskartta'); return; }
-      const i = TILAT.findIndex(t => t[0] === as.tila); as.tila = TILAT[(i + 1) % TILAT.length][0]; tallennaAs(); renderoi(false);
+    $('tilaNappi').onclick = () => {   // v181: valikko kaikista tiloista (ennen nappi kierrätti neljää)
+      const v = $('valikko');
+      if (v.style.display === 'grid') { v.style.display = 'none'; return; }
+      const ilman = pohja && !pohja.ennuste, nyt = pohja ? pohja.naytto : as.tila;
+      v.innerHTML = TILAT.map(t => '<button data-tila="' + t[0] + '"' + (t[0] === nyt ? ' class="valittu"' : '') + (ilman && t[0] !== 'syvyys' ? ' disabled' : '') + '>' + t[2] + '</button>').join('')
+        + (ilman ? '<div class="huom">Ilman tuuliennustetta vain syvyyskartta.</div>' : '');
+      v.querySelectorAll('button').forEach(b => { b.onclick = () => { v.style.display = 'none'; as.tila = b.dataset.tila; tallennaAs(); renderoi(false); }; });
+      v.style.display = 'grid';
     };
+    cv.addEventListener('pointerdown', () => { $('valikko').style.display = 'none'; });
     $('tuntiEd').onclick = () => vaihdaTunti(-1);
     $('tuntiSeur').onclick = () => vaihdaTunti(1);
     $('tuntiTeksti').onclick = () => { tuntiKasin = false; tunti = nykyTunti(); renderoi(false); };
@@ -769,6 +827,7 @@
       if (e.key === KLOONI_LS) { paivitaKerros(); pyydaPiirto(); }
       if (typeof LS_SAALIS === 'string' && e.key === LS_SAALIS) { paivitaSaaliit(); pyydaPiirto(); }   // v180: kirjaus toisessa välilehdessä
       if (typeof KIRJAUSPOHJA_LS === 'string' && e.key === KIRJAUSPOHJA_LS) { pohjaVali.t = 0; paivitaKalaNappi(); }
+      if (typeof LAHTOPAIKAT_LS === 'string' && e.key === LAHTOPAIKAT_LS) pyydaPiirto();   // v181
       // uusi oma luotaus tuotu pääsovelluksessa: syvyysruudukko lasketaan uudelleen sivun latauksessa
       if (e.key === 'uistelututka_omaluotaus') { tila('Oma luotaus päivittyi: ladataan kartta uudelleen…'); setTimeout(() => location.reload(), 800); }
     });
@@ -802,6 +861,17 @@
           return { ws: h.ws, wg: h.wg, wd: h.wd, aika: new Date(h.aika), asema: h.asema };
         } catch (e) { return null; }
       };
+      /* v181: pinkki kumpuamisalue. Malli kysyy window.kumpuArvio-funktiolta, onko kumpuaminen vahvaa; etusivulla se
+         laskee lämpötiedoista. Tässä samat parametrit tulevat kirjauspohjasta (sama järvi, enintään 12 h vanha) ja
+         lasketaan samalla funktiolla (kirjaus.js: kumpuArvioParam). Ilman pohjaa pinkkiä ei piirretä (ei arvata). */
+      const kumpuPohja = () => {
+        const P = (typeof pohjaRajauksiin === 'function') ? pohjaRajauksiin() : null;
+        return (P && P.kumpu && P.avain === avain && Date.now() - Date.parse(P.aika) <= KIRJAUSPOHJA_MAX_MS) ? P.kumpu : null;
+      };
+      if (typeof kumpuArvioParam === 'function') {
+        window.kumpuArvio = (U, L, tunteja) => { const k = kumpuPohja(); return k && k.p ? kumpuArvioParam(k.p, U, L, tunteja) : null; };
+        window.kumpuHistoriaTunteja = dir => { const k = kumpuPohja(); return k ? kumpuHistoriaParam(k.kertyma, dir) : 0; };
+      }
       try { window.aaltokarttaAlusta(); } catch (e) { tila('Mallin käynnistys epäonnistui: ' + (e && e.message || e)); return; }
       const sel = $('jarvi');
       window.akJarviAvaimet().forEach(k => { const o = document.createElement('option'); o.value = k; o.textContent = J[k].nimi; sel.appendChild(o); });
