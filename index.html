@@ -2385,14 +2385,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=189" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=189" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=189" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=189" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=189" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=189" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=189" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=189" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=190" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=190" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=190" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=190" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=190" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=190" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=190" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=190" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     // Viimeisimmät arvot saaliskirjausta varten (päivittyvät GPS:stä ja analyysistä).
     let viimeisinGps = null;      // { lat, lon }
@@ -11495,7 +11495,7 @@ function sumuriskiAlusta(){
       let R = null;
       try { R = window.akReunaEhdokkaat ? window.akReunaEhdokkaat({ avain, aikaMs, max: 6, pisteet: nimetyt }) : null; } catch (e) { R = null; }
       const kartalle = [];
-      let reunaTxt;
+      let reunaTxt, reunaLista = '';   // v190: reunat myös tekstinä (nimi, suunta, pohja, rinne, koordinaatit)
       if (pys && pys.tunteja >= 6) {
         const ranta = SYYS_RANTA[syysSektori(pys.dir + 180)];
         reunaTxt = 'Tuuli on puhaltanut ' + SYYS_MISTA[syysSektori(pys.dir)] + ' noin ' + pys.tunteja + ' h (keskimäärin ' + n1(pys.U) + ' m/s)'
@@ -11519,6 +11519,15 @@ function sumuriskiAlusta(){
                  { taso: 'Tutkittu', teksti: 'Kesällä kerrostuneessa järvessä iso eläinplankton kasautui tuulen alapuolelle; ratkaisi tuuli, joka oli puhaltanut jopa 12 h ennen (Blukacz ym. 2009, Opeongo, Kanada).', p: 0 }],
           lahin: lahinNimi(x) }));
         const lahella = nimetyt.map((sp, i) => ({ sp, d: R.pisteet && R.pisteet[i] })).filter(x => x.d && x.d.m <= 300).sort((a, b) => b.d.kasautuminen - a.d.kasautuminen).slice(0, 3);
+        const lyhytNimi = t => String(t).replace(/\s*\(.*\)\s*$/, '');
+        reunaLista = R.lista.map((x, i) => {
+          let l = null;
+          nimetyt.forEach(sp => { const m = haversineDistMeters(sp.lat, sp.lon, x.lat, x.lon); if (!l || m < l.m) l = { sp, m }; });
+          const b = l ? (Math.atan2((x.lon - l.sp.lon) * Math.cos(x.lat * Math.PI / 180), x.lat - l.sp.lat) * 180 / Math.PI + 360) % 360 : 0;
+          const missa = l ? lyhytNimi(l.sp.name) + ', reuna ' + (l.m >= 1000 ? n1(l.m / 1000) + ' km' : Math.round(l.m / 10) * 10 + ' m') + ' ' + KUHA_ILLAT[Math.round(b / 45) % 8] : 'ei nimettyä paikkaa lähellä';
+          return '<div style="margin:4px 0 0 10px;"><b>R' + (i + 1) + '</b> · ' + missa + ' · pohja ' + n1(x.f) + ' m, laskee ' + n1(x.g) + ' m / 100 m, syvempi vesi ' + KUHA_INESS[syysSektori(x.syvaSuunta)]
+            + ' · kasautuminen ' + x.kasautuminen + ' <span class="hint" style="font-size:11px;">' + x.lat.toFixed(5) + ', ' + x.lon.toFixed(5) + '</span></div>';
+        }).join('') + (lahella.length ? '<div style="margin:4px 0 0 10px;">Omat paikat reunalla (enintään 300 m): ' + lahella.map(x => lyhytNimi(x.sp.name) + ' (' + Math.round(x.d.m / 10) * 10 + ' m)').join(', ') + '. Sinisinä kartalla.</div>' : '');
         lahella.forEach((x, i) => kartalle.push({ lat: x.sp.lat, lon: x.sp.lon, tyyppi: 'oma', paras: i === 0, tunnus: '', nimi: x.sp.name,
           teksti: 'nimetty paikka tuulen pakkaamalla reunalla (reuna ' + Math.round(x.d.m) + ' m:n päässä, kasautuminen ' + x.d.kasautuminen + ', malli).',
           syyt: [{ taso: 'Malli', teksti: 'Konvergenssin syvä reuna rinteellä ' + Math.round(x.d.m) + ' m:n päässä (kasautuminen ' + x.d.kasautuminen + ').', p: 0 },
@@ -11563,9 +11572,11 @@ function sumuriskiAlusta(){
         + '<div style="margin:4px 0;"><b>1. Reuna.</b></div>' + rivi(pys ? 'Konsensus' : 'Tieto puuttuu', reunaTxt)
         + (pys && pys.tunteja >= 12 ? rivi('Tutkittu', 'Kesällä kerrostuneessa järvessä iso eläinplankton kasautui tuulen alapuolelle, ja sen ratkaisi tuuli, joka oli puhaltanut jopa 12 tuntia ennen (Blukacz ym. 2009, Opeongo). Syksyn sekoittuneessa vedessä tätä ei ole tutkittu.') : '')
         + (R && R.tila === 'ok' ? rivi('Malli', R.lista.length ? 'Kartalla ' + R.lista.length + ' tuulen pakkaamaa reunaa (R1–R' + R.lista.length + ', parhaat ensin, vähintään 1 km toisistaan): konvergenssin syvä reuna rinteellä tämän tunnin tuulella. Napauta merkkiä.'
-                                         : 'Malli ei löydä tällä tuulella reunaa, jossa kasautuminen ja rinne osuvat yhteen.')
-           : rivi('Tieto puuttuu', R && R.tila === 'eriJarvi' ? 'Reunat lasketaan aaltokortin järvelle; valitse kortille sama järvi.'
-               : 'Reunoja ei voitu laskea: ' + ({ eiTuntia: 'tuuliennuste ei ulotu tälle tunnille', eiEnnustetta: 'tuuliennustetta ei ole', eiKarttaa: 'järvelle ei ole syvyysruudukkoa' }[R && R.tila] || 'aaltomalli ei ole vielä latautunut') + '.'))
+                                         : 'Malli ei löydä tällä tuulella reunaa, jossa kasautuminen ja rinne osuvat yhteen.') + reunaLista
+           : rivi('Tieto puuttuu', R && R.tila === 'eriJarvi' ? 'Reunat lasketaan aaltokortin järvelle; valitse kortille sama järvi. Jos aaltomalli vasta käynnistyy, paneeli päivittyy itse.'
+               : R && R.tila === 'eiTuntia' ? 'Reunoja ei voitu laskea: tuuliennuste ei ulotu tälle tunnille.'
+               : R && R.tila === 'eiKarttaa' ? 'Reunoja ei voitu laskea: järvelle ei ole syvyysruudukkoa.'
+               : 'Aaltomallin tuuliennuste latautuu vielä. Reunat tulevat tähän ja kartalle, kun se on valmis; paneeli päivittyy itse. Jos ennustetta ei saada verkosta eikä puhelimen muistista, reunoja ei voi laskea.'))
         + '<div style="margin:8px 0 4px;"><b>2. Kaikuluotain.</b></div>'
         + rivi('Havainto', 'Laaja, yhtenäinen ja rauhallinen täkyparvi: ei aktiivisia petoja, jatka etsimistä. Rikkonainen, pystysuuntainen tai säikky parvi: pedot ovat paikalla. Tarkenna petojen syvyys ja vedä vieheet parven reunoilta tai alta.')
         + '<div style="margin:8px 0 4px;"><b>3. Näkösyvyys.</b></div>'
@@ -11582,8 +11593,39 @@ function sumuriskiAlusta(){
         + rivi('Konsensus', 'Sama ohje: reunat, siimat, valo ja lämpö kuten yllä. Oma sääntö 0,1–0,7 m on taimenen sääntö. Järvilohen syvyys seuraa saaliskalaa, joten parvi luotaimessa ratkaisee.')
         + rivi('Tutkittu', jlTutkittu)
         + '</div>';
-      return { html, kartalle, lyhyt, jarvilohi, reunat: R, pysyvyys: pys };
+      return { html, kartalle, lyhyt, jarvilohi, reunat: R, reunatTila: R ? R.tila : null, pysyvyys: pys };
     }
+
+    /* v190 (10.10.2026, Hannun kuvat klo 20.38): Analysoi laski syysohjeen reunat ennen kuin aaltomallin tuuliennuste oli
+       ladattu ("tuuliennustetta ei ole"), eikä taimenpaneelia laskettu uudelleen (kuhalla on kuhaEhdAjastus), joten kartalle
+       ei tullut R-merkkejä. Nyt: kun reunoja ei voitu laskea, koska malli tai ennuste latautuu (ei mallia, eiEnnustetta,
+       eriJarvi), odotetaan akValmiina ja tarkistetaan 1,5 s välein enintään 30 s, ja kun malli on valmis (akValmis),
+       paneeli lasketaan kerran uudelleen. Sama analyysi (o) ajastetaan vain kerran. Lisäksi 'akEnnustePaivittyi'
+       (verkko palasi, uusi ennuste) laskee paneelin uudelleen, kun syysohje on näkyvissä. */
+    let taimenSyysOdottaa = null;
+    function taimenSyysUudelleen(o) {
+      const tp = document.getElementById('taimenPaneeli');
+      if (!tp || taimenViimeArgs !== o) return;
+      tp.innerHTML = taimenHotspotHtml(o);
+      try { syysJarvilohiPaivita(); } catch (e) { /* ei kriittistä */ }
+    }
+    function taimenSyysAjastus(tila, o) {
+      if (!(tila === null || tila === 'eiEnnustetta' || tila === 'eriJarvi')) return;
+      if (taimenSyysOdottaa && taimenSyysOdottaa.o === o) return;
+      const ajo = { o, n: 0 }; taimenSyysOdottaa = ajo;
+      if (typeof window.akKaynnistaHiljaa === 'function') { try { window.akKaynnistaHiljaa(); } catch (e) {} }
+      const kierros = function () {
+        if (taimenSyysOdottaa !== ajo || taimenViimeArgs !== o) return;
+        ajo.n++;
+        if (typeof window.akValmis === 'function' && window.akValmis()) { taimenSyysUudelleen(o); return; }
+        if (ajo.n < 20) setTimeout(kierros, 1500);
+      };
+      const alku = typeof window.akValmiina === 'function' ? window.akValmiina() : Promise.resolve();
+      alku.then(function () { setTimeout(kierros, 0); }, function () { setTimeout(kierros, 0); });
+    }
+    window.addEventListener('akEnnustePaivittyi', function () {
+      if (window.syysOhjeLyhyt && taimenViimeArgs) { try { taimenSyysUudelleen(taimenViimeArgs); } catch (e) { /* ei kriittistä */ } }
+    });
 
     // v189: syysohjeen tiivistelmä järvilohen perusteluihin (ensimmäiseksi). Kutsutaan, kun järvilohen perustelut
     // piirretään ja kun taimenpaneeli piirtyy uudelleen (tuulihistoria tulee myöhemmin).
@@ -11629,6 +11671,7 @@ function sumuriskiAlusta(){
         try { so = (e && (e.tila === 'sekoittunut' || e.tila === 'heikko')) ? syysOhje(o, avain, chip) : null; } catch (er) { console.warn('Syysohje:', er); so = null; }
         window.syysOhjeLyhyt = so ? so.lyhyt : null;
         window.syysOhjeJarvilohi = so ? so.jarvilohi : null;
+        if (so) taimenSyysAjastus(so.reunatTila, o);   // v190: ennuste latautuu vielä → reunat uudelleen, kun se on valmis
         taimenKartalle(e && e.tila !== 'lataus' ? avain : null, o.hetki, so ? so.kartalle : [], lyhytSyy);
         const syy = !e ? '' : e.tila === 'lataus' ? 'Syvyyskartta latautuu vielä. Hotspotit tulevat tähän, kun se on valmis.'
           : e.tila === 'sekoittunut' ? chip(e.hp && e.hp.taso ? e.hp.taso : (e.hp && e.hp.mitattu ? 'Mittaus' : 'Arvio')) + 'Järvi on nyt sekoittunut (' + (e.hp && e.hp.lahde ? e.hp.lahde : 'lämpötieto') + '). Ilman harppauskerrosta ei synny kallistumaa, paluuheilahdusta eikä rintamaa, joten malli ei anna ehdokkaita. Malli koskee kerrostunutta kautta.'
@@ -12782,7 +12825,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v189';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v190';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -20770,7 +20813,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=189';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=190';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })
