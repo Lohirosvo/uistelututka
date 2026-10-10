@@ -2,7 +2,7 @@
 <html lang="fi">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#060B14">
   <title>Tilannekuva — Uistelututka</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -60,6 +60,12 @@
     - Vihreä ennusteviiva (5 min nykyisellä nopeudella, vähintään 30 px keulan edessä) vain, kun suunta on mitattu
       viimeisen minuutin aikana. Jos vene on seissyt, se näkyy haaleana viimeisimpään kulkusuuntaan. Ennen ensimmäistä
       liikettä merkki on pyöreä.
+  v184 (10.10.2026): ALAPALKKI NÄKYVIIN. Hannun kuvakaappaus (S25 Ultra, ei osoiteriviä, kolmen napin navigointi):
+    alapalkki (nopeus, syvyys, ◎ 🎯 ☾ ↻) jäi kokonaan Androidin navigointipalkin alle, joten ↻-nappia ei näkynyt.
+    Syy: viewport-fit=cover. Sen kanssa Chrome (135→) ulottaa sivun ruudun alareunaan navigointipalkin alle, mutta
+    env(safe-area-inset-bottom) oli kuvan mittojen mukaan 0, joten palkki ei noussut. viewport-fit=cover poistettu (kuten
+    index.html:ssä, joka näkyy oikein): selain pitää sivun järjestelmäpalkkien välissä. env()-arvot jäävät koodiin
+    (ilman coveria ne ovat 0). Vaakanäkymän koko näytössä kameran reikä jää nyt sivun ulkopuolelle (selain rajaa).
   -->
   <style>
     :root { --bg:#060B14; --panel:#0E1B2E; --panel-alt:#13253D; --line:#1E3350; --text:#E7EEF6; --muted:#7E93AC;
@@ -228,17 +234,17 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=183" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=183" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=183" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=183" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=183" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="aaltomalli.js?v=183" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=183" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=184" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=184" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=184" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=184" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=184" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="aaltomalli.js?v=184" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=184" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v183';
+    const APP_VERSIO = 'v184';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
