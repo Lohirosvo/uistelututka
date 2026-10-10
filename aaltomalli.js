@@ -7,11 +7,36 @@
    KÄYNNISTYS: index.html kutsuu aaltokarttaAlusta() laiskasti (kortti avataan tai saalis kirjataan).
    Rajapinta pääkoodille: window.ak*-funktiot (akMalliSync, akKloonit, akSyvyysJarvessa, …).
    Tarvitsee pääkoodista: TM35, omaLuotausSolut/-Korvaa, haversine ym. (globaalit, kutsuhetkellä).
-   VERSIO: index.html lataa tiedoston nimellä aaltomalli.js?v=NNN; NNN = sw.js:n VERSIO-numero. */
+   v179: toimii myös ilman aaltokorttia (PIILORUNKO) ja antaa tilannekuvalle pohjakuvan (akRenderoi);
+   oma sijainti (window.utOmaSijainti) piirretään aaltokarttaan.
+   VERSIO: sivut lataavat tiedoston nimellä aaltomalli.js?v=NNN; NNN = sw.js:n VERSIO-numero. */
 function aaltokarttaAlusta(){
 "use strict";
 var $ = function(id){ return document.getElementById(id); };
 var g = 9.81;
+
+/* v179 (10.10.2026): PIILORUNKO. tilanne.html käyttää tätä samaa mallia ilman aaltokorttia. Malli kirjoittaa
+   korttinsa elementteihin (leima, taulukko, liukusäädin, venevalinta …), joten jos sivulla ei ole korttia
+   (#aaltokartta), luodaan näkymätön runko samoilla tunnisteilla ja elementtityypeillä. index.html:ssä
+   runkoa ei luoda. Jos kortille lisätään uusi id, jota malli käyttää, se lisätään myös tähän. */
+var akPiilorunko = false;
+if (!document.getElementById('aaltokartta')){
+  var akRunko = document.createElement('div'); akRunko.id = 'akPiilorunko'; akRunko.hidden = true; akRunko.style.display = 'none';
+  akRunko.innerHTML = '<section id="aaltokartta"><select id="akJarvi"></select><canvas id="akKuva" width="300" height="300"></canvas>'
+    + '<button type="button" id="akZoomTaso"></button><div id="akLeima"></div><div id="akTuuli"></div>'
+    + '<p id="akKumpuInfo"></p><p id="akKuhaInfo"></p><p id="akTaimenInfo"></p><p id="akKlooniInfo"></p><div id="akAsteikko"></div>'
+    + '<input type="checkbox" id="akKayrat"><input type="checkbox" id="akKuhaMerkit"><input type="checkbox" id="akTaimenMerkit">'
+    + '<input type="checkbox" id="akKlooniMerkit"><input type="checkbox" id="akKorosta">'
+    + '<select id="akNaytto"><option value="aalto">Aallonkorkeus</option><option value="murtuva">Murtuva aallokko</option>'
+    + '<option value="virtaus">Pintavirtaus</option><option value="syva">Syvempi vesi</option><option value="vajoama">Vajoama</option>'
+    + '<option value="kumpuama">Kumpuama</option><option value="konvergenssi">Konvergenssi</option><option value="syvyys">Syvyyskartta</option></select>'
+    + '<span id="akYksikko"></span><button type="button" id="akOziNappi"></button><p id="akOziTila"></p><div id="akPiste"></div>'
+    + '<select id="akVene"></select><input type="range" id="akRaja" min="0.10" max="0.60" step="0.01" value="0.20"><span id="akRajaL"></span>'
+    + '<div id="akRulla"><div id="akRullaSisus"></div></div><div id="akJana"></div><div id="akPaivat"></div>'
+    + '<span id="akAlku"></span><span id="akLoppu"></span><input type="range" id="akLiuku" min="0" max="0" value="0"><div id="akTaulu"></div></section>';
+  (document.body || document.documentElement).appendChild(akRunko);
+  akPiilorunko = true;
+}
 
 // ================== JÄRVET ==================
 // v178 (10.10.2026): järvien ruudukot (maski, syvyysluokat, kattavuus) ovat omassa tiedostossaan
@@ -113,7 +138,8 @@ function akPiirraKayrat(ctx, win, S, LW){
     var paa = KAYRAT_PAA.indexOf(taso) >= 0, jt = akKayraJanat(f, taso, win, S);
     if (!jt.length) return;
     ctx.strokeStyle = paa ? "rgba(12,38,64,.70)" : "rgba(12,38,64,.38)";
-    ctx.lineWidth = paa ? Math.max(1.2, LW/420) : Math.max(0.8, LW/800);
+    ctx.lineWidth = akKayraLeveys ? (paa ? akKayraLeveys.paa : akKayraLeveys.muu)   // v179: tilannekuvan pohjakuva (zoomataan, ohuemmat viivat)
+                                  : (paa ? Math.max(1.2, LW/420) : Math.max(0.8, LW/800));
     ctx.beginPath();
     jt.forEach(function(l){ ctx.moveTo(l[0][0], l[0][1]); ctx.lineTo(l[1][0], l[1][1]); });
     ctx.stroke();
@@ -404,7 +430,7 @@ window.akLapiPaivita = function(){
 /* v172: oma luotaus kartalle (pääosa pääkoodissa, ks. OMA LUOTAUS KAIKULUOTAIMELTA). */
 // Kartta: jälki pisteinä Syvyyskartta-tilassa
 function akPiirraOmaLuotaus(ctx, win, S){
-  if (akTila !== 'syvyys' || !jarvi || !jarvi.kartta) return;
+  if (akTila !== 'syvyys' || !jarvi || !jarvi.kartta || akKayraLeveys) return;   // v179: tilannekuva piirtää jäljen itse ohuena
   var P = omaLuotausPisteet(); if (!P.length) return;
   var k = jarvi.kartta, kerr = akVientiKerroin > 1 ? akVientiKerroin : 1, r = 1.5*kerr;
   ctx.fillStyle = 'rgba(45,18,80,.16)';   // v176: himmeä, kertoo vain mistä mitattu syvyys on (Hannu 7.10.)
@@ -943,6 +969,7 @@ function piirra(){
   akPiirraKuhaMerkit(ctx, win, S);   // v153
   akPiirraTaimenMerkit(ctx, win, S);   // v156
   try { akPiirraKloonit(ctx, win, S); } catch (e) {}   // v177
+  try { akPiirraOmaSijainti(ctx, win, S); } catch (e) {}   // v179
   try { akPiirraOmaLuotaus(ctx, win, S); } catch (e) {}   // v172
   akPiirraMerkki(ctx, S);
   akKuhaInfoPaivita();
@@ -2814,6 +2841,99 @@ function akKlooniPisteTieto(){
   return '<br>🎯 <b>' + paras.tunnus + '</b>: ' + (paras.teksti || '');
 }
 
+/* ===== TILANNEKUVA JA OMA SIJAINTI — 10.10.2026 (v179) =====
+   Hannu 10.10.: tilannetietoisuudelle oma kevyt sivu (tilanne.html), mutta mallia ei monisteta.
+   Sivu lataa tämän saman tiedoston ja piirtää kartan itse (siirto, zoom, oma sijainti, merkit
+   vektoreina näytön tarkkuudella). Pohjakuva lasketaan täsmälleen samalla piirra()-funktiolla kuin
+   aaltokortti, joten värit, kalastusraja ja nuolet ovat samat. Lisäksi oma sijainti aaltokarttaan.
+   RAJAPINTA:
+     akRenderoi({ tila, tunti, kerroin }) → { kuva (canvas), k, win, S, aika, U, dir, raja, … }
+         koko järvi ilman merkkejä; ilman ennustetta vain tila 'syvyys' (tuulena tyyni)
+     akTunnit() → ennusteen tunnit [{ i, aika, U, dir, puuska }]
+     akAvainPaikalle(nimi) → JARVET-avain sovelluksen paikan nimestä (sama sääntö kuin akSovitaPaikkaan)
+     akJarviPisteessa(lat, lon) → järvi, jonka vesiruutuun piste osuu (tai null)
+     akPiirraSijainti() → aaltokortin uudelleenpiirto oman sijainnin vuoksi (enintään 8 s välein,
+         vain kun kortti näkyy). Sijainti luetaan window.utOmaSijainti-oliosta (sivu asettaa). */
+var akKayraLeveys = null;   // { paa, muu } pikseleinä: vain akRenderoi asettaa (tilannekuvan pohjakuva zoomataan)
+function akNykyAvain(){
+  var ks = Object.keys(JARVET);
+  for (var n = 0; n < ks.length; n++) if (JARVET[ks[n]] === jarvi) return ks[n];
+  return null;
+}
+function akAvainNimelle(nimi){
+  if (!nimi) return null;
+  var osuma = Object.keys(JARVET).filter(function(k){
+    var jn = JARVET[k].nimi || '';
+    return nimi.slice(0,8) === jn.slice(0,8) || jn.indexOf(nimi.split(' ')[0]) === 0;
+  })[0];
+  return osuma || null;
+}
+window.akAvainPaikalle = function(nimi){ return akAvainNimelle(nimi); };
+window.akJarviPisteessa = function(lat, lon){
+  var ks = window.akJarviAvaimet();
+  for (var n = 0; n < ks.length; n++) if (window.akOnVetta(ks[n], lat, lon) === true) return ks[n];
+  return null;
+};
+window.akTunnit = function(){
+  return data.map(function(d, i){ return { i: i, aika: d.aika, U: d.U, dir: d.dir, puuska: d.puuska }; });
+};
+window.akRenderoi = function(o){
+  o = o || {};
+  if (!jarvi || !jarvi.kartta || !mask) return { tila: 'eiJarvea' };
+  var tyhja = !data.length;
+  if (tyhja && o.tila && o.tila !== 'syvyys') return { tila: 'eiEnnustetta' };
+  var t = { tila: akTila, valittu: valittu, zoom: akZoom, keski: akZoomKeski, sel: akValittu, kerroin: akVientiKerroin,
+            kuha: akKuhaMerkit, taimen: akTaimenMerkit, klooni: akKlooniMerkit, oma: akOmaNakyy, data: data, kayra: akKayraLeveys };
+  try {
+    if (tyhja) data = [{ aika: new Date(), U: 0.5, Uenn: 0.5, dir: 0, puuska: null, tunteja: 1, Fpahin: 20000, korkein: 0, Tp: 0 }];
+    akTila = akSyvyys ? (tyhja ? 'syvyys' : (o.tila || 'aalto')) : 'aalto';
+    valittu = Math.max(0, Math.min(data.length - 1, typeof o.tunti === 'number' ? o.tunti : valittu));
+    akZoom = 1; akZoomKeski = null; akValittu = null;
+    akVientiKerroin = Math.max(1, o.kerroin || 3);
+    akKuhaMerkit = false; akTaimenMerkit = false; akKlooniMerkit = false; akOmaNakyy = false;
+    akKayraLeveys = { paa: 1.3, muu: 0.7 };
+    piirra();
+    var c = $("akKuva"), kopio = document.createElement('canvas');
+    kopio.width = c.width; kopio.height = c.height; kopio.getContext('2d').drawImage(c, 0, 0);
+    var d = data[valittu];
+    return { tila: 'ok', kuva: kopio, k: akViime.k, win: akViime.win, S: akViime.S, avain: akNykyAvain(), jarvi: jarvi.nimi,
+             naytto: akTila, tunti: valittu, ennuste: !tyhja, aika: tyhja ? null : d.aika, U: tyhja ? null : d.U, dir: tyhja ? null : d.dir,
+             puuska: tyhja ? null : d.puuska, tunteja: tyhja ? null : d.tunteja, korkein: d.korkein, osuus: d.osuus, virMax: d.virMax,
+             raja: akKalaRaja(), turva: akVene().turva, vene: akVene().nimi, syvyysLahde: akSyvyysLahde() };
+  } finally {
+    data = t.data; akTila = t.tila; valittu = t.valittu; akZoom = t.zoom; akZoomKeski = t.keski; akValittu = t.sel;
+    akVientiKerroin = t.kerroin; akKuhaMerkit = t.kuha; akTaimenMerkit = t.taimen; akKlooniMerkit = t.klooni; akOmaNakyy = t.oma; akKayraLeveys = t.kayra;
+    if (!akPiilorunko){ try { if (data.length) piirra(); } catch(e){} }   // aaltokortti näyttää taas omaa tilaansa
+  }
+};
+
+/* Oma sijainti aaltokarttaan: vihreä pallo ja kulkusuunta. Vain kortin omassa piirrossa, ei Ozi-viennissä
+   eikä tilannekuvan pohjakuvassa (tilannekuva piirtää sijainnin itse). Yli 2 min vanha sijainti ei näy. */
+var akOmaNakyy = true, akSijaintiPiirtoT = 0;
+function akPiirraOmaSijainti(ctx, win, S){
+  var p = window.utOmaSijainti;
+  if (!akOmaNakyy || akVientiKerroin > 1 || !p || typeof p.lat !== 'number' || !jarvi || !jarvi.kartta) return;
+  if (Date.now() - (p.aika || 0) > 120e3) return;
+  var k = jarvi.kartta;
+  var x = ((p.lon - k.lansiLon)*111320*Math.cos(p.lat*Math.PI/180)/k.ruutu - win.i0)*S, y = ((k.pohjoisLat - p.lat)*111320/k.ruutu - win.j0)*S;
+  if (x < -30 || y < -30 || x > win.w*S + 30 || y > win.h*S + 30) return;
+  if (typeof p.suunta === 'number'){
+    var a = p.suunta*Math.PI/180, L = 26;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.sin(a)*L, y - Math.cos(a)*L);
+    ctx.lineWidth = 4.5; ctx.strokeStyle = "rgba(255,255,255,.95)"; ctx.stroke();
+    ctx.lineWidth = 2.4; ctx.strokeStyle = "#1b5e20"; ctx.stroke();
+  }
+  ctx.beginPath(); ctx.arc(x, y, 8.5, 0, 6.2832); ctx.fillStyle = "rgba(255,255,255,.95)"; ctx.fill();
+  ctx.beginPath(); ctx.arc(x, y, 6, 0, 6.2832); ctx.fillStyle = "#2e7d32"; ctx.fill();
+}
+window.akPiirraSijainti = function(){
+  if (akPiilorunko || !jarvi || !data.length) return;
+  var c = $("akKuva"); if (!c || c.offsetParent === null) return;   // kortti kiinni tai toinen ruutu
+  var nyt = Date.now(); if (nyt - akSijaintiPiirtoT < 8000) return;
+  akSijaintiPiirtoT = nyt;
+  try { piirra(); } catch(e){}
+};
+
 /* Napautus: lähin kuhamerkki kerrotaan pisteen tietojen perään (myös syvyys- ja aaltotilassa). */
 function akKuhaPisteTieto(){
   if (!akKuhaMerkit || !akValittu || !akViime) return '';
@@ -3030,21 +3150,17 @@ val.addEventListener("change", function(){ lataa(this.value); });
 function akSovitaPaikkaan(){
   var nimi = (typeof currentLocation === 'object' && currentLocation && currentLocation.name)
              ? currentLocation.name : '';
-  if(!nimi) return null;
-  var osuma = Object.keys(JARVET).filter(function(k){
-    var jn = JARVET[k].nimi || '';
-    /* "Hirvijärven tekoallas" ja "Hirvijärven tekojärvi" ovat sama paikka
-       eri nimellä, joten verrataan alkuosaa eikä koko merkkijonoa. */
-    return nimi.slice(0,8) === jn.slice(0,8) || jn.indexOf(nimi.split(' ')[0]) === 0;
-  })[0];
-  return osuma || null;
+  /* "Hirvijärven tekoallas" ja "Hirvijärven tekojärvi" ovat sama paikka eri nimellä, joten
+     akAvainNimelle vertaa alkuosaa eikä koko merkkijonoa (v179: sama sääntö tilannekuvalle). */
+  return akAvainNimelle(nimi);
 }
 window.akPaivitaPaikka = function(){
   var k = akSovitaPaikkaan();
   if(k && val.value !== k){ val.value = k; lataa(k); }
 };
 
-var eka = akSovitaPaikkaan()
+var eka = (window.akAlkuJarvi && JARVET[window.akAlkuJarvi] ? window.akAlkuJarvi : null)   // v179: tilannekuva kertoo järven
+  || akSovitaPaikkaan()
   || Object.keys(JARVET).filter(function(k){
        return JARVET[k].kartta && JARVET[k].kartta.maski;
      })[0] || Object.keys(JARVET)[0];
