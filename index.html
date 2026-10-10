@@ -2385,14 +2385,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=185" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=185" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=185" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=185" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=185" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=185" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=185" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=185" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=186" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=186" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=186" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=186" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=186" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=186" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=186" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=186" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     // Viimeisimmät arvot saaliskirjausta varten (päivittyvät GPS:stä ja analyysistä).
     let viimeisinGps = null;      // { lat, lon }
@@ -8116,6 +8116,14 @@ function sumuriskiAlusta(){
         if (P.taimenKentta) delete P.taimenKentta.K;   // funktio: tilannekuva laskee kentän syötteestä
         // v181: pinkki kumpuamisalue tilannekuvaan (sama Wedderburn-arvio: kirjaus.js kumpuArvioParam)
         try { const kk = tuuliKertyma; P.kumpu = { p: kumpuParametrit(), kertyma: kk ? { luotettava: !!kk.luotettava, suunta: kk.suunta, tunteja: kk.tunteja } : null }; } catch (e) { P.kumpu = null; }
+        /* v186: kuha- ja taimenpaikkojen kartta (sama kuin aaltokortissa, perustelut mukana) tilannekuvaan. Jos niitä ei ole
+           laskettu tämän avauksen jälkeen (Analysoi ei vielä ajettu), edellinen tallennus säilyy: illan suunnitelma näkyy
+           aamulla vesillä. Tyhjä tulos syineen (esim. järvi sekoittunut) tallentuu sellaisenaan. */
+        try {
+          const ed = (() => { try { const v = JSON.parse(localStorage.getItem(KIRJAUSPOHJA_LS) || 'null'); return v && v.kartta ? v.kartta : null; } catch (e) { return null; } })();
+          P.kartta = { kuha: window.akKuhaKohteet !== undefined ? window.akKuhaKohteet : (ed ? ed.kuha || null : null),
+                       taimen: window.akTaimenKohteet !== undefined ? window.akTaimenKohteet : (ed ? ed.taimen || null : null) };
+        } catch (e) { P.kartta = null; }
         (typeof locations !== 'undefined' ? locations : []).forEach(l => {
           const k = karttaAvainNimesta(l.name);
           if (!k) return;
@@ -11184,10 +11192,19 @@ function sumuriskiAlusta(){
           }, 0);
         }).catch(function () {});
     }
+    /* v186 (10.10.2026): perustelut kartan merkkeihin, jotta tilannekuva näyttää ne napautuksesta (kirjauspohjan kautta).
+       Samat tekstit kuin paneelissa; aaltokortin piirto ja napautus käyttävät edelleen vain nimeä ja lyhyttä tekstiä. */
+    function kartalleSyyt(syyt) {
+      return (syyt || []).slice().sort((a, b) => b.p - a.p).map(s => ({ taso: s.taso, teksti: s.teksti, p: s.p }));
+    }
+    function kartalleLahin(l) {
+      return l ? 'Lähin nimetty paikka ' + l.sp.name + ', ' + (l.m >= 1000 ? n1(l.m / 1000) + ' km' : Math.round(l.m) + ' m') + '; ehdokas on siitä ' + l.suunta + '.' : null;
+    }
     function kuhaEhdKartalle(ehd, o) {
       return (ehd && ehd.lista ? ehd.lista : []).map((x, i) => ({ lat: x.c.lat, lon: x.c.lon, tyyppi: 'ehdokas', tunnus: String(i + 1),
         nimi: 'Kuha-ehdokas ' + (i + 1),
-        teksti: 'syvyyskartan reuna, kuhan syvyys ' + n1(o.syvyysKuha) + ' m, ' + x.pisteet + ' pistettä (malli, ei omaa saalista).' }));
+        teksti: 'syvyyskartan reuna, kuhan syvyys ' + n1(o.syvyysKuha) + ' m, ' + x.pisteet + ' pistettä (malli, ei omaa saalista).',
+        syyt: kartalleSyyt(x.syyt), lahin: kartalleLahin(x.lahin) }));   // v186
     }
     // v153: järvi, jolla ei ole nimettyjä kuhapaikkoja (Cupin järvet, Kyrkösjärvi, Kalajärvi; v154 + Ähtärinjärvi, Kivijärvi, Saimaa)
     function kuhaVainEhdokkaatHtml(o, avain) {
@@ -11237,7 +11254,8 @@ function sumuriskiAlusta(){
       const lyhenne = n => { const m = /(?:^|\s)([A-ZÅÄÖ])$/.exec(n || ''); return m ? m[1] : ''; };
       kuhaKartalle(jarviAvain, o.hetki, nimetytKartalle.map((x, i) => ({ lat: x.spot.lat, lon: x.spot.lon, tyyppi: 'oma', paras: i === 0,
         tunnus: lyhenne(x.spot.name), nimi: x.spot.name,
-        teksti: (i === 0 ? 'paras nimetty kuhapaikka nyt, ' : 'vaihtoehto, ') + x.pisteet + ' pistettä (' + (x.spot.taso || 'oma tieto') + ').' }))
+        teksti: (i === 0 ? 'paras nimetty kuhapaikka nyt, ' : 'vaihtoehto, ') + x.pisteet + ' pistettä (' + (x.spot.taso || 'oma tieto') + ').',
+        syyt: kartalleSyyt(x.syyt) }))   // v186
         .concat(kuhaEhdKartalle(ehd, o)));
       const vaihto = auki.filter(x => x !== par).slice(0, 2).map(v => {
         const paa = v.syyt.filter(x => x.p > 0).sort((a, b) => b.p - a.p)[0];
@@ -11497,9 +11515,9 @@ function sumuriskiAlusta(){
       huom.push('Malli on tarkistettava mittauksella: Depth Raider -lukema ehdokkaan kohdalla kertoo, onko kerros siellä missä malli sanoo.');
       const kartalle = e.lista.map((x, i) => ({ lat: x.c.lat, lon: x.c.lon, tyyppi: 'ehdokas', tunnus: tunnus(i), nimi: 'Taimen-ehdokas ' + tunnus(i),
         teksti: x.pisteet + ' pistettä (' + x.syyt.slice().sort((a, b) => b.p - a.p).map(y => y.lyhyt).filter(Boolean).join(', ') + '), harppaus ' + n1(Math.max(0, x.c.hq)) + ' m, pohja ' + n1(x.c.f) + ' m. Malli, ei omaa saalista.'
-          + (ev.pysyy ? ' Ennusteen varmuus: ' + ensvPysyyTxt(ev, i) + '.' : '') }))
+          + (ev.pysyy ? ' Ennusteen varmuus: ' + ensvPysyyTxt(ev, i) + '.' : ''), syyt: kartalleSyyt(x.syyt), lahin: kartalleLahin(x.lahin) }))   // v186
         .concat(e.nimetyt.filter(x => x.pisteet > 0).slice(0, 3).map((x, i) => ({ lat: x.sp.lat, lon: x.sp.lon, tyyppi: 'oma', paras: i === 0, tunnus: '',
-          nimi: x.sp.name, teksti: 'nimetty paikka, malli antaa ' + x.pisteet + ' pistettä (harppaus täällä ' + (x.c ? n1(Math.max(0, x.c.hq)) : '–') + ' m).' })))
+          nimi: x.sp.name, teksti: 'nimetty paikka, malli antaa ' + x.pisteet + ' pistettä (harppaus täällä ' + (x.c ? n1(Math.max(0, x.c.hq)) : '–') + ' m).', syyt: kartalleSyyt(x.syyt) })))   // v186
         .concat(ev.merkit);
       taimenKartalle(avain, o.hetki, kartalle);
       return alku + meta
@@ -12572,7 +12590,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v185';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v186';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -20555,7 +20573,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=185';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=186';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })

@@ -70,6 +70,10 @@
     syvyyskartta piirtävät nyt saman veneen ja vanan kuin tämä sivu. Koodi siirretty sanasta sanaan; tämän sivun kuva on
     bitilleen sama kuin v184:ssä (testattu). Vana on välilehden yhteinen (sessionStorage 'ut_vana', v183:n
     'tilanne_vana' luetaan kerran), joten etusivulla kuljettu reitti jatkuu tilannekuvassa ja päinvastoin.
+  v186 (10.10.2026): KUHA- JA TAIMENPAIKAT. Hannu valitsi "Ehdokkaat tilannekuvaan". Etusivun Analysoi tallentaa aaltokortin
+    kuha- ja taimenmerkit perusteluineen kirjauspohjaan (P.kartta); täällä samat merkit ja napautuksesta perustelut
+    todisteen tasoineen. Kytkimet tilavalikossa. Samassa kohdassa olevat merkit (esim. kuhapaikka ja ottipaikka)
+    näkyvät napautuksessa yhdessä.
   -->
   <style>
     :root { --bg:#060B14; --panel:#0E1B2E; --panel-alt:#13253D; --line:#1E3350; --text:#E7EEF6; --muted:#7E93AC;
@@ -100,6 +104,9 @@
     #tieto { position: absolute; left: 8px; right: 8px; bottom: 8px; background: rgba(14,27,46,.97); border: 1px solid var(--line);
              border-radius: 12px; padding: 10px 40px 10px 12px; font-size: 15px; line-height: 1.35; display: none; max-height: 45%; overflow: auto; }
     #tieto b { color: var(--text); }
+    #tieto .syy { margin-top: 5px; }   /* v186: kuha- ja taimenpaikan perustelut */
+    #tieto .taso { display: inline-block; padding: 0 6px; margin-right: 5px; border: 1px solid var(--line); border-radius: 9px; font-size: 12px; color: var(--cyan); }
+    #valikko button.merkki { font-size: 15px; }
     #tietoSulje { position: absolute; right: 4px; top: 4px; width: 36px; height: 36px; border: 0; background: transparent; color: var(--muted); font-size: 20px; }
     #ilmoitus { position: absolute; left: 50%; top: 56px; transform: translateX(-50%); background: var(--vihrea); color: #04121f;
                 border-radius: 10px; padding: 8px 14px; font-size: 18px; font-weight: 700; display: none; white-space: nowrap; }
@@ -238,18 +245,18 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=185" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=185" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=185" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=185" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=185" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=185" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=185" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=185" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=186" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=186" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=186" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=186" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=186" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=186" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=186" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=186" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v185';
+    const APP_VERSIO = 'v186';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
@@ -262,7 +269,7 @@
     const kk = n => String(n).padStart(2, '0');
     const ilmansuunta = deg => ['P', 'KO', 'I', 'KA', 'E', 'LO', 'L', 'LU'][Math.round((((deg % 360) + 360) % 360) / 45) % 8];   // mistä tuulee
 
-    let as = { tila: 'aalto', kloonit: true, yo: false, laji: null, selite: false, vaaka: false };
+    let as = { tila: 'aalto', kloonit: true, yo: false, laji: null, selite: false, vaaka: false, kuha: true, taimen: true };   // v186: kuha, taimen
     try { as = Object.assign(as, JSON.parse(localStorage.getItem(AS_LS) || '{}')); } catch (e) {}
     const tallennaAs = () => { try { localStorage.setItem(AS_LS, JSON.stringify(as)); } catch (e) {} };
 
@@ -329,6 +336,47 @@
        etusivun aaltokortti ja syvyyskartta piirtävät saman veneen. Tämä sivu antaa vain oman koordinaatistonsa:
        utPiirraVana(ctx, { oma, naytolle, mPerPx }) ja utPiirraVeneMerkki(ctx, { oma, p, mPerPx, yo }). */
 
+    /* ---------- v186: kuha- ja taimenpaikat tilannekuvaan ----------
+       Hannu 10.10. (valinta listalta): "Ehdokkaat tilannekuvaan". Etusivun Analysoi laskee kuhapaikat (nimetyt ja ehdokkaat
+       syvyyskartasta) ja taimenpaikat (harppauskerroksen mallista) ja tallentaa ne perusteluineen kirjauspohjaan
+       (P.kartta.kuha / .taimen, sama sisältö kuin aaltokortin merkeillä). Täällä ne piirretään samoin merkein, ja napautus
+       kertoo nimen, lyhyen tekstin, perustelut todisteen tasoineen ja lähimmän nimetyn paikan.
+       - Vain sama järvi. Paikat koskevat analyysin hetkeä (voi olla tuleva, esim. illalla aamuksi tehty suunnitelma);
+         ne eivät vaihdu kartan tunnin mukana, kuten aaltokortissakaan. Yli 12 h menneisyydessä oleva hetki ei näy.
+       - Valikossa (tilanappi) kytkimet 🐟 ja 🎣; oletus päällä. */
+    const PAIKKALAJIT = ['kuha', 'taimen'], PAIKAT_MAX_MS = 12 * 3600e3;
+    const hetkiTeksti = ms => { const d = new Date(ms); return PV[d.getDay()] + ' ' + d.getDate() + '.' + (d.getMonth() + 1) + '. klo ' + klooniKello(ms); };
+    const jarvenNimi = a => (window.UT_JARVET && window.UT_JARVET[a] && window.UT_JARVET[a].nimi) || a || '–';
+    function paikkaKartta(laji) {   // → { K: { avain, hetki, kohteet, syy } tai null, syy }
+      const P = pohjaRajauksiin(), K = P && P.kartta ? P.kartta[laji] : null;
+      if (!K || !Array.isArray(K.kohteet)) return { K: null, syy: 'ei laskettu: paina etusivulla Analysoi' };
+      if (K.avain !== avain) return { K: null, syy: 'laskettu järvelle ' + jarvenNimi(K.avain) };
+      if (Date.now() - K.hetki > PAIKAT_MAX_MS) return { K: null, syy: 'laskettu hetkelle ' + hetkiTeksti(K.hetki) + ', yli 12 h sitten' };
+      if (!K.kohteet.length) return { K: null, syy: 'ei paikkoja' + (K.syy ? ', koska ' + K.syy : '') + ' (' + hetkiTeksti(K.hetki) + ')' };
+      return { K, syy: '' };
+    }
+    function paikkaMerkki(laji, q, x, y) {   // aaltokortin merkit (akPiirraKuhaMerkit / akPiirraTaimenMerkit), kerroin 1
+      const oma = q.tyyppi === 'oma', vt = q.tyyppi === 'vaihtoehto';
+      const r = oma ? (q.paras ? 9 : 7.5) : (laji === 'kuha' ? 8 : 9.5);
+      ctx.beginPath(); ctx.arc(x, y, r + 2.2, 0, 6.2832); ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.fill();
+      ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832);
+      ctx.fillStyle = laji === 'kuha' ? (oma ? '#f2a024' : '#ffffff') : (oma ? '#3d8fd6' : vt ? '#dbe9f7' : '#ffffff'); ctx.fill();
+      if (vt) ctx.setLineDash([4, 4]);
+      ctx.lineWidth = oma ? 1.6 : 2.6; ctx.strokeStyle = laji === 'kuha' ? (oma ? '#3b2700' : '#c27400') : (oma ? '#0b2f52' : '#1c6fb8'); ctx.stroke();
+      if (vt) ctx.setLineDash([]);
+      if (q.tunnus) {
+        ctx.font = '700 ' + (laji === 'kuha' ? 11 : (q.tunnus.length >= 3 ? 8.5 : 10)) + 'px system-ui, sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = laji === 'kuha' ? '#1d1400' : '#0b2f52';
+        ctx.fillText(q.tunnus, x, y + 0.5); ctx.textAlign = 'left';
+      }
+    }
+    function paikkaTietoHtml(laji, K, q) {
+      const syyt = (q.syyt || []).map(s => '<div class="syy"><span class="taso">' + s.taso + '</span>' + s.teksti + (s.p ? ' <span style="color:#7E93AC">(' + (s.p > 0 ? '+' : '') + s.p + ')</span>' : '') + '</div>').join('');
+      return '<b style="color:' + (laji === 'kuha' ? '#ffc46b' : '#8fc4ff') + '">' + (laji === 'kuha' ? '🐟 ' : '🎣 ') + q.nimi + '</b>'
+        + ' <span style="color:#7E93AC">(etusivun analyysi, ' + hetkiTeksti(K.hetki) + ')</span><br>' + q.teksti + syyt
+        + (q.lahin ? '<div class="syy" style="color:#7E93AC">' + q.lahin + '</div>' : '');
+    }
+
     function piirra() {
       const { w, h } = koko();
       ctx.fillStyle = '#0a1626'; ctx.fillRect(0, 0, w, h);
@@ -361,6 +409,12 @@
           if (nimet) teksti(hs.name, p.x + 9, p.y, '#ffc2cc', 13);
         });
       }
+
+      // v186: kuha- ja taimenpaikat etusivun analyysista (samat merkit kuin aaltokortissa)
+      PAIKKALAJIT.forEach(laji => {
+        if (!as[laji]) return; const { K } = paikkaKartta(laji); if (!K) return;
+        K.kohteet.forEach(q => { const p = naytolle(q.lat, q.lon); if (nakyy(p, 20)) paikkaMerkki(laji, q, p.x, p.y); });
+      });
 
       const K = (as.kloonit && kerros && kerros.avain === avain) ? kerros : null;
       // päivän saaliit (v180): pieni pallo lajin värillä; saalis, jolla on klooni-isku, näkyy iskuna (punainen pallo)
@@ -834,7 +888,16 @@
           '<b style="color:#ff8fa3">' + h.name + '</b>' + (h.type ? '<br>' + h.type : '') + (h.targetSpecies ? '<br>Kohde: ' + h.targetSpecies : '') + (h.tactic ? '<br>' + h.tactic : '')));
         if (typeof omatMerkinnat !== 'undefined') omatMerkinnat.forEach(m => lisaa(m.lat, m.lon, '<b style="color:#ffb020">Oma merkintä:</b> ' + m.t));
       }
-      if (ehd.length) { ehd.sort((a, b) => a.e - b.e); const x = ehd[0]; nayttoTieto(x.html + '<br><span style="color:#7E93AC">' + etaisyysVeneesta(x.lat, x.lon).replace(/^ · /, '') + '</span>'); return; }
+      PAIKKALAJIT.forEach(laji => {   // v186
+        if (!as[laji]) return; const { K } = paikkaKartta(laji); if (!K) return;
+        K.kohteet.forEach(q => lisaa(q.lat, q.lon, paikkaTietoHtml(laji, K, q)));
+      });
+      if (ehd.length) {
+        ehd.sort((a, b) => a.e - b.e); const x = ehd[0];
+        // v186: samassa kohdassa (alle 10 m) olevat merkit yhdessä, esim. kuhapaikka ja sen ottipaikka
+        const samat = ehd.filter(y => y === x || klooniMatka(x.lat, x.lon, y.lat, y.lon) < 10);
+        nayttoTieto(samat.map(y => y.html).join('<hr style="border:0;border-top:1px solid #1E3350;margin:8px 0">') + '<br><span style="color:#7E93AC">' + etaisyysVeneesta(x.lat, x.lon).replace(/^ · /, '') + '</span>'); return;
+      }
       const p = latLon(sx, sy);
       const asteet = (v, pos, neg) => { const a = Math.abs(v), d = Math.floor(a); return (v >= 0 ? pos : neg) + ' ' + d + '°' + ((a - d) * 60).toFixed(3).replace('.', ',') + '′'; };
       const koord = '<br><span style="color:#7E93AC">' + asteet(p.lat, 'N', 'S') + ' ' + asteet(p.lon, 'E', 'W') + '</span>';
@@ -914,10 +977,28 @@
       if (v.style.display === 'grid') { v.style.display = 'none'; return; }
       const ilman = pohja && !pohja.ennuste, nyt = pohja ? pohja.naytto : as.tila;
       v.innerHTML = TILAT.map(t => '<button data-tila="' + t[0] + '"' + (t[0] === nyt ? ' class="valittu"' : '') + (ilman && t[0] !== 'syvyys' ? ' disabled' : '') + '>' + t[2] + '</button>').join('')
-        + (ilman ? '<div class="huom">Ilman tuuliennustetta vain syvyyskartta.</div>' : '');
-      v.querySelectorAll('button').forEach(b => { b.onclick = () => { v.style.display = 'none'; as.tila = b.dataset.tila; tallennaAs(); renderoi(false); }; });
+        + (ilman ? '<div class="huom">Ilman tuuliennustetta vain syvyyskartta.</div>' : '')
+        + merkitValikko();
+      v.querySelectorAll('button[data-tila]').forEach(b => { b.onclick = () => { v.style.display = 'none'; as.tila = b.dataset.tila; tallennaAs(); renderoi(false); }; });
+      kytkeMerkit(v);
       v.style.display = 'grid';
     };
+    // v186: kuha- ja taimenpaikkojen kytkimet valikon alaosaan; valikko pysyy auki, jotta tilan näkee
+    function merkitValikko() {
+      const o = PAIKKALAJIT.map(laji => ({ laji, ...paikkaKartta(laji) }));
+      const nappi = x => '<button class="merkki' + (as[x.laji] && x.K ? ' valittu' : '') + '" data-merkit="' + x.laji + '"' + (x.K ? '' : ' disabled') + '>'
+        + (x.laji === 'kuha' ? '🐟 Kuhapaikat' : '🎣 Taimenpaikat') + (x.K ? ' (' + x.K.kohteet.length + ')' : '') + '</button>';
+      const huom = o.map(x => x.K ? (x.laji === 'kuha' ? 'Kuha: oranssi = oma paikka, valkoinen numero = ehdokas' : 'Taimen: sininen = nimetty paikka, valkoinen T = ehdokas, katkoviiva V = ensemble-vaihtoehto')
+          + ' (' + hetkiTeksti(x.K.hetki) + ')' : (x.laji === 'kuha' ? 'Kuhapaikat: ' : 'Taimenpaikat: ') + x.syy);
+      return '<div class="huom" style="margin-top:4px;color:var(--text)">Merkit etusivun analyysista</div>' + o.map(nappi).join('')
+        + '<div class="huom">' + huom.join('.<br>') + '. Napauta merkkiä: perustelut.</div>';
+    }
+    function kytkeMerkit(v) {
+      v.querySelectorAll('button[data-merkit]').forEach(b => { b.onclick = () => {
+        const l = b.dataset.merkit; as[l] = !as[l]; tallennaAs(); pyydaPiirto();
+        b.classList.toggle('valittu', as[l]);
+      }; });
+    }
     cv.addEventListener('pointerdown', () => { $('valikko').style.display = 'none'; });
     $('tuntiEd').onclick = () => vaihdaTunti(-1);
     $('tuntiSeur').onclick = () => vaihdaTunti(1);
@@ -932,7 +1013,7 @@
     window.addEventListener('storage', e => {
       if (e.key === KLOONI_LS) { paivitaKerros(); pyydaPiirto(); }
       if (typeof LS_SAALIS === 'string' && e.key === LS_SAALIS) { paivitaSaaliit(); pyydaPiirto(); }   // v180: kirjaus toisessa välilehdessä
-      if (typeof KIRJAUSPOHJA_LS === 'string' && e.key === KIRJAUSPOHJA_LS) { pohjaVali.t = 0; paivitaKalaNappi(); }
+      if (typeof KIRJAUSPOHJA_LS === 'string' && e.key === KIRJAUSPOHJA_LS) { pohjaVali.t = 0; paivitaKalaNappi(); pyydaPiirto(); }   // v186: + kuha- ja taimenpaikat
       if (typeof LAHTOPAIKAT_LS === 'string' && e.key === LAHTOPAIKAT_LS) pyydaPiirto();   // v181
       // uusi oma luotaus tuotu pääsovelluksessa: syvyysruudukko lasketaan uudelleen sivun latauksessa
       if (e.key === 'uistelututka_omaluotaus') { tila('Oma luotaus päivittyi: ladataan kartta uudelleen…'); setTimeout(() => location.reload(), 800); }
@@ -989,7 +1070,8 @@
       try { if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
     }
     window.utTilanne = { piirra: pyydaPiirto, tila: () => ({ avain, tunti, tuntiKasin, seuraa, oma, nak, pohja: pohja && { avain: pohja.avain, naytto: pohja.naytto, ennuste: pohja.ennuste, w: pohja.kuva.width, h: pohja.kuva.height }, kerros: kerros && { avain: kerros.avain, seuraava: kerros.seuraava } }), napautus, sijainti,
-                       kalaKiinni, kirjattu: () => kirjattu, saaliit: () => saaliit.length, vana: () => utVana.pisteet().slice() };   // testejä varten
+                       kalaKiinni, kirjattu: () => kirjattu, saaliit: () => saaliit.length, vana: () => utVana.pisteet().slice(),
+                       naytolle: (la, lo) => naytolle(la, lo), paikat: l => paikkaKartta(l), keskita: (la, lo, m) => { asetaSeuraa(false); keskita(la, lo, m); pyydaPiirto(); } };   // testejä varten (v186: naytolle, paikat, keskita)
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', aloita); else aloita();
   })();
   </script>
