@@ -2385,13 +2385,13 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=181" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=181" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=181" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=181" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=181" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="aaltomalli.js?v=181" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=181" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=183" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=183" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=183" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=183" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=183" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="aaltomalli.js?v=183" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=183" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     // Viimeisimmät arvot saaliskirjausta varten (päivittyvät GPS:stä ja analyysistä).
     let viimeisinGps = null;      // { lat, lon }
@@ -12557,7 +12557,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v181';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v183';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -20546,7 +20546,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=181';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=183';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })
