@@ -2385,14 +2385,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=187" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=187" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=187" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=187" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=187" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=187" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=187" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=187" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=188" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=188" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=188" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=188" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=188" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=188" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=188" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=188" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     // Viimeisimmät arvot saaliskirjausta varten (päivittyvät GPS:stä ja analyysistä).
     let viimeisinGps = null;      // { lat, lon }
@@ -11874,12 +11874,36 @@ function sumuriskiAlusta(){
     /* Ennuste tunnille: FMI ensin, Open-Meteo varalla, muuten null.
        Täytetään taustalla (paivitaLahdeVarasto) ja päivää vaihdettaessa. */
     let tuoreEnnuste = { fmi: {}, om: {} };
-    function paivitaTuore(lahde, tunnit) { Object.assign(tuoreEnnuste[lahde], tunnit || {}); try { suunnTuoreTuli(); } catch (e) {} }   // v181: suunnitelma tuntien omalla tuulella
+    /* v188 (10.10.2026): ENNUSTEET TALTEEN. Tuntien tuuliennuste (FMI ja Open-Meteo) tallennetaan puhelimeen
+       ('uistelututka_tuore_ennuste': uusin arvo tunneittain, haettu-aika lähteittäin, −24 h…+84 h). ennusteTunnille käyttää
+       tallennettua vasta, kun tämän avauksen hakua ei ole (ei verkkoa): suunnitelma ja aikajana toimivat vesillä ilman verkkoa,
+       ja lähteeseen tulee "puhelimen muistista, haettu …". Haku ja sen ehdot ovat ennallaan (tuoreEnnuste on vain tämän
+       avauksen hauista). */
+    const TUORE_LS = 'uistelututka_tuore_ennuste';
+    const tuoreMuisti = (() => { try { const v = JSON.parse(localStorage.getItem(TUORE_LS) || 'null'); return v && v.fmi && v.om ? v : { haettu: {}, fmi: {}, om: {} }; } catch (e) { return { haettu: {}, fmi: {}, om: {} }; } })();
+    function tuoreTalteen(lahde, tunnit) {
+      if (!tunnit || !Object.keys(tunnit).length) return;
+      try {
+        const nyt = Date.now(), ala = new Date(nyt - 24 * 3600e3).toISOString().slice(0, 13);
+        tuoreMuisti.haettu = tuoreMuisti.haettu || {}; tuoreMuisti.haettu[lahde] = nyt;
+        Object.keys(tunnit).forEach(k => { const x = tunnit[k]; if (x && typeof x.ws === 'number') tuoreMuisti[lahde][k] = { ws: x.ws, wd: x.wd, haettu: nyt }; });
+        ['fmi', 'om'].forEach(l => Object.keys(tuoreMuisti[l]).forEach(k => { if (k < ala) delete tuoreMuisti[l][k]; }));
+        localStorage.setItem(TUORE_LS, JSON.stringify(tuoreMuisti));
+      } catch (e) {}
+    }
+    function paivitaTuore(lahde, tunnit) { Object.assign(tuoreEnnuste[lahde], tunnit || {}); tuoreTalteen(lahde, tunnit); try { suunnTuoreTuli(); } catch (e) {} }   // v181: suunnitelma tuntien omalla tuulella; v188 talteen
     function ennusteTunnille(hetki) {
       const k = new Date(hetki).toISOString().slice(0, 13);
       const f = tuoreEnnuste.fmi[k], o = tuoreEnnuste.om[k];
       if (f && typeof f.ws === 'number') return { ws: f.ws, wd: f.wd, lahde: 'FMI-ennuste' };
       if (o && typeof o.ws === 'number') return { ws: o.ws, wd: o.wd, lahde: 'Open-Meteo-ennuste' };
+      // v188: tämän avauksen hakua ei ole → puhelimeen tallennettu (ikä näkyviin)
+      const mf = tuoreMuisti.fmi[k], mo = tuoreMuisti.om[k], m = (mf && typeof mf.ws === 'number') ? ['FMI', mf] : (mo && typeof mo.ws === 'number') ? ['Open-Meteo', mo] : null;
+      if (m) {
+        const h = (Date.now() - m[1].haettu) / 3600e3, d = new Date(m[1].haettu);
+        return { ws: m[1].ws, wd: m[1].wd, muisti: true, haettu: m[1].haettu,
+                 lahde: m[0] + '-ennuste puhelimen muistista, haettu ' + d.getDate() + '.' + (d.getMonth() + 1) + '. klo ' + d.getHours() + '.' + String(d.getMinutes()).padStart(2, '0') + ', ' + (h < 1 ? Math.round(h * 60) + ' min' : Math.round(h) + ' h') + ' sitten' };
+      }
       return null;
     }
 
@@ -12590,7 +12614,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v187';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v188';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -20573,7 +20597,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=187';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=188';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })

@@ -13,6 +13,8 @@
    tilannekuvalle selite ja napautusteksti (akRenderoi.asteikko, akPisteTeksti).
    v185: oma sijainti veneenä ja vanana (vene.js, sama kuin tilannekuvassa) omalla kerroksellaan kartan päällä.
    v187: venelista 9 venettä (sama kuin Beason630wa.html), valinta tunnisteen mukaan, tuntematon näkyy (akVeneRajat().huom).
+   v188: tuuliennuste talteen puhelimeen (akEnnusteTila, akEnnusteHistoria); ilman verkkoa malli toimii muistista ja
+         kertoo ennusteen iän; verkon palatessa haetaan uusi (tapahtuma 'akEnnustePaivittyi').
    VERSIO: sivut lataavat tiedoston nimellä aaltomalli.js?v=NNN; NNN = sw.js:n VERSIO-numero. */
 function aaltokarttaAlusta(){
 "use strict";
@@ -1755,9 +1757,11 @@ function naytaTiedot(d){
      Yhtenä rivinä se katkesi kapealla ruudulla kesken sanan. */
   /* 22.9.2026: korjausrivi lyhyeksi ("korj. −1,9 m/s"). Pitkä "korjattu
      havainnolla" levensi laatikon järven päälle; selitys on taulukossa. */
+  var ikaTx = akEnnusteIkaTeksti();   // v188: ennusteen ikä, kun muistista tai yli 3 h vanha
   $("akTuuli").innerHTML = d.U.toFixed(0) + " m/s"
     + (d.puuska != null ? '<small>puuskat ' + d.puuska.toFixed(0) + ' m/s</small>' : "")
     + "<small>" + kompassi(d.dir) + "</small>"
+    + (ikaTx ? '<small style="color:#9a5b00;font-weight:600">' + ikaTx + '</small>' : "")
     + (akKorjaus && Math.abs(akKorjaus.erotus) >= 0.5
         ? '<small style="color:#7a4d00">korj. '
           + (akKorjaus.erotus > 0 ? "+" : "") + akKorjaus.erotus.toFixed(1).replace('.', ',') + " m/s</small>"
@@ -1777,7 +1781,8 @@ function naytaTiedot(d){
     + '<div><span>Jakso</span><b>' + d.Tp.toFixed(1) + ' s</b></div>'
     + '<div><span>Tuuli</span><b>' + d.U.toFixed(1) + ' m/s, '
         + Math.round(d.dir) + '°</b></div>'
-    + '<div><span>Tuullut</span><b>' + d.tunteja + ' h samasta suunnasta</b></div>';
+    + '<div><span>Tuullut</span><b>' + d.tunteja + ' h samasta suunnasta</b></div>'
+    + akEnnusteTauluRivi();   // v188: tyhjä, kun ennuste on tuore verkosta
 
   /* VIRTAUSTILA: leimaan virtauksen huippu ja suunta, taulukon alkuun sama.
      Aallon rivit jäävät alle, koska aalto on yhä se mikä ratkaisee lähdön. */
@@ -2930,7 +2935,8 @@ window.akRenderoi = function(o){
     return { tila: 'ok', kuva: kopio, k: akViime.k, win: akViime.win, S: akViime.S, avain: akNykyAvain(), jarvi: jarvi.nimi,
              naytto: akTila, tunti: valittu, ennuste: !tyhja, aika: tyhja ? null : d.aika, U: tyhja ? null : d.U, dir: tyhja ? null : d.dir,
              puuska: tyhja ? null : d.puuska, tunteja: tyhja ? null : d.tunteja, korkein: d.korkein, osuus: d.osuus, virMax: d.virMax,
-             raja: akKalaRaja(), turva: akVene().turva, vene: akVene().nimi, syvyysLahde: akSyvyysLahde(), asteikko: ast, yksikko: yks };
+             raja: akKalaRaja(), turva: akVene().turva, vene: akVene().nimi, syvyysLahde: akSyvyysLahde(), asteikko: ast, yksikko: yks,
+             ennusteTila: tyhja ? null : window.akEnnusteTila(), ennusteIka: tyhja ? '' : akEnnusteIkaTeksti() };   // v188
   } finally {
     data = t.data; akTila = t.tila; valittu = t.valittu; akZoom = t.zoom; akZoomKeski = t.keski; akValittu = t.sel;
     akVientiKerroin = t.kerroin; akKuhaMerkit = t.kuha; akTaimenMerkit = t.taimen; akKlooniMerkit = t.klooni; akOmaNakyy = t.oma; akKayraLeveys = t.kayra;
@@ -3106,6 +3112,114 @@ function akKuhaPisteTieto(){
   return '<br>🐟 <b>' + paras.nimi + '</b>: ' + paras.teksti;
 }
 
+/* ===== ENNUSTEET TALTEEN — 10.10.2026 (v188) =====
+   Hannun järjestys 10.10.: venelista → ENNUSTEET TALTEEN → aikajana. Ennen tätä FMI:n 84 h tuuliennuste haettiin joka
+   avauksella eikä tallentunut: ilman verkkoa aaltomalli, rajat, suunnitelman aallot ja tilannekuva olivat poissa
+   (vain syvyyskartta). Veneen puhelimessa ei ole SIM-korttia (verkko pääpuhelimen hotspotista).
+   - Jokainen onnistunut haku tallennetaan järvikohtaisesti (localStorage 'uistelututka_ennusteet'): uusin aina, lisäksi
+     aiemmat vähintään 3 h välein, enintään 48 h vanhat, enintään 8 kpl. Aiemmat ovat aamun "mikä muuttui illasta"
+     -vertailua varten (akEnnusteHistoria). Noin 2,5 kt / haku.
+   - Haku katkaistaan 8 s:n jälkeen (tilannekuva odottaa enintään 10 s). Jos haku ei onnistu, käytetään uusinta
+     tallennettua, alkaen nykyisestä tunnista (kuten tuore haku), jos siinä on vielä tulevia tunteja.
+   - Tila: akEnnusteTila() → { tapa: 'verkko' | 'muisti', haettu, ikaH, loppuu, virhe }. Aaltokortti näyttää iän, kun
+     ennuste on muistista tai yli 3 h vanha; tilannekuva samoin.
+   - Muistista käytettäessä uusi haku yritetään, kun verkko palaa ('online') ja 10 min välein; onnistuessa malli
+     lasketaan uudelleen ja lähetetään tapahtuma 'akEnnustePaivittyi' (tilannekuva piirtää uudelleen). */
+var AK_ENN_LS = 'uistelututka_ennusteet', AK_ENN_VALI = 3*3600e3, AK_ENN_MAX_IKA = 48*3600e3, AK_ENN_MAX = 8, AK_ENN_AIKARAJA = 8000;
+var akEnnusteTilaNyt = null, akEnnusteYritys = null;
+function akEnnLue(){
+  try { var v = JSON.parse(localStorage.getItem(AK_ENN_LS) || 'null'); return (v && v.versio === 1 && v.jarvet) ? v : { versio: 1, jarvet: {} }; }
+  catch(e){ return { versio: 1, jarvet: {} }; }
+}
+function akEnnTalteen(avain, sarja, haettu){
+  if (!avain || !sarja || !sarja.length) return;
+  try {
+    var v = akEnnLue(), L = v.jarvet[avain] || [], uusi = { haettu: haettu,
+      sarja: sarja.map(function(p){ return [p.aika.getTime(), p.U, p.dir, p.puuska == null ? null : p.puuska]; }) };
+    L = [uusi].concat(L.filter(function(x){ return x && x.haettu < haettu; }));
+    var pidetty = [L[0]];
+    for (var i = 1; i < L.length && pidetty.length < AK_ENN_MAX; i++){
+      if (haettu - L[i].haettu > AK_ENN_MAX_IKA) break;
+      if (pidetty[pidetty.length-1].haettu - L[i].haettu >= AK_ENN_VALI) pidetty.push(L[i]);
+    }
+    v.jarvet[avain] = pidetty;
+    Object.keys(v.jarvet).forEach(function(k){   // muiden järvien yli 48 h vanhat pois (uusin säilyy, kunnes korvautuu)
+      v.jarvet[k] = v.jarvet[k].filter(function(x, n){ return n === 0 || haettu - x.haettu <= AK_ENN_MAX_IKA; });
+    });
+    localStorage.setItem(AK_ENN_LS, JSON.stringify(v));
+  } catch(e){ console.warn('Ennusteen tallennus:', e && e.message); }
+}
+function akEnnSarjaksi(x){ return x.sarja.map(function(q){ return { aika: new Date(q[0]), U: q[1], dir: q[2], puuska: q[3] }; }); }
+function akEnnMuistista(avain){   // uusin tallennettu, nykyisestä tunnista alkaen (kuten tuore haku); null jos ei tulevia tunteja
+  var L = akEnnLue().jarvet[avain]; if (!L || !L.length) return null;
+  var t0 = new Date(); t0.setMinutes(0, 0, 0);
+  var s = akEnnSarjaksi(L[0]).filter(function(p){ return p.aika.getTime() >= t0.getTime(); });
+  return s.length ? { sarja: s, haettu: L[0].haettu } : null;
+}
+window.akEnnusteHistoria = function(avain){   // [{ haettu, sarja: [{ aika, U, dir, puuska }] }], uusin ensin
+  var L = akEnnLue().jarvet[avain || akNykyAvain()] || [];
+  return L.map(function(x){ return { haettu: x.haettu, sarja: akEnnSarjaksi(x) }; });
+};
+window.akEnnusteTila = function(){
+  var T = akEnnusteTilaNyt; if (!T) return null;
+  return { tapa: T.tapa, haettu: T.haettu, ikaH: (Date.now() - T.haettu)/3600e3, loppuu: T.loppuu, virhe: T.virhe || null, avain: T.avain };
+};
+function akEnnusteIkaTeksti(){   // lyhyt: "muistista · 14 h" / "ennuste 5 h vanha"; tyhjä, kun tuore verkosta
+  var T = window.akEnnusteTila(); if (!T) return '';
+  var h = T.ikaH < 1 ? Math.round(T.ikaH*60) + ' min' : Math.round(T.ikaH) + ' h';
+  if (T.tapa === 'muisti') return 'muistista · ' + h;
+  return T.ikaH > 3 ? 'ennuste ' + h + ' vanha' : '';
+}
+window.akEnnusteIkaTeksti = akEnnusteIkaTeksti;
+function akEnnusteTauluRivi(){   // aaltokortin taulukkoon, kun ennuste on muistista tai yli 3 h vanha
+  var T = window.akEnnusteTila(); if (!T || !akEnnusteIkaTeksti()) return '';
+  var d = new Date(T.haettu), pad = function(n){ return ("0"+n).slice(-2); }, pv = ["su","ma","ti","ke","to","pe","la"];
+  return '<div><span>Ennuste</span><b style="color:#9a5b00">haettu ' + pv[d.getDay()] + ' ' + d.getDate() + '.' + (d.getMonth()+1) + '. klo '
+    + d.getHours() + '.' + pad(d.getMinutes()) + (T.tapa === 'muisti' ? ', puhelimen muistista (' + (T.virhe || 'ei verkkoa') + ')' : '') + '</b></div>';
+}
+function akHaeEnnuste(avain){
+  var ohjain = (typeof AbortController === 'function') ? new AbortController() : null;
+  var ajastin = ohjain ? setTimeout(function(){ ohjain.abort(); }, AK_ENN_AIKARAJA) : null;
+  return fetch(fmiUrl(jarvi.lat, jarvi.lon), ohjain ? { signal: ohjain.signal } : undefined)
+    .then(function(r){ return r.ok ? r.text() : Promise.reject(new Error("palvelin " + r.status)); })
+    .then(function(txt){
+      if (ajastin) clearTimeout(ajastin);
+      var s = parsi(txt);
+      var nop = s.windspeedms, suu = s.winddirection, puu = s.windgust;
+      if (!nop || !nop.length) throw new Error("tuulitietoja ei saatu");
+      var sarja = nop.map(function(p, i){
+        return {aika:p.aika, U:p.arvo, dir: suu && suu[i] ? suu[i].arvo : null,
+                puuska: (puu && puu[i]) ? puu[i].arvo : null};
+      }).filter(function(p){ return p.U != null && p.dir != null; });
+      if (!sarja.length) throw new Error("ennusteessa ei ollut arvoja");
+      var nyt = Date.now();
+      akEnnTalteen(avain, sarja, nyt);
+      return { sarja: sarja, tapa: 'verkko', haettu: nyt };
+    })
+    .catch(function(e){
+      if (ajastin) clearTimeout(ajastin);
+      var syy = (e && e.name === 'AbortError') ? 'ei vastausta ' + Math.round(AK_ENN_AIKARAJA/1000) + ' s:ssa'
+        : (e instanceof TypeError || /failed to fetch|network/i.test(e && e.message || '')) ? 'ei verkkoa' : (e && e.message || String(e));
+      var m = akEnnMuistista(avain);
+      if (m) return { sarja: m.sarja, tapa: 'muisti', haettu: m.haettu, virhe: syy };
+      throw new Error(syy + (akEnnLue().jarvet[avain] ? ' (puhelimen muistissa oleva ennuste on jo vanhentunut)' : ''));
+    });
+}
+// Muistista käytettäessä uusi yritys, kun verkko palaa ja 10 min välein (ei, jos kortti on vaihtanut järveä)
+function akEnnusteYritaUudelleen(){
+  var T = akEnnusteTilaNyt; if (!T || T.tapa !== 'muisti' || akEnnusteYritys) return;
+  var avain = T.avain; if (avain !== akNykyAvain()) return;
+  akEnnusteYritys = akHaeEnnuste(avain).then(function(E){
+    if (E.tapa !== 'verkko' || akNykyAvain() !== avain) return;
+    lataa(avain);   // tallennettu juuri: lataa ottaa sen (verkko tai heti muistista, jos haku nyt epäonnistuu)
+    return Promise.resolve(akLatausLupaus).then(function(){
+      try { window.dispatchEvent(new CustomEvent('akEnnustePaivittyi', { detail: window.akEnnusteTila() })); } catch(e){}
+    });
+  }).catch(function(){}).then(function(){ akEnnusteYritys = null; });
+}
+window.addEventListener('online', function(){ setTimeout(akEnnusteYritaUudelleen, 1500); });
+setInterval(akEnnusteYritaUudelleen, 10*60e3);
+
 function lataa(avain){
   jarvi = JARVET[avain];
   try { akKiertoLataa(); } catch(e){}   // v150: kiertomallin kantakentät puhelimesta, jos laskettu aiemmin
@@ -3126,18 +3240,11 @@ function lataa(avain){
   akPaivitaVirtausKytkin();
   $("akLeima").innerHTML = '<small>haetaan…</small>';
 
-  akLatausLupaus = fetch(fmiUrl(jarvi.lat, jarvi.lon))
-    .then(function(r){ return r.ok ? r.text() : Promise.reject(new Error("palvelin " + r.status)); })
-    .then(function(txt){
-      var s = parsi(txt);
-      var nop = s.windspeedms, suu = s.winddirection, puu = s.windgust;
-      if (!nop || !nop.length) throw new Error("tuulitietoja ei saatu");
-
-      var sarja = nop.map(function(p, i){
-        return {aika:p.aika, U:p.arvo, dir: suu && suu[i] ? suu[i].arvo : null,
-                puuska: (puu && puu[i]) ? puu[i].arvo : null};
-      }).filter(function(p){ return p.U != null && p.dir != null; });
-      if (!sarja.length) throw new Error("ennusteessa ei ollut arvoja");
+  akEnnusteTilaNyt = null;
+  akLatausLupaus = akHaeEnnuste(avain)   // v188: verkosta tai puhelimen muistista
+    .then(function(E){
+      var sarja = E.sarja;
+      akEnnusteTilaNyt = { tapa: E.tapa, haettu: E.haettu, virhe: E.virhe || null, avain: avain, loppuu: sarja[sarja.length-1].aika.getTime() };
 
       // kuinka kauan tuuli on puhaltanut samasta suunnasta
       data = sarja.map(function(p, i){

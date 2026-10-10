@@ -70,6 +70,9 @@
     syvyyskartta piirtävät nyt saman veneen ja vanan kuin tämä sivu. Koodi siirretty sanasta sanaan; tämän sivun kuva on
     bitilleen sama kuin v184:ssä (testattu). Vana on välilehden yhteinen (sessionStorage 'ut_vana', v183:n
     'tilanne_vana' luetaan kerran), joten etusivulla kuljettu reitti jatkuu tilannekuvassa ja päinvastoin.
+  v188 (10.10.2026): ENNUSTEET TALTEEN (aaltomalli.js). Ilman verkkoa malli toimii puhelimeen tallennetulla ennusteella;
+    yläpalkissa näkyy ennusteen ikä (keltainen), kun se on muistista tai yli 3 h vanha, ja vasemmassa alakulmassa haun
+    aika. Kun verkko palaa, uusi ennuste haetaan ja kartta piirretään uudelleen ("Ennuste päivitetty verkosta").
   v187 (10.10.2026): VENELISTA (aaltomalli.js). Valikon alaosassa näkyy, millä veneellä rajat lasketaan, ja huomautus,
     jos tallennettua venettä ei tunnistettu.
   v186 (10.10.2026): KUHA- JA TAIMENPAIKAT. Hannu valitsi "Ehdokkaat tilannekuvaan". Etusivun Analysoi tallentaa aaltokortin
@@ -247,18 +250,18 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=187" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=187" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=187" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=187" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=187" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=187" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=187" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=187" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=188" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=188" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=188" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=188" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=188" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=188" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=188" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=188" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v187';
+    const APP_VERSIO = 'v188';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
@@ -503,7 +506,7 @@
             sovitaJarvi();
             if (oma && window.akJarviPisteessa(oma.lat, oma.lon) === avain) keskita(oma.lat, oma.lon, 3000);
           }
-          paivitaYla(); paivitaLukemat(); paivitaSelite(); tila(r.ennuste ? '' : 'Ei tuuliennustetta (ei verkkoa?): näytetään syvyyskartta.');
+          paivitaYla(); paivitaLukemat(); paivitaSelite(); tila(r.ennuste ? ennusteMuistiTeksti(r) : 'Ei tuuliennustetta (ei verkkoa?): näytetään syvyyskartta.');
           pyydaPiirto();
         } catch (e) { tila('Virhe kartassa: ' + (e && e.message || e)); }
         finally { laskee = false; }
@@ -532,10 +535,28 @@
       const el = $('tuntiTeksti');
       if (pohja && pohja.ennuste && pohja.aika) {
         const d = pohja.aika;
-        el.innerHTML = (tuntiKasin ? '' : 'nyt ') + PV[d.getDay()] + ' ' + kk(d.getHours()) + ':00<small>' + Math.round(pohja.U) + ' m/s ' + ilmansuunta(pohja.dir) + (pohja.puuska ? ' (' + Math.round(pohja.puuska) + ')' : '') + '</small>';
+        el.innerHTML = (tuntiKasin ? '' : 'nyt ') + PV[d.getDay()] + ' ' + kk(d.getHours()) + ':00<small>' + Math.round(pohja.U) + ' m/s ' + ilmansuunta(pohja.dir) + (pohja.puuska ? ' (' + Math.round(pohja.puuska) + ')' : '') + '</small>'
+          + (lyhytIka(pohja) ? '<small style="color:#f5b700;white-space:nowrap">' + lyhytIka(pohja) + '</small>' : '');   // v188: ennusteen ikä
       } else el.innerHTML = '–<small>ei ennustetta</small>';
       $('jarvi').value = avain || '';
     }
+    // v188: lyhyt ikä yläpalkkiin ("muisti 10 h" / "ennuste 5 h"), tyhjä kun tuore verkosta
+    function lyhytIka(r) {
+      const T = r && r.ennusteTila; if (!T || !r.ennusteIka) return '';
+      const h = T.ikaH < 1 ? Math.round(T.ikaH * 60) + ' min' : Math.round(T.ikaH) + ' h';
+      return (T.tapa === 'muisti' ? 'muisti ' : 'ennuste ') + h;
+    }
+    // v188: ennuste puhelimen muistista → pysyvä tieto vasempaan alakulmaan; verkon palatessa uusi ennuste piirretään
+    function ennusteMuistiTeksti(r) {
+      const T = r && r.ennusteTila; if (!T || T.tapa !== 'muisti') return '';
+      const h = T.ikaH < 1 ? Math.round(T.ikaH * 60) + ' min' : Math.round(T.ikaH) + ' h';
+      return 'Ennuste puhelimen muistista: haettu ' + hetkiTeksti(T.haettu) + ' (' + h + ' sitten). Haetaan uusi, kun verkko palaa.';
+    }
+    window.addEventListener('akEnnustePaivittyi', () => {
+      if (!pohja) return;
+      if (!tuntiKasin) tunti = nykyTunti();
+      renderoi(false); ilmoita('Ennuste päivitetty verkosta');
+    });
     async function valitseJarvi(av, sovita) {
       if (!av || typeof window.akValitseJarvi !== 'function') return;
       avain = av; window.akValitseJarvi(av);
