@@ -11,6 +11,7 @@
    oma sijainti (window.utOmaSijainti) piirretään aaltokarttaan.
    v181: reitti vettä pitkin ja sen aalto (akReitti, akReittiAalto) päivän suunnitelmalle, veneen rajat (akVeneRajat),
    tilannekuvalle selite ja napautusteksti (akRenderoi.asteikko, akPisteTeksti).
+   v185: oma sijainti veneenä ja vanana (vene.js, sama kuin tilannekuvassa) omalla kerroksellaan kartan päällä.
    VERSIO: sivut lataavat tiedoston nimellä aaltomalli.js?v=NNN; NNN = sw.js:n VERSIO-numero. */
 function aaltokarttaAlusta(){
 "use strict";
@@ -971,7 +972,7 @@ function piirra(){
   akPiirraKuhaMerkit(ctx, win, S);   // v153
   akPiirraTaimenMerkit(ctx, win, S);   // v156
   try { akPiirraKloonit(ctx, win, S); } catch (e) {}   // v177
-  try { akPiirraOmaSijainti(ctx, win, S); } catch (e) {}   // v179
+  try { akPiirraOmaSijainti(); } catch (e) {}   // v179; v185 omalle kerrokselleen (akViime on jo asetettu)
   try { akPiirraOmaLuotaus(ctx, win, S); } catch (e) {}   // v172
   akPiirraMerkki(ctx, S);
   akKuhaInfoPaivita();
@@ -2913,32 +2914,47 @@ window.akRenderoi = function(o){
   }
 };
 
-/* Oma sijainti aaltokarttaan: vihreä pallo ja kulkusuunta. Vain kortin omassa piirrossa, ei Ozi-viennissä
-   eikä tilannekuvan pohjakuvassa (tilannekuva piirtää sijainnin itse). Yli 2 min vanha sijainti ei näy. */
-var akOmaNakyy = true, akSijaintiPiirtoT = 0;
-function akPiirraOmaSijainti(ctx, win, S){
-  var p = window.utOmaSijainti;
-  if (!akOmaNakyy || akVientiKerroin > 1 || !p || typeof p.lat !== 'number' || !jarvi || !jarvi.kartta) return;
-  if (Date.now() - (p.aika || 0) > 120e3) return;
-  var k = jarvi.kartta;
-  var x = ((p.lon - k.lansiLon)*111320*Math.cos(p.lat*Math.PI/180)/k.ruutu - win.i0)*S, y = ((k.pohjoisLat - p.lat)*111320/k.ruutu - win.j0)*S;
-  if (x < -30 || y < -30 || x > win.w*S + 30 || y > win.h*S + 30) return;
-  if (typeof p.suunta === 'number'){
-    var a = p.suunta*Math.PI/180, L = 26;
-    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.sin(a)*L, y - Math.cos(a)*L);
-    ctx.lineWidth = 4.5; ctx.strokeStyle = "rgba(255,255,255,.95)"; ctx.stroke();
-    ctx.lineWidth = 2.4; ctx.strokeStyle = "#1b5e20"; ctx.stroke();
+/* Oma sijainti aaltokarttaan. v179: vihreä pallo ja kulkusuunta karttakuvan sisällä, uudelleenpiirto 8 s välein.
+   v185 (10.10.2026, Hannu: "vene etusivun kartoille"): vene ja vana kuten tilannekuvassa (vene.js), omalla läpinäkyvällä
+   kerroksellaan (#akOmaKerros) kartan päällä. Sijainnin päivitys piirtää vain kerroksen eikä koko karttaa, joten vene
+   liikkuu jokaisella GPS-pisteellä (enintään 1 s välein). Kerros on CSS-pikseleissä, joten vene on 44 px kuten
+   tilannekuvassa. Ei Ozi-viennissä eikä tilannekuvan pohjakuvassa (akRenderoi; tilannekuva piirtää itse), eikä
+   karttakuvan pikseleissä (aaltokortin kuva on sama kuin ennen). Yli 2 min vanha sijainti ei näy. */
+var akOmaNakyy = true, akSijaintiPiirtoT = 0, akOmaKerros = null;
+function akPiirraOmaSijainti(){
+  if (akPiilorunko || !akOmaNakyy || akVientiKerroin > 1) return;   // vienti / pohjakuva: kerrokseen ei kosketa
+  var c = $("akKuva"); if (!c || !c.parentNode) return;
+  var kv = akOmaKerros;
+  if (!kv){
+    kv = akOmaKerros = document.createElement('canvas'); kv.id = 'akOmaKerros'; kv.setAttribute('aria-hidden', 'true');
+    // ei z-indexiä: leima ja tuuli (myöhemmin DOMissa) jäävät päälle, zoomnapit (z-index 2) myös
+    kv.style.cssText = 'position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;display:block';
+    c.parentNode.insertBefore(kv, c.nextSibling);
   }
-  ctx.beginPath(); ctx.arc(x, y, 8.5, 0, 6.2832); ctx.fillStyle = "rgba(255,255,255,.95)"; ctx.fill();
-  ctx.beginPath(); ctx.arc(x, y, 6, 0, 6.2832); ctx.fillStyle = "#2e7d32"; ctx.fill();
+  var cw = c.clientWidth, ch = c.clientHeight, dpr = window.devicePixelRatio || 1;
+  if (!cw || !ch) return;   // kortti kiinni: piirretään, kun se avataan (seuraava GPS-piste tai piirto)
+  kv.style.left = c.offsetLeft + 'px'; kv.style.top = c.offsetTop + 'px'; kv.style.width = cw + 'px'; kv.style.height = ch + 'px';
+  var W = Math.round(cw*dpr), H = Math.round(ch*dpr);
+  if (kv.width !== W || kv.height !== H){ kv.width = W; kv.height = H; }
+  var g = kv.getContext('2d');
+  g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  var p = window.utOmaSijainti, V = akViime;
+  if (!p || typeof p.lat !== 'number' || Date.now() - (p.aika || 0) > 120e3) return;
+  if (!V || !V.k || !V.win || !jarvi || V.k !== jarvi.kartta || typeof window.utPiirraOma !== 'function') return;
+  var k = V.k, win = V.win, sx = cw / win.w, sy = ch / win.h;   // CSS-pikseliä ruutua kohden
+  function naytolle(lat, lon){
+    return { x: ((lon - k.lansiLon)*111320*Math.cos(lat*Math.PI/180)/k.ruutu - win.i0)*sx, y: ((k.pohjoisLat - lat)*111320/k.ruutu - win.j0)*sy };
+  }
+  window.utPiirraOma(g, { oma: p, naytolle: naytolle, mPerPx: k.ruutu / sx, yks: 1, yo: document.documentElement.getAttribute('data-tila') === 'yo' });
 }
 window.akPiirraSijainti = function(){
   if (akPiilorunko || !jarvi || !data.length) return;
   var c = $("akKuva"); if (!c || c.offsetParent === null) return;   // kortti kiinni tai toinen ruutu
-  var nyt = Date.now(); if (nyt - akSijaintiPiirtoT < 8000) return;
+  var nyt = Date.now(); if (nyt - akSijaintiPiirtoT < 1000) return;   // v185: vain kerros, enintään 1 s välein (ennen koko kartta 8 s)
   akSijaintiPiirtoT = nyt;
-  try { piirra(); } catch(e){}
+  try { akPiirraOmaSijainti(); } catch(e){}
 };
+if (!akPiilorunko) window.addEventListener('resize', function(){ try { akPiirraOmaSijainti(); } catch(e){} });   // kortin leveys muuttuu
 
 /* ===== SUUNNITELMAN JA TILANNEKUVAN RAJAPINNAT — 10.10.2026 (v181) =====
    akVeneRajat()               → { vene, raja (kalastusraja), turva (ajoraja: kestääkö runko) }, sama kuin aaltokortin valinta

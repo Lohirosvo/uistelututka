@@ -2385,13 +2385,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=184" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=184" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=184" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=184" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=184" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="aaltomalli.js?v=184" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=184" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=185" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=185" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=185" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=185" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=185" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=185" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=185" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=185" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     // Viimeisimmät arvot saaliskirjausta varten (päivittyvät GPS:stä ja analyysistä).
     let viimeisinGps = null;      // { lat, lon }
@@ -8536,15 +8537,29 @@ function sumuriskiAlusta(){
            kevyen paikannuksen ja sammuttaa sen suljettaessa (akku);
          - mittarin ollessa pois päältä kartan paikannus täyttää myös viimeisinGps:n, joten Kala kiinni saa
            sijainnin silloinkin.
-       Selain keskeyttää paikannuksen, kun näyttö sammuu tai sivu on taustalla; sitä ei voi kiertää. */
+       Selain keskeyttää paikannuksen, kun näyttö sammuu tai sivu on taustalla; sitä ei voi kiertää.
+       v185 (10.10.2026): VENE JA VANA ETUSIVUN KARTOILLE (Hannun valinta). Aaltokortti ja syvyyskartta piirtävät saman
+       veneen ja vanan kuin tilannekuva (vene.js). Siksi:
+         - utOmaSijainti saa suunnan iän (suuntaT): tuore suunta = ennusteviiva, vanha = vene haaleana;
+         - paikallaan (GPS:n oma nopeus alle 1 km/h) liikkeestä laskettua suuntaa ei käytetä, ettei kohina käännä venettä
+           (sama sääntö kuin tilannekuvassa; mittarin oma vetosuunta ennallaan);
+         - jokainen GPS-piste (mittari tai kartan paikannus) menee vanaan (utVana), joka jatkuu tilannekuvassa;
+         - syvyyskartta piirtyy sijainnin vuoksi 1 s välein (ennen 3 s), aaltokortissa vain veneen kerros (aaltomalli.js). */
     let utKarttaWatch = null, utKarttaEdellinen = null, utKarttaPiirtoT = 0;
     const utKarttaKayttajat = new Set();
-    function utAsetaSijainti(lat, lon, suunta, tarkkuus, kmh) {
-      window.utOmaSijainti = { lat, lon, suunta: (typeof suunta === 'number' && isFinite(suunta)) ? suunta : (window.utOmaSijainti && Date.now() - window.utOmaSijainti.aika < 60e3 ? window.utOmaSijainti.suunta : null),
-                               tarkkuus: typeof tarkkuus === 'number' ? tarkkuus : null, kmh: typeof kmh === 'number' ? kmh : null, aika: Date.now() };
+    function utAsetaSijainti(lat, lon, suunta, tarkkuus, kmh, gpsMs) {
+      const nyt = Date.now(), ed = window.utOmaSijainti;
+      if (typeof gpsMs !== 'number' || !(gpsMs >= 0)) gpsMs = null;
+      if (gpsMs !== null && gpsMs < 0.28) suunta = null;   // v185: paikallaan suunta on kohinaa (sama kuin tilannekuvassa)
+      let suuntaT = null;
+      if (typeof suunta === 'number' && isFinite(suunta)) suuntaT = nyt;
+      else if (ed && nyt - ed.aika < 60e3 && typeof ed.suunta === 'number') { suunta = ed.suunta; suuntaT = typeof ed.suuntaT === 'number' ? ed.suuntaT : null; }
+      else suunta = null;
+      window.utOmaSijainti = { lat, lon, suunta, suuntaT, tarkkuus: typeof tarkkuus === 'number' ? tarkkuus : null, kmh: typeof kmh === 'number' ? kmh : null, aika: nyt };
+      try { if (window.utVana) window.utVana.lisaa(lat, lon, tarkkuus, gpsMs, nyt); } catch (e) {}   // v185
       try { if (typeof window.akPiirraSijainti === 'function') window.akPiirraSijainti(); } catch (e) {}
-      const nyt = Date.now(), ov = document.getElementById('karttaOverlay');
-      if (ov && ov.style.display === 'flex' && nyt - utKarttaPiirtoT > 3000) { utKarttaPiirtoT = nyt; try { karttaPiirra(); } catch (e) {} }
+      const ov = document.getElementById('karttaOverlay');
+      if (ov && ov.style.display === 'flex' && nyt - utKarttaPiirtoT > 1000) { utKarttaPiirtoT = nyt; try { karttaPiirra(); } catch (e) {} }
     }
     function utKarttaGps(kayttaja, paalle) {
       if (paalle) utKarttaKayttajat.add(kayttaja); else utKarttaKayttajat.delete(kayttaja);
@@ -8559,7 +8574,7 @@ function sumuriskiAlusta(){
               suunta = klooniSuuntima(utKarttaEdellinen.lat, utKarttaEdellinen.lon, la, lo);
             if (!utKarttaEdellinen || suunta !== null) utKarttaEdellinen = { lat: la, lon: lo };
             viimeisinGps = { lat: la, lon: lo }; viimeisinGpsAika = Date.now();
-            utAsetaSijainti(la, lo, suunta, pos.coords.accuracy, typeof ms === 'number' && ms >= 0 ? ms * 3.6 : null);
+            utAsetaSijainti(la, lo, suunta, pos.coords.accuracy, typeof ms === 'number' && ms >= 0 ? ms * 3.6 : null, ms);
             try { klooniGps(la, lo); } catch (e) {}
           }, function () {}, { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 });
         } catch (e) { utKarttaWatch = null; }
@@ -9523,7 +9538,7 @@ function sumuriskiAlusta(){
           viimeisinGps = { lat: pos.coords.latitude, lon: pos.coords.longitude };
           viimeisinGpsAika = Date.now();   // 30.9.2026 (v109): pyyntilokin GPS-pisteille
           viimeisinNopeus = speedKmh;
-          try { utAsetaSijainti(pos.coords.latitude, pos.coords.longitude, suunta, pos.coords.accuracy, speedKmh); } catch (e) {}   // v179: kartoille
+          try { utAsetaSijainti(pos.coords.latitude, pos.coords.longitude, suunta, pos.coords.accuracy, speedKmh, pos.coords.speed); } catch (e) {}   // v179: kartoille (v185: + GPS:n oma nopeus vanalle)
 
           tarkistaOttiPisteet(pos.coords.latitude, pos.coords.longitude);
           try { klooniGps(pos.coords.latitude, pos.coords.longitude); } catch (e) {}   // v177: kloonien käynnit
@@ -12557,7 +12572,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v184';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v185';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -12753,20 +12768,14 @@ function sumuriskiAlusta(){
       });
 
       // Oma sijainti (v179: yhteinen utOmaSijainti, jossa myös kulkusuunta; varalla mittarin viimeisinGps)
-      const omaS = klooniLahto() || viimeisinGps;
-      if (omaS) {
-        const pk = karttaPx(omaS.lat, omaS.lon);
-        const x = pk.x * kScale + kOffX, y = pk.y * kScale + kOffY;
-        if (typeof omaS.suunta === 'number') {
-          const sa = omaS.suunta * Math.PI / 180;
-          ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.sin(sa) * 34, y - Math.cos(sa) * 34);
-          ctx.lineWidth = 3; ctx.strokeStyle = '#7ED957'; ctx.stroke();
-        }
-        ctx.beginPath(); ctx.arc(x, y, 11, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(126,217,87,0.25)'; ctx.fill();
-        ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2);
-        ctx.fillStyle = '#7ED957'; ctx.fill();
-        ctx.lineWidth = 2; ctx.strokeStyle = '#04121f'; ctx.stroke();
+      // v185: vene ja vana kuten tilannekuvassa (vene.js). Vanhasta varasijainnista (viimeisinGps) vain merkki ilman vanaa.
+      const omaTuore = klooniLahto(), omaS = omaTuore || viimeisinGps;
+      if (omaS && typeof window.utPiirraOma === 'function') {
+        const naytolle = (la, lo) => { const pk = karttaPx(la, lo); return { x: pk.x * kScale + kOffX, y: pk.y * kScale + kOffY }; };
+        const o = { oma: omaS, naytolle, mPerPx: (KARTTA.N - KARTTA.S) * 111320 / (karttaKuva.height * kScale), yks: 1,
+                    yo: document.documentElement.getAttribute('data-tila') === 'yo' };
+        if (omaTuore) window.utPiirraOma(ctx, o);
+        else window.utPiirraVeneMerkki(ctx, Object.assign(o, { p: naytolle(omaS.lat, omaS.lon) }));
       }
       if (banneri) {   // v177: seuraava kloonipiste vasempaan yläkulmaan, ei peity muiden nimien alle
         ctx.font = 'bold 15px sans-serif';
@@ -20546,7 +20555,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=184';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=185';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })
@@ -20676,7 +20685,7 @@ function paivitaPaikkaLeima(){
       <span style="color:#ff4d6d;">◆</span> ottipaikka &nbsp;
       <span style="color:#8b5cf6;">◆</span> klooni &nbsp;
       <span style="color:#ff3b5c;">●</span> isku &nbsp;
-      <span style="color:#7ED957;">◉</span> sinä
+      <span style="color:#5EE7FF;">⛵</span> vene ja vana (v185)
     </div>
   </div>
 
