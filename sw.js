@@ -1,8 +1,9 @@
 // Service worker — Nopeusnäyttö pro1
 //
 // Tehtävä: sovellus aukeaa ilman verkkoa ja ilman että Acoden palvelinta tarvitsee
-// käynnistää. Sivu on yksi iso HTML-tiedosto (n. 1,2 MB, josta ottipisteääni on
-// noin 0,9 MB), joten välimuistiin riittää käytännössä se, jaetut sivut ja kuvakkeet.
+// käynnistää. v178 (10.10.2026): sivu (n. 1,3 MB) lataa kolme omaa tiedostoaan:
+// jarvet.js (järvien ruudukot), aaltomalli.js (aalto- ja virtausmalli, kloonit) ja
+// otti.mp3 (ottipisteääni). Ne tallennetaan tässä puhelimeen asennuksen yhteydessä.
 //
 // STRATEGIA: sovellussivu haetaan verkosta ensin ja tallennetaan välimuistiin
 // (network-first). Jos verkkoa ei ole, tarjotaan välimuistista. Näin päivitetty
@@ -12,7 +13,12 @@
 // VERSIO: kasvata tätä aina kun julkaiset uuden version. Vanha välimuisti siivotaan.
 // Versionumeron kasvatus on se mekanismi joka SIIVOAA vanhan välimuistin,
 // index2.html mukaan lukien. Ilman tätä poisto ei näkyisi puhelimissa.
-const VERSIO = 'uistelututka-v177';
+const VERSIO = 'uistelututka-v178';
+/* v178: sivun omat tiedostot ladataan nimellä tiedosto?v=NNN, jossa NNN on tämän VERSIOn numero.
+   index.html:n <script src> -riveissä ja ottiäänen haussa on SAMA numero: kun julkaiset, vaihda
+   molemmat. Uusi numero on uusi osoite, joten puhelin ei voi yhdistää uutta sivua vanhaan malliin
+   (GitHub Pages pyytää säilyttämään tiedostoja ~10 min, ja muut kuin sivut tarjotaan täältä ensin). */
+const TV = VERSIO.replace('uistelututka-v', '');
 const SIVU = './';
 
 // MUUTETTU 18.9.2026. index2.html oli keskeneräinen uusi käyttöliittymä, ja se
@@ -33,6 +39,9 @@ const ESILADATTAVAT = [
   './Lahtoaikalaskuri.html',
   './Lahtis.html',
   './harppausennuste-2027.html',
+  './jarvet.js?v=' + TV,        // v178
+  './aaltomalli.js?v=' + TV,    // v178
+  './otti.mp3?v=' + TV,         // v178
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
@@ -47,8 +56,10 @@ self.addEventListener('install', (e) => {
     caches.open(VERSIO)
       // addAll kaatuu kokonaan jos yksikin tiedosto puuttuu, joten haetaan
       // jokainen erikseen ja ohitetaan puuttuvat.
+      // v178: cache:'reload' ohittaa selaimen oman välimuistin, jotta asennus saa varmasti
+      // palvelimen uusimman version (sama syy kuin sivuhaussa alla, korjaus 18.9.2026).
       .then(c => Promise.all(ESILADATTAVAT.map(u =>
-        c.add(u).catch(err => console.warn('SW: ohitettiin', u, err))
+        c.add(new Request(u, { cache: 'reload' })).catch(err => console.warn('SW: ohitettiin', u, err))
       )))
       .then(() => self.skipWaiting())
   );
