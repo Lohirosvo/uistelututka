@@ -1235,6 +1235,7 @@ body{padding-bottom:66px}
           🐟 KALA KIINNI
         </button>
         <p class="hint" id="kalaStatus" style="margin-top:8px;"></p>
+        <p class="hint" id="klooniPika" style="margin-top:4px; color:#b794ff;"></p>
 
         <!-- Täydennyslomake, aukeaa vasta napista -->
         <div id="kalaTaydennaBox" style="display:none; margin-top:12px; background:var(--panel-alt); border:1px solid var(--hard-red); border-radius:10px; padding:14px;">
@@ -1300,6 +1301,25 @@ body{padding-bottom:66px}
             <button class="chip" onclick="peruSaalis()" style="border-color:var(--muted); color:var(--muted);">Sulje</button>
           </div>
         </div>
+
+        <!-- KLOONIPISTEET — 10.10.2026 (v177): iskun sormenjälki ja samanlaiset paikat ympäriltä (OODA-silmukka) -->
+        <details id="klooniBox" style="margin-top:12px; border:1px solid #7c5bc4; border-radius:10px; padding:8px 10px;" ontoggle="if (this.open) klooniPiirraPaneeli()">
+          <summary style="cursor:pointer; color:#b794ff; font-size:15px;">🎯 Kloonipisteet <span id="klooniYhteenveto" style="color:var(--muted);"></span></summary>
+          <div id="klooniSisalto"></div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;">
+            <button type="button" class="chip" id="klooniSyvyysNappi" onclick="klooniKartta(true)" style="border-color:#b794ff; color:#b794ff;">🗺 Syvyyskartta</button>
+            <button type="button" class="chip" onclick="klooniKartta(false)" style="border-color:#b794ff; color:#b794ff;">🌊 Aaltokartta</button>
+            <button type="button" class="chip" onclick="klooniVie('wpt')" style="border-color:var(--cyan); color:var(--cyan);">💾 OziExplorer .wpt</button>
+            <button type="button" class="chip" onclick="klooniVie('gpx')" style="border-color:var(--cyan); color:var(--cyan);">💾 Lowrance .gpx</button>
+          </div>
+          <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:10px; font-size:14px; color:var(--muted); align-items:center;">
+            <label>Säde <select id="klooniSade" onchange="klooniAsetusMuuttui()"><option value="1">1 km</option><option value="2">2 km</option><option value="3">3 km</option><option value="4">4 km</option><option value="5">5 km</option></select></label>
+            <label>Pisteitä <select id="klooniMaara" onchange="klooniAsetusMuuttui()"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></label>
+            <label>Raja <select id="klooniKynnys" onchange="klooniAsetusMuuttui()"><option value="60">60 %</option><option value="70">70 %</option><option value="80">80 %</option></select></label>
+          </div>
+          <p class="hint" id="klooniTila" style="margin-top:8px;"></p>
+          <p class="hint" style="margin-top:6px;">Sormenjälki: pohjan syvyys, penkan jyrkkyys ja asento tuuleen, aalto, karit ja kuopat sekä etäisyys rannasta (taimenella ja järvilohella myös harppauskerroksen malli, jos se on laskettu). Haku iskuhetken tuulella. Veden lämpö on sovelluksessa sama koko järvelle, joten se ei erottele paikkoja. Todisteen taso: malli. Syvyysluokat ovat karkeita: kloonipiste on paikka, jonne ajetaan katsomaan kaikulla.</p>
+        </details>
 
         <details style="margin-top:12px;">
           <summary style="cursor:pointer; color:var(--cyan); font-size:15px;">Saaliskirjanpito (<span id="saalisMaara">0</span>)</summary>
@@ -1446,12 +1466,15 @@ body{padding-bottom:66px}
   <p class="hint" id="akKuhaInfo" style="margin:6px 0 0; display:none;"></p>
   <!-- v156: taimenen hotspotit harppauskerroksen mallista -->
   <p class="hint" id="akTaimenInfo" style="margin:6px 0 0; display:none;"></p>
+  <!-- v177: kloonipisteet (iskun sormenjälki ja samanlaiset paikat ympäriltä) -->
+  <p class="hint" id="akKlooniInfo" style="margin:6px 0 0; display:none;"></p>
 
   <div class="ak-asteikko" id="akAsteikko"></div>
   <div class="ak-alarivi">
     <label class="ak-kytkin"><input type="checkbox" id="akKayrat"> Syvyyskäyrät</label>
     <label class="ak-kytkin"><input type="checkbox" id="akKuhaMerkit"> Kuhapaikat</label>
     <label class="ak-kytkin"><input type="checkbox" id="akTaimenMerkit"> Taimenpaikat</label>
+    <label class="ak-kytkin"><input type="checkbox" id="akKlooniMerkit"> Kloonit</label>
       <label class="ak-kytkin"><input type="checkbox" id="akKorosta"> Korosta erot</label>
     <select id="akNaytto" aria-label="Kartan suure"
             style="font:inherit; font-size:.8rem; padding:3px 6px; border-radius:6px;
@@ -8492,10 +8515,12 @@ function piirra(){
   akViime = { murt:murt, hs:hs, vir:vir, vi:vi, kf:kf, saumat:saumat, reuna:reunaK, syvK:syvK, kue:kue, kun:kun, kv:kv, kentta:kentta, k:k, S:S, win:win, kalaRaja:kalaRaja, turva:akVene().turva, dir:d.dir };
   akPiirraKuhaMerkit(ctx, win, S);   // v153
   akPiirraTaimenMerkit(ctx, win, S);   // v156
+  try { akPiirraKloonit(ctx, win, S); } catch (e) {}   // v177
   try { akPiirraOmaLuotaus(ctx, win, S); } catch (e) {}   // v172
   akPiirraMerkki(ctx, S);
   akKuhaInfoPaivita();
   akTaimenInfoPaivita();   // v156
+  try { akKlooniInfoPaivita(); } catch (e) {}   // v177
 
   d.korkein = korkein;
   d.Tp = jonswapTp(Math.min(d.Fpahin, Fkesto), U);
@@ -9143,7 +9168,7 @@ function akPiirraMerkki(ctx, S){
 
 function akNaytaPiste(){   // v153: kuhamerkin tieto napautetun pisteen tietojen perään
   akNaytaPisteSisalto();
-  var el = $("akPiste"), lisa = akKuhaPisteTieto() + akTaimenPisteTieto();   // v156: myös taimenmerkki
+  var el = $("akPiste"), lisa = akKuhaPisteTieto() + akTaimenPisteTieto() + akKlooniPisteTieto();   // v156: myös taimenmerkki; v177: kloonit
   if (el && lisa) el.innerHTML += lisa;
 }
 function akNaytaPisteSisalto(){
@@ -10116,6 +10141,252 @@ window.akPiirraUudelleen = function(){
   try { akTaimenInfoPaivita(); } catch(e){}   // v156
   try { if ((akKuhaMerkit || akTaimenMerkit) && jarvi && data.length) piirra(); } catch(e){}
 };
+/* ===== KLOONIPISTEET — 10.10.2026 (v177) =====
+   Hannu 10.10.2026: "Visuaalinen tilannekuva ja POI-pisteiden dynaaminen kloonaus". Iskun hetkellä
+   iskuruudun tilanne jäädytetään sormenjäljeksi, ja säteen sisältä etsitään ruudut, joissa sama
+   yhdistelmä toistuu. Hannun valinnat 10.10.: vain lohikalat ja kuha käynnistävät (pääkoodi),
+   ISKUHETKEN tuuli (pisteet eivät siirry tuulen kääntyessä), säde 1–5 km ja määrä 1–5 säädettävät.
+   Kokonaisuus OODA-silmukkana: ks. pääkoodin KLOONIPISTEET-kommentti. Tämä osa laskee ja piirtää.
+   SORMENJÄLKI (sama ruudukko kuin kuhaehdokkaissa, akKuhaPohjaLaske; oma luotaus on mukana s:ssä):
+     pohja     ruudun syvyys s (MML-luokka tai oman luotauksen mediaani)               paino 3
+     kaltevuus pehmennetyn syvyyden kaltevuus g, m / 100 m                            paino 2
+     asento    syvenemissuunta tuulen kulkusuuntaan nähden, −180…180°:                paino 2 × min(1, g)
+               ±180 = tuuli puskee syvältä matalalle (tuulenpuoleinen penkka),
+               0 = tuuli painaa matalalta syvälle (suojan puoli). Etumerkki kertoo,
+               kummalla puolella syvä on myötätuuleen katsoen (Coriolis kääntää virtaa oikealle).
+     aalto     merkitsevä aallonkorkeus iskuhetken tuulella (sama kaava kuin kartalla)  paino 1,5
+     muoto     ruudun syvyys miinus 150 m:n renkaan keskisyvyys: < 0 kari/matalikko,   paino 1,5
+               > 0 kuoppa
+     rannasta  etäisyys rantaan (suhde, log)                                            paino 1
+     harppaus  taimenen harppauskerroksen malli, jos pääkoodi antaa sen (≤ 3 h)        paino 1
+   Kunkin tekijän samankaltaisuus exp(−½(Δ/σ)²); σ: pohja max(0,6 m; 15 %), kaltevuus max(0,4; 35 %),
+   asento 35°, aalto max(0,04 m; 30 %), muoto max(0,5 m; 40 %), rannasta 0,5 (log), harppaus 1,5 m.
+   Pisteet = painotettu keskiarvo × 100. Painot ja σ:t ovat ARVIO, ei sovitettu saaliisiin (dataa ei
+   vielä ole); tilasto (käynnit, osumat) kertyy pääkoodissa myöhempää sovitusta varten.
+   RAJAUS: vesiruutu säteen sisällä, vähintään 400 m iskusta ja toisistaan (paras ensin), Saimaalla
+   vain katetut ruudut, pohja ≥ pyyntisyvyys + 0,3 m, kun pyyntisyvyys tiedetään.
+   EI MUKANA: veden lämpö, koska sovelluksessa se on yksi SYKE-arvo koko järvelle. Se kulkee
+   kirjauksen mukana, mutta paikkoja sillä ei voi erotella.
+   Laskenta vaatii, että kortilla on iskun järvi (aalto ja pyyhkäisy lasketaan kortin ruudukossa);
+   pääkoodi vaihtaa kortin järven akValitseJarvi-funktiolla ennen laskentaa. */
+var akRantaMatkaV = {};
+function akRantaMatka(avain){   // etäisyys rantaan metreinä (chamfer, sama kuin taimenmallissa)
+  if (akRantaMatkaV[avain]) return akRantaMatkaV[avain];
+  var P = akKuhaPohjaLaske(avain); if (!P) return null;
+  var k = P.k, W = k.W, H = k.H, R = k.ruutu, n = W*H, d = new Float32Array(n), D1 = R, D2 = R*Math.SQRT2, i, j, q, v;
+  for (q = 0; q < n; q++) d[q] = P.m[q] ? 1e9 : 0;
+  for (j = 0; j < H; j++) for (i = 0; i < W; i++){
+    q = j*W + i; if (!P.m[q]) continue; v = d[q];
+    v = Math.min(v, i > 0 ? d[q-1] + D1 : D1);
+    if (j > 0){ v = Math.min(v, d[q-W] + D1, i > 0 ? d[q-W-1] + D2 : D1, i < W-1 ? d[q-W+1] + D2 : D1); } else v = Math.min(v, D1);
+    d[q] = v;
+  }
+  for (j = H-1; j >= 0; j--) for (i = W-1; i >= 0; i--){
+    q = j*W + i; if (!P.m[q]) continue; v = d[q];
+    v = Math.min(v, i < W-1 ? d[q+1] + D1 : D1);
+    if (j < H-1){ v = Math.min(v, d[q+W] + D1, i < W-1 ? d[q+W+1] + D2 : D1, i > 0 ? d[q+W-1] + D2 : D1); } else v = Math.min(v, D1);
+    d[q] = v;
+  }
+  return akRantaMatkaV[avain] = d;
+}
+function akKlooniKohta(k, q){
+  var i = q % k.W, j = (q/k.W)|0, la = k.pohjoisLat - (j + 0.5)*k.ruutu/111320;
+  return { lat: la, lon: k.lansiLon + (i + 0.5)*k.ruutu/(111320*Math.cos(la*Math.PI/180)) };
+}
+function akKlooniPiirteet(P, q, c){
+  var k = P.k, W = k.W, H = k.H, i = q % W, j = (q/W)|0, rr = c.rr, sum = 0, cnt = 0, a, b;
+  for (a = -rr; a <= rr; a++) for (b = -rr; b <= rr; b++){
+    var e = a*a + b*b; if (e <= 2 || e > rr*rr) continue;   // rengas: välittömät naapurit eivät kerro muodosta
+    var ii = i + a, jj = j + b; if (ii < 0 || jj < 0 || ii >= W || jj >= H) continue;
+    var q2 = jj*W + ii; if (!P.m[q2]) continue;
+    sum += P.s[q2]; cnt++;
+  }
+  return { pohja: P.s[q], f: P.f[q], g: P.g[q], syvaSuunta: P.suunta[q],
+           asento: ((P.suunta[q] - c.kulku) % 360 + 540) % 360 - 180,
+           aalto: akAaltoRuutu(q, Math.min(c.kentta[q], c.Fkesto), c.U, c.katto).hs,
+           muoto: cnt ? P.s[q] - sum/cnt : 0, rengas: cnt ? sum/cnt : null, rannasta: c.ranta ? c.ranta[q] : null, hq: null,
+           oma: !!(c.omaSolut && c.omaSolut[q] !== undefined) };   // oma = ruudun syvyys omasta luotauksesta
+}
+function akKlooniVertaa(A, B){
+  var osat = {}, sw = 0, ss = 0;
+  function G(d, s){ return Math.exp(-0.5*(d/s)*(d/s)); }
+  function lisaa(nimi, w, sim){ if (!(w > 0) || !isFinite(sim)) return; osat[nimi] = Math.round(sim*100); sw += w; ss += w*sim; }
+  lisaa('pohja', 3, G(B.pohja - A.pohja, Math.max(0.6, 0.15*A.pohja)));
+  lisaa('kaltevuus', 2, G(B.g - A.g, Math.max(0.4, 0.35*A.g)));
+  // penkan asento vain, jos iskupaikalla on penkka; tasaisella ehdokkaalla suunta on kohinaa
+  if (A.g >= 0.3) lisaa('asento', 2*Math.min(1, A.g), B.g >= 0.3 ? G(akKulmaEro(A.asento, B.asento), 35) : 0.3);
+  lisaa('aalto', 1.5, G(B.aalto - A.aalto, Math.max(0.04, 0.3*A.aalto)));
+  lisaa('muoto', 1.5, G(B.muoto - A.muoto, Math.max(0.5, 0.4*Math.abs(A.muoto))));
+  if (A.rannasta > 0 && B.rannasta > 0) lisaa('rannasta', 1, G(Math.log(B.rannasta/A.rannasta), 0.5));
+  if (typeof A.hq === 'number' && typeof B.hq === 'number') lisaa('harppaus', 1, G(B.hq - A.hq, 1.5));
+  return { pisteet: sw ? Math.round(100*ss/sw) : 0, osat: osat };
+}
+window.akKloonit = function(o){
+  // o: { avain, lat, lon, U (m/s), dir (mistä, °), tunteja, sadeM, maara, kynnys (%), pyyntiSyvyys (m|null), harppaus(lat, lon) -> m|null }
+  if (!o || !JARVET[o.avain]) return { tila: 'eiJarvea' };
+  if (jarvi !== JARVET[o.avain] || !mask || !akSyvyys) return { tila: 'eriJarvi', jarvi: JARVET[o.avain].nimi, kortilla: jarvi ? jarvi.nimi : null };
+  var P = akKuhaPohjaLaske(o.avain); if (!P) return { tila: 'eiSyvyytta', jarvi: JARVET[o.avain].nimi };
+  var k = P.k, W = k.W, H = k.H, R = k.ruutu;
+  var qI = akRuutuPisteelle(k, o.lat, o.lon); if (qI < 0) return { tila: 'eiRuutua', jarvi: jarvi.nimi };
+  var U = Math.max(0.5, +o.U || 0), dir = ((+o.dir % 360) + 360) % 360, tunteja = Math.max(1, +o.tunteja || 6);
+  var c = { kentta: akKentta(Math.round(dir/5)*5), Fkesto: kestonPyyhkaisy(tunteja*3600, U), U: U, katto: syvyysKatto(jarvi.syvyys, U),
+            ranta: akRantaMatka(o.avain), kulku: (dir + 180) % 360, rr: Math.max(2, Math.round(150/R)), omaSolut: null };
+  try { var ol = (typeof omaLuotausSolut === 'function') ? omaLuotausSolut(k) : null; c.omaSolut = ol && ol.soluja ? ol.solut : null; } catch(e){}
+  var A = akKlooniPiirteet(P, qI, c), cI = akKlooniKohta(k, qI);
+  /* Testi 10.10. (Hannun 4.10. taimen, Pihlajasaaren seutu): iskuruudussa ei ollut omaa luotausta, joten
+     sormenjälki sai MML-luokan 3–6 m (4,5), vaikka naapuriruutujen luotaus näytti 2,4–2,5 m. Iskupaikan
+     pohja otetaan siksi oman luotauksen mediaanista 60 m säteeltä, kun pisteitä on vähintään kolme
+     (pääkoodi antaa pohjaMitattu). Muoto lasketaan silloin samasta arvosta. */
+  A.pohjaLahde = A.oma ? 'oma luotaus' : 'MML-luokka';
+  if (typeof o.pohjaMitattu === 'number' && o.pohjaMitattu > 0){
+    A.pohjaRuutu = A.pohja; A.pohja = o.pohjaMitattu; A.pohjaLahde = 'oma luotaus 60 m';
+    if (typeof A.rengas === 'number') A.muoto = A.pohja - A.rengas;
+  }
+  var hqF = typeof o.harppaus === 'function' ? o.harppaus : null;
+  if (hqF){ try { A.hq = hqF(cI.lat, cI.lon); } catch(e){ A.hq = null; } if (typeof A.hq !== 'number') hqF = null; }
+  var sade = Math.max(500, Math.min(10000, +o.sadeM || 3000)), r = Math.ceil(sade/R), i0 = qI % W, j0 = (qI/W)|0;
+  var vali2 = (400/R)*(400/R), kynnys = +o.kynnys || 70, maara = Math.max(1, Math.min(9, +o.maara || 3));
+  var ps = (typeof o.pyyntiSyvyys === 'number' && o.pyyntiSyvyys > 0) ? o.pyyntiSyvyys : null;
+  var ehd = [], tutkittu = 0, rajattuSyvyys = 0;
+  for (var dj = -r; dj <= r; dj++) for (var di = -r; di <= r; di++){
+    var e2 = di*di + dj*dj; if (e2*R*R > sade*sade || e2 < vali2) continue;
+    var ii = i0 + di, jj = j0 + dj; if (ii < 0 || jj < 0 || ii >= W || jj >= H) continue;
+    var q = jj*W + ii; if (!P.m[q] || (P.kat && !P.kat[q])) continue;
+    tutkittu++;
+    if (ps !== null && P.s[q] < ps + 0.3){ rajattuSyvyys++; continue; }
+    var B = akKlooniPiirteet(P, q, c);
+    if (hqF){ var cq = akKlooniKohta(k, q); try { B.hq = hqF(cq.lat, cq.lon); } catch(e){ B.hq = null; } }
+    var v = akKlooniVertaa(A, B);
+    if (v.pisteet < kynnys) continue;
+    ehd.push({ q: q, di: di, dj: dj, pisteet: v.pisteet, osat: v.osat, sj: B });
+  }
+  ehd.sort(function(a, b){ return b.pisteet - a.pisteet || (a.di*a.di + a.dj*a.dj) - (b.di*b.di + b.dj*b.dj); });
+  var valitut = [];
+  for (var n = 0; n < ehd.length && valitut.length < maara; n++){
+    var x = ehd[n], ok = true;
+    for (var m = 0; m < valitut.length && ok; m++){ var a1 = x.di - valitut[m].di, b1 = x.dj - valitut[m].dj; if (a1*a1 + b1*b1 < vali2) ok = false; }
+    if (ok) valitut.push(x);
+  }
+  var kloonit = valitut.map(function(x){
+    var p = akKlooniKohta(k, x.q), dx = x.di*R, dy = -x.dj*R;
+    return { lat: p.lat, lon: p.lon, pisteet: x.pisteet, osat: x.osat, sj: x.sj,
+             etaisyysM: Math.round(Math.sqrt(dx*dx + dy*dy)), suunta: Math.round((Math.atan2(dx, dy)*180/Math.PI + 360) % 360) % 360 };
+  });
+  return { tila: 'ok', jarvi: jarvi.nimi, ruutu: R, sadeM: sade, kynnys: kynnys, maara: maara,
+           isku: { lat: cI.lat, lon: cI.lon, sj: A }, kloonit: kloonit, ehdokkaita: ehd.length, tutkittu: tutkittu,
+           rajattuSyvyys: rajattuSyvyys, harppaus: !!hqF, tuuli: { U: U, dir: dir, tunteja: tunteja } };
+};
+/* Iskuhetken tuuli kortin ennusteesta (FMI, havaintokorjattu), jos lähin tunti on ≤ 3 h päässä
+   ja kortilla on sama järvi. Muuten null: pääkoodi käyttää kirjauksen tuulta. */
+window.akTuuliHetkella = function(aikaMs, avain){
+  if (!data.length || !jarvi || (avain && jarvi !== JARVET[avain])) return null;
+  var idx = 0, pe = Infinity;
+  for (var n = 0; n < data.length; n++){ var e = Math.abs(data[n].aika.getTime() - aikaMs); if (e < pe){ pe = e; idx = n; } }
+  if (pe > 3*3600e3) return null;
+  var d = data[idx];
+  return { U: d.U, dir: d.dir, tunteja: d.tunteja, lahde: 'FMI-ennuste ' + ('0' + d.aika.getHours()).slice(-2) + ':00' };
+};
+window.akValitseJarvi = function(avain){   // kortti iskun järvelle (kloonit lasketaan kortin ruudukossa)
+  if (!JARVET[avain] || !val || val.value === avain) return false;
+  val.value = avain; lataa(avain); return true;
+};
+
+/* Kloonit kartalle (v177): oma kytkin (oletuksena päällä), violetti salmiakki = klooni, punainen
+   pallo = isku, katkoviivaympyrä = hakusäde aktiivisesta iskusta, keltainen rengas = seuraavaksi.
+   Kerroksen (window.akKlooniKerros) kokoaa pääkoodi; mukana myös Ozi-kuvassa. */
+var akKlooniMerkit = true;
+try { akKlooniMerkit = localStorage.getItem('aaltokartta_kloonit') !== '0'; } catch(e){}
+function akKlooniKerrosKortilla(){
+  var K = window.akKlooniKerros;
+  return (K && K.iskut && K.iskut.length && jarvi && jarvi === JARVET[K.avain]) ? K : null;
+}
+function akPiirraKloonit(ctx, win, S){
+  if (!akKlooniMerkit) return;
+  var K = akKlooniKerrosKortilla(); if (!K) return;
+  var k = jarvi.kartta, kerr = akVientiKerroin > 1 ? akVientiKerroin : 1, LW = win.w*S, LH = win.h*S;
+  function px(lat, lon){ return { x: ((lon - k.lansiLon)*111320*Math.cos(lat*Math.PI/180)/k.ruutu - win.i0)*S,
+                                  y: ((k.pohjoisLat - lat)*111320/k.ruutu - win.j0)*S }; }
+  function nakyy(p){ var m = 60*kerr; return p.x > -m && p.y > -m && p.x < LW + m && p.y < LH + m; }
+  function teksti(t, x, y, vari){
+    ctx.font = "700 " + Math.round(11*kerr) + "px system-ui, sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    ctx.lineWidth = 3*kerr; ctx.strokeStyle = "rgba(255,255,255,.92)"; ctx.strokeText(t, x, y);
+    ctx.fillStyle = vari; ctx.fillText(t, x, y);
+  }
+  ctx.save();
+  K.iskut.forEach(function(I){
+    var a = px(I.lat, I.lon);
+    if (I.tunnus === K.aktiivinen && I.sadeM){
+      ctx.setLineDash([6*kerr, 5*kerr]); ctx.lineWidth = 1.4*kerr; ctx.strokeStyle = "rgba(124,58,237,.55)";
+      ctx.beginPath(); ctx.arc(a.x, a.y, I.sadeM/k.ruutu*S, 0, 6.2832); ctx.stroke();
+    }
+    ctx.setLineDash([3*kerr, 4*kerr]); ctx.lineWidth = 1.3*kerr; ctx.strokeStyle = "rgba(124,58,237,.65)";
+    ctx.beginPath();
+    (I.kloonit || []).forEach(function(c){ var b = px(c.lat, c.lon); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); });
+    ctx.stroke();
+  });
+  ctx.setLineDash([]);
+  K.iskut.forEach(function(I){
+    (I.kloonit || []).forEach(function(c){
+      var p = px(c.lat, c.lon); if (!nakyy(p)) return;
+      var r = 8*kerr, r2 = r + 2.2*kerr;
+      if (c.tunnus === K.seuraava){ ctx.beginPath(); ctx.arc(p.x, p.y, r + 6*kerr, 0, 6.2832); ctx.lineWidth = 2.6*kerr; ctx.strokeStyle = "#f5b700"; ctx.stroke(); }
+      ctx.beginPath(); ctx.moveTo(p.x, p.y - r2); ctx.lineTo(p.x + r2, p.y); ctx.lineTo(p.x, p.y + r2); ctx.lineTo(p.x - r2, p.y); ctx.closePath();
+      ctx.fillStyle = "rgba(255,255,255,.95)"; ctx.fill();
+      ctx.beginPath(); ctx.moveTo(p.x, p.y - r); ctx.lineTo(p.x + r, p.y); ctx.lineTo(p.x, p.y + r); ctx.lineTo(p.x - r, p.y); ctx.closePath();
+      ctx.fillStyle = c.osuma ? "#f5b700" : c.kayty ? "#c4b5fd" : "#7c3aed"; ctx.fill();
+      teksti(c.tunnus + ' ' + c.pisteet + '%', p.x + r2 + 3*kerr, p.y, "#3b0a73");
+    });
+  });
+  K.iskut.forEach(function(I){
+    var p = px(I.lat, I.lon); if (!nakyy(p)) return;
+    var r = 6.5*kerr;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r + 2.2*kerr, 0, 6.2832); ctx.fillStyle = "rgba(255,255,255,.95)"; ctx.fill();
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 6.2832); ctx.fillStyle = "#d7263d"; ctx.fill();
+    teksti(I.tunnus + (I.lajiNimi ? ' ' + I.lajiNimi : ''), p.x + r + 5*kerr, p.y, "#7a0c1e");
+  });
+  ctx.restore();
+}
+function akKlooniInfoPaivita(){
+  var el = $("akKlooniInfo"); if (!el) return;
+  if (!akKlooniMerkit){ el.style.display = 'none'; el.textContent = ''; return; }
+  el.style.display = '';
+  var K = window.akKlooniKerros;
+  if (!K || !K.iskut || !K.iskut.length){
+    el.textContent = 'Kloonipisteitä ei ole vielä. Ne lasketaan, kun kirjaat taimenen, järvilohen, kirjolohen tai kuhan Kala kiinni -napilla, tai saalislistan 🎯-napista.'; return;
+  }
+  if (!jarvi || jarvi !== JARVET[K.avain]){
+    el.textContent = 'Kloonit ovat järveltä ' + (JARVET[K.avain] ? JARVET[K.avain].nimi : K.avain) + ', mutta kartalla on ' + (jarvi ? jarvi.nimi : '–') + '.'; return;
+  }
+  el.innerHTML = K.info || '';
+}
+window.akAsetaKlooniMerkit = function(paalla){
+  akKlooniMerkit = !!paalla;
+  var el = $("akKlooniMerkit"); if (el) el.checked = akKlooniMerkit;
+  try { localStorage.setItem('aaltokartta_kloonit', akKlooniMerkit ? '1' : '0'); } catch(e){}
+  akKlooniInfoPaivita();
+  try { if (jarvi && data.length) piirra(); } catch(e){}
+};
+window.akAsetaKlooniKerros = function(K){
+  window.akKlooniKerros = K || null;
+  akKlooniInfoPaivita();
+  try { if (akKlooniMerkit && jarvi && data.length) piirra(); } catch(e){}
+};
+function akKlooniPisteTieto(){
+  if (!akKlooniMerkit || !akValittu || !akViime) return '';
+  var K = akKlooniKerrosKortilla(); if (!K) return '';
+  var k = akViime.k, lat = k.pohjoisLat - (akValittu.j + 0.5)*k.ruutu/111320;
+  var lon = k.lansiLon + (akValittu.i + 0.5)*k.ruutu/(111320*Math.cos(lat*Math.PI/180));
+  var raja = Math.max(150, 12/akViime.S*k.ruutu), paras = null, pm = Infinity;
+  K.iskut.forEach(function(I){
+    [I].concat(I.kloonit || []).forEach(function(p){
+      var dy = (p.lat - lat)*111320, dx = (p.lon - lon)*111320*Math.cos(lat*Math.PI/180), e = Math.sqrt(dx*dx + dy*dy);
+      if (e < pm){ pm = e; paras = p; }
+    });
+  });
+  if (!paras || pm > raja) return '';
+  return '<br>🎯 <b>' + paras.tunnus + '</b>: ' + (paras.teksti || '');
+}
+
 /* Napautus: lähin kuhamerkki kerrotaan pisteen tietojen perään (myös syvyys- ja aaltotilassa). */
 function akKuhaPisteTieto(){
   if (!akKuhaMerkit || !akValittu || !akViime) return '';
@@ -10266,6 +10537,10 @@ if ($("akKuhaMerkit")){   // v153
 if ($("akTaimenMerkit")){   // v156
   $("akTaimenMerkit").checked = akTaimenMerkit;
   $("akTaimenMerkit").addEventListener("change", function(){ window.akAsetaTaimenMerkit(this.checked); });
+}
+if ($("akKlooniMerkit")){   // v177
+  $("akKlooniMerkit").checked = akKlooniMerkit;
+  $("akKlooniMerkit").addEventListener("change", function(){ window.akAsetaKlooniMerkit(this.checked); });
 }
 $("akKorosta").addEventListener("change", function(){
   korosta = this.checked;
@@ -11400,6 +11675,7 @@ lataa(eka);
       snap.taydennetty = false;
       { const lista0 = lataaSaaliit(); lista0.push(snap); tallennaSaaliit(lista0); paivitaSaalisLista(); }
       keskenerainenSaalis = snap;
+      try { klooniIskusta(snap); } catch (e) { console.warn('Kloonit:', e); }   // v177: osuma aiempaan klooniin ja uudet kloonit
       document.getElementById('kalaStatus').innerHTML =
         '<span style="color:var(--cyan);">✓ Kala tallennettu ' + nyt.toLocaleTimeString('fi-FI', {hour:'2-digit',minute:'2-digit'}) + ' (paikka ja olot). Täydennä alla jos ehdit, muuten valmis.</span>';
       document.getElementById('kalaTaydennaAika').textContent =
@@ -11521,6 +11797,7 @@ lataa(eka);
       document.getElementById('kalaStatus').innerHTML = ok
         ? '<span style="color:var(--cyan);">✓ Saalis täydennetty (' + lista.length + ' kpl kirjanpidossa).' + varmuuskopioMuistutus() + (tiedostoOk ? '' : ' <strong style="color:var(--hard-red);">Huom: tiedostovarmuuskopio epäonnistui.</strong>') + '</span>'
         : '<span style="color:var(--hard-red);">Tallennus epäonnistui — kirjaa tiedot muualle.</span>';
+      const klooniKohde = keskenerainenSaalis;   // v177
       keskenerainenSaalis = null;
       document.getElementById('kalaTaydennaBox').style.display = 'none';
       document.getElementById('kalaPituus').value = '';
@@ -11530,6 +11807,7 @@ lataa(eka);
       // saa kirjaamisen jäämään väliin.
       paivitaSaalisLista();
       if (typeof koosteAutomaatti === 'function') koosteAutomaatti();
+      try { klooniTaydennyksesta(klooniKohde); } catch (e) { console.warn('Kloonit:', e); }   // v177: laji voi vaihtua
     }
 
     function peruSaalis() {   // v151: "Sulje" — kala on jo tallessa ilman lisätietoja
@@ -11583,6 +11861,508 @@ lataa(eka);
         return n >= 10 ? ' <span style="color:var(--amber);">💾 ' + n + ' kalaa viime varmuuskopion jälkeen: rannassa Raportit → Vie ja jaa.</span>' : '';
       } catch (e) { return ''; }
     }
+
+
+    /* ===== KLOONIPISTEET JA OODA-SILMUKKA — 10.10.2026 (v177) =====
+       Hannu 10.10.2026: "Visuaalinen tilannekuva ja POI-pisteiden dynaaminen kloonaus". Kun kohdekala
+       iskee, hetki jäädytetään sormenjäljeksi ja sama tilanne etsitään ympäriltä: kartalle tulee
+       pisteet, joissa sama pohja, penkan asento tuuleen ja aalto toistuvat. Kokonaisuus OODA-silmukkana
+       (Boyd: havainnoi – suuntaa – päätä – toimi), Hannun pyyntö "kokonaisuudessa":
+         HAVAINNOI  Kala kiinni → sormenjälki iskuruudusta (moduulin akKloonit): pohja, kaltevuus, penkan
+                    asento tuuleen, aalto, muoto (kari/kuoppa), etäisyys rannasta ja harppaus (taimenen
+                    malli, jos laskettu samalle järvelle ≤ 3 h). Kirjauksen omat tiedot (vesi, tuuli,
+                    pyyntisyvyys) kulkevat mukana. Tallentuu saalisriville (sj*-sarakkeet) ja kloonilokiin.
+         SUUNTAA    Haku säteen sisältä ISKUHETKEN tuulella (Hannun valinta: pisteet eivät siirry tuulen
+                    kääntyessä). Enintään N parasta, vähintään raja-%, 400 m toisistaan ja iskusta.
+                    Säde 1–5 km, määrä 1–5, raja 60–80 % (Hannun valinta: säädettävät).
+         PÄÄTÄ      "Seuraavaksi" = paras, kun samankaltaisuudesta vähennetään 4 %-yksikköä veneen
+                    etäisyyden jokaista kilometriä kohden (lähellä oleva hyvä voittaa kaukaisen hieman
+                    paremman). Kippari päättää; lista näyttää suunnan ja matkan veneestä.
+         TOIMI      Syvyyskartalla viiva Minä → seuraava. Ottipistehälytyksen ääni 60 m:ssä (jos päällä)
+                    ja kuulutus uistelun aikana. Käynti kirjautuu itsestään 100 m:n sisällä. Kala 150 m:n
+                    sisällä kloonista (24 h sisällä iskusta) = osuma; uusi isku aloittaa seuraavan kierroksen.
+         OPI        Tilasto: kloonit, käynnit, osumat. Painoja ei sovita nyt (sormenjälki puuttuu vanhoista
+                    saaliista); kun käyntejä on kymmeniä, osumaprosenttia voi verrata siihen, kuinka usein
+                    samoilla reissuilla tuli kalaa muualta.
+       Tiedostot (Hannun pyyntö): päivän kaikki iskut ja kloonit kertyvät yhteen tiedostoon, ja nimessä on
+       juokseva numero (kloonit_20261010_03.wpt), jotta seuraava Bluetooth-siirto ei korvaa edellistä.
+       Tunnukset juoksevat koko vuorokauden (I = isku, K = klooni) eivätkä toistu saman päivän aikana,
+       joten OziExplorer ja plotteri eivät sekoita pisteitä. Lowrance saa saman .gpx-muodossa.
+       Lajit: taimen, järvilohi, kirjolohi ja kuha käynnistävät (Hannun valinta 10.10.).
+       Todisteen taso: Malli. Tallennus: localStorage 'uistelututka_kloonit' (kulkee varmuuskopiossa). */
+    const KLOONI_LS = 'uistelututka_kloonit', KLOONI_ASET_LS = 'uistelututka_klooni_asetukset';
+    const KLOONI_LAJIT = ['taimen', 'jarvilohi', 'kirjolohi', 'kuha'];
+    const KLOONI_LAJINIMI = { taimen: 'taimen', jarvilohi: 'järvilohi', kirjolohi: 'kirjolohi', kuha: 'kuha', hauki: 'hauki', ahven: 'ahven', muu: 'muu' };
+    let klooniAktiivinen = null;   // isku-id, jonka päivä näytetään (null = viimeisin isku)
+    let klooniGpsT = 0, klooniKarttaT = 0;
+    const klooniHalytetty = {};
+
+    function klooniLue() {
+      try {
+        const d = JSON.parse(localStorage.getItem(KLOONI_LS) || 'null');
+        if (d && Array.isArray(d.iskut)) { if (!d.paivat || typeof d.paivat !== 'object') d.paivat = {}; return d; }
+      } catch (e) {}
+      return { versio: 1, iskut: [], paivat: {} };
+    }
+    function klooniTallenna(d) { try { localStorage.setItem(KLOONI_LS, JSON.stringify(d)); return true; } catch (e) { return false; } }
+    function klooniAsetukset() {
+      let a = {};
+      try { a = JSON.parse(localStorage.getItem(KLOONI_ASET_LS) || '{}') || {}; } catch (e) { a = {}; }
+      const r = (x, lo, hi, o) => (typeof x === 'number' && x >= lo && x <= hi) ? x : o;
+      return { sadeKm: r(a.sadeKm, 1, 5, 3), maara: r(a.maara, 1, 5, 3), kynnys: r(a.kynnys, 50, 90, 70) };
+    }
+    function klooniAsetusMuuttui() {
+      const v = id => parseFloat((document.getElementById(id) || {}).value);
+      try { localStorage.setItem(KLOONI_ASET_LS, JSON.stringify({ sadeKm: v('klooniSade'), maara: v('klooniMaara'), kynnys: v('klooniKynnys') })); } catch (e) {}
+      klooniNaytaTila('Asetukset tallennettu. Ne koskevat seuraavia iskuja; jo lasketut kloonit saat uusilla asetuksilla ↻-napista.');
+    }
+    function klooniPvm(ms) { const d = new Date(ms); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+    function klooniPvmTeksti(pvm) { const o = String(pvm).split('-'); return (+o[2]) + '.' + (+o[1]) + '.'; }
+    function klooniN1(x) { return (Math.round(x * 10) / 10).toFixed(1).replace('.', ','); }
+    function klooniN2(x) { return (Math.round(x * 100) / 100).toFixed(2).replace('.', ','); }
+    function klooniKello(ms) { const d = new Date(ms); return d.getHours() + '.' + String(d.getMinutes()).padStart(2, '0'); }
+    function klooniKohti(deg) { return ['pohjoiseen', 'koilliseen', 'itään', 'kaakkoon', 'etelään', 'lounaaseen', 'länteen', 'luoteeseen'][Math.round((((deg % 360) + 360) % 360) / 45) % 8]; }
+    function klooniMista(deg) { return ['pohjoisesta', 'koillisesta', 'idästä', 'kaakosta', 'etelästä', 'lounaasta', 'lännestä', 'luoteesta'][Math.round((((deg % 360) + 360) % 360) / 45) % 8]; }
+    function klooniSuuntima(la1, lo1, la2, lo2) {
+      const a = la1 * Math.PI / 180, b = la2 * Math.PI / 180, dl = (lo2 - lo1) * Math.PI / 180;
+      const y = Math.sin(dl) * Math.cos(b), x = Math.cos(a) * Math.sin(b) - Math.sin(a) * Math.cos(b) * Math.cos(dl);
+      return Math.round((Math.atan2(y, x) * 180 / Math.PI + 360) % 360) % 360;
+    }
+    function klooniMatkaTeksti(m) { return m >= 1000 ? klooniN1(m / 1000) + ' km' : (Math.round(m / 10) * 10) + ' m'; }
+    function klooniPuheMatka(m) { return m >= 1000 ? klooniN1(m / 1000) + ' kilometriä' : (Math.round(m / 50) * 50) + ' metriä'; }
+    function klooniAsentoTeksti(a, g) {
+      if (!(g >= 0.3)) return 'tasainen pohja';
+      const x = Math.abs(a);
+      if (x >= 135) return 'tuuli puskee syvältä matalalle';
+      if (x <= 45) return 'tuuli painaa matalalta syvälle';
+      return 'sivutuuli, syvä ' + (a > 0 ? 'oikealla' : 'vasemmalla') + ' myötätuuleen';
+    }
+    function klooniMuotoTeksti(m) {
+      if (m <= -0.8) return 'kari tai matalikko (' + klooniN1(-m) + ' m ympäristöä matalampi)';
+      if (m >= 0.8) return 'kuoppa (' + klooniN1(m) + ' m ympäristöä syvempi)';
+      return '';
+    }
+    function klooniPyorista(s) {
+      const r = (x, n) => (typeof x === 'number' && isFinite(x)) ? Math.round(x * Math.pow(10, n)) / Math.pow(10, n) : null;
+      return { pohja: r(s.pohja, 2), f: r(s.f, 2), g: r(s.g, 2), asento: r(s.asento, 0), syvaSuunta: r(s.syvaSuunta, 0),
+               aalto: r(s.aalto, 3), muoto: r(s.muoto, 2), rannasta: r(s.rannasta, 0), hq: r(s.hq, 1),
+               oma: !!s.oma, pohjaLahde: s.pohjaLahde || null, pohjaRuutu: r(s.pohjaRuutu, 2) };
+    }
+    function klooniIskuTeksti(I) {
+      const s = I.sj || {}, o = [];
+      o.push('pohja ' + klooniN1(s.pohja) + ' m (' + (s.pohjaLahde || 'ruudukko') + (typeof s.pohjaRuutu === 'number' ? '; ruudun luokka ' + klooniN1(s.pohjaRuutu) : '') + ')');
+      o.push('kaltevuus ' + klooniN1(s.g) + ' m/100 m');
+      o.push(klooniAsentoTeksti(s.asento, s.g));
+      o.push('aalto ' + klooniN2(s.aalto) + ' m');
+      const mu = klooniMuotoTeksti(s.muoto); if (mu) o.push(mu);
+      if (typeof s.rannasta === 'number') o.push('rannasta ' + klooniMatkaTeksti(s.rannasta));
+      if (typeof s.hq === 'number') o.push('harppaus ' + klooniN1(s.hq) + ' m (malli)');
+      const t = I.tuuli || {};
+      o.push('tuuli ' + Math.round(t.U) + ' m/s ' + klooniMista(t.dir) + ' (' + (t.lahde || '?') + (t.oletusKesto ? ', kesto oletettu 6 h' : '') + ')');
+      if (typeof I.pyyntiSyvyys === 'number') o.push('pyyntisyvyys ' + klooniN1(I.pyyntiSyvyys) + ' m');
+      if (typeof I.vesiC === 'number') o.push('vesi ' + klooniN1(I.vesiC) + ' °C (koko järvi)');
+      if (I.tutkittu) o.push('kaava toistuu ' + Math.max(1, Math.round(100 * I.ehdokkaita / I.tutkittu)) + ' %:ssa hakualueen vedestä (raja ' + I.kynnys + ' %)');
+      return o.join(' · ');
+    }
+    function klooniTeksti(I, c, lyhyt) {   // lyhyt: paneelin lista (pisteet, matka ja tila ovat jo rivillä)
+      const A = I.sj || {}, B = c.sj || {}, o = [];
+      if (!lyhyt) o.push(c.pisteet + ' % · ' + klooniMatkaTeksti(c.etaisyysM) + ' ' + klooniKohti(c.suunta) + ' iskusta ' + I.tunnus);
+      o.push('pohja ' + klooniN1(B.pohja) + ' m ' + (B.oma ? 'luotaus' : 'MML') + ' (isku ' + klooniN1(A.pohja) + ')');
+      o.push('kaltevuus ' + klooniN1(B.g) + ' (' + klooniN1(A.g) + ') m/100 m');
+      o.push(klooniAsentoTeksti(B.asento, B.g));
+      o.push('aalto ' + klooniN2(B.aalto) + ' (' + klooniN2(A.aalto) + ') m');
+      const mu = klooniMuotoTeksti(B.muoto); if (mu) o.push(mu);
+      if (typeof B.rannasta === 'number') o.push('rannasta ' + klooniMatkaTeksti(B.rannasta) + ' (' + klooniMatkaTeksti(A.rannasta) + ')');
+      if (typeof B.hq === 'number') o.push('harppaus ' + klooniN1(B.hq) + ' (' + klooniN1(A.hq) + ') m');
+      if (lyhyt) return o.join(' · ');
+      if (c.osuma) o.push('🐟 osuma ' + klooniKello(new Date(c.osuma.aika).getTime()) + (c.osuma.laji ? ' (' + (KLOONI_LAJINIMI[c.osuma.laji] || c.osuma.laji) + ')' : ''));
+      else if (c.kayty) o.push('✓ käyty ' + klooniKello(c.kayty));
+      return o.join(' · ') + '. Malli: tarkista kaikulla.';
+    }
+    function klooniIskuSaaliille(id, d) { return (d || klooniLue()).iskut.find(x => x.id === id) || null; }
+    function klooniSaalisKentat(s, kentat) {
+      try {
+        Object.assign(s, kentat);
+        if (keskenerainenSaalis && keskenerainenSaalis.id === s.id && keskenerainenSaalis !== s) Object.assign(keskenerainenSaalis, kentat);
+        const lista = lataaSaaliit(), ix = lista.findIndex(x => x && x.id === s.id);
+        if (ix >= 0) { Object.assign(lista[ix], kentat); tallennaSaaliit(lista); }
+      } catch (e) { console.warn('Kloonikentät:', e); }
+    }
+    function klooniPika(html) { const el = document.getElementById('klooniPika'); if (el) el.innerHTML = html || ''; }
+    function klooniNaytaTila(t) { const el = document.getElementById('klooniTila'); if (el) el.innerHTML = t || ''; }
+
+    // Iskupaikan pohja omasta luotauksesta: mediaani 60 m säteeltä, vähintään 3 pistettä (muuten null).
+    function klooniOmaPohja(lat, lon) {
+      let P = [];
+      try { P = omaLuotausPisteet(); } catch (e) { return null; }
+      if (!P.length) return null;
+      const r = 60, kx = 111320 * Math.cos(lat * Math.PI / 180), v = [];
+      for (let i = 0; i < P.length; i++) {
+        const p = P[i], dy = (p.lat - lat) * 111320, dx = (p.lon - lon) * kx;
+        if (Math.abs(dy) > r || Math.abs(dx) > r || dx * dx + dy * dy > r * r) continue;
+        v.push(p.syv);
+      }
+      if (v.length < 3) return null;
+      v.sort((a, b) => a - b);
+      return { m: v.length % 2 ? v[v.length >> 1] : (v[(v.length >> 1) - 1] + v[v.length >> 1]) / 2, n: v.length };
+    }
+    // HAVAINNOI + SUUNTAA: sormenjälki ja kloonit yhdelle saaliille. Palauttaa { ok, isku } tai { ok:false, syy }.
+    async function klooniLaske(s) {
+      if (!s || typeof s.lat !== 'number' || typeof s.lon !== 'number') return { ok: false, syy: 'kirjauksella ei ole GPS-sijaintia (mittari ei ollut päällä)' };
+      const avain = karttaAvainNimesta(s.paikka || '') || karttaAvain();
+      if (!avain) return { ok: false, syy: 'järvellä ei ole syvyysruudukkoa' };
+      if (typeof window.akKaynnistaHiljaa === 'function') { try { window.akKaynnistaHiljaa(); } catch (e) {} }
+      if (typeof window.akKloonit !== 'function') return { ok: false, syy: 'karttamoduuli ei käynnistynyt' };
+      try { if (typeof window.akValitseJarvi === 'function') window.akValitseJarvi(avain); } catch (e) {}
+      // ennuste odotetaan enintään 8 s (hidas yhteys veneessä); muuten tuuli kirjauksesta
+      try { if (typeof window.akValmiina === 'function') await Promise.race([window.akValmiina(), new Promise(r => setTimeout(r, 8000))]); } catch (e) {}
+      const t = new Date(s.aika).getTime();
+      let tuuli = null;
+      try { tuuli = window.akTuuliHetkella(t, avain); } catch (e) { tuuli = null; }
+      if (!tuuli) {
+        const fmi = typeof s.malliTuuliMs === 'number' && typeof s.malliTuuliSuunta === 'number';
+        const U = fmi ? s.malliTuuliMs : s.tuuliMs, dir = fmi ? s.malliTuuliSuunta : s.tuuliSuunta;
+        if (typeof U === 'number' && typeof dir === 'number') tuuli = { U, dir, tunteja: 6, lahde: fmi ? 'kirjaus, FMI' : 'kirjaus, Open-Meteo', oletusKesto: true };
+      }
+      if (!tuuli) return { ok: false, syy: 'iskuhetken tuulta ei ole (ei ennustetta eikä kirjausta)' };
+      const ps = (typeof s.syvyysM === 'number' && s.syvyysLahde === 'mitattu') ? s.syvyysM : (typeof s.viehesyvyysM === 'number' ? s.viehesyvyysM : null);
+      let harppaus = null;
+      try {
+        const tk = viimeisinTaimenKentta;
+        if ((s.laji === 'taimen' || s.laji === 'jarvilohi') && tk && tk.avain === avain && tk.K && typeof tk.K.kohta === 'function' && Math.abs(tk.hetkiMs - t) <= 3 * 3600e3)
+          harppaus = function (la, lo) { const x = tk.K.kohta(la, lo); return x ? Math.max(0, x.hq) : null; };
+      } catch (e) { harppaus = null; }
+      const as = klooniAsetukset(), op = klooniOmaPohja(s.lat, s.lon);
+      const r = window.akKloonit({ avain, lat: s.lat, lon: s.lon, U: tuuli.U, dir: tuuli.dir, tunteja: tuuli.tunteja,
+                                   sadeM: as.sadeKm * 1000, maara: as.maara, kynnys: as.kynnys, pyyntiSyvyys: ps, harppaus,
+                                   pohjaMitattu: op ? op.m : null });
+      if (!r || r.tila !== 'ok') {
+        const syy = !r ? 'laskenta ei palauttanut tulosta'
+          : r.tila === 'eriJarvi' ? 'kartalla on ' + (r.kortilla || '–') + ', isku on järveltä ' + r.jarvi + ' (yritä hetken päästä uudelleen)'
+          : r.tila === 'eiRuutua' ? 'iskupaikka ei osu järven ruudukkoon (yli 200 m rannasta maalle?)'
+          : r.tila === 'eiSyvyytta' ? 'järvellä ' + (r.jarvi || '') + ' ei ole syvyysruudukkoa'
+          : 'tuntematon tila ' + r.tila;
+        return { ok: false, syy };
+      }
+      const d = klooniLue(), pvm = klooniPvm(t), P = d.paivat[pvm] || (d.paivat[pvm] = { i: 0, k: 0, wpt: 0, gpx: 0 });
+      const vanha = d.iskut.findIndex(x => x.id === s.id);
+      let tunnus;
+      if (vanha >= 0) { tunnus = d.iskut[vanha].tunnus; d.iskut.splice(vanha, 1); }   // uudelleenlaskenta: isku pitää tunnuksensa, kloonit saavat uudet
+      else { P.i = (P.i || 0) + 1; tunnus = 'I' + P.i; }
+      const sj = klooniPyorista(r.isku.sj);
+      const isku = {
+        id: s.id, tunnus, aika: s.aika, pvm, laji: s.laji || null, avain, jarvi: r.jarvi, lat: s.lat, lon: s.lon,
+        sadeM: r.sadeM, maara: r.maara, kynnys: r.kynnys,
+        tuuli: { U: Math.round(tuuli.U * 10) / 10, dir: Math.round(tuuli.dir), tunteja: tuuli.tunteja, lahde: tuuli.lahde, oletusKesto: !!tuuli.oletusKesto },
+        pyyntiSyvyys: ps, vesiC: typeof s.vesiC === 'number' ? s.vesiC : null, harppaus: r.harppaus, sj,
+        ehdokkaita: r.ehdokkaita, tutkittu: r.tutkittu, rajattuSyvyys: r.rajattuSyvyys, ruutu: r.ruutu, laskettu: Date.now(), versio: (typeof APP_VERSIO === 'string' ? APP_VERSIO : ''),
+        kloonit: r.kloonit.map(c => {
+          P.k = (P.k || 0) + 1;
+          return { tunnus: 'K' + P.k, lat: Math.round(c.lat * 1e6) / 1e6, lon: Math.round(c.lon * 1e6) / 1e6, pisteet: c.pisteet, osat: c.osat,
+                   sj: klooniPyorista(c.sj), etaisyysM: c.etaisyysM, suunta: c.suunta, kayty: null, osuma: null };
+        })
+      };
+      d.iskut.push(isku);
+      d.iskut.sort((a, b) => String(a.aika).localeCompare(String(b.aika)));
+      klooniTallenna(d);
+      klooniSaalisKentat(s, {
+        iskuTunnus: tunnus, klooniTunnukset: isku.kloonit.map(c => c.tunnus).join(' ') || '-',
+        sjPohjaM: sj.pohja, sjKaltevuus: sj.g, sjAsento: sj.asento, sjAaltoM: sj.aalto, sjMuotoM: sj.muoto, sjRannastaM: sj.rannasta,
+        sjHarppausM: sj.hq, sjTuuliMs: isku.tuuli.U, sjTuuliSuunta: isku.tuuli.dir
+      });
+      klooniAktiivinen = s.id;
+      klooniPaivitaKaikki();
+      return { ok: true, isku };
+    }
+
+    // Kala kiinni: ensin osuma aiempaan klooniin (kaikki lajit), sitten uudet kloonit kohdelajeille.
+    function klooniIskusta(snap) {
+      let alku = '';
+      const os = klooniOsumaTarkistus(snap);
+      if (os) alku = '<b>🎯 Osuma:</b> kala ' + klooniMatkaTeksti(os.e) + ' kloonista ' + os.c.tunnus + ' (' + os.c.pisteet + ' %, isku ' + os.I.tunnus + '). ';
+      if (!KLOONI_LAJIT.includes(snap.laji)) { klooniPika(alku); if (os) klooniPaivitaKaikki(); return; }
+      if (typeof snap.lat !== 'number') { klooniPika(alku + 'Kloonit: ei GPS-sijaintia (käynnistä mittari).'); return; }
+      klooniPika(alku + '🎯 Lasketaan kloonipisteitä…');
+      klooniLaske(snap).then(r => {
+        if (!r.ok) { klooniPika(alku + 'Kloonit: ' + r.syy + '.'); return; }
+        const I = r.isku, n = I.kloonit.length, seur = klooniSeuraava();
+        const km = klooniN1(I.sadeM / 1000).replace(',0', '');
+        const txt = n
+          ? '🎯 <b>' + I.tunnus + '</b>: ' + n + ' kloonia ' + km + ' km säteellä' + (seur ? '. Seuraavaksi <b>' + seur.c.tunnus + '</b>: ' + klooniMatkaTeksti(seur.e) + ' ' + klooniKohti(seur.s) + ' (' + seur.s + '°), ' + seur.c.pisteet + ' %.' : '.')
+          : '🎯 <b>' + I.tunnus + '</b>: ei kloonia ' + km + ' km säteellä rajalla ' + I.kynnys + ' %. Kaava on tällä alueella harvinainen.';
+        klooniPika(alku + txt);
+        try { if (n && seur && typeof kuulPuhu === 'function') kuulPuhu('Kloonipisteitä ' + n + '. Seuraava ' + seur.c.tunnus + ', ' + klooniPuheMatka(seur.e) + ' ' + klooniKohti(seur.s) + '.', false); } catch (e) {}
+      }).catch(e => klooniPika(alku + 'Kloonit: virhe ' + (e && e.message || e)));
+    }
+    // Täydennys: laji voi vaihtua pikakirjauksen jälkeen.
+    function klooniTaydennyksesta(s) {
+      if (!s) return;
+      const d = klooniLue(), I = klooniIskuSaaliille(s.id, d);
+      let muutos = false;
+      d.iskut.forEach(x => x.kloonit.forEach(c => { if (c.osuma && c.osuma.id === s.id && c.osuma.laji !== (s.laji || null)) { c.osuma.laji = s.laji || null; muutos = true; } }));
+      if (I && !KLOONI_LAJIT.includes(s.laji)) {
+        d.iskut = d.iskut.filter(x => x.id !== s.id); muutos = true;   // numerot eivät palaa käyttöön
+        klooniSaalisKentat(s, { klooniTunnukset: null, iskuTunnus: null });
+        klooniPika('Kloonit poistettu: ' + (KLOONI_LAJINIMI[s.laji] || s.laji || '?') + ' ei käynnistä klooneja.');
+      } else if (I && I.laji !== s.laji) { I.laji = s.laji; muutos = true; }
+      if (muutos) { klooniTallenna(d); klooniPaivitaKaikki(); }
+      if (!I && KLOONI_LAJIT.includes(s.laji) && typeof s.lat === 'number') klooniIskusta(s);
+    }
+    // TOIMI → OPI: kala 150 m:n sisällä kloonista, joka on laskettu ≤ 24 h ennen.
+    function klooniOsumaTarkistus(snap) {
+      if (!snap || typeof snap.lat !== 'number') return null;
+      const t = new Date(snap.aika).getTime(), d = klooniLue();
+      let paras = null;
+      d.iskut.forEach(I => {
+        if (I.id === snap.id) return;
+        const tI = new Date(I.aika).getTime();
+        if (!(t > tI && t - tI <= 24 * 3600e3)) return;
+        I.kloonit.forEach(c => { const e = haversineDistMeters(snap.lat, snap.lon, c.lat, c.lon); if (e <= 150 && (!paras || e < paras.e)) paras = { I, c, e }; });
+      });
+      if (!paras) return null;
+      paras.c.osuma = { id: snap.id, laji: snap.laji || null, aika: snap.aika, etaisyysM: Math.round(paras.e) };
+      if (!paras.c.kayty) paras.c.kayty = t;
+      klooniTallenna(d);
+      klooniSaalisKentat(snap, { klooniOsuma: paras.c.tunnus, klooniOsumaPisteet: paras.c.pisteet, klooniOsumaM: Math.round(paras.e) });
+      return paras;
+    }
+    // PÄÄTÄ: avoimista (ei käyty, ≤ 24 h) paras = pisteet − 4 / km veneestä (ilman GPS:ää viimeisestä iskusta).
+    function klooniSeuraava(d) {
+      d = d || klooniLue();
+      const nyt = Date.now(), avoimet = [];
+      d.iskut.forEach(I => { if (nyt - new Date(I.aika).getTime() > 24 * 3600e3) return; I.kloonit.forEach(c => { if (!c.kayty && !c.osuma) avoimet.push({ I, c }); }); });
+      if (!avoimet.length) return null;
+      const viim = d.iskut[d.iskut.length - 1], gps = (typeof viimeisinGps === 'object' && viimeisinGps) ? viimeisinGps : null;
+      const lahto = gps || { lat: viim.lat, lon: viim.lon };
+      let paras = null;
+      avoimet.forEach(x => {
+        const e = haversineDistMeters(lahto.lat, lahto.lon, x.c.lat, x.c.lon), arvo = x.c.pisteet - 4 * e / 1000;
+        if (!paras || arvo > paras.arvo) paras = { I: x.I, c: x.c, e, s: klooniSuuntima(lahto.lat, lahto.lon, x.c.lat, x.c.lon), arvo, gps: !!gps };
+      });
+      return paras;
+    }
+    // TOIMI: GPS-päivitys (nopeusmittari) — käynti 100 m:ssä, ääni 60 m:ssä, syvyyskartan päivitys.
+    function klooniGps(lat, lon) {
+      const nyt = Date.now();
+      if (nyt - klooniGpsT < 4000) return;
+      klooniGpsT = nyt;
+      const d = klooniLue();
+      if (!d.iskut.length) return;
+      let saapui = null;
+      d.iskut.forEach(I => {
+        if (nyt - new Date(I.aika).getTime() > 24 * 3600e3) return;
+        I.kloonit.forEach(c => {
+          const e = haversineDistMeters(lat, lon, c.lat, c.lon), av = I.pvm + c.tunnus;
+          if (e < 60 && !klooniHalytetty[av]) {
+            klooniHalytetty[av] = true;
+            try {
+              if (ottiHalytysPaalla && !ottiSoi) {
+                const el = document.getElementById('ottiAani');
+                if (el) { ottiSoi = true; el.currentTime = 0; el.play().catch(() => {}); el.onended = () => { ottiSoi = false; }; }
+              }
+            } catch (e2) {}
+          }
+          if (!c.kayty && !c.osuma && e <= 100) { c.kayty = nyt; saapui = c; }
+        });
+      });
+      if (saapui) {
+        klooniTallenna(d);
+        klooniPika('✓ <b>' + saapui.tunnus + '</b> käyty klo ' + klooniKello(nyt) + ' (' + saapui.pisteet + ' %). Kala tästä 150 m:n sisältä kirjautuu osumaksi.');
+        try { if (typeof kuulPuhu === 'function') kuulPuhu('Kloonipiste ' + saapui.tunnus + '.', false); } catch (e) {}
+        klooniPaivitaKaikki();
+        return;
+      }
+      const box = document.getElementById('klooniBox');
+      if (box && box.open) klooniPiirraPaneeli(d);
+      const ov = document.getElementById('karttaOverlay');
+      if (ov && ov.style.display === 'flex' && nyt - klooniKarttaT > 4000) { klooniKarttaT = nyt; try { karttaPiirra(); } catch (e) {} }
+    }
+
+    // Näytettävä päivä: aktiivisen (tai viimeisimmän) iskun päivä ja järvi.
+    function klooniAktiivinenIsku(d) {
+      d = d || klooniLue();
+      return d.iskut.find(x => x.id === klooniAktiivinen) || d.iskut[d.iskut.length - 1] || null;
+    }
+    function klooniKerros(d) {
+      d = d || klooniLue();
+      const akt = klooniAktiivinenIsku(d);
+      if (!akt) return null;
+      const iskut = d.iskut.filter(x => x.pvm === akt.pvm && x.avain === akt.avain);
+      const seur = klooniSeuraava(d);
+      const seuraava = (seur && seur.I.pvm === akt.pvm && seur.I.avain === akt.avain) ? seur.c.tunnus : null;
+      const km = klooniN1(akt.sadeM / 1000).replace(',0', '');
+      const info = 'Kloonit ' + klooniPvmTeksti(akt.pvm) + ' (' + iskut.length + ' iskua): <b>violetti salmiakki</b> on paikka, jossa iskun pohja, penkan asento tuuleen ja aalto toistuvat iskuhetken tuulella (malli). '
+        + '<b>Punainen pallo</b> on isku, katkoviivaympyrä ' + km + ' km hakusäde iskusta ' + akt.tunnus
+        + (seuraava ? ', <b>keltainen rengas</b> seuraavaksi (' + seuraava + ')' : '') + '. Vaalea = käyty, kultainen = osuma. Napauta merkkiä.';
+      return {
+        avain: akt.avain, pvm: akt.pvm, aktiivinen: akt.tunnus, seuraava, info,
+        iskut: iskut.map(I => ({
+          tunnus: I.tunnus, lat: I.lat, lon: I.lon, sadeM: I.sadeM, lajiNimi: KLOONI_LAJINIMI[I.laji] || I.laji || '',
+          teksti: 'isku klo ' + klooniKello(new Date(I.aika).getTime()) + (I.laji ? ' (' + (KLOONI_LAJINIMI[I.laji] || I.laji) + ')' : '') + ': ' + klooniIskuTeksti(I),
+          kloonit: I.kloonit.map(c => ({ tunnus: c.tunnus, lat: c.lat, lon: c.lon, pisteet: c.pisteet, kayty: c.kayty, osuma: c.osuma, teksti: klooniTeksti(I, c) }))
+        }))
+      };
+    }
+    function klooniPaivitaKaikki() {
+      const d = klooniLue();
+      try { const K = klooniKerros(d); window.akKlooniKerros = K; if (typeof window.akAsetaKlooniKerros === 'function') window.akAsetaKlooniKerros(K); } catch (e) { console.warn('Kloonikerros:', e); }
+      try { klooniPiirraPaneeli(d); } catch (e) { console.warn('Klooniapaneeli:', e); }
+      try { const ov = document.getElementById('karttaOverlay'); if (ov && ov.style.display === 'flex') karttaPiirra(); } catch (e) {}
+      try { paivitaSaalisLista(); } catch (e) {}
+    }
+    function klooniTilastoTeksti(d) {
+      let k = 0, kay = 0, os = 0, osK = 0;
+      d.iskut.forEach(I => I.kloonit.forEach(c => { k++; if (c.kayty) kay++; if (c.osuma) { os++; if (KLOONI_LAJIT.includes(c.osuma.laji)) osK++; } }));
+      if (!k) return 'Ei vielä klooneja.';
+      return 'Kaikkiaan ' + d.iskut.length + ' iskua, ' + k + ' kloonia, käyty ' + kay + ', osumia ' + os + (os !== osK ? ' (lohikala tai kuha ' + osK + ')' : '')
+        + (kay ? ' = ' + Math.round(100 * os / kay) + ' % käydyistä' : '') + '. Vertailu sattumaan vaatii kymmeniä käyntejä; siihen asti luku on suuntaa-antava.';
+    }
+    function klooniPiirraPaneeli(d) {
+      const el = document.getElementById('klooniSisalto'), yht = document.getElementById('klooniYhteenveto');
+      if (!el) return;
+      d = d || klooniLue();
+      const as = klooniAsetukset();
+      [['klooniSade', as.sadeKm], ['klooniMaara', as.maara], ['klooniKynnys', as.kynnys]].forEach(([id, v]) => {
+        const s = document.getElementById(id); if (s && document.activeElement !== s) s.value = String(v);
+      });
+      const akt = klooniAktiivinenIsku(d);
+      const syv = document.getElementById('klooniSyvyysNappi');
+      if (syv) syv.style.display = (akt && akt.avain === 'lappajarvi') ? '' : 'none';
+      if (!akt) {
+        if (yht) yht.textContent = '— ei vielä iskuja';
+        el.innerHTML = '<p class="hint" style="margin:6px 0;">Kun kirjaat taimenen, järvilohen, kirjolohen tai kuhan Kala kiinni -napilla (mittari päällä), iskupaikan tilanne jäädytetään ja samanlaiset paikat etsitään ympäriltä. Vanhoille saaliille 🎯-nappi saalislistassa.</p>';
+        return;
+      }
+      const paiva = d.iskut.filter(x => x.pvm === akt.pvm);
+      const nK = paiva.reduce((a, I) => a + I.kloonit.length, 0);
+      if (yht) yht.textContent = '— ' + klooniPvmTeksti(akt.pvm) + ' ' + paiva.length + ' iskua, ' + nK + ' kloonia';
+      const gps = (typeof viimeisinGps === 'object' && viimeisinGps) ? viimeisinGps : null;
+      const seur = klooniSeuraava(d);
+      let h = '';
+      if (seur) h += '<div style="margin:6px 0;padding:8px 10px;border:1px solid #f5b700;border-radius:8px;">▶ <b>Seuraavaksi ' + seur.c.tunnus + '</b>: '
+        + klooniMatkaTeksti(seur.e) + ' ' + klooniKohti(seur.s) + ' (' + seur.s + '°) ' + (seur.gps ? 'veneestä' : 'viimeisestä iskusta') + ' · ' + seur.c.pisteet + ' %'
+        + '<br><span class="hint">Valinta: samankaltaisuus miinus 4 %-yksikköä kilometriä kohden.</span></div>';
+      paiva.slice().reverse().forEach(I => {
+        const t = new Date(I.aika).getTime();
+        h += '<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--line);font-size:14px;">'
+          + '<b style="color:#ff6b7d;">' + I.tunnus + '</b> klo ' + klooniKello(t) + ' · ' + (KLOONI_LAJINIMI[I.laji] || I.laji || '?') + ' · ' + I.jarvi
+          + '<br><span class="hint">' + klooniIskuTeksti(I) + '</span>';
+        if (!I.kloonit.length) h += '<br><span style="color:var(--muted);">Ei kloonia ' + klooniN1(I.sadeM / 1000).replace(',0', '') + ' km säteellä rajalla ' + I.kynnys + ' %.</span>';
+        I.kloonit.forEach(c => {
+          const e = gps ? haversineDistMeters(gps.lat, gps.lon, c.lat, c.lon) : c.etaisyysM, s = gps ? klooniSuuntima(gps.lat, gps.lon, c.lat, c.lon) : c.suunta;
+          const tila = c.osuma ? ' · 🐟 osuma ' + klooniKello(new Date(c.osuma.aika).getTime()) + (c.osuma.laji ? ' (' + (KLOONI_LAJINIMI[c.osuma.laji] || c.osuma.laji) + ')' : '') : c.kayty ? ' · ✓ käyty ' + klooniKello(c.kayty) : '';
+          h += '<div style="margin-top:5px;"><b style="color:#b794ff;">' + c.tunnus + '</b> ' + c.pisteet + ' % · ' + klooniMatkaTeksti(e) + ' ' + klooniKohti(s) + ' (' + s + '°) ' + (gps ? 'veneestä' : 'iskusta') + tila
+            + '<br><span class="hint">' + klooniTeksti(I, c, true) + '</span></div>';
+        });
+        h += '<div style="margin-top:5px;"><button type="button" class="chip" onclick="klooniUudelleen(' + I.id + ')" style="padding:2px 10px;font-size:12px;border-color:var(--muted);color:var(--muted);">↻ Laske ' + I.tunnus + ' uudelleen nykyisillä asetuksilla</button></div></div>';
+      });
+      const muut = d.iskut.filter(x => x.pvm !== akt.pvm).map(x => x.pvm).filter((v, i, a) => a.indexOf(v) === i).slice(-5);
+      if (muut.length) h += '<p class="hint" style="margin-top:8px;">Muut päivät: ' + muut.map(p => {
+        const I = d.iskut.filter(x => x.pvm === p).slice(-1)[0];
+        return '<a href="#" onclick="klooniNaytaPaiva(' + I.id + ');return false;" style="color:#b794ff;">' + klooniPvmTeksti(p) + '</a>';
+      }).join(' · ') + '</p>';
+      h += '<p class="hint" style="margin-top:8px;">' + klooniTilastoTeksti(d) + '</p>';
+      el.innerHTML = h;
+    }
+    function klooniNaytaPaiva(id) { klooniAktiivinen = id; klooniPaivitaKaikki(); }
+    async function klooniUudelleen(id) {
+      const s = lataaSaaliit().find(x => x && x.id === id);
+      if (!s) { klooniNaytaTila('Saalista ei löydy kirjanpidosta.'); return; }
+      klooniNaytaTila('Lasketaan…');
+      const r = await klooniLaske(s);
+      klooniNaytaTila(r.ok ? r.isku.tunnus + ': ' + r.isku.kloonit.length + ' kloonia (' + r.isku.kloonit.map(c => c.tunnus).join(', ') + '). Vanhat numerot eivät palaa käyttöön.' : 'Ei laskettu: ' + r.syy + '.');
+    }
+    // Saalislistan 🎯-nappi: laskee, jos ei ole laskettu; muuten näyttää sen päivän.
+    async function klooniSaaliille(id) {
+      const d = klooniLue(), I = klooniIskuSaaliille(id, d);
+      const box = document.getElementById('klooniBox');
+      if (I) { klooniAktiivinen = id; klooniPaivitaKaikki(); if (box) { box.open = true; box.scrollIntoView({ behavior: 'smooth', block: 'start' }); } return; }
+      const s = lataaSaaliit().find(x => x && x.id === id);
+      if (!s) return;
+      if (box) { box.open = true; box.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+      klooniNaytaTila('Lasketaan kloonit saaliille ' + new Date(s.aika).toLocaleString('fi-FI') + '…');
+      const r = await klooniLaske(s);
+      klooniNaytaTila(r.ok ? r.isku.tunnus + ': ' + r.isku.kloonit.length + ' kloonia. ' + (r.isku.tuuli.oletusKesto ? 'Tuuli kirjauksesta, tuulen kesto oletettu 6 h.' : '') : 'Ei laskettu: ' + r.syy + '.');
+    }
+    function klooniNappi(s, d) {
+      if (!s || s.nollareissu || !KLOONI_LAJIT.includes(s.laji) || typeof s.lat !== 'number') return '';
+      const I = klooniIskuSaaliille(s.id, d);
+      const t = I ? (I.tunnus + (I.kloonit.length ? ' → ' + I.kloonit.map(c => c.tunnus).join(' ') : ' (ei klooneja)')) : 'Kloonit';
+      return ` <button class="chip" onclick="klooniSaaliille(${s.id})" style="padding:1px 8px;font-size:11px;border-color:#a87ef5;color:#b794ff;">🎯 ${t}</button>`;
+    }
+    function klooniKartta(syvyys) {
+      const akt = klooniAktiivinenIsku();
+      if (syvyys && akt && akt.avain === 'lappajarvi' && typeof avaaKartta === 'function') { avaaKartta(); return; }
+      if (typeof window.akAsetaKlooniMerkit === 'function') window.akAsetaKlooniMerkit(true);
+      else { try { localStorage.setItem('aaltokartta_kloonit', '1'); } catch (e) {} }
+      if (typeof window.naytaRuutu === 'function') window.naytaRuutu('suunnittelu');
+      const box = document.getElementById('aaltokarttaBox');
+      if (box) { box.open = true; setTimeout(() => box.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150); }
+      if (akt && typeof window.akValitseJarvi === 'function') { try { window.akValitseJarvi(akt.avain); } catch (e) {} }
+    }
+
+    /* TIEDOSTOT — OziExplorer (.wpt) ja Lowrance (.gpx). Päivän kaikki iskut ja kloonit yhteen tiedostoon;
+       nimen juokseva numero kasvaa joka viennillä (muodoittain), joten Bluetooth-siirto ei korvaa
+       edellistä. Ozi: "OziExplorer Waypoint File Version 1.1", WGS 84, kentät: numero, nimi, lat, lon,
+       päiväys (Delphi TDateTime), symboli, tila 1, näyttömuoto, tekstin ja taustan väri (BGR), kuvaus
+       (≤ 40 merkkiä, ei pilkkuja), …, korkeus −777 = ei tiedossa. Merkistö ASCII (Ozi lukee ANSI). */
+    function klooniAscii(t) {
+      return String(t).replace(/[äå]/g, 'a').replace(/[ÄÅ]/g, 'A').replace(/ö/g, 'o').replace(/Ö/g, 'O').replace(/%/g, ' pct')
+        .replace(/,/g, '.').replace(/[^\x20-\x7e]/g, '').replace(/\s+/g, ' ').trim();
+    }
+    function klooniVientiPisteet(iskut) {
+      const p = [];
+      iskut.forEach(I => {
+        const t = new Date(I.aika).getTime(), s = I.sj || {};
+        p.push({ tyyppi: 'isku', ms: t, lat: I.lat, lon: I.lon, nimi: I.tunnus + ' ' + (KLOONI_LAJINIMI[I.laji] || I.laji || 'isku'),
+                 kuvaus: I.tunnus + ' ' + klooniKello(t) + ' pohja ' + (typeof s.pohja === 'number' ? s.pohja.toFixed(1) : '?') + 'm ' + I.kloonit.length + ' kloonia' });
+        I.kloonit.forEach(c => p.push({ tyyppi: 'klooni', ms: I.laskettu || t, lat: c.lat, lon: c.lon, nimi: c.tunnus + ' ' + c.pisteet,
+                 kuvaus: c.tunnus + ' ' + c.pisteet + '% ' + I.tunnus + ' pohja ' + (c.sj && typeof c.sj.pohja === 'number' ? c.sj.pohja.toFixed(1) : '?') + 'm' + (c.osuma ? ' OSUMA' : c.kayty ? ' kayty' : '') }));
+      });
+      return p;
+    }
+    function klooniWpt(p) {
+      const L = ['OziExplorer Waypoint File Version 1.1', 'WGS 84', 'Reserved 2', 'Reserved 3'];
+      const VALK = 16777215, PUN = 61 * 65536 + 38 * 256 + 215, VIOL = 237 * 65536 + 58 * 256 + 124;   // TColor = B·65536 + G·256 + R
+      p.forEach((x, i) => {
+        const tdt = (x.ms - new Date(x.ms).getTimezoneOffset() * 60000) / 86400000 + 25569;
+        L.push([i + 1, klooniAscii(x.nimi).slice(0, 24), x.lat.toFixed(6), x.lon.toFixed(6), tdt.toFixed(7), 0, 1, 3, VALK, x.tyyppi === 'isku' ? PUN : VIOL,
+                klooniAscii(x.kuvaus).slice(0, 40), 0, 0, 0, -777, 6, 0, 17, 0, '10.0', 2, '', '', ''].join(','));
+      });
+      return L.join('\r\n') + '\r\n';
+    }
+    function klooniGpx(p, pvm) {
+      const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      const L = ['<?xml version="1.0" encoding="UTF-8"?>',
+        '<gpx version="1.1" creator="Uistelututka ' + esc(typeof APP_VERSIO === 'string' ? APP_VERSIO : '') + '" xmlns="http://www.topografix.com/GPX/1/1">',
+        '  <metadata><name>Kloonit ' + pvm + '</name><time>' + new Date().toISOString().replace(/\.\d{3}Z$/, 'Z') + '</time></metadata>'];
+      p.forEach(x => L.push('  <wpt lat="' + x.lat.toFixed(6) + '" lon="' + x.lon.toFixed(6) + '"><time>' + new Date(x.ms).toISOString().replace(/\.\d{3}Z$/, 'Z')
+        + '</time><name>' + esc(klooniAscii(x.nimi)) + '</name><desc>' + esc(klooniAscii(x.kuvaus)) + '</desc></wpt>'));
+      L.push('</gpx>');
+      return L.join('\r\n') + '\r\n';
+    }
+    function klooniVie(muoto) {
+      const d = klooniLue(), akt = klooniAktiivinenIsku(d);
+      if (!akt) { klooniNaytaTila('Ei pisteitä vietäväksi.'); return; }
+      const pvm = akt.pvm, iskut = d.iskut.filter(x => x.pvm === pvm);
+      const P = d.paivat[pvm] || (d.paivat[pvm] = { i: 0, k: 0, wpt: 0, gpx: 0 });
+      P[muoto] = (P[muoto] || 0) + 1;
+      const nro = String(P[muoto]).padStart(2, '0'), nimi = 'kloonit_' + pvm.replace(/-/g, '') + '_' + nro + '.' + muoto;
+      const pisteet = klooniVientiPisteet(iskut), nK = pisteet.filter(x => x.tyyppi === 'klooni').length;
+      const teksti = muoto === 'wpt' ? klooniWpt(pisteet) : klooniGpx(pisteet, pvm);
+      klooniTallenna(d);   // numero talteen ennen latausta: seuraava vienti saa aina uuden nimen
+      try {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([teksti], { type: 'application/octet-stream' })); a.download = nimi;
+        document.body.appendChild(a); a.click();
+        setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+      } catch (e) { klooniNaytaTila('Tallennus epäonnistui: ' + (e && e.message || e)); return; }
+      klooniNaytaTila('Tallennettu Latauksiin: <b>' + nimi + '</b>, päivän ' + klooniPvmTeksti(pvm) + ' kaikki pisteet (' + iskut.length + ' iskua, ' + nK + ' kloonia). '
+        + 'Seuraava vienti saa numeron ' + String(P[muoto] + 1).padStart(2, '0') + ', joten Bluetooth-siirto ei korvaa tätä. '
+        + (muoto === 'wpt' ? 'OziExplorerissa avaa uusin tiedosto: siinä on koko päivä, aiempia ei tarvita.'
+                           : 'Lowrance: kopioi muistikortille ja tuo Tiedostot-valikosta. Plotteri lisää pisteet, joten tuo päivältä vain uusin tiedosto.'));
+    }
+    window.addEventListener('load', function () { setTimeout(function () { try { klooniPaivitaKaikki(); } catch (e) {} }, 1500); });
 
     /* ===== VANHA SAALIS JÄLKIKÄTEEN — 22.9.2026 =====
        Saalis kirjataan päivämäärällä, ja olot haetaan sille päivälle: veden lämpö
@@ -11686,6 +12466,7 @@ lataa(eka);
         el.innerHTML = '<p class="hint">Ei vielä kirjauksia. Jokainen saalis JA nollareissu tarkentaa mallia — nollareissut ovat yhtä tärkeitä, koska ne kertovat milloin ennuste petti.</p>';
         return;
       }
+      const klD = (typeof klooniLue === 'function') ? klooniLue() : null;   // v177
       el.innerHTML = lista.slice().reverse().slice(0, 20).map(s => {
         const d = new Date(s.aika);
         // vuosi näkyviin, jos eri kuin nyt (jälkikirjaukset); 📜 = kirjattu jälkikäteen
@@ -11711,7 +12492,7 @@ lataa(eka);
           osuma = ` <span style="color:${Math.abs(ero) <= 1.5 ? 'var(--cyan)' : 'var(--amber)'};">(malli ${ennuste.toFixed(1)} m, ero ${ero >= 0 ? '+' : ''}${ero.toFixed(1)})</span>`;
         }
         return `<div style="padding:6px 0;border-bottom:1px solid rgba(30,51,80,0.5);font-size:13px;">
-          <strong style="color:var(--text);">${pvm} · ${s.laji || '?'}</strong>${s.taydennetty === false ? ` <button class="chip" onclick="saalisTaydenna(${s.id})" style="padding:1px 8px;font-size:11px;border-color:var(--amber);color:var(--amber);">✏️ Täydennä</button>` : ''}${s.pituusCm ? ' ' + s.pituusCm + ' cm' : ''}${typeof s.syvyysM === 'number' ? ' · ' + s.syvyysM.toFixed(1) + ' m' : ''}${osuma}
+          <strong style="color:var(--text);">${pvm} · ${s.laji || '?'}</strong>${s.taydennetty === false ? ` <button class="chip" onclick="saalisTaydenna(${s.id})" style="padding:1px 8px;font-size:11px;border-color:var(--amber);color:var(--amber);">✏️ Täydennä</button>` : ''}${klD ? klooniNappi(s, klD) : ''}${s.pituusCm ? ' ' + s.pituusCm + ' cm' : ''}${typeof s.syvyysM === 'number' ? ' · ' + s.syvyysM.toFixed(1) + ' m' : ''}${osuma}
           ${s.viehe ? `<br><span style="color:var(--amber);">${s.viehe}${s.vari ? ' · ' + s.vari : ''}${s.esitystapa ? ' · ' + s.esitystapa : ''}</span>` : ''}
           <br><span style="color:var(--muted);">${typeof s.vesiC === 'number' ? 'vesi ' + s.vesiC.toFixed(1) + ' °C · ' : ''}${typeof s.tuuliMs === 'number' ? 'tuuli ' + s.tuuliMs.toFixed(1) + ' m/s · ' : ''}${s.taimenkeli !== null && s.taimenkeli !== undefined ? 'taimenkeli ' + s.taimenkeli + ' %' : ''}</span>
         </div>`;
@@ -11738,7 +12519,10 @@ lataa(eka);
       // 5.10.2026 (v156)
       'taimenEhdokasLahinM','taimenEhdokasTunnus','taimenHarppausMalliM','taimenMalliVaihe',
       // 5.10.2026 (v164)
-      'pintaLtC','pintaLtLahde','pintaLtMitattu','taimenProfiiliSyvA','taimenProfiiliSyvB','taimenProfiiliLahde'];
+      'pintaLtC','pintaLtLahde','pintaLtMitattu','taimenProfiiliSyvA','taimenProfiiliSyvB','taimenProfiiliLahde',
+      // 10.10.2026 (v177): kloonipisteet — iskun sormenjälki (malli, iskuruutu) ja osuma aiempaan klooniin
+      'iskuTunnus','klooniTunnukset','klooniOsuma','klooniOsumaPisteet','klooniOsumaM',
+      'sjPohjaM','sjKaltevuus','sjAsento','sjAaltoM','sjMuotoM','sjRannastaM','sjHarppausM','sjTuuliMs','sjTuuliSuunta'];
 
     function saaliitCsv(lista) {
       return [SAALIS_KENTAT.join(';')].concat(
@@ -12541,6 +13325,7 @@ lataa(eka);
           viimeisinNopeus = speedKmh;
 
           tarkistaOttiPisteet(pos.coords.latitude, pos.coords.longitude);
+          try { klooniGps(pos.coords.latitude, pos.coords.longitude); } catch (e) {}   // v177: kloonien käynnit
         },
         (err) => {
           // GPS-virhe pysäyttää KOLME toimintoa kerralla: nopeusnäytön,
@@ -15479,7 +16264,7 @@ lataa(eka);
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v176';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v177';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -15610,6 +16395,15 @@ lataa(eka);
       Object.values(lappajarviHotspots).forEach(h => lista.push({
         lat: h.lat, lon: h.lon, t: h.name, tyyppi: 'ottipaikka'
       }));
+      /* v177: näytettävän päivän iskut ja kloonit; vain Lappajärvellä, koska kartta kattaa vain sen */
+      try {
+        const K = klooniKerros();
+        if (K && K.avain === 'lappajarvi') K.iskut.forEach(I => {
+          lista.push({ lat: I.lat, lon: I.lon, t: I.tunnus + ' ' + I.lajiNimi, tyyppi: 'isku' });
+          I.kloonit.forEach(c => lista.push({ lat: c.lat, lon: c.lon, t: c.tunnus + ' ' + c.pisteet + ' %', tyyppi: 'klooni',
+            seuraava: c.tunnus === K.seuraava, kayty: !!c.kayty, osuma: !!c.osuma }));
+        });
+      } catch (e) {}
       return lista;
     }
 
@@ -15629,18 +16423,32 @@ lataa(eka);
 
       ctx.drawImage(karttaKuva, kOffX, kOffY, karttaKuva.width * kScale, karttaKuva.height * kScale);
 
-      const varit = { lisatieto: '#ffb020', oma: '#45d3e8', ottipaikka: '#ff4d6d' };
+      const varit = { lisatieto: '#ffb020', oma: '#45d3e8', ottipaikka: '#ff4d6d', isku: '#ff3b5c', klooni: '#8b5cf6' };
+      /* v177: katkoviiva veneestä seuraavaan kloonipisteeseen (OODA: toimi); suunta ja matka kulmaan */
+      let banneri = '';
+      try {
+        const sk = viimeisinGps ? klooniSeuraava() : null;
+        if (sk && sk.I.avain === 'lappajarvi') {
+          const a = karttaPx(viimeisinGps.lat, viimeisinGps.lon), b = karttaPx(sk.c.lat, sk.c.lon);
+          const ax = a.x * kScale + kOffX, ay = a.y * kScale + kOffY, bx = b.x * kScale + kOffX, by = b.y * kScale + kOffY;
+          ctx.save(); ctx.setLineDash([8, 6]); ctx.lineWidth = 2.5; ctx.strokeStyle = '#f5b700';
+          ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke(); ctx.restore();
+          banneri = '▶ ' + sk.c.tunnus + ' · ' + klooniMatkaTeksti(sk.e) + ' · ' + sk.s + '° · ' + sk.c.pisteet + ' %';
+        }
+      } catch (e) {}
       karttaPisteet().forEach(p => {
         const pk = karttaPx(p.lat, p.lon);
         const x = pk.x * kScale + kOffX, y = pk.y * kScale + kOffY;
         if (x < -20 || y < -20 || x > w + 20 || y > h + 20) return;
         ctx.beginPath();
-        ctx.arc(x, y, p.tyyppi === 'ottipaikka' ? 7 : 5.5, 0, Math.PI * 2);
-        ctx.fillStyle = varit[p.tyyppi];
+        if (p.tyyppi === 'klooni') { const r = 8; ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); }
+        else ctx.arc(x, y, (p.tyyppi === 'ottipaikka' || p.tyyppi === 'isku') ? 7 : 5.5, 0, Math.PI * 2);
+        ctx.fillStyle = p.tyyppi === 'klooni' ? (p.osuma ? '#f5b700' : p.kayty ? '#c4b5fd' : varit.klooni) : varit[p.tyyppi];
         ctx.fill();
         ctx.lineWidth = 1.5; ctx.strokeStyle = '#040a12'; ctx.stroke();
-        // Nimi näkyviin vasta kun on zoomattu riittävästi, ettei ruutu täyty tekstistä
-        if (kScale > 0.55) {
+        if (p.seuraava) { ctx.beginPath(); ctx.arc(x, y, 13, 0, Math.PI * 2); ctx.lineWidth = 2.5; ctx.strokeStyle = '#f5b700'; ctx.stroke(); }
+        // Nimi näkyviin vasta kun on zoomattu riittävästi, ettei ruutu täyty tekstistä (v177: iskut ja kloonit aina)
+        if (kScale > 0.55 || p.tyyppi === 'klooni' || p.tyyppi === 'isku') {
           ctx.font = '11px sans-serif';
           ctx.fillStyle = '#e6f0fa';
           ctx.strokeStyle = 'rgba(4,10,18,0.85)';
@@ -15660,6 +16468,13 @@ lataa(eka);
         ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2);
         ctx.fillStyle = '#7ED957'; ctx.fill();
         ctx.lineWidth = 2; ctx.strokeStyle = '#04121f'; ctx.stroke();
+      }
+      if (banneri) {   // v177: seuraava kloonipiste vasempaan yläkulmaan, ei peity muiden nimien alle
+        ctx.font = 'bold 15px sans-serif';
+        const bw = ctx.measureText(banneri).width + 20;
+        ctx.fillStyle = 'rgba(4,10,18,0.88)'; ctx.fillRect(10, 10, bw, 30);
+        ctx.lineWidth = 1.5; ctx.strokeStyle = '#f5b700'; ctx.strokeRect(10, 10, bw, 30);
+        ctx.fillStyle = '#f5b700'; ctx.textBaseline = 'middle'; ctx.fillText(banneri, 20, 25); ctx.textBaseline = 'alphabetic';
       }
     }
 
@@ -23541,6 +24356,8 @@ function paivitaPaikkaLeima(){
       <span style="color:#ffb020;">★</span> oma merkintä lisätiedolla &nbsp;
       <span style="color:#45d3e8;">●</span> oma taimenmerkintä &nbsp;
       <span style="color:#ff4d6d;">◆</span> ottipaikka &nbsp;
+      <span style="color:#8b5cf6;">◆</span> klooni &nbsp;
+      <span style="color:#ff3b5c;">●</span> isku &nbsp;
       <span style="color:#7ED957;">◉</span> sinä
     </div>
   </div>
