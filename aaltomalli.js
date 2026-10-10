@@ -12,6 +12,7 @@
    v181: reitti vettä pitkin ja sen aalto (akReitti, akReittiAalto) päivän suunnitelmalle, veneen rajat (akVeneRajat),
    tilannekuvalle selite ja napautusteksti (akRenderoi.asteikko, akPisteTeksti).
    v185: oma sijainti veneenä ja vanana (vene.js, sama kuin tilannekuvassa) omalla kerroksellaan kartan päällä.
+   v187: venelista 9 venettä (sama kuin Beason630wa.html), valinta tunnisteen mukaan, tuntematon näkyy (akVeneRajat().huom).
    VERSIO: sivut lataavat tiedoston nimellä aaltomalli.js?v=NNN; NNN = sw.js:n VERSIO-numero. */
 function aaltokarttaAlusta(){
 "use strict";
@@ -478,21 +479,45 @@ function akKohti(deg){
    rajasta eikä veneen kyky, ja se muuttuu kokemuksen karttuessa. Säädetty arvo
    muistetaan venekohtaisesti. Raja ei ole järvikohtainen: aalto on aalto, ja
    matalan järven pienempi aalto näkyy kartassa itsestään. */
+/* v187 (10.10.2026): VENELISTA KUNTOON. Pääsovelluksessa oli 5 venettä, erillisellä Beason630wa.html-sivulla 9, ja
+   molemmat tallentavat valinnan samaan avaimeen (aaltokartta_vene). Beason-sivulla valittu Silver Shark CC 580 ei
+   ollut täällä listalla, joten valinta palasi hiljaa indeksiin 3 (Pilothouse 500): rajat olivat oikein vain sattumalta
+   (Hannun oma vene on Örnvik 500 Pilothouse 80 hv), ja kaverin veneellä suunnitelma, paluu ja kalastusraja olisi
+   laskettu väärällä veneellä ilman ilmoitusta. Nyt:
+     - sama 9 veneen lista ja samat arvot kuin Beason-sivulla (tunnisteet samat, joten valinta on yhteinen);
+     - valinta palautetaan tunnisteen mukaan; tuntematon tunniste → oletus Pilothouse 500 ja huomautus näkyviin
+       (aaltokortti, tilannekuvan valikko, akVeneRajat().huom), ei enää hiljaa;
+     - kertasiirto (Hannun valinta 10.10.): jos tallennettuna on vene, jota pääsovellus ei ennen tuntenut, valinnaksi
+       palautetaan Pilothouse 500, jolla laskelmat on tähän asti tehty.
+   Soutuvene sähkömoottorilla = Päijän 470/471 · sähkö (Hannu 10.10.). Turvarajat ja oletusrajat ovat arvioita
+   (Beason-sivulta); oma kalastusraja säädetään liukusäätimellä ja muistetaan venekohtaisesti kuten ennen. */
 var AK_VENEET = [
   { id:'paijan470', nimi:'Päijän 470/471 · sähkö', turva:0.30, kalaOletus:0.15 },
   { id:'paijan520', nimi:'Päijän 520 · 10 hv',     turva:0.40, kalaOletus:0.18 },
   { id:'sunbuster', nimi:'Sun Buster · 30 hv',      turva:0.50, kalaOletus:0.20 },
   { id:'ph500',     nimi:'Pilothouse 500 · 80 hv',  turva:0.60, kalaOletus:0.20 },
-  { id:'dorado100', nimi:'Silver Dorado · 100 hv',  turva:0.60, kalaOletus:0.20 }
+  { id:'dorado100', nimi:'Silver Dorado · 100 hv',  turva:0.60, kalaOletus:0.20 },
+  { id:'shark580',  nimi:'Silver Shark CC 580 · 100 hv', turva:0.70, kalaOletus:0.25 },
+  { id:'faster525', nimi:'Faster 525 CC',           turva:0.60, kalaOletus:0.20 },
+  { id:'falconc7',  nimi:'Falcon C 7 · 115 hv',     turva:0.80, kalaOletus:0.30 },
+  { id:'beason630', nimi:'Beason 630 WA · 150 hv+', turva:1.00, kalaOletus:0.40 }
 ];
+var AK_VENE_OLETUS = 'ph500', AK_VENEET_V186 = ['paijan470', 'paijan520', 'sunbuster', 'ph500', 'dorado100'];
+var akVeneTuntematon = null, akVeneSiirretty = null;   // v187: huomautusta varten
+function akVeneOletus(){ for (var n = 0; n < AK_VENEET.length; n++) if (AK_VENEET[n].id === AK_VENE_OLETUS) return AK_VENEET[n]; return AK_VENEET[0]; }
 var AK_LS_RAJAT = 'aaltokartta_kalastusrajat', AK_LS_VENE = 'aaltokartta_vene';
 function akLueRajat(){
   try { var r = JSON.parse(localStorage.getItem(AK_LS_RAJAT));
         return (r && typeof r === 'object') ? r : {}; } catch(e){ return {}; }
 }
 function akVene(){
-  var i = $("akVene") ? $("akVene").selectedIndex : 3;
-  return AK_VENEET[i] || AK_VENEET[3];
+  var i = $("akVene") ? $("akVene").selectedIndex : -1;
+  return AK_VENEET[i] || akVeneOletus();   // v187: oletus tunnisteen mukaan, ei indeksillä
+}
+function akVeneHuomTeksti(){   // v187: miksi valittu vene ei ole tallennettu (tai tyhjä)
+  if (akVeneTuntematon) return 'Tallennettua venettä "' + akVeneTuntematon + '" ei ole listalla, joten käytetään ' + akVeneOletus().nimi.split(' · ')[0] + '. Valitse vene aallonkorkeuskortista.';
+  if (akVeneSiirretty) return 'Vene palautettiin Pilothouse 500:ksi, jolla laskelmat on tähän asti tehty (Beason-sivulla oli valittu ' + akVeneSiirretty + '). Vaihda tarvittaessa.';
+  return '';
 }
 function akKalaRaja(){
   var v = akVene(), r = akLueRajat();
@@ -2983,7 +3008,7 @@ window.akPisteTeksti = function(lat, lon){
   } catch (e) { return null; }
   finally { akViime = t.viime; akTila = t.tila; akValittu = t.sel; }
 };
-window.akVeneRajat = function(){ var v = akVene(); return { vene: v.nimi, raja: akKalaRaja(), turva: v.turva }; };
+window.akVeneRajat = function(){ var v = akVene(); return { vene: v.nimi, raja: akKalaRaja(), turva: v.turva, id: v.id, huom: akVeneHuomTeksti() }; };   // v187: + id, huom
 
 var akReittiMuisti = {};
 window.akReitti = function(avain, lat1, lon1, lat2, lon2){
@@ -3235,11 +3260,31 @@ $("akKorosta").addEventListener("change", function(){
     o.textContent = v.nimi + " · turva " + v.turva.toFixed(2).replace(".", ",") + " m";
     sel.appendChild(o);
   });
-  var i = 3;
-  try { var t = localStorage.getItem(AK_LS_VENE);
-        var kk = AK_VENEET.map(function(v){ return v.id; }).indexOf(t);
-        if (kk >= 0) i = kk; } catch(e){}
+  // v187: valinta tunnisteen mukaan; kertasiirto ja tuntematon tunniste näkyviin (ks. AK_VENEET)
+  var ids = AK_VENEET.map(function(v){ return v.id; }), i = ids.indexOf(AK_VENE_OLETUS), t = null;
+  try {
+    t = localStorage.getItem(AK_LS_VENE);
+    if (!localStorage.getItem('aaltokartta_vene_v187')){
+      if (t && AK_VENEET_V186.indexOf(t) < 0){
+        var vt = AK_VENEET.filter(function(v){ return v.id === t; })[0];
+        akVeneSiirretty = vt ? vt.nimi.split(' · ')[0] : t;
+        t = AK_VENE_OLETUS; localStorage.setItem(AK_LS_VENE, t);
+      }
+      localStorage.setItem('aaltokartta_vene_v187', '1');
+    }
+  } catch(e){}
+  if (t){ var kk = ids.indexOf(t); if (kk >= 0) i = kk; else akVeneTuntematon = t; }
   sel.selectedIndex = i;
+  function naytaVeneHuom(){
+    var el = $("akVeneHuom"), tx = akVeneHuomTeksti();
+    if (!el && tx && !akPiilorunko && $("akRaja") && $("akRaja").parentNode){
+      el = document.createElement('p'); el.id = 'akVeneHuom';
+      el.style.cssText = 'margin:6px 0 0;font-size:.82rem;line-height:1.35;color:#8a5a00;background:#fff4dc;border:1px solid #f0c36d;border-radius:6px;padding:6px 8px';
+      $("akRaja").parentNode.parentNode.insertBefore(el, $("akRaja").parentNode.nextSibling);
+    }
+    if (el){ el.textContent = tx; el.style.display = tx ? '' : 'none'; }
+  }
+  naytaVeneHuom();
 
   function naytaRaja(){
     var r = akKalaRaja();
@@ -3251,6 +3296,7 @@ $("akKorosta").addEventListener("change", function(){
 
   sel.addEventListener("change", function(){
     try { localStorage.setItem(AK_LS_VENE, akVene().id); } catch(e){}
+    akVeneTuntematon = null; akVeneSiirretty = null; naytaVeneHuom();   // v187: käyttäjä valitsi
     naytaRaja(); akPiirraJana(); piirra();
   });
   $("akRaja").addEventListener("input", function(){

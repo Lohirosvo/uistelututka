@@ -2385,14 +2385,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=186" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=186" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=186" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=186" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=186" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=186" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=186" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=186" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=187" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=187" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=187" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=187" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=187" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=187" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=187" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=187" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     // Viimeisimmät arvot saaliskirjausta varten (päivittyvät GPS:stä ja analyysistä).
     let viimeisinGps = null;      // { lat, lon }
@@ -12053,7 +12053,7 @@ function sumuriskiAlusta(){
       const sel = '<select onchange="suunnTallennaHamara(this.value)" style="font:inherit;font-size:13px;padding:2px 4px;border-radius:6px;background:var(--panel-alt);color:var(--text);border:1px solid var(--line);">'
         + SUUNN_HAMARAT.map(x => '<option value="' + x.v + '"' + (x.v === S.as.hamara ? ' selected' : '') + '>' + x.nimi + ' (' + x.selite + ')</option>').join('') + '</select>';
       const ik = S.ik ? 'klo ' + suunnKlo(S.ik.alkuMin) + '–' + suunnKlo(S.ik.loppuMin) : 'aurinko ei nouse rajan yli tänä päivänä';
-      const ve = S.rajat ? 'Vene ' + String(S.rajat.vene).split(' · ')[0] + ': kalastusraja ' + n2(S.rajat.raja) + ' m, ajoraja ' + n2(S.rajat.turva) + ' m (aallonkorkeuskortin valinta).' : 'Veneen rajat puuttuvat (aallonkorkeusmalli ei ole vielä latautunut).';
+      const ve = S.rajat ? 'Vene ' + String(S.rajat.vene).split(' · ')[0] + ': kalastusraja ' + n2(S.rajat.raja) + ' m, ajoraja ' + n2(S.rajat.turva) + ' m (aallonkorkeuskortin valinta).' + (S.rajat.huom ? ' <b style="color:#f5b700">' + S.rajat.huom + '</b>' : '') : 'Veneen rajat puuttuvat (aallonkorkeusmalli ei ole vielä latautunut).';   // v187: + huom
       const L = S.avain && typeof lahtopaikkaLue === 'function' ? lahtopaikkaLue(S.avain) : null;
       const nappi = (t, f) => ' <button type="button" class="chip" style="padding:2px 9px;font-size:12px;" onclick="' + f + '">' + t + '</button>';
       const la = L ? '⚓ Lähtöpaikka asetettu ' + new Date(L.aika).toLocaleDateString('fi-FI') + (L.tapa === 'gps' ? ' (GPS)' : ' (kartalta)') + '.' + nappi('Nykyinen sijainti', 'suunnLahtoNykyinen()') + nappi('Poista', 'suunnLahtoPoista()')
@@ -12590,7 +12590,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v186';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v187';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -20573,7 +20573,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=186';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=187';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })

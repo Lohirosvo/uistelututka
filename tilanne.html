@@ -70,6 +70,8 @@
     syvyyskartta piirtävät nyt saman veneen ja vanan kuin tämä sivu. Koodi siirretty sanasta sanaan; tämän sivun kuva on
     bitilleen sama kuin v184:ssä (testattu). Vana on välilehden yhteinen (sessionStorage 'ut_vana', v183:n
     'tilanne_vana' luetaan kerran), joten etusivulla kuljettu reitti jatkuu tilannekuvassa ja päinvastoin.
+  v187 (10.10.2026): VENELISTA (aaltomalli.js). Valikon alaosassa näkyy, millä veneellä rajat lasketaan, ja huomautus,
+    jos tallennettua venettä ei tunnistettu.
   v186 (10.10.2026): KUHA- JA TAIMENPAIKAT. Hannu valitsi "Ehdokkaat tilannekuvaan". Etusivun Analysoi tallentaa aaltokortin
     kuha- ja taimenmerkit perusteluineen kirjauspohjaan (P.kartta); täällä samat merkit ja napautuksesta perustelut
     todisteen tasoineen. Kytkimet tilavalikossa. Samassa kohdassa olevat merkit (esim. kuhapaikka ja ottipaikka)
@@ -245,18 +247,18 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=186" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=186" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=186" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=186" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=186" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=186" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=186" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=186" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=187" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=187" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=187" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=187" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=187" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=187" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=187" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=187" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v186';
+    const APP_VERSIO = 'v187';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
@@ -991,7 +993,15 @@
       const huom = o.map(x => x.K ? (x.laji === 'kuha' ? 'Kuha: oranssi = oma paikka, valkoinen numero = ehdokas' : 'Taimen: sininen = nimetty paikka, valkoinen T = ehdokas, katkoviiva V = ensemble-vaihtoehto')
           + ' (' + hetkiTeksti(x.K.hetki) + ')' : (x.laji === 'kuha' ? 'Kuhapaikat: ' : 'Taimenpaikat: ') + x.syy);
       return '<div class="huom" style="margin-top:4px;color:var(--text)">Merkit etusivun analyysista</div>' + o.map(nappi).join('')
-        + '<div class="huom">' + huom.join('.<br>') + '. Napauta merkkiä: perustelut.</div>';
+        + '<div class="huom">' + huom.join('.<br>') + '. Napauta merkkiä: perustelut.</div>' + veneValikko();
+    }
+    // v187: millä veneellä rajat lasketaan (sama valinta kuin etusivun aallonkorkeuskortissa)
+    function veneValikko() {
+      const v = window.akVeneRajat ? window.akVeneRajat() : null;
+      if (!v) return '';
+      return '<div class="huom" style="margin-top:4px;color:var(--text)">Vene: ' + String(v.vene).split(' · ')[0] + '</div>'
+        + '<div class="huom">Kalastusraja ' + n2(v.raja) + ' m, ajoraja ' + n2(v.turva) + ' m. Vaihto etusivun aallonkorkeuskortista.'
+        + (v.huom ? '<br><b style="color:#f5b700">' + v.huom + '</b>' : '') + '</div>';
     }
     function kytkeMerkit(v) {
       v.querySelectorAll('button[data-merkit]').forEach(b => { b.onclick = () => {
