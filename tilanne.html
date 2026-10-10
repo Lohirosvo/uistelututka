@@ -70,6 +70,10 @@
     syvyyskartta piirtävät nyt saman veneen ja vanan kuin tämä sivu. Koodi siirretty sanasta sanaan; tämän sivun kuva on
     bitilleen sama kuin v184:ssä (testattu). Vana on välilehden yhteinen (sessionStorage 'ut_vana', v183:n
     'tilanne_vana' luetaan kerran), joten etusivulla kuljettu reitti jatkuu tilannekuvassa ja päinvastoin.
+  v191 (10.10.2026): ALAPALKKI PÄIVITYKSEN JÄLKEEN. Hannun puhelimessa alapalkki jäi kolmesti (16.08, 20.39, 21.09) heti
+    päivityksen jälkeen Androidin navigointipalkin alle; sovelluksen sulkeminen ja avaaminen korjasi. Etusivun alavalikko
+    (position: fixed; bottom: 0) näkyi samaan aikaan oikein. Runko kiinnitetään nyt samoin (position: fixed, ylä- ja
+    alareuna näkymän mukaan) eikä 100dvh:lla, ja alareuna nousee env(safe-area-inset-bottom):n verran (Chromen ohje).
   v190 (10.10.2026): vain versionumero (korjaus etusivulla: syysohjeen reunat lasketaan uudelleen, kun ennuste on ladattu).
   v189 (10.10.2026): SYKSYN OHJE. Taimenpaikkoihin tulee sekoittuneessa 4–12 °C:n vedessä tuulen pakkaamat reunat (R-merkit,
     tyyppi 'reuna') perusteluineen; piirto ja napautus samoin kuin muilla merkeillä (v186).
@@ -89,7 +93,10 @@
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
                  font-family: 'Barlow Condensed', system-ui, sans-serif; overscroll-behavior: none; }
-    body { display: flex; flex-direction: column; height: 100dvh; }
+    /* v191: runko kiinnitetään näkymään kuten etusivun alavalikko (position: fixed), ei 100dvh:lla. Hannun puhelimessa
+       alapalkki jäi päivityksen jälkeen kolmesti navigointipalkin alle, kun etusivun kiinnitetty valikko näkyi samaan aikaan
+       oikein. Alareuna nousee Chromen ohjeen mukaan env(safe-area-inset-bottom):n verran (Chrome 135→ "chin"). */
+    body { display: flex; flex-direction: column; position: fixed; top: 0; left: 0; right: 0; bottom: env(safe-area-inset-bottom, 0px); height: auto; }
     button, select { font: inherit; color: inherit; }
     #yla { flex: 0 0 auto; display: flex; gap: 6px; align-items: center; padding: calc(6px + env(safe-area-inset-top)) 8px 6px;
            background: var(--panel); border-bottom: 1px solid var(--line); }
@@ -118,7 +125,7 @@
     #tietoSulje { position: absolute; right: 4px; top: 4px; width: 36px; height: 36px; border: 0; background: transparent; color: var(--muted); font-size: 20px; }
     #ilmoitus { position: absolute; left: 50%; top: 56px; transform: translateX(-50%); background: var(--vihrea); color: #04121f;
                 border-radius: 10px; padding: 8px 14px; font-size: 18px; font-weight: 700; display: none; white-space: nowrap; }
-    #ala { flex: 0 0 auto; display: flex; gap: 8px; align-items: center; padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    #ala { flex: 0 0 auto; display: flex; gap: 8px; align-items: center; padding: 6px 8px 6px;   /* v191: alareunan vara rungossa */
            background: var(--panel); border-top: 1px solid var(--line); }
     #lukemat { flex: 1 1 auto; min-width: 0; line-height: 1.05; }
     #nopeus { font-size: 30px; font-weight: 700; color: var(--vihrea); }
@@ -177,7 +184,7 @@
       #tuntiTeksti small { font-size: 11px; }
       #alue { flex: 1 1 auto; min-width: 0; }
       #ala { flex: 0 0 var(--sarake); flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 10px; overflow: hidden;
-             padding: calc(8px + env(safe-area-inset-top)) calc(8px + env(safe-area-inset-right)) calc(102px + env(safe-area-inset-bottom)) 8px;
+             padding: calc(8px + env(safe-area-inset-top)) calc(8px + env(safe-area-inset-right)) 102px 8px;   /* v191: alareunan vara rungossa */
              border-top: 0; border-left: 1px solid var(--line); }
       #lukemat { flex: 1 1 auto; min-height: 0; overflow: hidden; }
       #nopeus { display: block; font-size: 42px; line-height: 1; }
@@ -253,18 +260,18 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=190" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=190" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=190" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=190" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=190" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=190" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=190" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=190" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=191" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=191" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=191" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=191" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=191" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=191" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=191" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=191" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v190';
+    const APP_VERSIO = 'v191';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
