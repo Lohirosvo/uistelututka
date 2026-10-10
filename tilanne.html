@@ -21,7 +21,18 @@
       vektoreina näytön tarkkuudella. Siirto ja zoomaus eivät laske mallia uudelleen.
     - Paikannus käynnistyy sivun auetessa ja näyttö pidetään päällä (Wake Lock). Selain keskeyttää
       paikannuksen, kun näyttö sammuu tai sivu on taustalla; sitä ei web-sovelluksessa voi kiertää.
-  TULOSSA: Kala kiinni tälle sivulle (v180, täysi kirjaus), suunnitelman rajaukset (v181).
+  v180 (10.10.2026): KALA KIINNI tällä sivulla, täysi kirjaus (Hannu: "jatketaan" v179-suunnitelman mukaan).
+    - Yksi napautus tallentaa heti saman rivin kuin etusivun Kala kiinni: rivi rakennetaan samalla funktiolla
+      (kirjaus.js: rakennaSaalis). Etusivun tila (sää, vesi, kyselyn vastaukset, ennusteet, suositukset,
+      harppaus- ja lämpötieto) tulee kirjauspohjasta, jonka etusivu tallentaa jäädessään taustalle; aika, GPS,
+      nopeus, veneen kohdan pohja (syvyys.js) ja mallin arviot lasketaan tässä kirjaushetkellä.
+    - Laji on viimeksi valittu (napissa näkyy). Kirjauksen jälkeen lajin voi vaihtaa yhdellä napautuksella ja
+      kirjauksen poistaa (kaksi napautusta). Pituus ja syvyys täydennetään etusivun saalislistasta (✏️ Täydennä).
+    - Kloonit samalla koodilla kuin etusivulla (kloonit.js): osuma aiempaan klooniin ja uudet kloonit.
+    - Rivillä lisäksi kirjausLahde 'tilanne', kirjauspohjaAika ja gpsIkaS, jotta lähde ja tuoreus näkyvät.
+    - Syvyyslukema sama kuin etusivulla (MML + oma luotaus, syvyys.js), päivän saaliit kartalla, ja avoimeen
+      uistelureissuun (etusivun Aloita uistelu) kirjautuu GPS-piste kerran minuutissa myös tällä sivulla.
+  TULOSSA: suunnitelman rajaukset (v181).
   -->
   <style>
     :root { --bg:#060B14; --panel:#0E1B2E; --panel-alt:#13253D; --line:#1E3350; --text:#E7EEF6; --muted:#7E93AC;
@@ -48,7 +59,7 @@
                 background: rgba(4,10,18,.88); border: 1.5px solid var(--kulta); color: var(--kulta); border-radius: 10px;
                 padding: 6px 12px; font-size: 19px; font-weight: 700; white-space: nowrap; display: none; cursor: pointer; }
     #tila { position: absolute; left: 8px; bottom: 8px; background: rgba(4,10,18,.8); color: var(--muted); border-radius: 8px;
-            padding: 4px 8px; font-size: 13px; max-width: calc(100% - 16px); }
+            padding: 4px 8px; font-size: 13px; max-width: calc(100% - 110px); }
     #tieto { position: absolute; left: 8px; right: 8px; bottom: 8px; background: rgba(14,27,46,.97); border: 1px solid var(--line);
              border-radius: 12px; padding: 10px 40px 10px 12px; font-size: 15px; line-height: 1.35; display: none; max-height: 45%; overflow: auto; }
     #tieto b { color: var(--text); }
@@ -61,8 +72,30 @@
     #nopeus { font-size: 30px; font-weight: 700; color: var(--vihrea); }
     #nopeus small, #kurssi small { font-size: 14px; color: var(--muted); font-weight: 600; }
     #kurssi { font-size: 22px; font-weight: 700; margin-left: 6px; }
-    #lisarivi { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #lisarivi { font-size: 13px; color: var(--muted); line-height: 1.2; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
     #virhe { display: none; position: absolute; inset: 0; padding: 24px; background: var(--bg); color: var(--text); font-size: 18px; line-height: 1.4; }
+    /* v180: Kala kiinni. Iso nappi oikeassa alakulmassa (peukalo), ei kartan päällä olevien paneelien alla. */
+    #kalaNappi { position: absolute; right: 10px; bottom: 54px; width: 76px; height: 76px; border-radius: 18px; border: 2px solid #fff3;
+                 background: #D7263D; color: #fff; font-weight: 700; line-height: 1; display: flex; flex-direction: column; align-items: center;
+                 justify-content: center; gap: 3px; box-shadow: 0 3px 12px rgba(0,0,0,.55); z-index: 5; cursor: pointer; }
+    #kalaNappi:active { transform: scale(.96); }
+    #kalaNappi .iso { font-size: 25px; }
+    #kalaNappi .pieni { font-size: 15px; letter-spacing: .02em; }
+    #kalaNappi #kalaLaji { font-size: 13px; font-weight: 600; opacity: .9; }
+    #tieto { right: 94px; }
+    #kirjaus { position: absolute; left: 8px; right: 94px; bottom: 8px; background: rgba(14,27,46,.98); border: 1.5px solid var(--vihrea);
+               border-radius: 12px; padding: 9px 10px; font-size: 15px; line-height: 1.35; display: none; z-index: 4; max-height: 70%; overflow: auto; }
+    #kirjaus .otsikko { font-size: 19px; font-weight: 700; color: var(--vihrea); }
+    #kirjaus .hint { color: var(--muted); font-size: 13px; }
+    #kirjaus .lajit { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 6px; }
+    #kirjaus .laji { min-height: 40px; padding: 0 11px; border-radius: 20px; border: 1px solid var(--line); background: var(--panel-alt);
+                     font-size: 16px; font-weight: 600; }
+    #kirjaus .laji.valittu { border-color: var(--vihrea); color: #04121f; background: var(--vihrea); }
+    #kirjaus .rivi { display: flex; gap: 8px; margin-top: 8px; }
+    #kirjaus .rivi button { flex: 1 1 0; min-height: 42px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-alt); font-size: 16px; font-weight: 700; }
+    #kirjaus .rivi .poista { color: #ff8a80; border-color: #5b2a2a; }
+    #kirjaus.virhe { border-color: var(--puna); }
+    #kirjaus.virhe .otsikko { color: var(--puna); }
   </style>
 </head>
 <body>
@@ -83,6 +116,8 @@
     <div id="ilmoitus"></div>
     <div id="tila">Käynnistetään…</div>
     <div id="tieto"><button id="tietoSulje" aria-label="Sulje">✕</button><div id="tietoSisalto"></div></div>
+    <div id="kirjaus" aria-live="polite"></div>
+    <button id="kalaNappi" aria-label="Kala kiinni: kirjaa saalis"><span class="iso">🐟</span><span class="pieni">KALA</span><span id="kalaLaji">taimen</span></button>
     <div id="virhe"></div>
   </div>
 
@@ -110,15 +145,18 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=179" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=179" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="jarvet.js?v=179" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="aaltomalli.js?v=179" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=179" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=180" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=180" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=180" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=180" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=180" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="aaltomalli.js?v=180" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=180" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v179';
+    const APP_VERSIO = 'v180';
+    window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
     const TILAT = [['aalto', 'Aalto'], ['syvyys', 'Syvyys'], ['virtaus', 'Virta'], ['murtuva', 'Murtuva']];
@@ -128,7 +166,7 @@
     const kk = n => String(n).padStart(2, '0');
     const ilmansuunta = deg => ['P', 'KO', 'I', 'KA', 'E', 'LO', 'L', 'LU'][Math.round((((deg % 360) + 360) % 360) / 45) % 8];   // mistä tuulee
 
-    let as = { tila: 'aalto', kloonit: true, yo: false };
+    let as = { tila: 'aalto', kloonit: true, yo: false, laji: null };
     try { as = Object.assign(as, JSON.parse(localStorage.getItem(AS_LS) || '{}')); } catch (e) {}
     const tallennaAs = () => { try { localStorage.setItem(AS_LS, JSON.stringify(as)); } catch (e) {} };
 
@@ -222,8 +260,17 @@
         });
       }
 
-      // kloonit ja iskut
       const K = (as.kloonit && kerros && kerros.avain === avain) ? kerros : null;
+      // päivän saaliit (v180): pieni pallo lajin värillä; saalis, jolla on klooni-isku, näkyy iskuna (punainen pallo)
+      saaliit.forEach(x => {
+        if (K && K.iskut.some(I => I.lat === x.lat && I.lon === x.lon)) return;
+        const p = naytolle(x.lat, x.lon); if (!nakyy(p, 40)) return;
+        ctx.beginPath(); ctx.arc(p.x, p.y, 6.5, 0, 6.2832); ctx.fillStyle = 'rgba(255,255,255,.95)'; ctx.fill();
+        ctx.beginPath(); ctx.arc(p.x, p.y, 4.5, 0, 6.2832); ctx.fillStyle = LAJIVARI[x.laji] || '#9aa7b8'; ctx.fill();
+        if (nimet) teksti((KLOONI_LAJINIMI[x.laji] || x.laji || '?') + ' ' + klooniKello(Date.parse(x.aika)), p.x + 9, p.y, '#ffe0a3', 12);
+      });
+
+      // kloonit ja iskut
       if (K) {
         ctx.save();
         K.iskut.forEach(I => {
@@ -342,6 +389,193 @@
         el.style.display = 'block';
       } else el.style.display = 'none';
     }
+    /* Kloonien laskenta (kloonit.js) tarvitsee tämän sivun tilan: järvi, taimenen harppauskenttä pohjasta. */
+    if (typeof KLOONI_SIVU === 'object') {
+      KLOONI_SIVU.avainNyt = () => avain;
+      KLOONI_SIVU.taimenKentta = () => { const P = kirjauspohjaLue(); return (P && P.taimenKentta) ? taimenKenttaPohjasta(P) : null; };
+      KLOONI_SIVU.laskettu = () => { paivitaKerros(); paivitaSaaliit(); pyydaPiirto(); };
+    }
+
+    /* ---------- syvyys: sama sääntö ja lähteet kuin etusivulla (syvyys.js) ---------- */
+    // Järven syvyysrajaukset etusivun paikkalistasta (kirjauspohja); ilman pohjaa ei rajauksia (kuten etusivulla useimmilla järvillä)
+    let pohjaVali = { t: 0, P: null };   // kirjauspohja syvyysrajauksiin (luetaan enintään 10 s välein; GPS päivittää lukemaa joka sekunti)
+    function pohjaRajauksiin() { if (Math.abs(Date.now() - pohjaVali.t) > 10e3) pohjaVali = { t: Date.now(), P: kirjauspohjaLue() }; return pohjaVali.P; }
+    function syvyysEhto(av) {
+      const P = pohjaRajauksiin();
+      if (P && P.avain === av && P.syvyysEhto) return Object.assign({}, P.syvyysEhto, { avain: av });
+      const e = (P && P.syvyysEhdot && P.syvyysEhdot[av]) || {};
+      return { avain: av, syvyysTuntematon: !!e.syvyysTuntematon, syvyysOsittain: !!e.syvyysOsittain };
+    }
+    function syvyysTeksti(lat, lon, lahde) {
+      const sy = syvyysJarvella(lat, lon, 60, syvyysEhto(avain));
+      if (!sy || !isFinite(sy.min)) return '';
+      return 'syvyys ' + n1(sy.min) + (sy.max - sy.min >= 0.5 ? '–' + n1(sy.max) : '') + ' m' + (lahde && sy.lahde ? ' (' + sy.lahde + ')' : '');
+    }
+
+    /* ---------- taimenen harppauskenttä kirjauspohjan syötteestä (sama malli kuin etusivulla) ---------- */
+    let tkValimuisti = { aika: null, tulos: null };
+    function taimenKenttaPohjasta(P) {
+      const tk = P.taimenKentta;
+      if (!tk || !tk.syote || typeof window.akTaimenKentta !== 'function') return null;
+      if (tkValimuisti.aika !== P.aika) {
+        let K = null; try { K = window.akTaimenKentta(tk.syote); } catch (e) { K = null; }
+        tkValimuisti = { aika: P.aika, tulos: (K && K.tila === 'ok') ? { avain: tk.avain, hetkiMs: tk.hetkiMs, K } : null };
+      }
+      return tkValimuisti.tulos;
+    }
+
+    /* ---------- KALA KIINNI (v180) ---------- */
+    const LAJIVARI = { taimen: '#ff6b7d', jarvilohi: '#ff9e80', kirjolohi: '#f48fb1', kuha: '#e6ee9c', hauki: '#81c784', ahven: '#ffb74d', muu: '#9aa7b8' };
+    let saaliit = [];          // päivän saaliit kartalle
+    let kirjattu = null;       // viimeisin tällä sivulla kirjattu rivi (lajin vaihto ja poisto)
+    function paivitaSaaliit() {
+      try {
+        const pv = klooniPvm(Date.now());
+        saaliit = lataaSaaliit().filter(x => x && !x.nollareissu && typeof x.lat === 'number' && typeof x.lon === 'number' && x.aika && klooniPvm(Date.parse(x.aika)) === pv);
+      } catch (e) { saaliit = []; }
+    }
+    function lajiNyt() {
+      if (as.laji && SAALIS_LAJIT.some(x => x.v === as.laji)) return as.laji;
+      const P = kirjauspohjaLue();
+      return (P && P.kalaLaji && SAALIS_LAJIT.some(x => x.v === P.kalaLaji)) ? P.kalaLaji : 'taimen';
+    }
+    const lajiNimi = v => (SAALIS_LAJIT.find(x => x.v === v) || { l: v || '?' }).l;
+    function paivitaKalaNappi() { $('kalaLaji').textContent = lajiNimi(lajiNyt()).toLowerCase(); }
+    const ikaTeksti = min => min < 60 ? min + ' min' : Math.floor(min / 60) + ' h ' + (min % 60) + ' min';
+
+    function kalaKiinni() {
+      const nyt = new Date(), t = nyt.getTime();
+      const gps = (oma && typeof oma.lat === 'number' && typeof oma.lon === 'number') ? oma : null;
+      // järvi: GPS:n mukaan, muuten näytöllä oleva
+      const kohde = (gps && window.akJarviPisteessa && window.akJarviPisteessa(gps.lat, gps.lon)) || avain;
+      const J = window.UT_JARVET || {};
+      const pk = kirjauspohjaKirjaukseen(kohde, t, kohde && J[kohde] ? J[kohde].nimi : null);
+      const P = pk.P;
+      if (pk.kelpaa && P.taimenKentta) { const tk = taimenKenttaPohjasta(P); P.taimenKentta = tk || null; }
+      const ehto = syvyysEhto(kohde);
+      let snap;
+      try {
+        snap = rakennaSaalis(P, {
+          nyt, nollareissu: false,
+          lat: gps ? gps.lat : null,
+          lon: gps ? gps.lon : null,
+          nopeusKmh: gps && typeof gps.kmh === 'number' ? Number(gps.kmh.toFixed(1)) : null,
+          avain: kohde,
+          veneella: dMalli => (gps && t - gps.aika <= VENE_GPS_MAX_MS) ? taimenVeneellaPohjasta(syvyysJarvella(gps.lat, gps.lon, VENE_SADE_M, ehto), dMalli) : null
+        });
+      } catch (e) {
+        // viimeinen varmistus: aika, paikka ja laji talteen joka tapauksessa
+        snap = rakennaSaalis(kirjauspohjaTyhja(kohde && J[kohde] ? J[kohde].nimi : null), { nyt, nollareissu: false, lat: gps ? gps.lat : null, lon: gps ? gps.lon : null, nopeusKmh: null, avain: kohde });
+        pk.kelpaa = false; pk.syy = 'virhe kirjauspohjassa (' + (e && e.message || e) + ')';
+      }
+      snap.laji = lajiNyt();
+      snap.taydennetty = false;
+      snap.kirjausLahde = 'tilanne';
+      snap.kirjauspohjaAika = pk.kelpaa ? P.aika : null;
+      snap.gpsIkaS = gps ? Math.max(0, Math.round((t - gps.aika) / 1000)) : null;
+      const lista = lataaSaaliit(); lista.push(snap);
+      const ok = tallennaSaaliit(lista);
+      try { if (navigator.vibrate) navigator.vibrate(ok ? 180 : [100, 80, 100, 80, 300]); } catch (e) {}
+      if (!ok) { naytaKirjaus(null, pk, false); return null; }
+      kirjattu = snap;
+      if (kohde && kohde !== avain) valitseJarvi(kohde, false);   // kirjausjärvi näkyviin (kloonit lasketaan sille)
+      naytaKirjaus(snap, pk, true);
+      klooniKirjauksesta(snap);
+      saalisMalliTaydennys(snap);   // mallin arviot ja veden liike saaliin kohdalta, kuten etusivulla
+      paivitaSaaliit(); pyydaPiirto();
+      return snap;
+    }
+
+    // Kloonit: osuma aiempaan klooniin (kaikki lajit), sitten uudet kloonit kohdelajeille (sama kuin etusivun klooniIskusta)
+    function klooniKirjauksesta(snap) {
+      let alku = '';
+      let os = null; try { os = klooniOsumaTarkistus(snap); } catch (e) {}
+      if (os) alku = '🐟 <b>Osuma</b>: ' + klooniMatkaTeksti(os.e) + ' kloonista ' + os.c.tunnus + ' (' + os.c.pisteet + ' %, isku ' + os.I.tunnus + '). ';
+      if (!KLOONI_LAJIT.includes(snap.laji)) { kirjausKlooni(alku); if (os) { paivitaKerros(); pyydaPiirto(); } return; }
+      if (typeof snap.lat !== 'number') { kirjausKlooni(alku + 'Kloonit: ei sijaintia.'); return; }
+      kirjausKlooni(alku + '🎯 Lasketaan kloonipisteitä…');
+      klooniLaske(snap).then(r => {
+        // laskennan aikana kirjaus poistettiin tai laji vaihtui lajiin, joka ei käynnistä klooneja: isku pois
+        if (!lataaSaaliit().some(x => x && x.id === snap.id)) { try { klooniSaalisPoistettu(snap.id); } catch (e) {} paivitaKerros(); pyydaPiirto(); return; }
+        if (r.ok && !KLOONI_LAJIT.includes(snap.laji)) {
+          try { klooniLajiMuutos(snap); } catch (e) {}
+          paivitaKerros(); pyydaPiirto();
+          if (kirjattu === snap) kirjausKlooni('Kloonit poistettu: ' + (KLOONI_LAJINIMI[snap.laji] || snap.laji) + ' ei käynnistä klooneja.');
+          return;
+        }
+        if (kirjattu !== snap) return;
+        if (!r.ok) { kirjausKlooni(alku + 'Kloonit: ' + r.syy + '.'); return; }
+        const I = r.isku, n = I.kloonit.length, km = klooniN1(I.sadeM / 1000).replace(',0', '');
+        paivitaKerros();
+        const s = kerros && kerros.seur;
+        kirjausKlooni(alku + (n
+          ? '🎯 <b>' + I.tunnus + '</b>: ' + n + ' kloonia ' + km + ' km säteellä' + (s ? '. Seuraavaksi <b>' + s.c.tunnus + '</b> ' + klooniMatkaTeksti(s.e) + ' ' + klooniKohti(s.s) + ' (' + s.s + '°), ' + s.c.pisteet + ' %.' : '.')
+          : '🎯 <b>' + I.tunnus + '</b>: ei kloonia ' + km + ' km säteellä rajalla ' + I.kynnys + ' %.'));
+        pyydaPiirto();
+      }).catch(e => kirjausKlooni(alku + 'Kloonit: virhe ' + (e && e.message || e)));
+    }
+
+    /* Kirjauspaneeli: vahvistus, lajin vaihto, poisto. Sulkeutuu itsestään 30 s kuluttua viimeisestä napautuksesta. */
+    let kirjausAj = null, poistoT = 0;
+    function kirjausAjastin() { clearTimeout(kirjausAj); kirjausAj = setTimeout(suljeKirjaus, 30000); }
+    function suljeKirjaus() { $('kirjaus').style.display = 'none'; clearTimeout(kirjausAj); }
+    function kirjausKlooni(html) { const el = document.getElementById('kirjausKlooni'); if (el) el.innerHTML = html || ''; }
+    function naytaKirjaus(snap, pk, ok) {
+      const el = $('kirjaus');
+      el.classList.toggle('virhe', !ok);
+      $('tieto').style.display = 'none';
+      if (!ok) {
+        el.innerHTML = '<div class="otsikko">⚠ Tallennus epäonnistui</div><div>Selaimen muisti ei ottanut kirjausta vastaan. Kirjaa aika ja paikka muualle.</div>'
+          + '<div class="rivi"><button id="kirjausSulje">Sulje</button></div>';
+        el.style.display = 'block'; $('kirjausSulje').onclick = suljeKirjaus; return;
+      }
+      const t = Date.parse(snap.aika);
+      const tiedot = [snap.lat !== null ? (typeof oma.tarkkuus === 'number' ? 'paikka ±' + Math.round(oma.tarkkuus) + ' m' : 'paikka') : '<span style="color:#ffb020">ei sijaintia</span>'];
+      if (snap.nopeusKmh !== null) tiedot.push(n1(snap.nopeusKmh) + ' km/h');
+      if (typeof snap.pohjaVeneellaM === 'number') tiedot.push('pohja ' + n1(snap.pohjaVeneellaM) + ' m');
+      const pohjaRivi = pk.kelpaa
+        ? 'Olot etusivulta klo ' + klooniKello(Date.parse(pk.P.aika)) + (pk.ikaMin >= 1 ? ' (' + ikaTeksti(pk.ikaMin) + ' sitten)' : '') + '.' + (pk.ikaMin > 90 ? ' Käy etusivulla, niin sää ja vesi päivittyvät.' : '')
+        : '<span style="color:#ffb020">Sää, vesi ja ennusteet puuttuvat: ' + pk.syy + '.</span> Aika, paikka, laji, pohja ja mallin arviot ovat tallessa.';
+      el.innerHTML = '<div class="otsikko" id="kirjausOtsikko">✓ ' + lajiNimi(snap.laji) + ' kirjattu klo ' + klooniKello(t) + '</div>'
+        + '<div class="hint">' + tiedot.join(' · ') + '</div>'
+        + '<div class="lajit">' + SAALIS_LAJIT.map(x => '<button class="laji' + (x.v === snap.laji ? ' valittu' : '') + '" data-laji="' + x.v + '">' + x.l + '</button>').join('') + '</div>'
+        + '<div id="kirjausKlooni"></div>'
+        + '<div class="hint" style="margin-top:4px;">' + pohjaRivi + ' Pituus ja syvyys: etusivun saalislista → ✏️ Täydennä.</div>'
+        + '<div class="rivi"><button class="poista" id="kirjausPoista">Poista kirjaus</button><button id="kirjausSulje">Valmis</button></div>';
+      el.style.display = 'block';
+      el.querySelectorAll('.laji').forEach(b => { b.onclick = () => vaihdaLaji(b.dataset.laji); });
+      $('kirjausPoista').onclick = poistaKirjaus;
+      $('kirjausSulje').onclick = suljeKirjaus;
+      el.onpointerdown = kirjausAjastin;
+      poistoT = 0; kirjausAjastin();
+    }
+    function vaihdaLaji(v) {
+      const s = kirjattu; if (!s || s.laji === v) return;
+      s.laji = v; as.laji = v; tallennaAs(); paivitaKalaNappi();
+      try {
+        const lista = lataaSaaliit(), ix = lista.findIndex(x => x && x.id === s.id);
+        if (ix >= 0) { lista[ix].laji = v; tallennaSaaliit(lista); }
+      } catch (e) {}
+      $('kirjausOtsikko').textContent = '✓ ' + lajiNimi(v) + ' kirjattu klo ' + klooniKello(Date.parse(s.aika));
+      $('kirjaus').querySelectorAll('.laji').forEach(b => b.classList.toggle('valittu', b.dataset.laji === v));
+      let r = null; try { r = klooniLajiMuutos(s); } catch (e) {}
+      if (r && r.poistettu) kirjausKlooni('Kloonit poistettu: ' + (KLOONI_LAJINIMI[v] || v) + ' ei käynnistä klooneja.');
+      else if (r && r.laske) klooniKirjauksesta(s);
+      else if (r && r.muutos) kirjausKlooni('');
+      if (r && r.muutos) paivitaKerros();
+      paivitaSaaliit(); pyydaPiirto(); kirjausAjastin();
+    }
+    function poistaKirjaus() {
+      const s = kirjattu; if (!s) return;
+      const b = $('kirjausPoista');
+      if (Date.now() - poistoT > 4000) { poistoT = Date.now(); b.textContent = 'Paina uudelleen: poista'; return; }
+      try { tallennaSaaliit(lataaSaaliit().filter(x => !x || x.id !== s.id)); } catch (e) {}
+      try { klooniSaalisPoistettu(s.id); } catch (e) {}
+      kirjattu = null; poistoT = 0;
+      $('kirjaus').innerHTML = '<div class="otsikko" style="color:#7E93AC">Kirjaus poistettu.</div>';
+      clearTimeout(kirjausAj); kirjausAj = setTimeout(suljeKirjaus, 2500);
+      paivitaKerros(); paivitaSaaliit(); pyydaPiirto();
+    }
     let kayntiT = 0;
     const halytetty = new Set();
     function kloonikaynti() {
@@ -357,7 +591,7 @@
     }
 
     /* ---------- sijainti ---------- */
-    let edellinen = null, jarviEhdokas = null, jarviEhdokasN = 0;
+    let edellinen = null, jarviEhdokas = null, jarviEhdokasN = 0, pyyntiT = 0, pyyntiAlku = null;
     function sijainti(pos) {
       const c = pos.coords, nyt = Date.now();
       let kmh = (typeof c.speed === 'number' && c.speed >= 0) ? c.speed * 3.6 : null, suunta = null;
@@ -373,6 +607,8 @@
       if (suunta === null && oma && nyt - oma.aika < 60e3) suunta = oma.suunta;
       oma = { lat: c.latitude, lon: c.longitude, suunta, tarkkuus: c.accuracy, kmh, aika: nyt };
       window.utOmaSijainti = oma;
+      // v180: avoimeen uistelureissuun (etusivun Aloita uistelu) GPS-piste kerran minuutissa, kuten etusivulla
+      if (nyt - pyyntiT > 30e3) { pyyntiT = nyt; try { const r = pyyntiGpsAvoimeen(oma.lat, oma.lon, nyt); pyyntiAlku = r ? r.alku : null; } catch (e) {} }
       // järvi GPS:n mukaan: vaihdetaan, kun kolme peräkkäistä sijaintia on toisella järvellä
       try {
         const av = window.akJarviPisteessa ? window.akJarviPisteessa(oma.lat, oma.lon) : null;
@@ -391,15 +627,16 @@
       if (!oma) return;
       $('nopeus').innerHTML = (typeof oma.kmh === 'number' ? n1(oma.kmh) : '–') + '<small> km/h</small>';
       $('kurssi').innerHTML = (typeof oma.suunta === 'number' ? kk(Math.round(oma.suunta) % 360).padStart(3, '0') : '–') + '<small>°</small>';
-      const o = ['±' + Math.round(oma.tarkkuus || 0) + ' m'];
+      const o = [];   // v180: tärkein ensin (syvyys, aalto), enintään kaksi riviä
+      try { o.push(syvyysTeksti(oma.lat, oma.lon, false)); } catch (e) {}   // sama kuin etusivulla (MML + oma luotaus)
       try {
         if (pohja && pohja.ennuste && window.akMalliSync) {
           const m = window.akMalliSync(oma.lat, oma.lon, pohja.aika.getTime());
           if (m && typeof m.aaltoM === 'number') o.push('aalto ' + n2(m.aaltoM) + ' m' + (m.aaltoM > m.raja ? ' (yli rajan ' + n2(m.raja) + ')' : ''));
         }
-        const sy = window.akSyvyysJarvessa ? window.akSyvyysJarvessa(avain, oma.lat, oma.lon, 60) : null;
-        if (sy) o.push('syvyys ' + n1(sy.min) + (sy.max - sy.min >= 0.5 ? '–' + n1(sy.max) : '') + ' m');
       } catch (e) {}
+      if (pyyntiAlku) o.push('⏱ ' + ikaTeksti(Math.max(0, Math.round((Date.now() - pyyntiAlku) / 60000))));
+      o.push('±' + Math.round(oma.tarkkuus || 0) + ' m');
       o.push(lukko ? '☀ näyttö päällä' : '');
       $('lisarivi').textContent = o.filter(Boolean).join(' · ');
     }
@@ -433,6 +670,14 @@
         lisaa(I.lat, I.lon, '<b style="color:#ff6b7d">' + I.tunnus + '</b> ' + I.teksti);
         I.kloonit.forEach(c => lisaa(c.lat, c.lon, '<b style="color:#b794ff">' + c.tunnus + '</b> ' + c.teksti));
       });
+      saaliit.forEach(x => {
+        const o = [(KLOONI_LAJINIMI[x.laji] || x.laji || '?') + ' klo ' + klooniKello(Date.parse(x.aika))];
+        if (typeof x.pituusCm === 'number') o.push(x.pituusCm + ' cm');
+        if (typeof x.syvyysM === 'number') o.push('pyynti ' + n1(x.syvyysM) + ' m');
+        if (typeof x.pohjaVeneellaM === 'number') o.push('pohja ' + n1(x.pohjaVeneellaM) + ' m');
+        if (typeof x.malliAaltoM === 'number') o.push('aalto ' + n2(x.malliAaltoM) + ' m (malli)');
+        lisaa(x.lat, x.lon, '<b style="color:#ffd166">Saalis</b> ' + o.join(' · ') + (x.iskuTunnus ? ' · isku ' + x.iskuTunnus : '') + (x.taydennetty === false ? '<br><span style="color:#7E93AC">Täydennä etusivun saalislistasta.</span>' : ''));
+      });
       if (avain === 'lappajarvi') {
         if (typeof lappajarviHotspots !== 'undefined') Object.values(lappajarviHotspots).forEach(h => lisaa(h.lat, h.lon,
           '<b style="color:#ff8fa3">' + h.name + '</b>' + (h.type ? '<br>' + h.type : '') + (h.targetSpecies ? '<br>Kohde: ' + h.targetSpecies : '') + (h.tactic ? '<br>' + h.tactic : '')));
@@ -443,8 +688,8 @@
       if (window.akOnVetta && window.akOnVetta(avain, p.lat, p.lon) !== true) { nayttoTieto('Maata tai järven ulkopuolella.' + etaisyysVeneesta(p.lat, p.lon)); return; }
       const o = [];
       try {
-        const sy2 = window.akSyvyysJarvessa(avain, p.lat, p.lon, 60);
-        if (sy2) o.push('syvyys ' + n1(sy2.min) + (sy2.max - sy2.min >= 0.5 ? '–' + n1(sy2.max) : '') + ' m (' + pohja.syvyysLahde + ')');
+        const sy2 = syvyysTeksti(p.lat, p.lon, true);   // v180: lähde pisteen mukaan (MML, oma luotaus, ruudukko)
+        if (sy2) o.push(sy2);
         if (pohja.ennuste) {
           const m = window.akMalliSync(p.lat, p.lon, pohja.aika.getTime());
           if (m) {
@@ -522,6 +767,8 @@
     window.addEventListener('resize', () => { if (nak && seuraa && oma) keskita(oma.lat, oma.lon); pyydaPiirto(); });
     window.addEventListener('storage', e => {
       if (e.key === KLOONI_LS) { paivitaKerros(); pyydaPiirto(); }
+      if (typeof LS_SAALIS === 'string' && e.key === LS_SAALIS) { paivitaSaaliit(); pyydaPiirto(); }   // v180: kirjaus toisessa välilehdessä
+      if (typeof KIRJAUSPOHJA_LS === 'string' && e.key === KIRJAUSPOHJA_LS) { pohjaVali.t = 0; paivitaKalaNappi(); }
       // uusi oma luotaus tuotu pääsovelluksessa: syvyysruudukko lasketaan uudelleen sivun latauksessa
       if (e.key === 'uistelututka_omaluotaus') { tila('Oma luotaus päivittyi: ladataan kartta uudelleen…'); setTimeout(() => location.reload(), 800); }
     });
@@ -533,6 +780,13 @@
     /* ---------- käynnistys ---------- */
     function aloita() {
       $('klooniNappi').classList.toggle('paalla', as.kloonit); $('yoNappi').classList.toggle('paalla', as.yo);
+      if (typeof rakennaSaalis !== 'function' || typeof syvyysJarvella !== 'function' || typeof KLOONI_SIVU !== 'object') { $('kalaNappi').style.display = 'none'; }   // puuttuva tiedosto näkyy virheruudussa
+      else {
+        let painettu = 0;   // tärähdys ei tee kahta kirjausta; kaksi kalaa yhtä aikaa = kaksi erillistä painallusta
+        $('kalaNappi').onclick = () => { if (Math.abs(Date.now() - painettu) < 800) return; painettu = Date.now(); try { kalaKiinni(); } catch (e) { naytaKirjaus(null, {}, false); } };
+        paivitaKalaNappi(); paivitaSaaliit();
+        try { mmlIdbHae().then(() => paivitaLukemat()).catch(() => {}); } catch (e) {}   // MML-syvyydet puhelimen muistista (etusivu lataa ne)
+      }
       if (typeof window.aaltokarttaAlusta !== 'function' || typeof window.UT_JARVET !== 'object') { tila(''); return; }   // virhe näkyy jo
       // järvi: sovelluksen valittu paikka (sama sääntö kuin mallissa: nimen alku); GPS vaihtaa tarvittaessa
       let paikka = ''; try { paikka = localStorage.getItem('uistelututka_valittu_paikka') || ''; } catch (e) {}
@@ -556,7 +810,8 @@
       kaynnistaGps(); pidaNayttoPaalla();
       try { if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
     }
-    window.utTilanne = { piirra: pyydaPiirto, tila: () => ({ avain, tunti, tuntiKasin, seuraa, oma, nak, pohja: pohja && { avain: pohja.avain, naytto: pohja.naytto, ennuste: pohja.ennuste, w: pohja.kuva.width, h: pohja.kuva.height }, kerros: kerros && { avain: kerros.avain, seuraava: kerros.seuraava } }), napautus, sijainti };   // testejä varten
+    window.utTilanne = { piirra: pyydaPiirto, tila: () => ({ avain, tunti, tuntiKasin, seuraa, oma, nak, pohja: pohja && { avain: pohja.avain, naytto: pohja.naytto, ennuste: pohja.ennuste, w: pohja.kuva.width, h: pohja.kuva.height }, kerros: kerros && { avain: kerros.avain, seuraava: kerros.seuraava } }), napautus, sijainti,
+                       kalaKiinni, kirjattu: () => kirjattu, saaliit: () => saaliit.length };   // testejä varten
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', aloita); else aloita();
   })();
   </script>

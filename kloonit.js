@@ -5,8 +5,9 @@
    Tässä on vain sellaista, joka ei tarvitse sivun omaa tilaa: tallennus (localStorage
    'uistelututka_kloonit'), muotoilu, PÄÄTÄ (klooniSeuraava), TOIMI (klooniKaynti), kartan kerros
    (klooniKerros) ja tiedostomuodot (OziExplorer .wpt, Lowrance .gpx).
-   Sivukohtaiset osat ovat sivuilla: laskenta ja saalisrivit (index.html: klooniLaske, osuma,
-   paneeli, vienti), kartta ja ilmoitukset (tilanne.html).
+   v180: myös laskenta ja saalisrivit (klooniLaske, osuma, saaliskentät, lajin vaihto, poisto) ovat tässä, koska
+   Kala kiinni toimii myös tilannekuvassa. Sivukohtaiset osat: paneeli, hälytys ja vienti (index.html), kartta ja
+   ilmoitukset (tilanne.html).
    OMA SIJAINTI: sivut asettavat window.utOmaSijainti = { lat, lon, suunta, tarkkuus, kmh, aika }.
    Seuraava kohde lasketaan siitä, jos se on enintään 10 min vanha; muuten viimeisestä iskusta.
    Taustan OODA-silmukka, sormenjälki ja painot: index.html KLOONIPISTEET-kommentti ja aaltomalli.js.
@@ -216,4 +217,148 @@ function klooniGpx(p, pvm) {
     + '</time><name>' + esc(klooniAscii(x.nimi)) + '</name><desc>' + esc(klooniAscii(x.kuvaus)) + '</desc></wpt>'));
   L.push('</gpx>');
   return L.join('\r\n') + '\r\n';
+}
+
+/* ===== LASKENTA JA SAALISRIVIT — v180 (10.10.2026) =====
+   Kala kiinni on nyt myös tilannekuvassa, joten iskun laskenta (klooniLaske), osuma (klooniOsumaTarkistus),
+   saalisrivin klooni- ja sormenjälkikentät (klooniSaalisKentat) ja lajin vaihto (klooniLajiMuutos) ovat tässä
+   yhteisinä. Siirretty index.html:stä sisältö ennallaan; sivun oma tila tulee KLOONI_SIVU-liitännöistä, jotka
+   sivu asettaa käynnistyessään. Tarvitsee: kirjaus.js (lataaSaaliit, tallennaSaaliit, haversineDistMeters),
+   paikat.js (karttaAvainNimesta), luotaus.js (omaLuotausPisteet) ja aaltomalli.js (akKloonit, akTuuliHetkella). */
+const KLOONI_SIVU = {
+  avainNyt: function () { return null; },       // sivun valittu järvi (JARVET-avain), jos saaliin paikasta ei saada
+  taimenKentta: function () { return null; },   // { avain, hetkiMs, K }: taimenen harppauskenttä sormenjälkeen
+  kesken: function () { return null; },         // täydennettävänä oleva saalis: sama id saa samat kentät muistiin
+  laskettu: function (isku, s) {}               // isku laskettu: sivu päivittää paneelit ja kartat
+};
+function klooniSaalisKentat(s, kentat) {
+  try {
+    Object.assign(s, kentat);
+    const kk = KLOONI_SIVU.kesken(); if (kk && kk.id === s.id && kk !== s) Object.assign(kk, kentat);
+    const lista = lataaSaaliit(), ix = lista.findIndex(x => x && x.id === s.id);
+    if (ix >= 0) { Object.assign(lista[ix], kentat); tallennaSaaliit(lista); }
+  } catch (e) { console.warn('Kloonikentät:', e); }
+}
+// Iskupaikan pohja omasta luotauksesta: mediaani 60 m säteeltä, vähintään 3 pistettä (muuten null).
+function klooniOmaPohja(lat, lon) {
+  let P = [];
+  try { P = omaLuotausPisteet(); } catch (e) { return null; }
+  if (!P.length) return null;
+  const r = 60, kx = 111320 * Math.cos(lat * Math.PI / 180), v = [];
+  for (let i = 0; i < P.length; i++) {
+    const p = P[i], dy = (p.lat - lat) * 111320, dx = (p.lon - lon) * kx;
+    if (Math.abs(dy) > r || Math.abs(dx) > r || dx * dx + dy * dy > r * r) continue;
+    v.push(p.syv);
+  }
+  if (v.length < 3) return null;
+  v.sort((a, b) => a - b);
+  return { m: v.length % 2 ? v[v.length >> 1] : (v[(v.length >> 1) - 1] + v[v.length >> 1]) / 2, n: v.length };
+}
+// HAVAINNOI + SUUNTAA: sormenjälki ja kloonit yhdelle saaliille. Palauttaa { ok, isku } tai { ok:false, syy }.
+async function klooniLaske(s) {
+  if (!s || typeof s.lat !== 'number' || typeof s.lon !== 'number') return { ok: false, syy: 'kirjauksella ei ole GPS-sijaintia (mittari ei ollut päällä)' };
+  const avain = karttaAvainNimesta(s.paikka || '') || KLOONI_SIVU.avainNyt();
+  if (!avain) return { ok: false, syy: 'järvellä ei ole syvyysruudukkoa' };
+  if (typeof window.akKaynnistaHiljaa === 'function') { try { window.akKaynnistaHiljaa(); } catch (e) {} }
+  if (typeof window.akKloonit !== 'function') return { ok: false, syy: 'karttamoduuli ei käynnistynyt' };
+  try { if (typeof window.akValitseJarvi === 'function') window.akValitseJarvi(avain); } catch (e) {}
+  // ennuste odotetaan enintään 8 s (hidas yhteys veneessä); muuten tuuli kirjauksesta
+  try { if (typeof window.akValmiina === 'function') await Promise.race([window.akValmiina(), new Promise(r => setTimeout(r, 8000))]); } catch (e) {}
+  const t = new Date(s.aika).getTime();
+  let tuuli = null;
+  try { tuuli = window.akTuuliHetkella(t, avain); } catch (e) { tuuli = null; }
+  if (!tuuli) {
+    const fmi = typeof s.malliTuuliMs === 'number' && typeof s.malliTuuliSuunta === 'number';
+    const U = fmi ? s.malliTuuliMs : s.tuuliMs, dir = fmi ? s.malliTuuliSuunta : s.tuuliSuunta;
+    if (typeof U === 'number' && typeof dir === 'number') tuuli = { U, dir, tunteja: 6, lahde: fmi ? 'kirjaus, FMI' : 'kirjaus, Open-Meteo', oletusKesto: true };
+  }
+  if (!tuuli) return { ok: false, syy: 'iskuhetken tuulta ei ole (ei ennustetta eikä kirjausta)' };
+  const ps = (typeof s.syvyysM === 'number' && s.syvyysLahde === 'mitattu') ? s.syvyysM : (typeof s.viehesyvyysM === 'number' ? s.viehesyvyysM : null);
+  let harppaus = null;
+  try {
+    const tk = KLOONI_SIVU.taimenKentta();
+    if ((s.laji === 'taimen' || s.laji === 'jarvilohi') && tk && tk.avain === avain && tk.K && typeof tk.K.kohta === 'function' && Math.abs(tk.hetkiMs - t) <= 3 * 3600e3)
+      harppaus = function (la, lo) { const x = tk.K.kohta(la, lo); return x ? Math.max(0, x.hq) : null; };
+  } catch (e) { harppaus = null; }
+  const as = klooniAsetukset(), op = klooniOmaPohja(s.lat, s.lon);
+  const r = window.akKloonit({ avain, lat: s.lat, lon: s.lon, U: tuuli.U, dir: tuuli.dir, tunteja: tuuli.tunteja,
+                               sadeM: as.sadeKm * 1000, maara: as.maara, kynnys: as.kynnys, pyyntiSyvyys: ps, harppaus,
+                               pohjaMitattu: op ? op.m : null });
+  if (!r || r.tila !== 'ok') {
+    const syy = !r ? 'laskenta ei palauttanut tulosta'
+      : r.tila === 'eriJarvi' ? 'kartalla on ' + (r.kortilla || '–') + ', isku on järveltä ' + r.jarvi + ' (yritä hetken päästä uudelleen)'
+      : r.tila === 'eiRuutua' ? 'iskupaikka ei osu järven ruudukkoon (yli 200 m rannasta maalle?)'
+      : r.tila === 'eiSyvyytta' ? 'järvellä ' + (r.jarvi || '') + ' ei ole syvyysruudukkoa'
+      : 'tuntematon tila ' + r.tila;
+    return { ok: false, syy };
+  }
+  const d = klooniLue(), pvm = klooniPvm(t), P = d.paivat[pvm] || (d.paivat[pvm] = { i: 0, k: 0, wpt: 0, gpx: 0 });
+  const vanha = d.iskut.findIndex(x => x.id === s.id);
+  let tunnus;
+  if (vanha >= 0) { tunnus = d.iskut[vanha].tunnus; d.iskut.splice(vanha, 1); }   // uudelleenlaskenta: isku pitää tunnuksensa, kloonit saavat uudet
+  else { P.i = (P.i || 0) + 1; tunnus = 'I' + P.i; }
+  const sj = klooniPyorista(r.isku.sj);
+  const isku = {
+    id: s.id, tunnus, aika: s.aika, pvm, laji: s.laji || null, avain, jarvi: r.jarvi, lat: s.lat, lon: s.lon,
+    sadeM: r.sadeM, maara: r.maara, kynnys: r.kynnys,
+    tuuli: { U: Math.round(tuuli.U * 10) / 10, dir: Math.round(tuuli.dir), tunteja: tuuli.tunteja, lahde: tuuli.lahde, oletusKesto: !!tuuli.oletusKesto },
+    pyyntiSyvyys: ps, vesiC: typeof s.vesiC === 'number' ? s.vesiC : null, harppaus: r.harppaus, sj,
+    ehdokkaita: r.ehdokkaita, tutkittu: r.tutkittu, rajattuSyvyys: r.rajattuSyvyys, ruutu: r.ruutu, laskettu: Date.now(), versio: (typeof APP_VERSIO === 'string' ? APP_VERSIO : ''),
+    kloonit: r.kloonit.map(c => {
+      P.k = (P.k || 0) + 1;
+      return { tunnus: 'K' + P.k, lat: Math.round(c.lat * 1e6) / 1e6, lon: Math.round(c.lon * 1e6) / 1e6, pisteet: c.pisteet, osat: c.osat,
+               sj: klooniPyorista(c.sj), etaisyysM: c.etaisyysM, suunta: c.suunta, kayty: null, osuma: null };
+    })
+  };
+  d.iskut.push(isku);
+  d.iskut.sort((a, b) => String(a.aika).localeCompare(String(b.aika)));
+  klooniTallenna(d);
+  klooniSaalisKentat(s, {
+    iskuTunnus: tunnus, klooniTunnukset: isku.kloonit.map(c => c.tunnus).join(' ') || '-',
+    sjPohjaM: sj.pohja, sjKaltevuus: sj.g, sjAsento: sj.asento, sjAaltoM: sj.aalto, sjMuotoM: sj.muoto, sjRannastaM: sj.rannasta,
+    sjHarppausM: sj.hq, sjTuuliMs: isku.tuuli.U, sjTuuliSuunta: isku.tuuli.dir
+  });
+  KLOONI_SIVU.laskettu(isku, s);
+  return { ok: true, isku };
+}
+// TOIMI → OPI: kala 150 m:n sisällä kloonista, joka on laskettu ≤ 24 h ennen.
+function klooniOsumaTarkistus(snap) {
+  if (!snap || typeof snap.lat !== 'number') return null;
+  const t = new Date(snap.aika).getTime(), d = klooniLue();
+  let paras = null;
+  d.iskut.forEach(I => {
+    if (I.id === snap.id) return;
+    const tI = new Date(I.aika).getTime();
+    if (!(t > tI && t - tI <= KLOONI_TUOREUS_MS)) return;
+    I.kloonit.forEach(c => { const e = haversineDistMeters(snap.lat, snap.lon, c.lat, c.lon); if (e <= 150 && (!paras || e < paras.e)) paras = { I, c, e }; });
+  });
+  if (!paras) return null;
+  paras.c.osuma = { id: snap.id, laji: snap.laji || null, aika: snap.aika, etaisyysM: Math.round(paras.e) };
+  if (!paras.c.kayty) paras.c.kayty = t;
+  klooniTallenna(d);
+  klooniSaalisKentat(snap, { klooniOsuma: paras.c.tunnus, klooniOsumaPisteet: paras.c.pisteet, klooniOsumaM: Math.round(paras.e) });
+  return paras;
+}
+// Täydennys tai lajin vaihto pikakirjauksen jälkeen: osumamerkinnän laji, iskun laji tai iskun poisto, jos laji ei
+// enää käynnistä klooneja. Palauttaa { muutos, poistettu, laske } — laske: iskua ei ole ja laji käynnistää kloonit.
+function klooniLajiMuutos(s) {
+  const d = klooniLue(), I = klooniIskuSaaliille(s.id, d);
+  let muutos = false, poistettu = false;
+  d.iskut.forEach(x => x.kloonit.forEach(c => { if (c.osuma && c.osuma.id === s.id && c.osuma.laji !== (s.laji || null)) { c.osuma.laji = s.laji || null; muutos = true; } }));
+  if (I && !KLOONI_LAJIT.includes(s.laji)) {
+    d.iskut = d.iskut.filter(x => x.id !== s.id); muutos = true; poistettu = true;   // numerot eivät palaa käyttöön
+    klooniSaalisKentat(s, { klooniTunnukset: null, iskuTunnus: null });
+  } else if (I && I.laji !== s.laji) { I.laji = s.laji; muutos = true; }
+  if (muutos) klooniTallenna(d);
+  return { muutos, poistettu, laske: !I && KLOONI_LAJIT.includes(s.laji) && typeof s.lat === 'number' };
+}
+// Kirjaus poistettu (Poista kirjaus / Kumoa): saaliin isku ja kloonin osumamerkintä pois; käynti jää (vene oli siellä).
+// v180: ennen tätä poistetun saaliin isku ja kloonit jäivät kartalle ja kloonilokiin.
+function klooniSaalisPoistettu(id) {
+  const d = klooniLue(), n = d.iskut.length;
+  let muutos = false;
+  d.iskut = d.iskut.filter(x => x.id !== id); if (d.iskut.length !== n) muutos = true;
+  d.iskut.forEach(I => I.kloonit.forEach(c => { if (c.osuma && c.osuma.id === id) { c.osuma = null; muutos = true; } }));
+  if (muutos) klooniTallenna(d);
+  return muutos;
 }

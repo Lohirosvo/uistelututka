@@ -227,3 +227,20 @@ const lappajarviHotspots = {
     reason: "Oma saalis, vähän otantaa: ennätystaimen ja muutama muu kala harvoilla ajoilla. Konsensus: läheltä tiedetään saadun hyvänkokoisia."
   },
 };
+
+/* Paikan nimi → JARVET-avain (v128). v180: siirretty index.html:stä sellaisenaan; tilannekuva ja kloonit.js käyttävät samaa. */
+function karttaAvainNimesta(n) {
+  n = n || '';
+  if (n.startsWith('Lappajärvi')) return 'lappajarvi';
+  if (n.startsWith('Hirvijärv')) return 'hirvijarvi';
+  if (n.startsWith('Ähtärinjärvi')) return 'ahtarinjarvi';
+  if (n.startsWith('Kivijärvi')) return 'kivijarvi';
+  if (n.startsWith('Alajärvi')) return 'alajarvi';      // v133
+  if (n.startsWith('Evijärvi')) return 'evijarvi';
+  if (n.startsWith('Patana')) return 'patana';
+  if (n.startsWith('Toisvesi')) return 'toisvesi';   // v135
+  if (n.startsWith('Kyrkösjärv')) return 'kyrkosjarvi';   // v139
+  if (n.startsWith('Kalajärv')) return 'kalajarvi';
+  if (n.startsWith('Saimaa')) return 'saimaa_imatra';   // v142
+  return null;
+}
