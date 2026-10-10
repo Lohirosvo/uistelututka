@@ -2385,14 +2385,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=188" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=188" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=188" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=188" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=188" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=188" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=188" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=188" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=189" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=189" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=189" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=189" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=189" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=189" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=189" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=189" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     // Viimeisimmät arvot saaliskirjausta varten (päivittyvät GPS:stä ja analyysistä).
     let viimeisinGps = null;      // { lat, lon }
@@ -11319,6 +11319,7 @@ function sumuriskiAlusta(){
       const tp = document.getElementById('taimenPaneeli');
       if (!tp || !taimenViimeArgs || typeof karttaAvain !== 'function' || karttaAvain() !== taimenViimeAvain) return;
       tp.innerHTML = taimenHotspotHtml(taimenViimeArgs);
+      try { syysJarvilohiPaivita(); } catch (e) { /* ei kriittistä */ }
     }
 
     // Tuuli 120 h taaksepäin analyysihetkestä: FMI- tai Open-Meteo-ennuste tunnille, muuten Open-Meteon
@@ -11441,9 +11442,171 @@ function sumuriskiAlusta(){
       return { tila: 'ok', lista, nimetyt: nimPisteet, K, p, avain, suljettuja, ruutuja: K.ruudut.length };
     }
 
+    /* ===== SYKSYN SEKOITTUNEEN VEDEN OHJE — 10.10.2026 (v189) =====
+       Hannun ohje kerrostumattomalle 12–4 °C:n syysvedelle "paremman puutteessa ottipaikan haun apuna" (10.10.), hiottu ja
+       kytketty sovelluksen tietoihin. Hannun valinnat 10.10.: Lappajärvellä oma sääntö ensin; siimapituudet ohjeen
+       näkösyvyysrajoista (2 ja 3 m), värit viehevalinnasta; kylmälle vedelle täkyraksi tai hidas vaappu/lusikka.
+         1 REUNA     tuulen pakkaama reuna: tuulen pysyvyys tuulisarjasta (±45°, ≥ 3 m/s) ja mallin reunat (akReunaEhdokkaat:
+                     konvergenssin syvä reuna rinteellä). Plaanarit matalaan, takilat syvään.
+         2 LUOTAIN   rikkonainen, pystysuuntainen tai säikky täkyparvi = pedot paikalla (muistutus; sovellus ei näe luotainta)
+         3 NÄKÖSYV.  siimapituudet (alle 2 m lyhyet, yli 3 m pitkät, välissä väliltä), värit viehevalinnasta (vvValitseVarit)
+         4 VALO      vetosyvyys: oma sääntö (pohja 0,5–8 m → 0,1–0,7 m) ensin; himmeä (pilvi, aallokko ≥ 5 m/s, hämärä) → 0–3 m;
+                     kirkas → 5–10 m vain, kun näkösyvyys yli 3 m; tummassa vedessä 0–3 m myös kirkkaalla
+         5 LÄMPÖ     8–12 °C 4,0–5,0 km/h vaaput ja lusikat; 4–8 °C 2,5–3,5 km/h täkyraksi tai hidas vaappu/lusikka
+       Näkyy taimenpaneelissa, kun harppausmalli ei toimi (sekoittunut tai heikko kerros) ja pintavesi on 4–12 °C. Reunat
+       kartalle R-merkkeinä (aaltokortti ja tilannekuva) perusteluineen; nimetyt taimen- ja lohipaikat 300 m:n sisällä
+       reunasta sinisinä. Todisteen taso jokaisella rivillä; lähes kaikki on uistelijoiden konsensusta.
+       JÄRVILOHI (Hannu 10.10. "Tehdään"): sama ohje koskee myös järvilohta. Ohjeen lopussa oma rivi (Larocque ym. 2022:
+       Ontariojärvi, syksyllä lähempänä rantaa, talvella ulapalla, enimmäkseen alle 4 m) ja järvilohen perusteluissa
+       tiivistelmä (syysJarvilohiPaivita). */
+    const SYYS_RANTA = ['pohjoisrannalle', 'koillisrannalle', 'itärannalle', 'kaakkoisrannalle', 'etelärannalle', 'lounaisrannalle', 'länsirannalle', 'luoteisrannalle'];
+    const SYYS_MISTA = ['pohjoisesta', 'koillisesta', 'idästä', 'kaakosta', 'etelästä', 'lounaasta', 'lännestä', 'luoteesta'];
+    const syysSektori = d => Math.round((((d % 360) + 360) % 360) / 45) % 8;
+    const syysFt = m => Math.round(m * 3.2808 / 5) * 5;   // Hannu mittaa siiman jalkoina
+    function syysTuulenPysyvyys(aikaMs) {   // kuinka kauan tuuli on puhaltanut samasta suunnasta (±45°, ≥ 3 m/s)
+      let s = [];
+      try { s = (taimenTuuliSarja(aikaMs) || []).filter(x => x.t <= aikaMs + 1800e3 && typeof x.U === 'number' && typeof x.dir === 'number'); } catch (e) { s = []; }
+      if (!s.length) return null;
+      let sx = 0, sy = 0;
+      s.slice(-3).forEach(x => { sx += Math.sin(x.dir * Math.PI / 180) * x.U; sy += Math.cos(x.dir * Math.PI / 180) * x.U; });
+      const d0 = (Math.atan2(sx, sy) * 180 / Math.PI + 360) % 360;
+      let tunteja = 0, uSum = 0;
+      for (let i = s.length - 1; i >= 0; i--) {
+        const ero = Math.abs(((s[i].dir - d0 + 540) % 360) - 180);
+        if (s[i].U < 3 || ero > 45) break;
+        tunteja++; uSum += s[i].U;
+      }
+      return { dir: d0, tunteja, U: tunteja ? uSum / tunteja : s[s.length - 1].U, sarjaH: s.length };
+    }
+    function syysOhje(o, avain, chip) {   // → { html, kartalle, lyhyt } tai null (ei koske tätä tilannetta)
+      const T = typeof o.lampo === 'number' ? o.lampo : (typeof latestSykeTemp === 'number' ? latestSykeTemp : null);
+      if (typeof T !== 'number' || T < 4 || T > 12) return null;
+      const aikaMs = new Date(o.hetki).getTime();
+      const rivi = (taso, teksti) => '<div style="margin:5px 0;">' + chip(taso) + teksti + '</div>';
+      const ns = (typeof kaytettavaNakosyvyys === 'function') ? kaytettavaNakosyvyys() : { m: 1.8, lahde: 'oletus' }, secchi = ns.m;
+      const pe = vvPeritty(), et = ennusteTunnille(o.hetki);
+      const ws = et ? et.ws : (typeof o.tuuliMs === 'number' ? o.tuuliMs : null), aallokko = typeof ws === 'number' && ws >= 5;
+      const himmea = pe.valo === 'hamara' || pe.valo === 'pilvi' || aallokko;
+      const valoTxt = pe.valo === 'hamara' ? 'hämärä' : pe.valo === 'aurinko' ? (aallokko ? 'aurinkoa, mutta aallokkoa' : 'kirkas auringonpaiste') : 'pilvistä' + (aallokko ? ' ja aallokkoa' : '');
+      // 1 tuuli ja reunat
+      const pys = syysTuulenPysyvyys(aikaMs);
+      const nimetyt = (avain === 'lappajarvi' && typeof lappajarviHotspots === 'object')
+        ? Object.values(lappajarviHotspots).filter(sp => /taimen|lohi/i.test(sp.targetSpecies || '')) : [];
+      let R = null;
+      try { R = window.akReunaEhdokkaat ? window.akReunaEhdokkaat({ avain, aikaMs, max: 6, pisteet: nimetyt }) : null; } catch (e) { R = null; }
+      const kartalle = [];
+      let reunaTxt;
+      if (pys && pys.tunteja >= 6) {
+        const ranta = SYYS_RANTA[syysSektori(pys.dir + 180)];
+        reunaTxt = 'Tuuli on puhaltanut ' + SYYS_MISTA[syysSektori(pys.dir)] + ' noin ' + pys.tunteja + ' h (keskimäärin ' + n1(pys.U) + ' m/s)'
+          + (pys.tunteja >= 12 ? '. Se pakkaa pintavettä ja ravintoa ' + ranta + ': aja sen niemennokkia ja selkien rinteitä, plaanarit matalaan ja takilat syvään.'
+                               : ', joten reunat ovat vasta pakkautumassa ' + ranta + '. Ohjeen mukaan tuulen pitää puhaltaa samasta suunnasta päiviä.');
+      } else if (pys) {
+        reunaTxt = 'Tuuli on vaihdellut tai ollut heikko (alle 6 h samasta suunnasta vähintään 3 m/s), joten tuulen pakkaamaa reunaa ei vielä ole. Reunamerkit ovat silloin heikko vihje; parvi luotaimessa ratkaisee.';
+      } else reunaTxt = 'Tuulihistoriaa ei vielä ole, joten tuulen pysyvyyttä ei tiedetä.';
+      if (R && R.tila === 'ok') {
+        const lahinNimi = (x) => {
+          let l = null;
+          nimetyt.forEach(sp => { const m = haversineDistMeters(sp.lat, sp.lon, x.lat, x.lon); if (!l || m < l.m) l = { sp, m }; });
+          if (!l) return null;
+          const b = (Math.atan2((x.lon - l.sp.lon) * Math.cos(x.lat * Math.PI / 180), x.lat - l.sp.lat) * 180 / Math.PI + 360) % 360;
+          return 'Lähin nimetty paikka ' + l.sp.name + ', ' + (l.m >= 1000 ? n1(l.m / 1000) + ' km' : Math.round(l.m) + ' m') + '; reuna on siitä ' + KUHA_ILLAT[Math.round(b / 45) % 8] + '.';
+        };
+        R.lista.forEach((x, i) => kartalle.push({ lat: x.lat, lon: x.lon, tyyppi: 'reuna', tunnus: 'R' + (i + 1), nimi: 'Tuulen pakkaama reuna R' + (i + 1),
+          teksti: 'kasautuminen ' + x.kasautuminen + ' (malli), pohja ' + n1(x.f) + ' m, rinne ' + n1(x.g) + ' m / 100 m, syvempi vesi ' + KUHA_INESS[syysSektori(x.syvaSuunta)] + '. Syksyn ohje, ei omaa saalista.',
+          syyt: [{ taso: 'Malli', teksti: 'Tuuli kasaa pintavettä tähän (kasautuminen ' + x.kasautuminen + ' 150 m:n sisällä, vahva ≥ 25). Reuna on syvällä puolella ja rinteellä: pohja ' + n1(x.f) + ' m, laskee ' + n1(x.g) + ' m sadan metrin matkalla.', p: 0 },
+                 { taso: 'Konsensus', teksti: 'Tuulen pakkaama reuna: plaanarit matalaan, takilat syvään. Syksyn sekoittuneessa vedessä kalojen seuraamista ei ole tutkittu.', p: 0 },
+                 { taso: 'Tutkittu', teksti: 'Kesällä kerrostuneessa järvessä iso eläinplankton kasautui tuulen alapuolelle; ratkaisi tuuli, joka oli puhaltanut jopa 12 h ennen (Blukacz ym. 2009, Opeongo, Kanada).', p: 0 }],
+          lahin: lahinNimi(x) }));
+        const lahella = nimetyt.map((sp, i) => ({ sp, d: R.pisteet && R.pisteet[i] })).filter(x => x.d && x.d.m <= 300).sort((a, b) => b.d.kasautuminen - a.d.kasautuminen).slice(0, 3);
+        lahella.forEach((x, i) => kartalle.push({ lat: x.sp.lat, lon: x.sp.lon, tyyppi: 'oma', paras: i === 0, tunnus: '', nimi: x.sp.name,
+          teksti: 'nimetty paikka tuulen pakkaamalla reunalla (reuna ' + Math.round(x.d.m) + ' m:n päässä, kasautuminen ' + x.d.kasautuminen + ', malli).',
+          syyt: [{ taso: 'Malli', teksti: 'Konvergenssin syvä reuna rinteellä ' + Math.round(x.d.m) + ' m:n päässä (kasautuminen ' + x.d.kasautuminen + ').', p: 0 },
+                 { taso: 'Konsensus', teksti: 'Tuulen pakkaama reuna (syksyn ohje).', p: 0 }] }));
+      }
+      // 3 näkösyvyys: siimapituudet (ohjeen rajat), värit viehevalinnasta
+      const luokka = secchi < 2 ? 'tumma' : secchi > 3 ? 'kirkas' : 'vali';
+      const siimat = { tumma: [15, 30, 5, 10], vali: [20, 40, 8, 15], kirkas: [30, 50, 10, 20] }[luokka];
+      const siimaTxt = 'Plaanari ' + syysFt(siimat[0]) + '–' + syysFt(siimat[1]) + ' jalkaa (' + siimat[0] + '–' + siimat[1] + ' m), takila ' + syysFt(siimat[2]) + '–' + syysFt(siimat[3]) + ' jalkaa (' + siimat[2] + '–' + siimat[3] + ' m)';
+      const siimaSyy = luokka === 'tumma' ? 'Näkösyvyys ' + n1(secchi) + ' m (alle 2 m): vene ei häiritse kalaa yhtä paljon, joten lyhyemmät vapautukset riittävät.'
+        : luokka === 'kirkas' ? 'Näkösyvyys ' + n1(secchi) + ' m (yli 3 m): kala säikkyy veneen ääntä ja varjoa, joten pitkät vapautukset.'
+        : 'Näkösyvyys ' + n1(secchi) + ' m on ohjeen rajojen 2 ja 3 m välissä, joten pituudet ovat niiden väliltä (arvio).';
+      let vari = null;
+      try { vari = vvValitseVarit(secchi, pe.valo, 'taimen', 0.5); } catch (e) { vari = null; }
+      const variTxt = vari ? vari.varit.map(v => v[0]).join(', ') + ' (' + vari.ryhma + '). ' + String(vari.syy).split(' PINTA:')[0] : 'viehevalinta ei ole käytettävissä';
+      // 4 valo → vetosyvyys
+      const omaSaanto = 'Pohjaa 0,5–8 m (rantavyöhyke, matalikko, penkan päällys): vieheet 0,1–0,7 m:iin, kunnes toisin todistetaan.';
+      const valoSyvyys = himmea ? 'Nyt ' + valoTxt + ': pyynti pintakalvoon 0–3 m, leveä plaanarilevitys.'
+        : luokka === 'kirkas' ? 'Nyt ' + valoTxt + ' ja vesi kirkasta: vieheet 5–10 m:iin takiloilla ja sivuille vetävillä syvääjillä.'
+        : luokka === 'tumma' ? 'Nyt ' + valoTxt + ', mutta vesi on tummaa (näkösyvyys ' + n1(secchi) + ' m): valo ei läpäise syvälle, joten kala pysyy lähellä pintaa kirkkaallakin. Pyynti 0–3 m.'
+        : 'Nyt ' + valoTxt + ' ja näkösyvyys ' + n1(secchi) + ' m: aloita 0–3 m:stä ja kokeile takilalla 3–5 m:iin (välimaasto, arvio).';
+      const syvyysLyhyt = himmea || luokka !== 'kirkas' ? '0–3 m' : '5–10 m';
+      // 5 lämpö → nopeus ja viehe
+      const lampin = T >= 8, raja = Math.abs(T - 8) <= 1;
+      const nopeusTxt = lampin ? '4,0–5,0 km/h, vaaput ja lusikat: aggressiivinen, hakeva ja vauhtia kestävä uinti.'
+        : '2,5–3,5 km/h, täkyraksi (hidas, pyörähtävä tynnyriuinti) tai hidas vaappu tai lusikka.';
+      const nopeusLyhyt = lampin ? '4,0–5,0 km/h' : '2,5–3,5 km/h';
+      const reunaLyhyt = (pys && pys.tunteja >= 6) ? SYYS_RANTA[syysSektori(pys.dir + 180)].replace('rannalle', 'ranta') : 'ei pakkautunutta reunaa';
+      const lyhyt = 'Taimen (sekoittunut ' + n1(T) + ' °C): ' + reunaLyhyt + ', ' + (luokka === 'kirkas' || himmea ? syvyysLyhyt : '0,1–0,7 m pohjan ollessa 0,5–8 m, muuten ' + syvyysLyhyt)
+        + ', plaanari ' + syysFt(siimat[0]) + '–' + syysFt(siimat[1]) + ' ft, ' + nopeusLyhyt + '.';
+      const jlTutkittu = 'Ontariojärvellä istutettu järvilohi ui enimmäkseen alle 4 m:n syvyydessä, ja syksyllä se liikkui lähempänä rantaa; talvella se siirtyi ulapalle, noin 5,5 km:n päähän rannasta (Larocque ym. 2022, akustinen telemetria, 14 kalaa).';
+      const jarvilohi = 'SYKSYN SEKOITTUNUT VESI ' + n1(T) + ' °C: oma syysohjeesi koskee myös järvilohta (koko ohje: Raportit → Taktinen ottipaikkaneuvonta, taimenpaneeli). Nyt: '
+        + (pys && pys.tunteja >= 12 ? 'tuuli pakkaa reunat ' + SYYS_RANTA[syysSektori(pys.dir + 180)] : pys && pys.tunteja >= 6 ? 'reunat vasta pakkautumassa ' + SYYS_RANTA[syysSektori(pys.dir + 180)] : 'ei pakkautunutta reunaa')
+        + ', vieheet ' + syvyysLyhyt + ' (ohjeen valosääntö; yllä oleva iskusyvyys seuraa saaliskalaa, joten parvi luotaimessa ratkaisee)'
+        + ', plaanari ' + syysFt(siimat[0]) + '–' + syysFt(siimat[1]) + ' jalkaa (' + siimat[0] + '–' + siimat[1] + ' m), takila ' + syysFt(siimat[2]) + '–' + syysFt(siimat[3]) + ' jalkaa (' + siimat[2] + '–' + siimat[3] + ' m), '
+        + nopeusTxt.replace(/:.*$/, '').replace(/\.$/, '') + '.'
+        + (R && R.tila === 'ok' && R.lista.length ? ' Tuulen pakkaamat reunat R1–R' + R.lista.length + ' kartalla.' : '')
+        + ' Tutkittu: ' + jlTutkittu;
+      const html = '<p style="font-size:14px;margin:12px 0 0;"><strong>Syksyn sekoittunut vesi ' + n1(T) + ' °C: ottipaikan haku taimenelle ja järvilohelle</strong></p>'
+        + '<p class="hint" style="margin:2px 0 0;font-size:12px;line-height:1.4;">Harppausmalli ei toimi sekoittuneessa vedessä, joten tässä on oma syysohjeesi sovelluksen tiedoilla. Lähes kaikki on uistelijoiden konsensusta; taso näkyy riveillä.</p>'
+        + '<div style="font-size:13px;line-height:1.45;margin-top:6px;">'
+        + '<div style="margin:4px 0;"><b>1. Reuna.</b></div>' + rivi(pys ? 'Konsensus' : 'Tieto puuttuu', reunaTxt)
+        + (pys && pys.tunteja >= 12 ? rivi('Tutkittu', 'Kesällä kerrostuneessa järvessä iso eläinplankton kasautui tuulen alapuolelle, ja sen ratkaisi tuuli, joka oli puhaltanut jopa 12 tuntia ennen (Blukacz ym. 2009, Opeongo). Syksyn sekoittuneessa vedessä tätä ei ole tutkittu.') : '')
+        + (R && R.tila === 'ok' ? rivi('Malli', R.lista.length ? 'Kartalla ' + R.lista.length + ' tuulen pakkaamaa reunaa (R1–R' + R.lista.length + ', parhaat ensin, vähintään 1 km toisistaan): konvergenssin syvä reuna rinteellä tämän tunnin tuulella. Napauta merkkiä.'
+                                         : 'Malli ei löydä tällä tuulella reunaa, jossa kasautuminen ja rinne osuvat yhteen.')
+           : rivi('Tieto puuttuu', R && R.tila === 'eriJarvi' ? 'Reunat lasketaan aaltokortin järvelle; valitse kortille sama järvi.'
+               : 'Reunoja ei voitu laskea: ' + ({ eiTuntia: 'tuuliennuste ei ulotu tälle tunnille', eiEnnustetta: 'tuuliennustetta ei ole', eiKarttaa: 'järvelle ei ole syvyysruudukkoa' }[R && R.tila] || 'aaltomalli ei ole vielä latautunut') + '.'))
+        + '<div style="margin:8px 0 4px;"><b>2. Kaikuluotain.</b></div>'
+        + rivi('Havainto', 'Laaja, yhtenäinen ja rauhallinen täkyparvi: ei aktiivisia petoja, jatka etsimistä. Rikkonainen, pystysuuntainen tai säikky parvi: pedot ovat paikalla. Tarkenna petojen syvyys ja vedä vieheet parven reunoilta tai alta.')
+        + '<div style="margin:8px 0 4px;"><b>3. Näkösyvyys.</b></div>'
+        + rivi('Konsensus', siimaTxt + '. ' + siimaSyy + ' <span class="hint">Näkösyvyyden lähde: ' + ns.lahde
+            + (/^taulukko/.test(ns.lahde) ? ' (asetus Valovyöhyke-kokeilun napista; oma mittaus ohittaa sen)' : '') + '.</span>')
+        + rivi('Viehevalinta', 'Värit: ' + variTxt)
+        + '<div style="margin:8px 0 4px;"><b>4. Valo ja syvyys.</b></div>'
+        + rivi('Oma sääntö', omaSaanto)
+        + rivi('Konsensus', valoSyvyys)
+        + rivi('Tutkittu', 'Talvella jään alla taimen pysyi 3–5 m:ssä, nieriä 12–15 m:ssä (Botnvatnet, Pohjois-Norja, telemetria). Kylmässä vedessä taimen pysyttelee matalalla.')
+        + '<div style="margin:8px 0 4px;"><b>5. Lämpö ' + n1(T) + ' °C.</b></div>'
+        + rivi('Konsensus', nopeusTxt + (raja ? ' Vesi on 8 °C:n rajan tuntumassa, joten kokeile myös ' + (lampin ? 'hitaampaa 2,5–3,5 km/h vetoa.' : 'reippaampaa 4,0–5,0 km/h vetoa vaapuilla ja lusikoilla.') : ''))
+        + '<div style="margin:8px 0 4px;"><b>Järvilohi.</b></div>'
+        + rivi('Konsensus', 'Sama ohje: reunat, siimat, valo ja lämpö kuten yllä. Oma sääntö 0,1–0,7 m on taimenen sääntö. Järvilohen syvyys seuraa saaliskalaa, joten parvi luotaimessa ratkaisee.')
+        + rivi('Tutkittu', jlTutkittu)
+        + '</div>';
+      return { html, kartalle, lyhyt, jarvilohi, reunat: R, pysyvyys: pys };
+    }
+
+    // v189: syysohjeen tiivistelmä järvilohen perusteluihin (ensimmäiseksi). Kutsutaan, kun järvilohen perustelut
+    // piirretään ja kun taimenpaneeli piirtyy uudelleen (tuulihistoria tulee myöhemmin).
+    function syysJarvilohiPaivita() {
+      const ul = document.getElementById('reasonsOutJarvilohi');
+      if (!ul) return;
+      const vanha = ul.querySelector('li[data-syys]');
+      if (vanha) vanha.remove();
+      if (window.syysOhjeJarvilohi) {
+        const li = document.createElement('li'); li.setAttribute('data-syys', '1'); li.textContent = window.syysOhjeJarvilohi;
+        ul.insertBefore(li, ul.firstChild);
+      }
+      const sum = ul.parentElement && ul.parentElement.querySelector('summary');   // määrä otsikkoon kuten renderResultin merkitseMaara
+      if (sum) {
+        const base = sum.textContent.replace(/\s*\(\d+\)\s*$/, '').trim();
+        sum.innerHTML = '<span class="arrow">▸</span> ' + base.replace(/^▸\s*/, '') + ' <span style="color:var(--muted); font-weight:normal;">(' + ul.children.length + ')</span>';
+      }
+    }
+
     function taimenHotspotHtml(o) {
       const avain = (typeof karttaAvain === 'function') ? karttaAvain() : null;
       window.taimenVarmuusLyhyt = null;   // v168: tiivistelmän rivi, asetetaan alla jos tulos on valmis
+      window.syysOhjeLyhyt = null; window.syysOhjeJarvilohi = null;   // v189: syysohje vain, jos se koskee tätä tilannetta
       if (!avain || TAIMEN_HOTSPOTJARVET.indexOf(avain) < 0) {
         viimeisinTaimenEhdokkaat = []; viimeisinTaimenKentta = null; taimenKartalle(null, null, null); return '';
       }
@@ -11461,7 +11624,12 @@ function sumuriskiAlusta(){
           heikko: 'pinnan ja alusveden ero on alle 1 °C' + (e.pohjaOletus ? ' (alusvesi oletus 8 °C, ei mitattu)' : '') + ', kerros on liian heikko kallistumaan. Depth Raider -profiili tai oma mittaus tälle järvelle korjaa tämän',
           eiKerrosta: 'harppauskerroksen tietoa ei ole', eiAlusvetta: 'harppauksen alla ei ole yhtenäistä alusvettä',
           eiTuulta: 'tuulihistoria tälle paikalle ei ole vielä tullut, paneeli päivittyy itse kun se tulee' }[e.tila] || 'syvyysruudukkoa ei ole';
-        taimenKartalle(e && e.tila !== 'lataus' ? avain : null, o.hetki, [], lyhytSyy);
+        // v189: sekoittunut tai heikko kerros ja vesi 4–12 °C → syksyn ohje ja tuulen pakkaamat reunat kartalle
+        let so = null;
+        try { so = (e && (e.tila === 'sekoittunut' || e.tila === 'heikko')) ? syysOhje(o, avain, chip) : null; } catch (er) { console.warn('Syysohje:', er); so = null; }
+        window.syysOhjeLyhyt = so ? so.lyhyt : null;
+        window.syysOhjeJarvilohi = so ? so.jarvilohi : null;
+        taimenKartalle(e && e.tila !== 'lataus' ? avain : null, o.hetki, so ? so.kartalle : [], lyhytSyy);
         const syy = !e ? '' : e.tila === 'lataus' ? 'Syvyyskartta latautuu vielä. Hotspotit tulevat tähän, kun se on valmis.'
           : e.tila === 'sekoittunut' ? chip(e.hp && e.hp.taso ? e.hp.taso : (e.hp && e.hp.mitattu ? 'Mittaus' : 'Arvio')) + 'Järvi on nyt sekoittunut (' + (e.hp && e.hp.lahde ? e.hp.lahde : 'lämpötieto') + '). Ilman harppauskerrosta ei synny kallistumaa, paluuheilahdusta eikä rintamaa, joten malli ei anna ehdokkaita. Malli koskee kerrostunutta kautta.'
           : e.tila === 'heikko' ? chip(e.pohjaOletus ? 'Arvio' : 'Mittaus') + 'Pinta on noin ' + n1(e.T1) + ' °C ja alusvesi ' + n1(e.T2) + ' °C' + (e.pohjaOletus ? ' (oletus, ei mitattu)' : '')
@@ -11471,7 +11639,7 @@ function sumuriskiAlusta(){
           : e.tila === 'eiAlusvetta' ? 'Harppauskerroksen alla ei ole tällä syvyydellä yhtenäistä alusvettä, joten kallistusta ei lasketa.'
           : e.tila === 'eiTuulta' ? chip('Tieto puuttuu') + 'Tuulihistoriaa on alle 6 tuntia. Paina Analysoi uudelleen, kun menneen tuulen haku on valmis.'
           : 'Tälle järvelle ei ole syvyysruudukkoa.';
-        return alku + p(syy) + '</div>';
+        return alku + p(syy) + (so ? so.html : '') + '</div>';
       }
       const K = e.K, vaiheTxt = { tuuli: 'tuuli kallistaa kerrosta', seiche: 'paluuheilahdus (seiche)', kelvin: 'kiertävä aalto (Kelvin)', tyyni: 'tyyntä, ei kallistusta' }[K.vaihe];
       const meta = '<div class="spot-meta">' + nimi + ' · harppaus ' + n1(K.h1) + ' m' + (e.p.mitattu ? ' (mitattu)' : ' (arvio)') + ' · ' + vaiheTxt
@@ -11553,7 +11721,7 @@ function sumuriskiAlusta(){
         window.akValmiina().then(function () {
           setTimeout(function () {
             const tp = document.getElementById('taimenPaneeli');
-            if (tp && taimenViimeArgs === o) tp.innerHTML = taimenHotspotHtml(o);
+            if (tp && taimenViimeArgs === o) { tp.innerHTML = taimenHotspotHtml(o); try { syysJarvilohiPaivita(); } catch (e) { /* ei kriittistä */ } }
           }, 0);
         }).catch(function () {});
     }
@@ -12614,7 +12782,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v188';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v189';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -14296,7 +14464,10 @@ function sumuriskiAlusta(){
       return paras;
     }
 
-    let taulukkoNakosyvyysKaytossa = false;
+    // v189: asetus luetaan heti käynnistyksessä. Ennen sitä se luettiin vasta ensimmäisen analyysin
+    // lopussa (alustaValoKuvaaja), joten avauksen jälkeinen ensimmäinen analyysi käytti kirkkausluokkaa
+    // ja seuraavat taulukkoa: sama painallus antoi kaksi eri tulosta.
+    let taulukkoNakosyvyysKaytossa = (() => { try { return localStorage.getItem('nakoTaulukko') === '1'; } catch (e) { return false; } })();
 
     // Palauttaa käytettävän näkösyvyyden ja sen lähteen. Järjestys:
     // 1) itse mitattu, 2) taulukko jos päällä, 3) kirkkausluokan oletus.
@@ -15546,7 +15717,8 @@ function sumuriskiAlusta(){
     // KOLME KORJAUSTA AIEMPAAN (kaikki perustuivat yhteen lehtiartikkeliin M&K 11/2003):
     // (a) POISTETTU "loppusyksyllä suunta kääntyy syvemmälle 5–15 m lämmön perässä".
     //     Telemetria osoittaa päinvastaista: kala pysyy pintakerroksessa myös kylmässä ja
-    //     siirtyy VAAKASUUNNASSA ulapalle. Syystäyskierron jälkeen järvi on lisäksi lähes
+    //     siirtyy VAAKASUUNNASSA ulapalle. v189 tarkennus (tiivistelmä tarkistettu 10.10.): "movements closer
+    //     to shore in the fall", ulapalle (~5,5 km rannasta) vasta talvella. Syystäyskierron jälkeen järvi on lisäksi lähes
     //     tasalämpöinen, joten "lämpimin vesi syvällä" -mekanismia ei enää ole.
     //     Loppusyksyn syvemmät otit selittyvät paremmin SAALISKALAN syvyydellä.
     // (b) POISTETTU oletus "järvilohi on taimenta syvemmällä ja kylmähakuisempi".
@@ -17234,7 +17406,7 @@ function sumuriskiAlusta(){
         reasonsJarvilohi.push('Hämärä: järvilohen vuorokausivaihtelu on mitattuna PIENTÄ (1–5 m) ja suunta on päivällä hieman syvemmälle. Sillä ei ole yhtä terävää hämärähuippua kuin taimenella — syöntijaksot ovat lyhyitä ja arvaamattomia.');
       }
       if (a.temp !== undefined && a.temp > 18) reasonsJarvilohi.push('Yli 18 °C pintavesi: vasta tässä lämmössä lohi hakeutuu selvästi syvemmälle (Gamperl ym. 2021). Alle 18 °C se pysyy pintakerroksessa.');
-      if (a.temp !== undefined && a.temp <= 8) reasonsJarvilohi.push('KORJATTU AIEMMASTA: kylmässä vedessä järvilohi EI painu syvemmälle. Aiempi malli väitti loppusyksyn suunnan kääntyvän 5–15 metriin, mutta telemetria osoittaa kalan pysyvän pintakerroksessa ja siirtyvän vaakasuunnassa ulapalle. Loppusyksyn syvemmät otit selittyvät saaliskalan vetäytymisellä, eivät lämpöhakuisuudella.');
+      if (a.temp !== undefined && a.temp <= 8) reasonsJarvilohi.push('KORJATTU AIEMMASTA: kylmässä vedessä järvilohi EI painu syvemmälle. Aiempi malli väitti loppusyksyn suunnan kääntyvän 5–15 metriin, mutta telemetria osoittaa kalan pysyvän pintakerroksessa, enimmäkseen alle 4 m:ssä. Syksyllä se liikkui lähempänä rantaa ja vasta talvella ulapalle (Larocque ym. 2022, Ontariojärvi; v189 tarkennus: aiemmin tässä luki, että kylmässä vedessä kala siirtyy ulapalle). Loppusyksyn syvemmät otit selittyvät saaliskalan vetäytymisellä, eivät lämpöhakuisuudella.');
 
       reasonsTaimen.push(`Selkävesillä ja syvänteiden yllä taimenen optimi-iskusyvyys on tällä hetkellä n. ${dTaimen.toFixed(1)} m.`);
       try { const tv = taimenVertailuTeksti(taimenProfiiliVertailu(now), dTaimen); if (tv) reasonsTaimen.push(tv); } catch (e) {}   // v164
@@ -18195,6 +18367,7 @@ function sumuriskiAlusta(){
 
       const ulJL = document.getElementById('reasonsOutJarvilohi'); ulJL.innerHTML = '';
       reasonsJarvilohi.forEach(r => { const li = document.createElement('li'); li.textContent = r; ulJL.appendChild(li); });
+      try { syysJarvilohiPaivita(); } catch (e) { console.warn('Syysohje järvilohelle:', e.message); }
 
       drawScale('scaleSyotti', lowS, highS, true);
       drawScale('scaleKuha', lowK, highK, false, 'kuha');
@@ -20597,7 +20770,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=188';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=189';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })

@@ -15,6 +15,7 @@
    v187: venelista 9 venettä (sama kuin Beason630wa.html), valinta tunnisteen mukaan, tuntematon näkyy (akVeneRajat().huom).
    v188: tuuliennuste talteen puhelimeen (akEnnusteTila, akEnnusteHistoria); ilman verkkoa malli toimii muistista ja
          kertoo ennusteen iän; verkon palatessa haetaan uusi (tapahtuma 'akEnnustePaivittyi').
+   v189: tuulen pakkaamat reunat syksyn sekoittuneen veden ohjeelle (akReunaEhdokkaat); taimenmerkkien tyyppi 'reuna' (R).
    VERSIO: sivut lataavat tiedoston nimellä aaltomalli.js?v=NNN; NNN = sw.js:n VERSIO-numero. */
 function aaltokarttaAlusta(){
 "use strict";
@@ -2304,6 +2305,53 @@ window.akKuhaEhdokkaat = function(o){
 };
 
 
+/* ===== TUULEN PAKKAAMAT REUNAT — 10.10.2026 (v189) =====
+   Hannun syksyn ohje kerrostumattomalle 12–4 °C:n vedelle ("Etsi tuulen pakkaama reuna"): aja tuulen pakkaamia rantoja,
+   niemennokkia ja selkien rinteitä. Malli: konvergenssin syvä reuna (akKonvReuna: ≥ 1,5 m syvä, 150 m:n sisällä vahvaa
+   kasautumista ≥ 25) JA rinne (kaltevuus vähintään järven vararaja gVara, sama kuin kuhan ehdokkailla). Järjestys: suurin
+   kasautuminen 150 m:n sisällä, sitten kaltevuus; vähintään 1 km toisistaan, enintään 6. Vain aaltokortin järvi ja tunti,
+   jolle on tuuliennuste (akVLKentat ±3 h).
+   Todisteen taso: Malli (missä tuuli kasaa pintavettä). Kesällä kerrostuneessa järvessä iso eläinplankton kasautui tuulen
+   alapuolelle tuulen mukaan, joka oli puhaltanut jopa 12 h ennen (Blukacz, Shuter & Sprules 2009, L&O, Opeongo); syksyn
+   sekoittuneessa vedessä kalojen seuraamista ei ole tutkittu, joten ohje on uistelijoiden konsensus. */
+window.akReunaEhdokkaat = function(o){
+  // o: { avain, aikaMs, max, pisteet }
+  var P = akKuhaPohjaLaske(o.avain);
+  if (!P) return { tila: 'eiKarttaa', lista: [] };
+  if (jarvi !== JARVET[o.avain]) return { tila: 'eriJarvi', lista: [] };
+  var vl = akVLKentat(o.aikaMs);
+  if (!vl || !vl.reuna || !vl.kf) return { tila: data.length ? 'eiTuntia' : 'eiEnnustetta', lista: [] };
+  var k = P.k, W = k.W, H = k.H, R = k.ruutu, r = Math.max(1, Math.round(150/R)), max = o.max || 6, kaikki = [];
+  for (var q = 0; q < P.m.length; q++){
+    if (!P.m[q] || !vl.reuna.reuna[q] || (P.kat && !P.kat[q]) || P.g[q] < P.gVara) continue;
+    var i = q % W, j = (q/W)|0, kfMax = 0;
+    for (var a = -r; a <= r; a++) for (var b = -r; b <= r; b++){
+      if (a*a + b*b > r*r) continue;
+      var ii = i + a, jj = j + b; if (ii < 0 || jj < 0 || ii >= W || jj >= H) continue;
+      var q2 = jj*W + ii; if (P.m[q2] && vl.kf[q2] > kfMax) kfMax = vl.kf[q2];
+    }
+    var lat = k.pohjoisLat - (j + 0.5)*R/111320;
+    kaikki.push({ lat: lat, lon: k.lansiLon + (i + 0.5)*R/(111320*Math.cos(lat*Math.PI/180)), f: P.f[q], g: P.g[q],
+                  syvaSuunta: P.suunta[q], kasautuminen: Math.round(kfMax) });
+  }
+  kaikki.sort(function(x, y){ return (y.kasautuminen - x.kasautuminen) || (y.g - x.g); });
+  var lista = [];
+  for (var n = 0; n < kaikki.length && lista.length < max; n++){
+    var x = kaikki[n];
+    if (lista.some(function(v){ var dy = (v.lat - x.lat)*111320, dx = (v.lon - x.lon)*111320*Math.cos(x.lat*Math.PI/180); return dx*dx + dy*dy < 1e6; })) continue;
+    lista.push(x);
+  }
+  // o.pisteet [{ lat, lon }] (esim. nimetyt paikat): matka lähimpään reunaruutuun ja sen kasautuminen
+  var pisteet = (o.pisteet || []).map(function(pt){
+    var best = null, bm = Infinity;
+    kaikki.forEach(function(x){ var dy = (x.lat - pt.lat)*111320, dx = (x.lon - pt.lon)*111320*Math.cos(pt.lat*Math.PI/180), m = dx*dx + dy*dy; if (m < bm){ bm = m; best = x; } });
+    return best ? { m: Math.sqrt(bm), kasautuminen: best.kasautuminen, f: best.f, g: best.g } : null;
+  });
+  var idx = 0, pe = Infinity;
+  for (var m2 = 0; m2 < data.length; m2++){ var e2 = Math.abs(data[m2].aika.getTime() - o.aikaMs); if (e2 < pe){ pe = e2; idx = m2; } }
+  return { tila: 'ok', lista: lista, pisteet: pisteet, ruutuja: kaikki.length, osuus: vl.reuna.osuus, U: data[idx].U, dir: data[idx].dir, gRaja: P.gVara };
+};
+
 /* ===== TAIMENEN HOTSPOTIT HARPPAUSKERROKSESTA — 5.10.2026 (v156) =====
    Hannu 5.10.2026: otit ovat tulleet pääosin pinnasta, joten saalisdata vääristää kuvaa; tarvitaan
    uusi näkemys, ja teoreettinen malli kelpaa. Painotus (Hannun järjestys): 1 harppauksen kallistuma,
@@ -2551,6 +2599,7 @@ function akTaimenInfoPaivita(){
   if (K.kohteet.some(function(p){ return p.tyyppi === 'ehdokas'; })) osat.push('<b>valkoinen T-numero</b> on ehdokas harppauskerroksen mallista');
   if (K.kohteet.some(function(p){ return p.tyyppi === 'oma'; })) osat.push('<b>sininen pallo</b> nimetty paikka, jolle malli antaa pisteitä (isoin paras)');
   if (K.kohteet.some(function(p){ return p.tyyppi === 'vaihtoehto'; })) osat.push('<b>katkoviivainen V</b> kohta, joka toistuu yli puolessa ensemble-ennusteista');
+  if (K.kohteet.some(function(p){ return p.tyyppi === 'reuna'; })) osat.push('<b>valkoinen R-numero</b> tuulen pakkaama reuna (syksyn sekoittuneen veden ohje, v189)');
   el.innerHTML = 'Taimenpaikat hetkelle ' + t.getDate() + '.' + (t.getMonth()+1) + '. klo ' + pad(t.getHours()) + ':' + pad(t.getMinutes())
     + ': ' + osat.join(', ')
     + '. Napauta merkkiä. Paikat lasketaan Analysoi-napista, eivät vaihdu kartan tunnin mukana.';

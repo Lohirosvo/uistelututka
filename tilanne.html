@@ -70,6 +70,8 @@
     syvyyskartta piirtävät nyt saman veneen ja vanan kuin tämä sivu. Koodi siirretty sanasta sanaan; tämän sivun kuva on
     bitilleen sama kuin v184:ssä (testattu). Vana on välilehden yhteinen (sessionStorage 'ut_vana', v183:n
     'tilanne_vana' luetaan kerran), joten etusivulla kuljettu reitti jatkuu tilannekuvassa ja päinvastoin.
+  v189 (10.10.2026): SYKSYN OHJE. Taimenpaikkoihin tulee sekoittuneessa 4–12 °C:n vedessä tuulen pakkaamat reunat (R-merkit,
+    tyyppi 'reuna') perusteluineen; piirto ja napautus samoin kuin muilla merkeillä (v186).
   v188 (10.10.2026): ENNUSTEET TALTEEN (aaltomalli.js). Ilman verkkoa malli toimii puhelimeen tallennetulla ennusteella;
     yläpalkissa näkyy ennusteen ikä (keltainen), kun se on muistista tai yli 3 h vanha, ja vasemmassa alakulmassa haun
     aika. Kun verkko palaa, uusi ennuste haetaan ja kartta piirretään uudelleen ("Ennuste päivitetty verkosta").
@@ -250,18 +252,18 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=188" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=188" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=188" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=188" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=188" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=188" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=188" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=188" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=189" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=189" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=189" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=189" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=189" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=189" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=189" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=189" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v188';
+    const APP_VERSIO = 'v189';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
@@ -1011,7 +1013,7 @@
       const o = PAIKKALAJIT.map(laji => ({ laji, ...paikkaKartta(laji) }));
       const nappi = x => '<button class="merkki' + (as[x.laji] && x.K ? ' valittu' : '') + '" data-merkit="' + x.laji + '"' + (x.K ? '' : ' disabled') + '>'
         + (x.laji === 'kuha' ? '🐟 Kuhapaikat' : '🎣 Taimenpaikat') + (x.K ? ' (' + x.K.kohteet.length + ')' : '') + '</button>';
-      const huom = o.map(x => x.K ? (x.laji === 'kuha' ? 'Kuha: oranssi = oma paikka, valkoinen numero = ehdokas' : 'Taimen: sininen = nimetty paikka, valkoinen T = ehdokas, katkoviiva V = ensemble-vaihtoehto')
+      const huom = o.map(x => x.K ? (x.laji === 'kuha' ? 'Kuha: oranssi = oma paikka, valkoinen numero = ehdokas' : 'Taimen: sininen = nimetty paikka, valkoinen T = ehdokas, R = tuulen pakkaama reuna (syksyn ohje), katkoviiva V = ensemble-vaihtoehto')
           + ' (' + hetkiTeksti(x.K.hetki) + ')' : (x.laji === 'kuha' ? 'Kuhapaikat: ' : 'Taimenpaikat: ') + x.syy);
       return '<div class="huom" style="margin-top:4px;color:var(--text)">Merkit etusivun analyysista</div>' + o.map(nappi).join('')
         + '<div class="huom">' + huom.join('.<br>') + '. Napauta merkkiä: perustelut.</div>' + veneValikko();
