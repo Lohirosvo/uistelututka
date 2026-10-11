@@ -2387,14 +2387,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=194" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=194" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=194" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=194" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=194" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=194" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=194" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=194" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=195" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=195" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=195" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=195" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=195" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=195" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=195" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=195" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
        uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
@@ -3459,6 +3459,8 @@ body{padding-bottom:66px}
    siirretty tiedostoon luotaus.js, koska aaltomalli.js tarvitsee niitä myös tilannekuvassa: ilman niitä
    tilannekuvan syvyydet olisivat pelkkää MML:ää (kaksi mallia). Tässä ovat tuonti ja kortti. */
 /* ---- TUONTI ---- */
+// v195: tuonnin käsittelyversio. Saman tiedoston uudelleentuonti korvaa vanhemmalla versiolla tehdyn (v195: kellonajat).
+var OL_TUONTI_VERSIO = 195;
 function olAnturi(){
   var el = document.getElementById('olAnturi'), v = el ? parseFloat(String(el.value).replace(',', '.')) : NaN;
   if (!(v >= 0 && v <= 3)) { v = 0.25; try { var s = parseFloat(localStorage.getItem(OL_ANTURI_LS)); if (s >= 0 && s <= 3) v = s; } catch (e) {} }
@@ -3484,6 +3486,12 @@ async function olLueSl2(file, edistys){
   // v175: ensimmäisen pisteen aika (alkuhetkeen) ja ajoaika pisteiden välisistä askelista. Aika saa hypätä taaksepäin:
   // v174:ssä yksi poikkeava aikaleima jumitti tuonnin yhteen pisteeseen (Hannu 7.10.: gigan tallenteista 1 piste).
   var t0 = null, kestoMs = 0, d = { aikaOhi: 0, matkaOhi: 0, taakse: 0, sijMuuttui: 0 }, edE = null, edN = null;
+  /* v195 (11.10.2026): kehyksen aika (+140, ms tallennuksen alusta) puretaan ympäripyörähdyksestä. Hannun jatkotallenteiden
+     ensimmäisillä kaiuilla aika on hieman alle nollan; etumerkittömänä luettuna se oli lähes 2^32 ms, ja pisteiden, parvien
+     ja kalojen kellonajat siirtyivät 49 vrk 17 h 03 min taaksepäin (Hannu: "Oltiin grillillä tuolloin?"). Ensimmäinen aika
+     luetaan etumerkillisenä ja seuraavat edellisestä etumerkillisenä erotuksena (−2^31…2^31 ms). Sonar0001 alkoi 307 ms:sta:
+     tulokset ennallaan. */
+  var tEdRaa = null, tEd = 0;
   while (pos + 144 <= size){
     var buf = await file.slice(pos, Math.min(size, pos + CH)).arrayBuffer(), dv = new DataView(buf), off = 0;
     while (off + 144 <= buf.byteLength){
@@ -3492,7 +3500,10 @@ async function olLueSl2(file, edistys){
       if (off + koko > buf.byteLength) break;
       kehyksia++;
       var ft = dv.getFloat32(off + 64, true), kn = dv.getFloat32(off + 100, true), lt = dv.getFloat32(off + 104, true);
-      var e = dv.getInt32(off + 108, true), n = dv.getInt32(off + 112, true), t = dv.getUint32(off + 140, true);
+      var e = dv.getInt32(off + 108, true), n = dv.getInt32(off + 112, true), tRaa = dv.getUint32(off + 140, true), t;
+      if (tEdRaa === null) t = tRaa > 2147483647 ? tRaa - 4294967296 : tRaa;
+      else { var tEro = tRaa - tEdRaa; if (tEro > 2147483647) tEro -= 4294967296; else if (tEro < -2147483648) tEro += 4294967296; t = tEd + tEro; }
+      tEdRaa = tRaa; tEd = t;   // v195
       var la = (2*Math.atan(Math.exp(n/R)) - Math.PI/2)*180/Math.PI, lo = e/R*180/Math.PI;
       if (alku === null){ var us = dv.getUint32(off + 60, true); if (us > 1.5e9 && us < 2.2e9) alku = us*1000 - t; }   // v173: tallenteen alkuhetki
       var liput = dv.getUint16(off + 132, true), ltOk = (liput & 4) && lt > -2 && lt < 35;   // v193: lämpö kelpaa (lippu 0x0004)
@@ -3786,7 +3797,9 @@ function olJalkikasittely(tulos, jarviAv, nimi){
     osat.push('vesi ' + olN1(tulos.lampoMin) + (tulos.lampoMax - tulos.lampoMin >= 0.1 ? '–' + olN1(tulos.lampoMax) : '') + ' °C, keskilämpö ' + olN1(tulos.lampoKa) + ' °C');
     var loppu = tulos.alku && tulos.aikaS && tulos.aikaS.length ? tulos.alku + tulos.aikaS[tulos.aikaS.length - 1]*1000 : null;
     if (jarviAv && loppu && typeof ltOmat === 'function' && typeof ltTallennaOmat === 'function'){
-      var id = 'ol-' + (nimi || '') + '-' + Math.round(loppu/1000), lista = ltOmat().filter(function(x){ return x.id !== id; });
+      var id = 'ol-' + (nimi || '') + '-' + Math.round(loppu/1000), vaara = loppu - 4294967296;
+      // v195: saman tallenteen v194:ssä tallentunut rivi, jonka aika oli 49 vrk 17 h 03 min liian aikaisin, poistetaan
+      var lista = ltOmat().filter(function(x){ return x.id !== id && !(x.lahde === 'kaikuluotain' && x.tallenne === (nimi || null) && Math.abs(new Date(x.aika).getTime() - vaara) < 3*3600e3); });
       lista.push({ id: id, avain: jarviAv, nimi: olJarviNimi(jarviAv), aika: new Date(loppu).toISOString(), lahde: 'kaikuluotain', pinta: tulos.lampoKa,
                    min: tulos.lampoMin, max: tulos.lampoMax, tallenne: nimi || null });
       ltTallennaOmat(lista);
@@ -3871,10 +3884,11 @@ async function olTuo(files){
       if (tila) tila.textContent = nimi + ': tunnistetaan järvi…';
       var jarviAv = vanha && vanha.jarvi ? vanha.jarvi : await olTunnistaJarvi(tulos.lat, tulos.lon);
       var lisa = olJalkikasittely(tulos, jarviAv, nimi);
-      if (vanha && (tulos.lat.length > vanha.lat.length || !Array.isArray(vanha.lampo) || !Array.isArray(vanha.kalat))){   // v175: jumittunut tuonti korvataan; v193: vanha tuonti saa lämmön ja parvet; v194: kalat
+      if (vanha && (tulos.lat.length > vanha.lat.length || !Array.isArray(vanha.lampo) || !Array.isArray(vanha.kalat) || (vanha.tuontiVersio || 0) < OL_TUONTI_VERSIO)){   // v175: jumittunut tuonti korvataan; v193: vanha tuonti saa lämmön ja parvet; v194: kalat; v195: kellonajat
         var ennen = vanha.lat.length;
         ['lat','lon','syv','kehyksia','kestoS','lampoMin','lampoMax','lampo','aikaS','lampoKa','lampoViim','parvet','pohjaPoistettu','kalat','kalaMed','takila','parviSekPois'].forEach(function(k){ vanha[k] = tulos[k]; });
         if (tulos.alku) vanha.alku = tulos.alku;
+        vanha.tuontiVersio = OL_TUONTI_VERSIO;
         vanha.tuotu = Date.now(); uusia++;
         viestit.push(nimi + ' tuotiin uudelleen: ' + ennen + ' → ' + tulos.lat.length + ' pistettä' + lisa + '.' + olDiagTeksti(tulos));
         continue;
@@ -3888,7 +3902,8 @@ async function olTuo(files){
                 kehyksia: tulos.kehyksia, kestoS: tulos.kestoS, alku: tulos.alku, lampoMin: tulos.lampoMin, lampoMax: tulos.lampoMax,
                 lat: tulos.lat, lon: tulos.lon, syv: tulos.syv,
                 lampo: tulos.lampo, aikaS: tulos.aikaS, lampoKa: tulos.lampoKa, lampoViim: tulos.lampoViim, parvet: tulos.parvet, pohjaPoistettu: tulos.pohjaPoistettu,   // v193
-                kalat: tulos.kalat, kalaMed: tulos.kalaMed, takila: tulos.takila, parviSekPois: tulos.parviSekPois };   // v194
+                kalat: tulos.kalat, kalaMed: tulos.kalaMed, takila: tulos.takila, parviSekPois: tulos.parviSekPois,   // v194
+                tuontiVersio: OL_TUONTI_VERSIO };   // v195
       d.tuonnit.push(t); uusia++;
       viestit.push(nimi + ': ' + t.lat.length + ' pistettä, ' + olJarviNimi(jarviAv) + (t.alku ? ', ' + olAika(t.alku) : '') + (jarviAv ? '' : ' (ei osu sovelluksen järviin, tallennetaan silti)') + lisa + olDiagTeksti(tulos));
     } catch (e) {
@@ -3940,6 +3955,7 @@ function olPiirraLista(){
       + (typeof t.lampoMin === 'number' ? ' · vesi ' + olN1(t.lampoMin) + (t.lampoMax - t.lampoMin >= 0.1 ? '–' + olN1(t.lampoMax) : '') + ' °C' + (typeof t.lampoKa === 'number' ? ' (ka ' + olN1(t.lampoKa) + ')' : '') : '')
       + (Array.isArray(t.parvet) ? ' · ' + t.parvet.filter(function(x){ return x.tyyppi === 'parvi'; }).length + ' parvea' + (t.pohjaPoistettu ? ', pohjaksi luettu parvi poistettu ' + t.pohjaPoistettu + ' pisteestä' : '') : '')
       + (Array.isArray(t.kalat) ? ' · ' + t.kalat.length + ' kalaa (' + omaLuotausKalaLuokat(t.kalat).iso + ' isoa)' + ((t.takila || []).length ? ', takila suodatettu' : '') : '')   // v194
+      + (olAikaVaarin(t) ? '<br><span style="color:var(--amber);">⚠ Kellonajat ovat 49 vrk 17 h liian aikaisin (v193–v194:n vika). Tuo tämä tiedosto uudelleen, niin ajat, lämpöjälki, parvet ja kalat korjautuvat.</span>' : '')   // v195
       + ' · tuotu ' + tt.getDate() + '.' + (tt.getMonth() + 1) + '. klo ' + pad(tt.getHours()) + '.' + pad(tt.getMinutes())
       + ' <button type="button" class="chip" style="padding:1px 8px;font-size:12px;margin-left:4px;" onclick="olPoista(\'' + t.id + '\')">Poista</button></div>';
   });
@@ -3956,9 +3972,11 @@ function olPiirraLista(){
 }
 /* v194: kalat kaikukuvasta syvyyden ja kellonajan mukaan, järvittäin (kaikki tuodut tallenteet). Solussa isot / kaikki;
    rivillä tallennettu aika, koska kalamäärä riippuu siitä, kauanko sillä tunnilla luodattiin. */
+// v195: v193–v194:ssä tuotu tallenne, jonka pisteiden ajat ovat pyörähtäneet 2^32 ms taaksepäin (aika yli vuorokauden ennen alkua)
+function olAikaVaarin(t){ return (t.tuontiVersio || 0) < OL_TUONTI_VERSIO && Array.isArray(t.aikaS) && t.aikaS.some(function(s){ return s < -86400; }); }
 function olKalaKoosteHtml(d){
   if (typeof omaLuotausKalaKooste !== 'function') return '';
-  var jarvet = []; d.tuonnit.forEach(function(t){ if (Array.isArray(t.kalat) && t.alku && jarvet.indexOf(t.jarvi) < 0) jarvet.push(t.jarvi); });
+  var jarvet = [], nimet = {}; d.tuonnit.forEach(function(t){ if (Array.isArray(t.kalat) && t.alku && jarvet.indexOf(t.jarvi) < 0){ jarvet.push(t.jarvi); nimet[t.jarvi] = t.jarviNimi; } });
   return jarvet.map(function(av){
     var K = omaLuotausKalaKooste(av), tunnit = Object.keys(K.tunnit).map(Number).sort(function(a, b){ return a - b; });
     if (!tunnit.length) return '';
@@ -3969,10 +3987,12 @@ function olKalaKoosteHtml(d){
       return '<tr><td style="' + td + 'text-align:left;">' + pad(h) + '–' + pad((h + 1) % 24) + '</td><td style="' + td + '">' + Math.round(r.s/60) + ' min</td>'
         + r.n.map(function(n, j){ return '<td style="' + td + (r.iso[j] ? 'color:var(--amber);font-weight:700;' : n ? '' : 'color:var(--muted);') + '">' + (n ? r.iso[j] + ' / ' + n : '·') + '</td>'; }).join('') + '</tr>';
     }).join('');
-    return '<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--line);"><strong>🎣 Kalat kaikukuvasta · ' + olJarviNimi(av) + '</strong>'
+    var vaarin = d.tuonnit.filter(function(t){ return t.jarvi === av && Array.isArray(t.kalat) && olAikaVaarin(t); }).length;   // v195
+    return '<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--line);"><strong>🎣 Kalat kaikukuvasta · ' + olJarviNimi(av, nimet[av]) + '</strong>'
       + ' <span class="hint">(' + K.tallenteita + (K.tallenteita === 1 ? ' tallenne, ' : ' tallennetta, ') + K.kaloja + ' kalaa; solussa isot / kaikki)</span>'
       + '<div style="overflow-x:auto;"><table style="border-collapse:collapse;font-size:12px;margin-top:4px;width:100%;"><tr><th style="' + th + 'text-align:left;">klo</th><th style="' + th + '">luodattu</th>'
       + OL_SYVLUOKAT.map(function(s){ return '<th style="' + th + '">' + s[2] + '</th>'; }).join('') + '</tr>' + rivit + '</table></div>'
+      + (vaarin ? '<p style="margin:4px 0 0;color:var(--amber);">⚠ ' + vaarin + (vaarin === 1 ? ' tallenne on' : ' tallennetta on') + ' väärillä tunneilla (kellonaika 49 vrk 17 h liian aikaisin): tuo ' + (vaarin === 1 ? 'se' : 'ne') + ' uudelleen.</p>' : '')
       + '<p class="hint" style="margin:4px 0 0;">Syvyys pinnasta (anturin syvyys lisätty). Iso = kaiku selvästi tallenteen tyypillistä kalaa vahvempi ja täysi kaari (kala kulki keilan keskeltä); '
       + 'kokoa senttimetreinä ei voi mitata, koska kaiku riippuu myös kalan paikasta keilassa. Ylin 1,75 m pinnasta ei näy. Lajiepäily ja paikka: tilannekuvan kerros 🎣 Isot kaiut.</p></div>';
   }).join('');
@@ -13163,7 +13183,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v194';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v195';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -21275,7 +21295,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=194';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=195';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })

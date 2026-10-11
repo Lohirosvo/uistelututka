@@ -3,6 +3,7 @@
 // Tehtävä: sovellus aukeaa ilman verkkoa ja ilman että Acoden palvelinta tarvitsee
 // käynnistää. v178 (10.10.2026): sivu (n. 1,3 MB) lataa omat tiedostonsa: jarvet.js (järvien
 // ruudukot), aaltomalli.js (aalto- ja virtausmalli, kloonihaku) ja otti.mp3 (ottipisteääni).
+// v195: kaikuluotaimen tallenteen kellonajat (aika alussa alle nollan → 49,7 vrk virhe), uudelleentuonti korjaa; ei uusia tiedostoja.
 // v194: yksittäiset kalat ja takilan kuula kaikuluotaimen tallenteesta (index.html, luotaus.js), tilannekuvan kerros 🎣 Isot kaiut; ei uusia tiedostoja.
 // v193: tilannekuvan kartta: vene kolmanneksen keskeltä taaksepäin, kulkusuunta ylös -valinta; ei uusia tiedostoja.
 // v192: analyysi toistuu uistelun aikana :00 ja :30 (etusivu, tilannekuvassa näkymätön etusivun kehys); ei uusia tiedostoja.
@@ -29,7 +30,7 @@
 // VERSIO: kasvata tätä aina kun julkaiset uuden version. Vanha välimuisti siivotaan.
 // Versionumeron kasvatus on se mekanismi joka SIIVOAA vanhan välimuistin,
 // index2.html mukaan lukien. Ilman tätä poisto ei näkyisi puhelimissa.
-const VERSIO = 'uistelututka-v194';
+const VERSIO = 'uistelututka-v195';
 /* v178: sivun omat tiedostot ladataan nimellä tiedosto?v=NNN, jossa NNN on tämän VERSIOn numero.
    index.html:n <script src> -riveissä ja ottiäänen haussa on SAMA numero: kun julkaiset, vaihda
    molemmat. Uusi numero on uusi osoite, joten puhelin ei voi yhdistää uutta sivua vanhaan malliin
