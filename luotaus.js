@@ -101,7 +101,7 @@ function omaLuotausTarkiste(k){ try { var r = omaLuotausSolut(k); return r ? r.t
 /* ===== v193 (11.10.2026): LÄMPÖJÄLKI JA PARVET TALLENTEISTA (tilannekuva) =====
    Tuonnit, joilla on aika (alku), enintään maxIkaMs vanhat (oletus 7 vrk), järvi avaimella. Lämpö °C, aika ms.
    Tallenteen pisteillä lampo (sadasosa-asteina) ja aikaS (sekuntia alusta) v193:sta alkaen; vanhemmissa ei ole. */
-function omaLuotausTuoreet(avain, maxIkaMs){
+function omaLuotausTuoreet(avain, maxIkaMs){   // v194: kalat (omaLuotausKalat) samasta välimuistista
   var raja = Date.now() - (maxIkaMs || 7*86400e3), k = (avain || '') + '|' + Math.floor(raja/600000);
   if (window.__olTuoreet && window.__olTuoreet.k === k) return window.__olTuoreet.t;
   var t = omaLuotausLue().tuonnit.filter(function(x){ return x.alku && x.alku >= raja && (!avain || x.jarvi === avain); });
@@ -122,8 +122,74 @@ function omaLuotausLampoJalki(avain, maxIkaMs){   // { pisteet: [{ lat, lon, c, 
 }
 function omaLuotausParvet(avain, maxIkaMs){
   var out = [];
-  omaLuotausTuoreet(avain, maxIkaMs).forEach(function(t){ (t.parvet || []).forEach(function(p){ var q = {}; for (var k in p) q[k] = p[k]; q.nimi = t.nimi; out.push(q); }); });
+  omaLuotausTuoreet(avain, maxIkaMs).forEach(function(t){
+    var a = omaLuotausAnturi(t), r1 = function(v){ return Math.round(v*10)/10; };
+    (t.parvet || []).forEach(function(p){
+      var q = {}; for (var k in p) q[k] = p[k]; q.nimi = t.nimi;
+      // v194: syvyydet pinnasta (tallenne mittaa anturista; laitteen näyttö lisää anturin syvyyden). Pohjaksi luetun pohja on kartasta.
+      if (typeof q.yla === 'number') q.yla = r1(q.yla + a);
+      if (typeof q.ala === 'number') q.ala = r1(q.ala + a);
+      if (q.tyyppi !== 'pohjaksi' && typeof q.pohja === 'number') q.pohja = r1(q.pohja + a);
+      out.push(q);
+    });
+  });
   return out;
+}
+/* ===== v194 (11.10.2026): YKSITTÄISET KALAT TALLENTEISTA (index.html olKalat) =====
+   Kala: { aikaS, t, lat, lon, z (huippu anturista), pohja (anturista), yl (kaiun ylitys taustasta), luokka iso/keski/pieni,
+   kaari (täysi kaari), lahella pohja/parvi/vali, parviM }. Täältä syvyydet pinnasta (zP, pohjaP) ja tallenteen nimi. */
+function omaLuotausAnturi(t){ return typeof t.anturiM === 'number' ? t.anturiM : 0; }
+function omaLuotausKalaLuokat(K){
+  var r = { iso: 0, keski: 0, pieni: 0 };
+  (K || []).forEach(function(k){ if (r[k.luokka] !== undefined) r[k.luokka]++; });
+  return r;
+}
+function omaLuotausKalat(avain, maxIkaMs){
+  var out = [];
+  omaLuotausTuoreet(avain, maxIkaMs).forEach(function(t){
+    var a = omaLuotausAnturi(t);
+    (t.kalat || []).forEach(function(k){
+      var q = {}; for (var x in k) q[x] = k[x];
+      q.zP = Math.round((k.z + a)*10)/10; q.pohjaP = Math.round((k.pohja + a)*10)/10; q.nimi = t.nimi; q.med = t.kalaMed; q.jarvi = t.jarvi; q.anturi = a;
+      out.push(q);
+    });
+  });
+  return out;
+}
+/* Lajiepäily olosuhteista (Hannu 11.10.: "mahdollisen lajin epäilyt"; valinta: epäily olosuhteista, todisteen taso näkyviin).
+   Kaikuluotain ei tunnista lajia: tämä on olosuhdepäätelmä lajien tavallisista elintavoista, ei tunnistus.
+   Lappajärvi (Järviseudun kalatalousalueen käyttö- ja hoitosuunnitelma 2022): kuha merkittävin, kuore ja muikku tärkeimmät
+   ulappalajit, järvilohi ja järvitaimen lähes kokonaan istutusten varassa, myös ahven, hauki, made, siika, lahna ja särki.
+   Saalistajat seuraavat muikku- ja kuoreparvia; made ja lahna ovat pohjan kaloja. Muilla järvillä yleinen luettelo. */
+function omaLuotausKalaLaji(k, avain){
+  var L = avain === 'lappajarvi', n1 = function(v){ return (Math.round(v*10)/10).toLocaleString('fi-FI'); };
+  if (k.lahella === 'pohja'){
+    var ero = k.pohja - k.z;
+    return { lajit: 'kuha, made tai lahna', peruste: 'pohjan tuntumassa (' + n1(ero) + ' m pohjasta)',
+             varaus: ero <= 0.5 ? 'Näin lähellä pohjaa kaari voi olla myös kivi tai pohjan muoto; sama kohta usealla ajolla viittaa kiveen.' : '' };
+  }
+  if (k.lahella === 'parvi') return { lajit: L ? 'kuha, taimen, järvilohi tai hauki' : 'kuha tai hauki (lohikala, jos järvessä on)',
+                                      peruste: 'syöttikalaparven liepeillä' + (typeof k.parviM === 'number' ? ' (' + k.parviM + ' m)' : ''), varaus: '' };
+  var mp = k.muuParvi, a = k.anturi || 0;
+  return { lajit: L ? 'taimen, järvilohi, kuha, siika tai lahna' : 'kuha, hauki, siika tai lahna',
+           peruste: mp ? 'välivedessä; syöttikalaparvi ' + mp.m + ' m:n päässä eri syvyydessä (' + n1(mp.yla + a) + '–' + n1(mp.ala + a) + ' m)' : 'välivedessä, ei syöttikalaparvea lähellä', varaus: '' };
+}
+/* Syvyys × kellonaika kaikista tämän järven tallenteista (iästä riippumatta): tunneittain tallennetut minuutit ja kalat
+   syvyysluokittain pinnasta. Hannu 11.10.: "Niiden esiintymissyvyyden eri kellonaikoina". */
+var OL_SYVLUOKAT = [[0, 3, '≤ 3 m'], [3, 6, '3–6 m'], [6, 9, '6–9 m'], [9, 12, '9–12 m'], [12, 999, 'yli 12 m']];
+function omaLuotausKalaKooste(avain){
+  var tunnit = {}, tallenteita = 0, kaloja = 0;
+  omaLuotausLue().tuonnit.forEach(function(t){
+    if (!Array.isArray(t.kalat) || !t.alku || (avain && t.jarvi !== avain)) return;
+    tallenteita++;
+    var a = omaLuotausAnturi(t), h = function(ms){ var x = tunnit[new Date(ms).getHours()]; if (!x) x = tunnit[new Date(ms).getHours()] = { s: 0, n: OL_SYVLUOKAT.map(function(){ return 0; }), iso: OL_SYVLUOKAT.map(function(){ return 0; }) }; return x; };
+    if (Array.isArray(t.aikaS)) for (var i = 1; i < t.aikaS.length; i++){ var dt = t.aikaS[i] - t.aikaS[i - 1]; if (dt > 0 && dt <= 120) h(t.alku + t.aikaS[i - 1]*1000).s += dt; }
+    t.kalat.forEach(function(k){
+      var z = k.z + a, j = 0; while (j < OL_SYVLUOKAT.length - 1 && z >= OL_SYVLUOKAT[j][1]) j++;
+      var r = h(k.t || (t.alku + k.aikaS*1000)); r.n[j]++; if (k.luokka === 'iso') r.iso[j]++; kaloja++;
+    });
+  });
+  return { tunnit: tunnit, tallenteita: tallenteita, kaloja: kaloja };
 }
 function omaLuotausViimeLampo(avain, maxIkaMs){   // uusin tallenne: { c (viimeisin), ka (keskilämpö), t (loppu), nimi }
   var paras = null;

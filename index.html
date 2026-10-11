@@ -2387,14 +2387,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=193" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=193" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=193" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=193" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=193" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=193" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=193" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=193" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=194" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=194" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=194" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=194" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=194" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=194" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=194" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=194" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
        uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
@@ -3480,6 +3480,7 @@ async function olLueSl2(file, edistys){
   /* v193 (11.10.2026, Hannun Sonar0001.slg: .slg-pääte, mutta sisältä sl2, muoto 2, kanavat 0 / 10 / 11): pisteille
      lämpö ja aika, ja ensisijaisen kanavan (0) kaiuista sekunneittain syvyys, lämpö ja vesipatsaan parvi (olParviSekunti). */
   var lampo = [], aikaS = [], sekunnit = [], sek = null, OL_B = 0.1, OL_NB = 600;
+  var kt = olKalaAlusta();   // v194: yksittäiset kalat pingeittäin (olKalaPingi)
   // v175: ensimmäisen pisteen aika (alkuhetkeen) ja ajoaika pisteiden välisistä askelista. Aika saa hypätä taaksepäin:
   // v174:ssä yksi poikkeava aikaleima jumitti tuonnin yhteen pisteeseen (Hannu 7.10.: gigan tallenteista 1 piste).
   var t0 = null, kestoMs = 0, d = { aikaOhi: 0, matkaOhi: 0, taakse: 0, sijMuuttui: 0 }, edE = null, edN = null;
@@ -3500,14 +3501,16 @@ async function olLueSl2(file, edistys){
         if (!sek || sek.s !== sS){ if (sek) olParviSekunti(sek, sekunnit, OL_B); sek = { s: sS, sum: new Float32Array(OL_NB), n: new Uint16Array(OL_NB), dep: [], la: la, lo: lo, lt: ltOk ? lt : null }; }
         var pk = dv.getUint16(off + 34, true), ul = dv.getFloat32(off + 40, true)*0.3048, ll = dv.getFloat32(off + 44, true)*0.3048, dm = ft*0.3048;
         sek.dep.push(dm);
+        var nayte = null;
         if (pk > 0 && off + 144 + pk <= buf.byteLength && ll > ul){
-          var nayte = new Uint8Array(buf, off + 144, pk), dz = (ll - ul)/pk;
+          nayte = new Uint8Array(buf, off + 144, pk); var dz = (ll - ul)/pk;
           for (var ni = 0; ni < pk; ni++){
             var z = ul + (ni + 0.5)*dz; if (z > dm - 0.3) break;
             var bi = Math.floor(z/OL_B); if (bi < 0 || bi >= OL_NB) continue;
             sek.sum[bi] += nayte[ni]; sek.n[bi]++;
           }
         }
+        olKalaPingi(kt, nayte, ul, ll, dm, t, la, lo);   // v194
       }
       off += koko;
       if (!(ft > 1 && ft < 500) || !(la > 40 && la < 80) || !(lo > -30 && lo < 60) || !(kn >= 0 && kn < 32)) { hyl++; continue; }
@@ -3537,11 +3540,16 @@ async function olLueSl2(file, edistys){
   for (var ai = 0; ai < aikaS.length; ai++) aikaS[ai] -= s0;
   var lk = [], lsum = 0; sekunnit.forEach(function(x){ if (x.lt !== null){ lk.push(x.lt); lsum += x.lt; } });   // keskilämpö ajan mukaan (sekunneittain)
   if (!lk.length) lampo.forEach(function(v){ if (v !== null){ lk.push(v/100); lsum += v/100; } });
+  // v194: raidat → takilan kuula (poistaa myös sen kohdan parvisekunnit) → parvet → kalat (luokka ja olosuhde)
+  var kr = olKalaRaidat(kt), tk = olTakila(kr, sekunnit), parvet = olParvet(sekunnit, alku, s0), ka = olKalat(kr, tk, parvet, alku, s0);
   return { lat: lat, lon: lon, syv: syv, kehyksia: kehyksia, hylatty: hyl, kestoS: Math.round(kestoMs/1000), diag: d,
            alku: alkuAbs, lampoMin: lMin, lampoMax: lMax,
            lampo: lampo, aikaS: aikaS, lampoKa: lk.length ? Math.round(lsum/lk.length*100)/100 : null,
            lampoViim: lk.length ? Math.round(lk[lk.length - 1]*100)/100 : null,
-           parvet: olParvet(sekunnit, alku, s0), pohjaEhdokkaat: olPohjaEhdokkaat(sekunnit, s0), sekunteja: sekunnit.length };
+           parvet: parvet, pohjaEhdokkaat: olPohjaEhdokkaat(sekunnit, s0), sekunteja: sekunnit.length,
+           kalat: ka.kalat, kalaMed: ka.med,
+           takila: tk.nauhat.map(function(c){ return { aikaS: Math.floor(c.t0/1000) - s0, kestoS: Math.round((c.t1 - c.t0)/1000), z: Math.round(olMed(c.jas.map(function(i){ return kr[i].zt; }))*10)/10 }; }),
+           parviSekPois: tk.pois };
 }
 /* ===== v193 (11.10.2026): PARVET JA POHJAKSI LUETTU PARVI KAIKULUOTAIMEN TALLENTEESTA =====
    Hannu 11.10.: "Onko suodattimen teko helppo, jos yli 6 m vedessä on iso syöttikalaparvi … tallentaa parven yläpinnan pohjaksi.
@@ -3563,12 +3571,15 @@ function olParviSekunti(c, ulos, B){
     for (var i = i0; i < i1; i++){ if (!c.n[i]){ ok = false; break; } w.push(c.sum[i]/c.n[i]); }
     if (ok){
       var j = w.slice().sort(function(a, b){ return a - b; }), bg = j[j.length >> 1], a = null, viim = null, paras = [0, null, null];
+      var ajot = [], aj = function(x, y){ if (x !== null && (y - x)*B >= 0.7){ var s2 = 0; for (var q2 = x; q2 <= y; q2++) s2 += w[q2]; ajot.push({ yla: (i0 + x)*B, ala: (i0 + y)*B, voima: s2/(y - x + 1) - bg, pit: y - x }); } };
       for (var k = 0; k < w.length; k++){
-        if (w[k] >= bg + 12){ if (a === null || k - viim > 2) a = k; viim = k; if (viim - a > paras[0]) paras = [viim - a, a, viim]; }
+        if (w[k] >= bg + 12){ if (a === null || k - viim > 2){ aj(a, viim); a = k; } viim = k; if (viim - a > paras[0]) paras = [viim - a, a, viim]; }
       }
+      aj(a, viim);   // v194: kaikki vähintään 0,7 m:n jaksot talteen (takilan kohdalta voidaan valita seuraava jakso)
       if (paras[1] !== null && paras[0]*B >= 0.7){
         var su = 0; for (var q = paras[1]; q <= paras[2]; q++) su += w[q];
         r.yla = (i0 + paras[1])*B; r.ala = (i0 + paras[2])*B; r.voima = su/(paras[2] - paras[1] + 1) - bg;
+        if (ajot.length > 1) r.ajot = ajot;
       }
     }
   }
@@ -3616,6 +3627,145 @@ function olPohjaVahvista(ehd, avain){
   });
   return { vahvistetut: v, kartta: true };
 }
+/* ===== v194 (11.10.2026): YKSITTÄISET KALAT JA TAKILAN KUULA KAIKUKUVASTA =====
+   Hannu 11.10.: "Heräsi ajatus petokalojen poimimisesta tallenteesta. Niiden esiintymissyvyyden eri kellonaikoina ja
+   mahdollisen lajin epäilyt. Vain arviolta 50 cm – 1,4 m." Valinnat: suhteelliset kokoluokat (senttejä ei voi mitata),
+   lajiepäily olosuhteista, anturi 200 kHz. Takila on usein alhaalla ja piirtyy kaikukuvaan kuin parvi.
+   KAIKU: ensisijaisen kanavan jokainen pingi 2 cm:n kerroksiin (kerroksen suurin näyte) 1,5 m:stä anturista 0,3 m:n päähän
+   pohjasta; 3 kerroksen liukuva keskiarvo; tausta = pingin vesipatsaan mediaani (2 m – 0,5 m pohjasta). Kaiku = yhtenäinen
+   jakso ≥ tausta + 20, jonka huippu ≥ tausta + 28. Ylin 1,5 m jää pois (aallokon ja kuplien häiriö, keila kapea).
+   RAITA: kaiku jatkaa raitaa, jos raidan edellinen kaiku on enintään 3 pingiä sitten ja syvyysero ≤ 0,12 m + 0,04 m
+   pingiä kohden (lähin pari ensin). Raita kelpaa, kun siinä on vähintään 6 kaikua.
+   KALA: kaiun paksuus (mediaani) ≤ 0,35 m, syvyysvaihtelu ≤ 1 m, kesto ≤ 10 s, vähintään 0,3 m pohjasta, ei parvessa
+   (parvisekunti ±1 s, syvyys ±0,3 m) eikä takilaa. Täysi kaari: raidan alku ja loppu (viidennes kaiuista) vähintään 3 cm
+   huippua syvemmällä, eli kala kulki keilan keskeltä.
+   KOKO (suhteellinen, ei senttejä): huipun ylitys taustasta verrattuna tallenteen kalojen mediaaniin (vähintään 10 kalaa,
+   muuten 40 = Hannun 11.10. tallenne): iso ≥ mediaani + 15 ja täysi kaari, keski ≥ mediaani + 6, muuten pieni. Kaiku
+   vahvistuu noin 19 dB pituuden kymmenkertaistuessa (Love 1971), mutta keilan reunalla sama kala näkyy heikompana, eikä
+   yksikeilainen luotain tiedä kalan paikkaa keilassa; Lowrancen tallenteen lukemat eivät ole kalibroituja desibelejä.
+   OLOSUHDE: enintään 1 m pohjasta = pohja; muuten parvi, jos syöttikalaparvi ±60 s, enintään 150 m ja syvyys parven
+   kohdalla ±2 m; muuten välivesi (muuParvi: lähin parvi ±60 s ja 150 m, joka on eri syvyydessä). Lajiepäily tehdään näistä (luotaus.js, omaLuotausKalaLaji).
+   TAKILA: tasaiset raidat (yläreunan vaihtelu ≤ 0,3 m) ketjutetaan (väli ≤ 3 s, syvyysero ≤ 0,3 m); ketju vähintään 20 s ja
+   kaikua vähintään puolet ajasta = takilan kuula. Sen raidat eivät ole kaloja, ja sen kohdalla (syvyys ±0,5 m, ±1 s)
+   enintään 1,5 m paksut parvijaksot poistetaan ennen parvien kokoamista; sekunnin parviksi jää silloin seuraavaksi pisin
+   jakso (olParviSekunti pitää kaikki vähintään 0,7 m:n jaksot talteen, ajot), muuten sekunti ei ole parvi. Kokeiltu synteettisellä takilaviivalla
+   (oikeaa takilatallennetta ei vielä ole). Sama laskenta Pythonilla testipaketissa (kalat_viite.py), tulokset samat. */
+var OLK = { B: 0.02, Z: 1.5, D1: 20, D2: 28, G: 3 };
+function olMed(v){ v = v.slice().sort(function(a, b){ return a - b; }); var n = v.length; return n % 2 ? v[n >> 1] : (v[n/2 - 1] + v[n/2])/2; }
+function olKalaAlusta(){ return { akt: [], valmiit: [], pi: -1, pt: [], pla: [], plo: [] }; }
+function olKalaPingi(k, nayte, ul, ll, dm, t, la, lo){
+  var B = OLK.B, Z = OLK.Z, G = OLK.G, pi = ++k.pi, ech = [], i, j;
+  k.pt.push(t); k.pla.push(la); k.plo.push(lo);
+  var nb = Math.floor((dm - 0.3 - Z)/B);
+  if (nb > 20 && ll > ul && nayte && nayte.length > 0){
+    var pk = nayte.length, dz = (ll - ul)/pk, b = new Int16Array(nb), bi;
+    b.fill(-1);
+    for (i = 0; i < pk; i++){ bi = Math.floor((ul + (i + 0.5)*dz - Z)/B); if (bi < 0) continue; if (bi >= nb) break; if (nayte[i] > b[bi]) b[bi] = nayte[i]; }
+    var eka = -1; for (i = 0; i < nb; i++) if (b[i] >= 0){ eka = i; break; }   // tyhjä kerros (karkea näyteväli): edellinen arvo
+    if (eka < 0) b.fill(0); else { var ed = b[eka]; for (i = 0; i < nb; i++){ if (b[i] < 0) b[i] = ed; else ed = b[i]; } }
+    var sm = new Float64Array(nb);
+    for (i = 0; i < nb; i++) sm[i] = (b[i > 0 ? i - 1 : 0] + b[i] + b[i < nb - 1 ? i + 1 : nb - 1])/3;
+    var i2 = Math.floor((2.0 - Z)/B), i3 = Math.min(nb, Math.max(i2 + 10, Math.floor((dm - 0.5 - Z)/B)));
+    var h0 = i3 > i2 ? i2 : 0, h1 = i3 > i2 ? i3 : nb, hist = new Uint32Array(256), tav = (h1 - h0) >> 1, cum = 0, bg = 0;
+    for (i = h0; i < h1; i++) hist[Math.round(sm[i])]++;
+    for (var v = 0; v < 256; v++){ cum += hist[v]; if (cum > tav){ bg = v; break; } }
+    i = 0;
+    while (i < nb){
+      if (!(sm[i] >= bg + OLK.D1)){ i++; continue; }
+      j = i; while (j + 1 < nb && sm[j + 1] >= bg + OLK.D1) j++;
+      var kk = i; for (var q = i + 1; q <= j; q++) if (b[q] > b[kk]) kk = q;
+      if (b[kk] >= bg + OLK.D2) ech.push({ zt: Z + i*B, zb: Z + (j + 1)*B, zp: Z + (kk + 0.5)*B, ex: b[kk] - bg });
+      i = j + 1;
+    }
+  }
+  var pari = [];
+  for (var ei = 0; ei < ech.length; ei++) for (var ti = 0; ti < k.akt.length; ti++){
+    var tr = k.akt[ti], gap = pi - tr.viim; if (gap < 1 || gap > G) continue;
+    var dd = Math.abs(ech[ei].zp - tr.zp[tr.zp.length - 1]);
+    if (dd <= 0.12 + 0.04*gap) pari.push([dd, ei, ti]);
+  }
+  pari.sort(function(a, c){ return a[0] - c[0] || a[1] - c[1] || a[2] - c[2]; });
+  var ek = {}, tk = {};
+  pari.forEach(function(x){
+    if (ek[x[1]] || tk[x[2]]) return; ek[x[1]] = 1; tk[x[2]] = 1;
+    var r = k.akt[x[2]], ec = ech[x[1]];
+    r.viim = pi; r.p.push(pi); r.zt.push(ec.zt); r.zp.push(ec.zp); r.ex.push(ec.ex); r.th.push(ec.zb - ec.zt); r.dm.push(dm);
+  });
+  ech.forEach(function(ec, n){ if (!ek[n]) k.akt.push({ eka: pi, viim: pi, p: [pi], zt: [ec.zt], zp: [ec.zp], ex: [ec.ex], th: [ec.zb - ec.zt], dm: [dm] }); });
+  var uusi = [];
+  k.akt.forEach(function(r){ if (pi - r.viim > G){ if (r.p.length >= 6) k.valmiit.push(r); } else uusi.push(r); });
+  k.akt = uusi;
+}
+function olKalaRaidat(k){
+  var L = k.valmiit.concat(k.akt.filter(function(r){ return r.p.length >= 6; }));
+  var out = L.map(function(r){
+    var n = r.p.length, zp = r.zp, apex = Infinity, kk = 0, i;
+    for (i = 0; i < n; i++) if (zp[i] < apex){ apex = zp[i]; kk = i; }
+    var m = Math.max(1, Math.floor(n/5)), sa = 0, se = 0, mx = -Infinity, tmn = Infinity, tmx = -Infinity, ex = -Infinity, pa = r.p[kk];
+    for (i = 0; i < m; i++) sa += zp[i];
+    for (i = n - m; i < n; i++) se += zp[i];
+    for (i = 0; i < n; i++){ if (zp[i] > mx) mx = zp[i]; if (r.zt[i] < tmn) tmn = r.zt[i]; if (r.zt[i] > tmx) tmx = r.zt[i]; if (r.ex[i] > ex) ex = r.ex[i]; }
+    return { t0: k.pt[r.eka], t1: k.pt[r.viim], ta: k.pt[pa], p0: r.eka, n: n, apex: apex, alku: sa/m - apex, loppu: se/m - apex, vaihtelu: mx - apex,
+             ylaVaiht: tmx - tmn, zt: olMed(r.zt), yl: ex, paksuus: olMed(r.th), pohja: r.dm[kk], la: k.pla[pa], lo: k.plo[pa], takila: false };
+  });
+  out.sort(function(a, b){ return a.t0 - b.t0 || a.p0 - b.p0; });
+  return out;
+}
+// Takilan kuula: pitkä tasainen ketju samassa syvyydessä. Merkitsee raidat (takila) ja poistaa kohdan parvisekunnit.
+function olTakila(RA, S){
+  var ket = [];
+  RA.forEach(function(x, i){
+    if (x.ylaVaiht > 0.3) return;
+    var paras = null, pd = Infinity;
+    ket.forEach(function(c){ var dz = Math.abs(x.zt - c.zt); if (x.t0 - c.t1 <= 3000 && dz <= 0.3 && dz < pd){ pd = dz; paras = c; } });
+    if (paras){ paras.t1 = Math.max(paras.t1, x.t1); paras.peitto += x.t1 - x.t0; paras.jas.push(i); paras.zt = x.zt; paras.zmin = Math.min(paras.zmin, x.zt); paras.zmax = Math.max(paras.zmax, x.zt); }
+    else ket.push({ t0: x.t0, t1: x.t1, peitto: x.t1 - x.t0, jas: [i], zt: x.zt, zmin: x.zt, zmax: x.zt });
+  });
+  var tak = ket.filter(function(c){ return c.t1 - c.t0 >= 20000 && c.peitto >= 0.5*(c.t1 - c.t0); });
+  tak.forEach(function(c){ c.jas.forEach(function(i){ RA[i].takila = true; }); });
+  var Smap = {}, pois = 0; S.forEach(function(x){ Smap[x.s] = x; });
+  tak.forEach(function(c){
+    for (var s = Math.floor(c.t0/1000) - 1; s <= Math.floor(c.t1/1000) + 1; s++){
+      var x = Smap[s]; if (!x || x.yla === null) continue;
+      // sekunnin jaksot (pisin oli parvisekunti); takilan kohdalla olevat pois, jäljelle jääneistä pisin (ensimmäinen) tilalle
+      var ajot = x.ajot || [{ yla: x.yla, ala: x.ala, voima: x.voima, pit: 0 }];
+      var jaa = ajot.filter(function(r){ return !(r.yla <= c.zmax + 0.5 && r.ala >= c.zmin - 0.5 && r.ala - r.yla <= 1.5); });
+      if (jaa.length === ajot.length) continue;
+      var p = null; jaa.forEach(function(r){ if (!p || r.pit > p.pit) p = r; });
+      x.ajot = jaa; x.yla = p ? p.yla : null; x.ala = p ? p.ala : null; x.voima = p ? p.voima : null; x.takila = true; pois++;
+    }
+  });
+  return { nauhat: tak, Smap: Smap, pois: pois };
+}
+function olKalat(RA, tk, parvet, alku, s0){
+  var Smap = tk.Smap;
+  var parvessa = function(x){
+    var s = Math.floor(x.ta/1000);
+    for (var q = s - 1; q <= s + 1; q++){ var y = Smap[q]; if (y && y.yla !== null && y.yla - 0.3 <= x.apex && x.apex <= y.ala + 0.3) return true; }
+    return false;
+  };
+  var K = RA.filter(function(x){ return !x.takila && x.paksuus <= 0.35 && x.vaihtelu <= 1.0 && x.t1 - x.t0 <= 10000 && x.pohja - x.apex >= 0.3 && !parvessa(x); });
+  var md = K.length >= 10 ? olMed(K.map(function(x){ return x.yl; })) : 40;
+  var PV = (parvet || []).filter(function(q){ return q.tyyppi === 'parvi'; });
+  var kalat = K.map(function(x){
+    var kaari = x.alku >= 0.03 && x.loppu >= 0.03, luokka = x.yl >= md + 15 && kaari ? 'iso' : x.yl >= md + 6 ? 'keski' : 'pieni';
+    var aS = Math.floor(x.ta/1000) - s0, lah = 'vali', pm = null, muu = null, mm = null;
+    if (x.pohja - x.apex <= 1.0) lah = 'pohja';
+    else PV.forEach(function(q){
+      if (aS >= q.aikaS - 60 && aS <= q.aikaS + q.kestoS + 60){
+        var e = olMatkaM({ la: x.la, lo: x.lo }, { la: q.lat, lo: q.lon }); if (e > 150) return;
+        if (x.apex >= q.yla - 2 && x.apex <= q.ala + 2){ if (pm === null || e < pm) pm = e; }
+        else if (mm === null || e < mm){ mm = e; muu = q; }   // parvi lähellä, mutta eri syvyydessä
+      }
+    });
+    if (pm !== null) lah = 'parvi';
+    return { aikaS: aS, t: alku !== null ? alku + x.ta : null, lat: Math.round(x.la*1e6)/1e6, lon: Math.round(x.lo*1e6)/1e6,
+             z: Math.round(x.apex*100)/100, pohja: Math.round(x.pohja*100)/100, yl: Math.round(x.yl*10)/10, luokka: luokka, kaari: kaari,
+             lahella: lah, parviM: pm !== null ? Math.round(pm) : null,
+             muuParvi: lah === 'vali' && muu ? { m: Math.round(mm), yla: muu.yla, ala: muu.ala } : null };
+  });
+  return { kalat: kalat, med: md };
+}
 /* v193: tuonnin jälkikäsittely: pohjaksi luettu parvi pois omasta luotauksesta (molemmat ehdot), parvet talteen ja
    tallenteen keskilämpö järven pintalämmöksi (oma mittaus, lähde kaikuluotain; Hannu 11.10.: "Keskilämpö voisi olla
    vakaampi"). Palauttaa lisätekstin tuontiviestiin. Muuttaa tulos-oliota (pisteet, parvet, pohjaPoistettu). */
@@ -3646,6 +3796,15 @@ function olJalkikasittely(tulos, jarviAv, nimi){
   }
   var np = (tulos.parvet || []).filter(function(x){ return x.tyyppi === 'parvi'; }).length;
   if (tulos.sekunteja) osat.push(np + (np === 1 ? ' parvi' : ' parvea') + ' kaikukuvasta');
+  if (Array.isArray(tulos.kalat)){   // v194
+    var kl = omaLuotausKalaLuokat(tulos.kalat);
+    osat.push(tulos.kalat.length + ' yksittäistä kalaa (iso ' + kl.iso + ', keski ' + kl.keski + ', pieni ' + kl.pieni + ')');
+    if ((tulos.takila || []).length){
+      var tmin = Math.round(tulos.takila.reduce(function(s, x){ return s + x.kestoS; }, 0)/60);
+      osat.push('takilan kuula ' + (tmin < 1 ? 'alle minuutin' : tmin + ' min') + ' (' + tulos.takila.map(function(x){ return olN1(x.z + olAnturi()) + ' m'; }).join(', ') + '): ei kaloja eikä parvia'
+        + (tulos.parviSekPois ? ', ' + tulos.parviSekPois + ' parvisekuntia pois' : ''));
+    }
+  }
   if (v.vahvistetut.length) osat.push('pohjaksi luettu parvi ' + v.vahvistetut.length + ' kohdassa: ' + pois + ' pistettä pois omasta luotauksesta');
   else if ((tulos.pohjaEhdokkaat || []).length && !v.kartta) osat.push((tulos.pohjaEhdokkaat || []).length + ' äkillistä syvyyden nousua, mutta järven syvyyskarttaa ei ollut: ei poistettu');
   return osat.length ? ', ' + osat.join(', ') : '';
@@ -3712,9 +3871,9 @@ async function olTuo(files){
       if (tila) tila.textContent = nimi + ': tunnistetaan järvi…';
       var jarviAv = vanha && vanha.jarvi ? vanha.jarvi : await olTunnistaJarvi(tulos.lat, tulos.lon);
       var lisa = olJalkikasittely(tulos, jarviAv, nimi);
-      if (vanha && (tulos.lat.length > vanha.lat.length || !Array.isArray(vanha.lampo))){   // v175: jumittunut tuonti korvataan; v193: vanha tuonti saa lämmön ja parvet
+      if (vanha && (tulos.lat.length > vanha.lat.length || !Array.isArray(vanha.lampo) || !Array.isArray(vanha.kalat))){   // v175: jumittunut tuonti korvataan; v193: vanha tuonti saa lämmön ja parvet; v194: kalat
         var ennen = vanha.lat.length;
-        ['lat','lon','syv','kehyksia','kestoS','lampoMin','lampoMax','lampo','aikaS','lampoKa','lampoViim','parvet','pohjaPoistettu'].forEach(function(k){ vanha[k] = tulos[k]; });
+        ['lat','lon','syv','kehyksia','kestoS','lampoMin','lampoMax','lampo','aikaS','lampoKa','lampoViim','parvet','pohjaPoistettu','kalat','kalaMed','takila','parviSekPois'].forEach(function(k){ vanha[k] = tulos[k]; });
         if (tulos.alku) vanha.alku = tulos.alku;
         vanha.tuotu = Date.now(); uusia++;
         viestit.push(nimi + ' tuotiin uudelleen: ' + ennen + ' → ' + tulos.lat.length + ' pistettä' + lisa + '.' + olDiagTeksti(tulos));
@@ -3728,7 +3887,8 @@ async function olTuo(files){
       var t = { id: 'sl2-' + Date.now() + '-' + f, tunniste: tunniste, nimi: nimi, tuotu: Date.now(), jarvi: jarviAv, jarviNimi: jarviAv ? olJarviNimi(jarviAv) : null, anturiM: olAnturi(),
                 kehyksia: tulos.kehyksia, kestoS: tulos.kestoS, alku: tulos.alku, lampoMin: tulos.lampoMin, lampoMax: tulos.lampoMax,
                 lat: tulos.lat, lon: tulos.lon, syv: tulos.syv,
-                lampo: tulos.lampo, aikaS: tulos.aikaS, lampoKa: tulos.lampoKa, lampoViim: tulos.lampoViim, parvet: tulos.parvet, pohjaPoistettu: tulos.pohjaPoistettu };   // v193
+                lampo: tulos.lampo, aikaS: tulos.aikaS, lampoKa: tulos.lampoKa, lampoViim: tulos.lampoViim, parvet: tulos.parvet, pohjaPoistettu: tulos.pohjaPoistettu,   // v193
+                kalat: tulos.kalat, kalaMed: tulos.kalaMed, takila: tulos.takila, parviSekPois: tulos.parviSekPois };   // v194
       d.tuonnit.push(t); uusia++;
       viestit.push(nimi + ': ' + t.lat.length + ' pistettä, ' + olJarviNimi(jarviAv) + (t.alku ? ', ' + olAika(t.alku) : '') + (jarviAv ? '' : ' (ei osu sovelluksen järviin, tallennetaan silti)') + lisa + olDiagTeksti(tulos));
     } catch (e) {
@@ -3779,6 +3939,7 @@ function olPiirraLista(){
       + ' · syvyys ' + olN1(mn) + '–' + olN1(mx) + ' m (anturi +' + a.toLocaleString('fi-FI', { maximumFractionDigits: 2 }) + ' m)'
       + (typeof t.lampoMin === 'number' ? ' · vesi ' + olN1(t.lampoMin) + (t.lampoMax - t.lampoMin >= 0.1 ? '–' + olN1(t.lampoMax) : '') + ' °C' + (typeof t.lampoKa === 'number' ? ' (ka ' + olN1(t.lampoKa) + ')' : '') : '')
       + (Array.isArray(t.parvet) ? ' · ' + t.parvet.filter(function(x){ return x.tyyppi === 'parvi'; }).length + ' parvea' + (t.pohjaPoistettu ? ', pohjaksi luettu parvi poistettu ' + t.pohjaPoistettu + ' pisteestä' : '') : '')
+      + (Array.isArray(t.kalat) ? ' · ' + t.kalat.length + ' kalaa (' + omaLuotausKalaLuokat(t.kalat).iso + ' isoa)' + ((t.takila || []).length ? ', takila suodatettu' : '') : '')   // v194
       + ' · tuotu ' + tt.getDate() + '.' + (tt.getMonth() + 1) + '. klo ' + pad(tt.getHours()) + '.' + pad(tt.getMinutes())
       + ' <button type="button" class="chip" style="padding:1px 8px;font-size:12px;margin-left:4px;" onclick="olPoista(\'' + t.id + '\')">Poista</button></div>';
   });
@@ -3791,7 +3952,30 @@ function olPiirraLista(){
       return r && r.soluja ? olJarviNimi(av) + ': ' + r.soluja + ' ruutua (' + k.ruutu + ' m) saa syvyyden omasta luotauksesta' : '';
     }).filter(Boolean).join(' · ');
   } catch (e) {}
-  el.innerHTML = (kaytossa ? '<p style="margin:0 0 4px;">' + kaytossa + '.</p>' : '') + rivit.join('');
+  el.innerHTML = (kaytossa ? '<p style="margin:0 0 4px;">' + kaytossa + '.</p>' : '') + rivit.join('') + olKalaKoosteHtml(d);
+}
+/* v194: kalat kaikukuvasta syvyyden ja kellonajan mukaan, järvittäin (kaikki tuodut tallenteet). Solussa isot / kaikki;
+   rivillä tallennettu aika, koska kalamäärä riippuu siitä, kauanko sillä tunnilla luodattiin. */
+function olKalaKoosteHtml(d){
+  if (typeof omaLuotausKalaKooste !== 'function') return '';
+  var jarvet = []; d.tuonnit.forEach(function(t){ if (Array.isArray(t.kalat) && t.alku && jarvet.indexOf(t.jarvi) < 0) jarvet.push(t.jarvi); });
+  return jarvet.map(function(av){
+    var K = omaLuotausKalaKooste(av), tunnit = Object.keys(K.tunnit).map(Number).sort(function(a, b){ return a - b; });
+    if (!tunnit.length) return '';
+    var th = 'padding:2px 5px;text-align:right;border-bottom:1px solid var(--line);font-weight:600;', td = 'padding:2px 5px;text-align:right;';
+    var pad = function(x){ return String(x).padStart(2, '0'); };
+    var rivit = tunnit.map(function(h){
+      var r = K.tunnit[h];
+      return '<tr><td style="' + td + 'text-align:left;">' + pad(h) + '–' + pad((h + 1) % 24) + '</td><td style="' + td + '">' + Math.round(r.s/60) + ' min</td>'
+        + r.n.map(function(n, j){ return '<td style="' + td + (r.iso[j] ? 'color:var(--amber);font-weight:700;' : n ? '' : 'color:var(--muted);') + '">' + (n ? r.iso[j] + ' / ' + n : '·') + '</td>'; }).join('') + '</tr>';
+    }).join('');
+    return '<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--line);"><strong>🎣 Kalat kaikukuvasta · ' + olJarviNimi(av) + '</strong>'
+      + ' <span class="hint">(' + K.tallenteita + (K.tallenteita === 1 ? ' tallenne, ' : ' tallennetta, ') + K.kaloja + ' kalaa; solussa isot / kaikki)</span>'
+      + '<div style="overflow-x:auto;"><table style="border-collapse:collapse;font-size:12px;margin-top:4px;width:100%;"><tr><th style="' + th + 'text-align:left;">klo</th><th style="' + th + '">luodattu</th>'
+      + OL_SYVLUOKAT.map(function(s){ return '<th style="' + th + '">' + s[2] + '</th>'; }).join('') + '</tr>' + rivit + '</table></div>'
+      + '<p class="hint" style="margin:4px 0 0;">Syvyys pinnasta (anturin syvyys lisätty). Iso = kaiku selvästi tallenteen tyypillistä kalaa vahvempi ja täysi kaari (kala kulki keilan keskeltä); '
+      + 'kokoa senttimetreinä ei voi mitata, koska kaiku riippuu myös kalan paikasta keilassa. Ylin 1,75 m pinnasta ei näy. Lajiepäily ja paikka: tilannekuvan kerros 🎣 Isot kaiut.</p></div>';
+  }).join('');
 }
 window.addEventListener('load', function(){
   try { olPiirraLista(); } catch (e) {}
@@ -12979,7 +13163,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v193';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v194';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -21091,7 +21275,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=193';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=194';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })
