@@ -35,7 +35,7 @@ function omaLuotausLue(){
   window.__olData = d;
   return d;
 }
-function omaLuotausNollaa(){ window.__olData = undefined; window.__olPisteet = null; window.__olSolut = null; }
+function omaLuotausNollaa(){ window.__olData = undefined; window.__olPisteet = null; window.__olSolut = null; window.__olTuoreet = null; }
 function omaLuotausPisteet(){   // kaikki pisteet anturikorjattuina
   if (window.__olPisteet) return window.__olPisteet;
   var out = [];
@@ -97,3 +97,40 @@ function omaLuotausYhdista(a, oma){
 }
 function omaLuotausTarkiste(k){ try { var r = omaLuotausSolut(k); return r ? r.tarkiste : ''; } catch (e) { return ''; } }
 
+
+/* ===== v193 (11.10.2026): LÄMPÖJÄLKI JA PARVET TALLENTEISTA (tilannekuva) =====
+   Tuonnit, joilla on aika (alku), enintään maxIkaMs vanhat (oletus 7 vrk), järvi avaimella. Lämpö °C, aika ms.
+   Tallenteen pisteillä lampo (sadasosa-asteina) ja aikaS (sekuntia alusta) v193:sta alkaen; vanhemmissa ei ole. */
+function omaLuotausTuoreet(avain, maxIkaMs){
+  var raja = Date.now() - (maxIkaMs || 7*86400e3), k = (avain || '') + '|' + Math.floor(raja/600000);
+  if (window.__olTuoreet && window.__olTuoreet.k === k) return window.__olTuoreet.t;
+  var t = omaLuotausLue().tuonnit.filter(function(x){ return x.alku && x.alku >= raja && (!avain || x.jarvi === avain); });
+  window.__olTuoreet = { k: k, t: t };
+  return t;
+}
+function omaLuotausLampoJalki(avain, maxIkaMs){   // { pisteet: [{ lat, lon, c, t, nimi }], min, max }
+  var out = [], mn = Infinity, mx = -Infinity;
+  omaLuotausTuoreet(avain, maxIkaMs).forEach(function(t){
+    if (!Array.isArray(t.lampo)) return;
+    for (var i = 0; i < t.lat.length; i++){
+      var v = t.lampo[i]; if (v === null || v === undefined) continue;
+      var c = v/100; if (c < mn) mn = c; if (c > mx) mx = c;
+      out.push({ lat: t.lat[i]/1e6, lon: t.lon[i]/1e6, c: c, t: Array.isArray(t.aikaS) ? t.alku + t.aikaS[i]*1000 : null, nimi: t.nimi });
+    }
+  });
+  return { pisteet: out, min: out.length ? mn : null, max: out.length ? mx : null };
+}
+function omaLuotausParvet(avain, maxIkaMs){
+  var out = [];
+  omaLuotausTuoreet(avain, maxIkaMs).forEach(function(t){ (t.parvet || []).forEach(function(p){ var q = {}; for (var k in p) q[k] = p[k]; q.nimi = t.nimi; out.push(q); }); });
+  return out;
+}
+function omaLuotausViimeLampo(avain, maxIkaMs){   // uusin tallenne: { c (viimeisin), ka (keskilämpö), t (loppu), nimi }
+  var paras = null;
+  omaLuotausTuoreet(avain, maxIkaMs).forEach(function(t){
+    if (typeof t.lampoViim !== 'number' || !Array.isArray(t.aikaS) || !t.aikaS.length) return;
+    var loppu = t.alku + t.aikaS[t.aikaS.length - 1]*1000;
+    if (!paras || loppu > paras.t) paras = { c: t.lampoViim, ka: t.lampoKa, t: loppu, nimi: t.nimi };
+  });
+  return paras;
+}

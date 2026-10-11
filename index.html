@@ -2233,13 +2233,15 @@ body{padding-bottom:66px}
     <div class="q" id="omaLuotaus">
       <div class="idx">Luotaus</div>
       <h2>Oma luotaus kaikuluotaimelta</h2>
-      <p class="hint">Lowrancen .sl2-tallenne muistikortilta. Puhelin lukee sen itse ilman verkkoa, ja syvyysmallit (aalto, virtaus,
+      <p class="hint">Lowrancen .sl2-tallenne (myös .slg, jos laite tallentaa sen sl2-muodossa) muistikortilta. Puhelin lukee sen itse ilman verkkoa, ja syvyysmallit (aalto, virtaus,
         syvyyskartta, kuha- ja taimenehdokkaat) käyttävät omaa luotausta MML:n syvyysluokkien sijaan niissä ruuduissa, joista sitä on.
-        Luotain mittaa anturista, joten anturin syvyys lisätään. Myös Clauden kanssa käsitellyt .json-pisteet tuodaan tästä.</p>
+        Luotain mittaa anturista, joten anturin syvyys lisätään. Myös Clauden kanssa käsitellyt .json-pisteet tuodaan tästä.
+        v193: tuonti poimii myös veden lämmön (jälki tilannekuvaan, keskilämpö järven pintalämmöksi), syöttikalaparvet kaikukuvasta
+        (aika, paikka, syvyys) ja poistaa omasta luotauksesta kohdat, joissa laite on lukenut parven pohjaksi.</p>
       <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
         <label style="font-size:13px;">Anturi pinnan alla
           <input type="number" id="olAnturi" step="0.05" min="0" max="3" value="0.25" style="width:72px;" onchange="olTallennaAnturi()"> m</label>
-        <label class="chip" style="border-color:var(--amber); color:var(--amber); cursor:pointer;">Tuo .sl2 tai .json
+        <label class="chip" style="border-color:var(--amber); color:var(--amber); cursor:pointer;">Tuo .sl2, .slg tai .json
           <input type="file" id="olTiedosto" multiple style="display:none;" onchange="olTuo(this.files); this.value='';">
         </label>
         <button class="chip" id="olLataa" onclick="location.reload()" style="display:none; border-color:var(--olive); color:var(--olive);">Käynnistä sovellus uudelleen</button>
@@ -2385,15 +2387,19 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=191" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=191" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=191" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=191" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=191" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=191" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=191" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=191" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=193" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=193" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=193" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=193" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=193" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=193" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=193" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=193" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
+    /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
+       uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
+       service workeria; se ajaa analyysin, tallentaa kirjauspohjan ja kertoo tuloksen tilannekuvalle (postMessage). */
+    var UT_TAUSTA = (function () { try { return /[?&]tausta=1(&|$)/.test(location.search) && window.parent !== window; } catch (e) { return false; } })();
     // Viimeisimmät arvot saaliskirjausta varten (päivittyvät GPS:stä ja analyysistä).
     let viimeisinGps = null;      // { lat, lon }
     let viimeisinNopeus = null;   // km/h
@@ -3471,6 +3477,9 @@ async function olLueSl2(file, edistys){
   if (fmt !== 2) throw new Error(fmt === 3 ? 'SL3-tallennetta ei vielä tueta. Lähetä lyhyt .sl3-näyte Claudelle, niin tuki lisätään.' : 'tiedosto ei ole Lowrancen sl2-tallenne (muoto ' + fmt + ')');
   var R = 6356752.3142, pos = 8, kehyksia = 0, hyl = 0;
   var lat = [], lon = [], syv = [], lMin = null, lMax = null, viimeT = -1e9, vLat = null, vLon = null, alku = null;
+  /* v193 (11.10.2026, Hannun Sonar0001.slg: .slg-pääte, mutta sisältä sl2, muoto 2, kanavat 0 / 10 / 11): pisteille
+     lämpö ja aika, ja ensisijaisen kanavan (0) kaiuista sekunneittain syvyys, lämpö ja vesipatsaan parvi (olParviSekunti). */
+  var lampo = [], aikaS = [], sekunnit = [], sek = null, OL_B = 0.1, OL_NB = 600;
   // v175: ensimmäisen pisteen aika (alkuhetkeen) ja ajoaika pisteiden välisistä askelista. Aika saa hypätä taaksepäin:
   // v174:ssä yksi poikkeava aikaleima jumitti tuonnin yhteen pisteeseen (Hannu 7.10.: gigan tallenteista 1 piste).
   var t0 = null, kestoMs = 0, d = { aikaOhi: 0, matkaOhi: 0, taakse: 0, sijMuuttui: 0 }, edE = null, edN = null;
@@ -3485,6 +3494,21 @@ async function olLueSl2(file, edistys){
       var e = dv.getInt32(off + 108, true), n = dv.getInt32(off + 112, true), t = dv.getUint32(off + 140, true);
       var la = (2*Math.atan(Math.exp(n/R)) - Math.PI/2)*180/Math.PI, lo = e/R*180/Math.PI;
       if (alku === null){ var us = dv.getUint32(off + 60, true); if (us > 1.5e9 && us < 2.2e9) alku = us*1000 - t; }   // v173: tallenteen alkuhetki
+      var liput = dv.getUint16(off + 132, true), ltOk = (liput & 4) && lt > -2 && lt < 35;   // v193: lämpö kelpaa (lippu 0x0004)
+      if (dv.getUint16(off + 32, true) === 0 && ft > 1 && ft < 500){   // v193: ensisijainen kanava → sekunnin kaiut
+        var sS = Math.floor(t/1000);
+        if (!sek || sek.s !== sS){ if (sek) olParviSekunti(sek, sekunnit, OL_B); sek = { s: sS, sum: new Float32Array(OL_NB), n: new Uint16Array(OL_NB), dep: [], la: la, lo: lo, lt: ltOk ? lt : null }; }
+        var pk = dv.getUint16(off + 34, true), ul = dv.getFloat32(off + 40, true)*0.3048, ll = dv.getFloat32(off + 44, true)*0.3048, dm = ft*0.3048;
+        sek.dep.push(dm);
+        if (pk > 0 && off + 144 + pk <= buf.byteLength && ll > ul){
+          var nayte = new Uint8Array(buf, off + 144, pk), dz = (ll - ul)/pk;
+          for (var ni = 0; ni < pk; ni++){
+            var z = ul + (ni + 0.5)*dz; if (z > dm - 0.3) break;
+            var bi = Math.floor(z/OL_B); if (bi < 0 || bi >= OL_NB) continue;
+            sek.sum[bi] += nayte[ni]; sek.n[bi]++;
+          }
+        }
+      }
       off += koko;
       if (!(ft > 1 && ft < 500) || !(la > 40 && la < 80) || !(lo > -30 && lo < 60) || !(kn >= 0 && kn < 32)) { hyl++; continue; }
       if (e !== edE || n !== edN){ if (edE !== null) d.sijMuuttui++; edE = e; edN = n; }
@@ -3497,6 +3521,7 @@ async function olLueSl2(file, edistys){
       if (dt < 0 && vLat !== null) d.taakse++;
       lat.push(Math.round(la*1e6)); lon.push(Math.round(lo*1e6)); syv.push(Math.round(ft*0.3048*100));
       if (t0 === null) t0 = t; else if (dt > 0 && dt < 120000) kestoMs += dt;   // yli 2 min katkoja ei lasketa ajoajaksi
+      lampo.push(ltOk ? Math.round(lt*100) : null); aikaS.push(Math.floor(t/1000));   // v193 (aika muutetaan alla tallenteen alusta)
       viimeT = t; vLat = la; vLon = lo;
       if (lt > -2 && lt < 35){ if (lMin === null || lt < lMin) lMin = lt; if (lMax === null || lt > lMax) lMax = lt; }
     }
@@ -3505,11 +3530,125 @@ async function olLueSl2(file, edistys){
     if (edistys) edistys(pos/size);
     await new Promise(function(res){ setTimeout(res, 0); });
   }
+  if (sek) olParviSekunti(sek, sekunnit, OL_B);
   if (!lat.length) throw new Error('tallenteessa ei ole sijaintia ja syvyyttä yhtä aikaa (' + kehyksia + ' kehystä)');
   d.hylatty = hyl;
+  var s0 = Math.floor((t0 || 0)/1000), alkuAbs = alku !== null ? alku + (t0 || 0) : null;
+  for (var ai = 0; ai < aikaS.length; ai++) aikaS[ai] -= s0;
+  var lk = [], lsum = 0; sekunnit.forEach(function(x){ if (x.lt !== null){ lk.push(x.lt); lsum += x.lt; } });   // keskilämpö ajan mukaan (sekunneittain)
+  if (!lk.length) lampo.forEach(function(v){ if (v !== null){ lk.push(v/100); lsum += v/100; } });
   return { lat: lat, lon: lon, syv: syv, kehyksia: kehyksia, hylatty: hyl, kestoS: Math.round(kestoMs/1000), diag: d,
-           alku: alku !== null ? alku + (t0 || 0) : null,
-           lampoMin: lMin, lampoMax: lMax };
+           alku: alkuAbs, lampoMin: lMin, lampoMax: lMax,
+           lampo: lampo, aikaS: aikaS, lampoKa: lk.length ? Math.round(lsum/lk.length*100)/100 : null,
+           lampoViim: lk.length ? Math.round(lk[lk.length - 1]*100)/100 : null,
+           parvet: olParvet(sekunnit, alku, s0), pohjaEhdokkaat: olPohjaEhdokkaat(sekunnit, s0), sekunteja: sekunnit.length };
+}
+/* ===== v193 (11.10.2026): PARVET JA POHJAKSI LUETTU PARVI KAIKULUOTAIMEN TALLENTEESTA =====
+   Hannu 11.10.: "Onko suodattimen teko helppo, jos yli 6 m vedessä on iso syöttikalaparvi … tallentaa parven yläpinnan pohjaksi.
+   Samalla voisi ottaa ajankohdan, parvipaikan muistiin." Valinta: pohjaksi luettu parvi tunnistetaan molemmilla ehdoilla.
+   PARVI (kaikukuvasta): ensisijaisen kanavan kaiut keskiarvoistetaan sekunneittain 0,1 m:n kerroksiin. Vesipatsaassa
+   (1,5 m pinnasta – 0,8 m pohjan yläpuolelle) kerros on vahva, kun se ylittää sekunnin taustan (mediaani) 12 yksiköllä
+   (tausta noin 80, parvi 100–130, pohja 130–190; mitattu Hannun tallenteesta). Parvisekunti: vahva yhtenäinen kerros
+   vähintään 0,7 m (aukko enintään 0,2 m); yksittäinen kala jää alle. Parvi: parvisekunnit enintään 3 s välein, vähintään
+   2 s ja 3 m. Sovitettu Hannun tallenteeseen 11.10. (28 parvea 53 minuutissa, tarkistettu kaikukuvasta). Malli, ei mittaus.
+   POHJAKSI LUETTU PARVI: laitteen syvyys nousee äkkiä (≥ 1,5 m ja ≥ 25 % ympäristön ±30 s mediaanista, ympäristö yli 6 m)
+   ja palaa enintään 100 m:n matkalla (olPohjaEhdokkaat); tuonnissa lisäksi järven syvyyskartta yli 6 m ja lukema
+   ≥ 1,5 m ja ≥ 25 % matalampi (olPohjaVahvista). Molemmat ehdot → pisteet pois omasta luotauksesta ja parvi talteen. */
+function olParviSekunti(c, ulos, B){
+  var dep = c.dep.slice().sort(function(a, b){ return a - b; })[c.dep.length >> 1];
+  var r = { s: c.s, dep: dep, la: c.la, lo: c.lo, lt: c.lt, yla: null, ala: null, voima: null };
+  var i0 = Math.floor(1.5/B), i1 = Math.floor((dep - 0.8)/B);
+  if (i1 - i0 > 8){
+    var w = [], ok = true;
+    for (var i = i0; i < i1; i++){ if (!c.n[i]){ ok = false; break; } w.push(c.sum[i]/c.n[i]); }
+    if (ok){
+      var j = w.slice().sort(function(a, b){ return a - b; }), bg = j[j.length >> 1], a = null, viim = null, paras = [0, null, null];
+      for (var k = 0; k < w.length; k++){
+        if (w[k] >= bg + 12){ if (a === null || k - viim > 2) a = k; viim = k; if (viim - a > paras[0]) paras = [viim - a, a, viim]; }
+      }
+      if (paras[1] !== null && paras[0]*B >= 0.7){
+        var su = 0; for (var q = paras[1]; q <= paras[2]; q++) su += w[q];
+        r.yla = (i0 + paras[1])*B; r.ala = (i0 + paras[2])*B; r.voima = su/(paras[2] - paras[1] + 1) - bg;
+      }
+    }
+  }
+  ulos.push(r);
+}
+function olMatkaM(a, b){ return Math.hypot((b.la - a.la)*111320, (b.lo - a.lo)*111320*Math.cos(a.la*Math.PI/180)); }
+function olParvet(S, alku, s0){
+  var ev = [], c = null;
+  S.forEach(function(x){
+    if (x.yla === null) return;
+    if (c && x.s - c[c.length - 1].s >= 0 && x.s - c[c.length - 1].s <= 3) c.push(x); else { c = [x]; ev.push(c); }
+  });
+  var r1 = function(v){ return Math.round(v*10)/10; };
+  return ev.filter(function(L){ return L[L.length - 1].s - L[0].s + 1 >= 2 && olMatkaM(L[0], L[L.length - 1]) >= 3; }).map(function(L){
+    var m = L[L.length >> 1], yla = Infinity, ala = -Infinity, vo = 0;
+    L.forEach(function(x){ if (x.yla < yla) yla = x.yla; if (x.ala > ala) ala = x.ala; vo += x.voima; });
+    return { tyyppi: 'parvi', t: alku !== null ? alku + L[0].s*1000 : null, aikaS: L[0].s - s0, kestoS: L[L.length - 1].s - L[0].s + 1,
+             pituusM: Math.round(olMatkaM(L[0], L[L.length - 1])), lat: Math.round(m.la*1e6)/1e6, lon: Math.round(m.lo*1e6)/1e6,
+             yla: r1(yla), ala: r1(ala), pohja: r1(m.dep), voima: Math.round(vo/L.length) };
+  });
+}
+function olPohjaEhdokkaat(S, s0){
+  var out = [], i = 0, med = function(a, b){ var v = []; for (var k = Math.max(0, a); k <= Math.min(S.length - 1, b); k++) v.push(S[k].dep); v.sort(function(x, y){ return x - y; }); return v[v.length >> 1]; };
+  var M = S.map(function(x, k){ return med(k - 30, k + 30); });
+  var on = function(k){ return M[k] > 6 && S[k].dep <= M[k] - 1.5 && S[k].dep <= 0.75*M[k]; };
+  while (i < S.length){
+    if (!on(i)){ i++; continue; }
+    var j = i; while (j + 1 < S.length && on(j + 1)) j++;
+    var pit = olMatkaM(S[i], S[j]);
+    if (pit <= 100){
+      var mn = Infinity, km = i; for (var k = i; k <= j; k++) if (S[k].dep < mn){ mn = S[k].dep; km = k; }
+      out.push({ s0: S[i].s - s0, s1: S[j].s - s0, lat: Math.round(S[km].la*1e6)/1e6, lon: Math.round(S[km].lo*1e6)/1e6, dep: Math.round(mn*10)/10, med: Math.round(M[km]*10)/10, pituusM: Math.round(pit) });
+    }
+    i = j + 1;
+  }
+  return out;
+}
+// Tuonnissa järven syvyyskartta: ehdokas vahvistuu, jos kartan syvin 50 m:n sisällä on yli 6 m ja lukema selvästi matalampi.
+function olPohjaVahvista(ehd, avain){
+  if (!avain || typeof window.akSyvyysJarvessa !== 'function') return { vahvistetut: [], kartta: false };
+  var v = [];
+  (ehd || []).forEach(function(x){
+    var k = null; try { k = window.akSyvyysJarvessa(avain, x.lat, x.lon, 50); } catch (e) { k = null; }
+    if (k && k.max > 6 && x.dep <= k.max - 1.5 && x.dep <= 0.75*k.max) v.push(Object.assign({}, x, { kartta: Math.round(k.max*10)/10 }));
+  });
+  return { vahvistetut: v, kartta: true };
+}
+/* v193: tuonnin jälkikäsittely: pohjaksi luettu parvi pois omasta luotauksesta (molemmat ehdot), parvet talteen ja
+   tallenteen keskilämpö järven pintalämmöksi (oma mittaus, lähde kaikuluotain; Hannu 11.10.: "Keskilämpö voisi olla
+   vakaampi"). Palauttaa lisätekstin tuontiviestiin. Muuttaa tulos-oliota (pisteet, parvet, pohjaPoistettu). */
+function olJalkikasittely(tulos, jarviAv, nimi){
+  var v = olPohjaVahvista(tulos.pohjaEhdokkaat, jarviAv), pois = 0;
+  if (v.vahvistetut.length && Array.isArray(tulos.aikaS)){
+    var keep = tulos.aikaS.map(function(s){ return !v.vahvistetut.some(function(x){ return s >= x.s0 - 1 && s <= x.s1 + 1; }); });
+    ['lat','lon','syv','lampo','aikaS'].forEach(function(k){ if (Array.isArray(tulos[k])) tulos[k] = tulos[k].filter(function(_, i){ return keep[i]; }); });
+    pois = keep.filter(function(x){ return !x; }).length;
+  }
+  tulos.pohjaPoistettu = pois;
+  tulos.parvet = (tulos.parvet || []).concat(v.vahvistetut.map(function(x){
+    return { tyyppi: 'pohjaksi', t: tulos.alku ? tulos.alku + x.s0*1000 : null, aikaS: x.s0, kestoS: x.s1 - x.s0 + 1, pituusM: x.pituusM,
+             lat: x.lat, lon: x.lon, yla: x.dep, ala: null, pohja: x.kartta, voima: null };
+  })).sort(function(a, b){ return a.aikaS - b.aikaS; });
+  var osat = [];
+  if (typeof tulos.lampoKa === 'number'){
+    osat.push('vesi ' + olN1(tulos.lampoMin) + (tulos.lampoMax - tulos.lampoMin >= 0.1 ? '–' + olN1(tulos.lampoMax) : '') + ' °C, keskilämpö ' + olN1(tulos.lampoKa) + ' °C');
+    var loppu = tulos.alku && tulos.aikaS && tulos.aikaS.length ? tulos.alku + tulos.aikaS[tulos.aikaS.length - 1]*1000 : null;
+    if (jarviAv && loppu && typeof ltOmat === 'function' && typeof ltTallennaOmat === 'function'){
+      var id = 'ol-' + (nimi || '') + '-' + Math.round(loppu/1000), lista = ltOmat().filter(function(x){ return x.id !== id; });
+      lista.push({ id: id, avain: jarviAv, nimi: olJarviNimi(jarviAv), aika: new Date(loppu).toISOString(), lahde: 'kaikuluotain', pinta: tulos.lampoKa,
+                   min: tulos.lampoMin, max: tulos.lampoMax, tallenne: nimi || null });
+      ltTallennaOmat(lista);
+      try { if (typeof ltPaivitaMalliin === 'function') ltPaivitaMalliin('oma'); } catch (e) {}
+      osat.push('keskilämpö järven pintalämmöksi (' + olAika(loppu) + ')');
+    }
+  }
+  var np = (tulos.parvet || []).filter(function(x){ return x.tyyppi === 'parvi'; }).length;
+  if (tulos.sekunteja) osat.push(np + (np === 1 ? ' parvi' : ' parvea') + ' kaikukuvasta');
+  if (v.vahvistetut.length) osat.push('pohjaksi luettu parvi ' + v.vahvistetut.length + ' kohdassa: ' + pois + ' pistettä pois omasta luotauksesta');
+  else if ((tulos.pohjaEhdokkaat || []).length && !v.kartta) osat.push((tulos.pohjaEhdokkaat || []).length + ' äkillistä syvyyden nousua, mutta järven syvyyskarttaa ei ollut: ei poistettu');
+  return osat.length ? ', ' + osat.join(', ') : '';
 }
 async function olTunnistaJarvi(lat, lon){
   try {
@@ -3569,12 +3708,16 @@ async function olTuo(files){
       var tulos = await olLueSl2(file, function(o){ if (tila) tila.textContent = 'Luetaan ' + nimi + ': ' + Math.round(o*100) + ' % (' + olN1(file.size*o/1e6) + ' / ' + olN1(file.size/1e6) + ' Mt)'; });
       var tunniste = nimi + '|' + file.size + '|' + tulos.lat[0] + '|' + tulos.lon[0];
       var vanha = d.tuonnit.filter(function(x){ return x.tunniste === tunniste; })[0];
-      if (vanha && tulos.lat.length > vanha.lat.length){   // v175: v174:n jumittunut tuonti korvataan
+      // v193: järvi ensin (pohjaksi luetun parven tarkistus tarvitsee järven syvyyskartan), sitten suodatus, lämpö ja parvet
+      if (tila) tila.textContent = nimi + ': tunnistetaan järvi…';
+      var jarviAv = vanha && vanha.jarvi ? vanha.jarvi : await olTunnistaJarvi(tulos.lat, tulos.lon);
+      var lisa = olJalkikasittely(tulos, jarviAv, nimi);
+      if (vanha && (tulos.lat.length > vanha.lat.length || !Array.isArray(vanha.lampo))){   // v175: jumittunut tuonti korvataan; v193: vanha tuonti saa lämmön ja parvet
         var ennen = vanha.lat.length;
-        ['lat','lon','syv','kehyksia','kestoS','lampoMin','lampoMax'].forEach(function(k){ vanha[k] = tulos[k]; });
+        ['lat','lon','syv','kehyksia','kestoS','lampoMin','lampoMax','lampo','aikaS','lampoKa','lampoViim','parvet','pohjaPoistettu'].forEach(function(k){ vanha[k] = tulos[k]; });
         if (tulos.alku) vanha.alku = tulos.alku;
         vanha.tuotu = Date.now(); uusia++;
-        viestit.push(nimi + ' tuotiin uudelleen: ' + ennen + ' → ' + tulos.lat.length + ' pistettä.' + olDiagTeksti(tulos));
+        viestit.push(nimi + ' tuotiin uudelleen: ' + ennen + ' → ' + tulos.lat.length + ' pistettä' + lisa + '.' + olDiagTeksti(tulos));
         continue;
       }
       if (vanha){
@@ -3582,13 +3725,12 @@ async function olTuo(files){
         else viestit.push(nimi + ' oli jo tuotu, ei tuotu uudelleen.');
         continue;
       }
-      if (tila) tila.textContent = nimi + ': tunnistetaan järvi…';
-      var jarviAv = await olTunnistaJarvi(tulos.lat, tulos.lon);
       var t = { id: 'sl2-' + Date.now() + '-' + f, tunniste: tunniste, nimi: nimi, tuotu: Date.now(), jarvi: jarviAv, jarviNimi: jarviAv ? olJarviNimi(jarviAv) : null, anturiM: olAnturi(),
                 kehyksia: tulos.kehyksia, kestoS: tulos.kestoS, alku: tulos.alku, lampoMin: tulos.lampoMin, lampoMax: tulos.lampoMax,
-                lat: tulos.lat, lon: tulos.lon, syv: tulos.syv };
+                lat: tulos.lat, lon: tulos.lon, syv: tulos.syv,
+                lampo: tulos.lampo, aikaS: tulos.aikaS, lampoKa: tulos.lampoKa, lampoViim: tulos.lampoViim, parvet: tulos.parvet, pohjaPoistettu: tulos.pohjaPoistettu };   // v193
       d.tuonnit.push(t); uusia++;
-      viestit.push(nimi + ': ' + t.lat.length + ' pistettä, ' + olJarviNimi(jarviAv) + (t.alku ? ', ' + olAika(t.alku) : '') + (jarviAv ? '' : ' (ei osu sovelluksen järviin, tallennetaan silti)') + olDiagTeksti(tulos));
+      viestit.push(nimi + ': ' + t.lat.length + ' pistettä, ' + olJarviNimi(jarviAv) + (t.alku ? ', ' + olAika(t.alku) : '') + (jarviAv ? '' : ' (ei osu sovelluksen järviin, tallennetaan silti)') + lisa + olDiagTeksti(tulos));
     } catch (e) {
       viestit.push(nimi + ': ' + (e && e.message ? e.message : e));
     }
@@ -3635,7 +3777,8 @@ function olPiirraLista(){
       + (t.alku ? ' · ' + olAika(t.alku) : '')
       + '<br>' + t.lat.length + ' pistettä, ' + (m >= 1000 ? olN1(m/1000) + ' km' : Math.round(m) + ' m') + (t.kestoS ? ', ' + Math.round(t.kestoS/60) + ' min' : '')
       + ' · syvyys ' + olN1(mn) + '–' + olN1(mx) + ' m (anturi +' + a.toLocaleString('fi-FI', { maximumFractionDigits: 2 }) + ' m)'
-      + (typeof t.lampoMin === 'number' ? ' · vesi ' + olN1(t.lampoMin) + (t.lampoMax - t.lampoMin >= 0.1 ? '–' + olN1(t.lampoMax) : '') + ' °C' : '')
+      + (typeof t.lampoMin === 'number' ? ' · vesi ' + olN1(t.lampoMin) + (t.lampoMax - t.lampoMin >= 0.1 ? '–' + olN1(t.lampoMax) : '') + ' °C' + (typeof t.lampoKa === 'number' ? ' (ka ' + olN1(t.lampoKa) + ')' : '') : '')
+      + (Array.isArray(t.parvet) ? ' · ' + t.parvet.filter(function(x){ return x.tyyppi === 'parvi'; }).length + ' parvea' + (t.pohjaPoistettu ? ', pohjaksi luettu parvi poistettu ' + t.pohjaPoistettu + ' pisteestä' : '') : '')
       + ' · tuotu ' + tt.getDate() + '.' + (tt.getMonth() + 1) + '. klo ' + pad(tt.getHours()) + '.' + pad(tt.getMinutes())
       + ' <button type="button" class="chip" style="padding:1px 8px;font-size:12px;margin-left:4px;" onclick="olPoista(\'' + t.id + '\')">Poista</button></div>';
   });
@@ -5829,7 +5972,7 @@ window.addEventListener('load', function(){
       const oma = ltOmaTuore('pinta', h, avain);
       // Lämpöluokan valinta on käyttäjän arvio eikä mittaus, mutta se ohittaa silti muut lähteet (oma valinta).
       if (oma) return { arvo: oma.pinta, taso: oma.lahde === 'luokka' ? 'Arvio' : 'Mittaus', mitattu: oma.lahde !== 'luokka', ankkuri: true,
-        lahde: (oma.lahde === 'luokka' ? 'oma valinta (lämpöluokka)' : oma.lahde === 'profiili' ? 'oma lämpöprofiili' : 'oma mittaus') + ', ' + ltIka(oma.aika, h) };
+        lahde: (oma.lahde === 'luokka' ? 'oma valinta (lämpöluokka)' : oma.lahde === 'profiili' ? 'oma lämpöprofiili' : oma.lahde === 'kaikuluotain' ? 'kaikuluotaimen tallenne, keskilämpö' : 'oma mittaus') + ', ' + ltIka(oma.aika, h) };
       if (ltSykeLuotaus && ltSykeLuotaus.avain === avain && typeof ltSykeLuotaus.pinta === 'number'
           && Math.abs(h - new Date(ltSykeLuotaus.aika).getTime()) <= 30 * 86400e3)
         return { arvo: ltSykeLuotaus.pinta, taso: 'Mittaus', mitattu: true, ankkuri: true, lahde: 'SYKEn lämpöluotaus ' + String(ltSykeLuotaus.aika).slice(0, 10) };
@@ -7326,7 +7469,7 @@ function sumuriskiAlusta(){
       try { return ('serviceWorker' in navigator) && !!navigator.serviceWorker; } catch (e) { return false; }
     }
     window.addEventListener('load', () => {
-      if (!swSaatavilla()) { pwaTila(); return; }
+      if (!swSaatavilla() || UT_TAUSTA) { pwaTila(); return; }   // v192: ei tausta-ajossa
       try {
         navigator.serviceWorker.register('sw.js')
           .then(() => pwaTila())
@@ -7496,6 +7639,7 @@ function sumuriskiAlusta(){
       return pyyntiLisaaPiste(r, viimeisinGps.lat, viimeisinGps.lon, viimeisinGpsAika);   // v180: kirjaus.js (sama sääntö tilannekuvassa)
     }
     function pyyntiTick() {
+      if (UT_TAUSTA) return;   // v192: tilannekuva kirjaa pisteet, kehys ei kirjoita samaan reissuun
       const r = pyyntiLue(LS_PYYNTI_AUKI, null);
       if (r && Date.now() - r.alku <= PYYNTI_AUKI_MAX_H * 3600000) {
         let muutos = pyyntiGpsTalteen(r);
@@ -11490,6 +11634,7 @@ function sumuriskiAlusta(){
       const valoTxt = pe.valo === 'hamara' ? 'hämärä' : pe.valo === 'aurinko' ? (aallokko ? 'aurinkoa, mutta aallokkoa' : 'kirkas auringonpaiste') : 'pilvistä' + (aallokko ? ' ja aallokkoa' : '');
       // 1 tuuli ja reunat
       const pys = syysTuulenPysyvyys(aikaMs);
+      window.syysRanta = (pys && pys.tunteja >= 6) ? SYYS_RANTA[syysSektori(pys.dir + 180)] : null;   // v192
       const nimetyt = (avain === 'lappajarvi' && typeof lappajarviHotspots === 'object')
         ? Object.values(lappajarviHotspots).filter(sp => /taimen|lohi/i.test(sp.targetSpecies || '')) : [];
       let R = null;
@@ -11649,6 +11794,7 @@ function sumuriskiAlusta(){
       const avain = (typeof karttaAvain === 'function') ? karttaAvain() : null;
       window.taimenVarmuusLyhyt = null;   // v168: tiivistelmän rivi, asetetaan alla jos tulos on valmis
       window.syysOhjeLyhyt = null; window.syysOhjeJarvilohi = null;   // v189: syysohje vain, jos se koskee tätä tilannetta
+      window.syysRanta = null;   // v192: tuulen pakkaama ranta toistuvan analyysin vertailuun
       if (!avain || TAIMEN_HOTSPOTJARVET.indexOf(avain) < 0) {
         viimeisinTaimenEhdokkaat = []; viimeisinTaimenKentta = null; taimenKartalle(null, null, null); return '';
       }
@@ -12263,7 +12409,15 @@ function sumuriskiAlusta(){
       // Malli latautuu vielä (aalto ja reitti tuntemattomia): lasketaan uudelleen, kun ennuste on tullut
       if (typeof window.akValmis === 'function' && !window.akValmis() && typeof window.akValmiina === 'function') {
         S.odottaaMallia = true;
-        window.akValmiina().then(() => { if (suunnViimeinen === S) suunnPaivita(); }).catch(() => {});
+        /* KORJATTU v192 (10.10.2026): uudelleenlaskenta vain, kun malli on todella valmis. Ennen, jos tuuliennustetta ei
+           saatu (ei verkkoa eikä puhelimen muistia), akValmiina ratkesi heti, suunnPaivita ajoi tämän uudelleen ja se taas
+           suunnPaivitan: loputon lupaussilmukka, joka jäädytti sivun (Analysoi ilman ennustetta; testissä toistettu).
+           Jos malli ei ole valmis, katsotaan uudelleen 3 s välein enintään 10 kertaa. */
+        const odota = n => window.akValmiina().then(() => {
+          if (suunnViimeinen !== S) return;
+          if (window.akValmis()) suunnPaivita(); else if (n < 10) setTimeout(() => odota(n + 1), 3000);
+        }).catch(() => {});
+        odota(0);
       }
       return S;
     }
@@ -12825,7 +12979,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v191';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v193';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -19527,6 +19681,7 @@ function kuulLopeta() {
   kuulNayta();
 }
 function kuulTick() {
+  if (UT_TAUSTA) return;   // v192: tausta-ajo ei kuuluta
   if (!kuulOn()) { if (kuul) kuulLopeta(); return; }
   if (document.hidden) return;
   if (!kuul) { kuulAlusta(); kuulWakePaalle(); kuulNayta(); return; }   // esim. uudelleenlatauksen jälkeen: pohja hiljaa
@@ -19639,10 +19794,14 @@ function kuulNayta() {
   var viim = kuul.viimeisin
     ? '<br><span style="color:var(--muted);">Klo ' + pyyntiKlo(kuul.viimeisin.t) + ':</span> ' + String(kuul.viimeisin.teksti).replace(/\s*¶\s*/g, ' ')
     : '';
-  tila.innerHTML = '<strong>' + otsikko + '</strong>' + lupa + viim;
+  var au = (typeof autoLue === 'function') ? autoLue() : null;   // v192: toistuva analyysi (otsikkoriville, ettei rivirajaus piilota)
+  var auto = au && au.t && !au.kesken ? ' · <span style="font-weight:normal;color:var(--muted);">analyysi toistuu :00 ja :30, viimeksi klo ' + pyyntiKlo(au.t)
+    + (au.kohde ? ' (tilanne klo ' + pyyntiKlo(au.kohde) + ')' : '') + '</span>' : ' · <span style="font-weight:normal;color:var(--muted);">analyysi toistuu :00 ja :30</span>';
+  tila.innerHTML = '<strong>' + otsikko + auto + '</strong>' + lupa + viim;
   if (btn) btn.textContent = hiljaa ? '🔊 PERU HILJAA' : '🔇 HILJAA 30 MIN';
 }
 function kuulWakePaalle() {
+  if (UT_TAUSTA) return;
   try {
     if (!('wakeLock' in navigator) || kuulWake || document.visibilityState !== 'visible') return;
     navigator.wakeLock.request('screen').then(function (w) {
@@ -19651,6 +19810,125 @@ function kuulWakePaalle() {
   } catch (e) {}
 }
 function kuulWakePois() { try { if (kuulWake) kuulWake.release(); } catch (e) {} kuulWake = null; }
+
+/* ===== TOISTUVA ANALYYSI UISTELUN AIKANA — 10.10.2026 (v192) =====
+   Hannu 10.10.: "Toista tehty analysoi jos uistelu päällä tasa puolituntisin tehdyillä valinnoilla." Valinnat 10.10.:
+   molemmat sivut (etusivu ja tilannekuva vaihdellen), tilanne 30 min eteenpäin ("ehtii reagoida"), ääni vain kun paikka
+   vaihtuu. Toteutus:
+   - Kun uistelu on päällä (Aloita uistelu, LS_PYYNTI_AUKI), analyysi ajetaan kerran jokaisessa puolen tunnin jaksossa
+     (:00 ja :30). Analyze() laskee jo valmiiksi tilanteen nyt + 30 min. Jos Suunnittelussa on valittuna toinen päivä,
+     palataan tähän päivään (uistellessa analyysi koskee tätä hetkeä). Kyselyn vastaukset, järvi ja laji pysyvät.
+   - Jakso on yhteinen sivuille: AUTO_LS = { slot, t, kohde, kesken, alkoi }. Käsin painettu Analysoi kuittaa jakson.
+     Jos näyttö oli kiinni jakson alussa, analyysi ajetaan, kun sivu tulee näkyviin.
+   - Etusivulla analyysi ajetaan suoraan (ei kesken kirjoituksen). Tilannekuvassa etusivu ladataan näkymättömään kehykseen
+     (UT_TAUSTA), joka ajaa saman ja palauttaa tuloksen; kartta, vaakalukko ja GPS jatkuvat.
+   - Vertailu edelliseen (VIIME_PAIKKA_LS, päivittyy jokaisesta analyysistä): Vesillä-ruudun lajin paras paikka (taimen,
+     järvilohi, kirjolohi: ottipaikka; kuha: kuhapaikka) ja taimenella/järvilohella syysohjeen pakattu ranta. Muutos
+     kuulutetaan (kuulPuhu, HILJAA-tila kunnioitetaan). Ilman edellistä vertailukohtaa ei kuuluteta. */
+var AUTO_LS = 'uistelututka_auto_analyysi', VIIME_PAIKKA_LS = 'uistelututka_viime_paikka', AUTO_JAKSO_MS = 1800e3;
+var autoKaynnissa = false;
+function autoSlot(t) { return Math.floor((t || Date.now()) / AUTO_JAKSO_MS); }
+function autoLue() { try { return JSON.parse(localStorage.getItem(AUTO_LS) || 'null'); } catch (e) { return null; } }
+function autoKirjoita(o) { try { localStorage.setItem(AUTO_LS, JSON.stringify(o)); } catch (e) {} }
+function autoOdota(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function autoAikaraja(lupaus, ms) { return Promise.race([Promise.resolve(lupaus).catch(function () {}), autoOdota(ms)]); }
+function autoKlo(t) { var d = new Date(t); return d.getHours() + '.' + String(d.getMinutes()).padStart(2, '0'); }
+function autoKloPuhe(t) { var d = new Date(t); return 'kello ' + d.getHours() + (d.getMinutes() ? ' ' + String(d.getMinutes()).padStart(2, '0') : ''); }
+function autoPaikkaNyt() {
+  var ot = (typeof viimeisinOttipaikka !== 'undefined') ? viimeisinOttipaikka : null, ku = (typeof viimeisinKuhapaikka !== 'undefined') ? viimeisinKuhapaikka : null;
+  return { t: Date.now(), ottipaikka: ot && ot.topSpot ? ot.topSpot.name : null, kuhapaikka: ku && ku.topSpot ? ku.topSpot.name : null,
+           syysRanta: window.syysRanta || null };
+}
+function autoPaikkaLue() { try { return JSON.parse(localStorage.getItem(VIIME_PAIKKA_LS) || 'null'); } catch (e) { return null; } }
+function autoPaikkaTalteen(p) { try { localStorage.setItem(VIIME_PAIKKA_LS, JSON.stringify(p)); } catch (e) {} }
+// Mitä kuulutetaan, kun paikka vaihtuu (tyhjä = ei muutosta tai ei vertailukohtaa)
+function autoPuheTeksti(ed, nyt, kohde, laji) {
+  if (!ed) return '';
+  var lohi = ['taimen', 'jarvilohi', 'kirjolohi'].indexOf(laji) >= 0, avain = laji === 'kuha' ? 'kuhapaikka' : (lohi ? 'ottipaikka' : null);
+  if (!avain) return '';
+  var osat = [];
+  // Vain paikan nimi: perustelu on ruudulla (Hannu 10.10.: saaliiden olosuhteita ei tiedetä, joten niihin ei vedota puheessa)
+  if (nyt[avain] && ed[avain] && nyt[avain] !== ed[avain]) osat.push('Paras paikka vaihtui: ' + String(nyt[avain]).replace(/\s*\(.*\)/, '') + '.');
+  if ((laji === 'taimen' || laji === 'jarvilohi') && (nyt.syysRanta || ed.syysRanta) && nyt.syysRanta !== ed.syysRanta)
+    osat.push(nyt.syysRanta ? 'Syysohje: tuuli pakkaa nyt ' + nyt.syysRanta + '.' : 'Syysohje: tuulen pakkaamaa reunaa ei enää ole, tuuli on vaihdellut.');
+  return osat.length ? 'Analyysi ' + autoKloPuhe(kohde) + '. ¶ ' + osat.join(' ¶ ') : '';
+}
+// Käsin painettu Analysoi kuittaa jakson ja päivittää vertailukohdan, kun paneelit ovat valmiit.
+(function () {
+  if (typeof analyze !== 'function') return;
+  var alkup = analyze;
+  analyze = function () {
+    var r = alkup.apply(this, arguments);
+    try {
+      if (!autoKaynnissa) {
+        var a0 = autoLue() || {};
+        if (!(a0.slot >= autoSlot())) autoKirjoita(Object.assign({}, a0, { slot: autoSlot(), t: Date.now(), kohde: Date.now() + 30 * 60000, kesken: false, kasin: true }));
+        autoAikaraja(window.akValmiina ? window.akValmiina() : null, 15000).then(function () { return autoOdota(1500); })
+          .then(function () { if (!autoKaynnissa) autoPaikkaTalteen(autoPaikkaNyt()); });
+      }
+    } catch (e) {}
+    return r;
+  };
+})();
+async function autoAja() {
+  if (autoKaynnissa) return null;
+  autoKaynnissa = true;
+  var alku = Date.now();
+  try {
+    autoKirjoita(Object.assign({}, autoLue() || {}, { slot: autoSlot(alku), alkoi: alku, kesken: true }));
+    var ed = autoPaikkaLue();
+    if (typeof ennusteTila !== 'undefined' && ennusteTila) { try { await asetaAnalyysiPaiva(paikallinenPvm(0)); } catch (e) {} }
+    // tuore sää ja vesi (enintään 15 s), malli käyntiin
+    await autoAikaraja(Promise.all([
+      (typeof fetchOpenMeteo === 'function') ? Promise.resolve(fetchOpenMeteo()).catch(function () {}) : null,
+      (typeof fetchSykeData === 'function') ? Promise.resolve(fetchSykeData()).catch(function () {}) : null]), 15000);
+    if (typeof window.akKaynnistaHiljaa === 'function') { try { window.akKaynnistaHiljaa(); } catch (e) {} }
+    await autoAikaraja(window.akValmiina ? window.akValmiina() : null, 15000);
+    analyze();
+    var kohde = Date.now() + 30 * 60000;
+    // kuha- ja taimenpaneelit lasketaan uudelleen, kun malli ja ennuste ovat valmiit (kuhaEhdAjastus, taimenSyysAjastus)
+    await autoAikaraja(window.akValmiina ? window.akValmiina() : null, 15000);
+    await autoOdota(2500);
+    var nyt = autoPaikkaNyt(), laji = (typeof vesillaLajiValinta !== 'undefined') ? vesillaLajiValinta : 'taimen';
+    var puhe = autoPuheTeksti(ed, nyt, kohde, laji);
+    autoPaikkaTalteen(nyt);
+    try { kirjauspohjaT = 0; kirjauspohjaTalteen(); } catch (e) {}
+    autoKirjoita({ slot: autoSlot(alku), t: Date.now(), alkoi: alku, kohde: kohde, laji: laji, puhe: puhe || null, kesken: false });
+    return { puhe: puhe, kohde: kohde, paikka: nyt };
+  } catch (e) {
+    console.warn('Toistuva analyysi:', e);
+    autoKirjoita(Object.assign({}, autoLue() || {}, { kesken: false, virhe: String(e && e.message || e) }));
+    return null;
+  } finally { autoKaynnissa = false; }
+}
+function autoTarvitaan() {
+  if (!kuulOn()) return false;
+  var r = autoLue(), slot = autoSlot();
+  if (!r || !(r.slot >= slot)) return true;
+  return !!(r.kesken && Date.now() - (r.alkoi || 0) > 120000);   // keskeytynyt ajo (sivu suljettiin kesken)
+}
+async function autoTarkista() {
+  if (UT_TAUSTA || autoKaynnissa || document.hidden || !autoTarvitaan()) return;
+  var ae = document.activeElement;
+  if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;   // ei kesken kirjoituksen; uusi yritys 20 s päästä
+  var t = await autoAja();
+  if (t && t.puhe) { try { if (kuul) kuulPuhu(t.puhe, false); } catch (e) {} }
+  try { kuulNayta(); } catch (e) {}
+}
+if (!UT_TAUSTA) {
+  setInterval(function () { autoTarkista().catch(function () {}); }, 20000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) setTimeout(function () { autoTarkista().catch(function () {}); }, 1500); });
+} else {
+  // Tausta-ajo tilannekuvalle: odotetaan käynnistyksen haut, ajetaan analyysi ja kerrotaan tulos kehyksen omistajalle
+  window.addEventListener('load', function () {
+    setTimeout(async function () {
+      var t = null;
+      try { t = await autoAja(); } catch (e) { t = null; }
+      try { window.parent.postMessage({ tyyppi: 'utAutoAnalyysi', ok: !!t, puhe: t ? t.puhe : null, kohde: t ? t.kohde : null,
+                                        paikka: t ? t.paikka : null }, location.origin); } catch (e) {}
+    }, 1500);
+  });
+}
 document.addEventListener('visibilitychange', function () {
   if (document.visibilityState === 'visible' && kuulOn()) { kuulWakePaalle(); try { kuulTick(); } catch (e) { setTimeout(function () { throw e; }, 0); } }
 });
@@ -20813,7 +21091,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=191';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=193';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })

@@ -3,6 +3,8 @@
 // Tehtävä: sovellus aukeaa ilman verkkoa ja ilman että Acoden palvelinta tarvitsee
 // käynnistää. v178 (10.10.2026): sivu (n. 1,3 MB) lataa omat tiedostonsa: jarvet.js (järvien
 // ruudukot), aaltomalli.js (aalto- ja virtausmalli, kloonihaku) ja otti.mp3 (ottipisteääni).
+// v193: tilannekuvan kartta: vene kolmanneksen keskeltä taaksepäin, kulkusuunta ylös -valinta; ei uusia tiedostoja.
+// v192: analyysi toistuu uistelun aikana :00 ja :30 (etusivu, tilannekuvassa näkymätön etusivun kehys); ei uusia tiedostoja.
 // v191: tilannekuvan runko kiinnitetään näkymään (alapalkki ei jää navigointipalkin alle päivityksen jälkeen); ei uusia tiedostoja.
 // v190: syysohjeen reunat lasketaan uudelleen, kun aaltomallin ennuste on ladattu; reunat myös tekstinä (ei uusia tiedostoja).
 // v189: syksyn sekoittuneen veden ohje taimenelle (ei uusia tiedostoja); näkösyvyystaulukon asetus luetaan käynnistyksessä.
@@ -26,7 +28,7 @@
 // VERSIO: kasvata tätä aina kun julkaiset uuden version. Vanha välimuisti siivotaan.
 // Versionumeron kasvatus on se mekanismi joka SIIVOAA vanhan välimuistin,
 // index2.html mukaan lukien. Ilman tätä poisto ei näkyisi puhelimissa.
-const VERSIO = 'uistelututka-v191';
+const VERSIO = 'uistelututka-v193';
 /* v178: sivun omat tiedostot ladataan nimellä tiedosto?v=NNN, jossa NNN on tämän VERSIOn numero.
    index.html:n <script src> -riveissä ja ottiäänen haussa on SAMA numero: kun julkaiset, vaihda
    molemmat. Uusi numero on uusi osoite, joten puhelin ei voi yhdistää uutta sivua vanhaan malliin
@@ -124,6 +126,13 @@ self.addEventListener('fetch', (e) => {
   const onSivu = req.mode === 'navigate' ||
                  url.pathname.endsWith('/') ||
                  url.pathname.endsWith('.html');
+
+  /* v192: tilannekuvan taustakehys (index.html?tausta=1, toistuva analyysi uistelun aikana) välimuistista: sama versio
+     kuin tämä service worker, eikä 1,3 Mt:n sivua ladata hotspotin yli puolen tunnin välein. Ilman välimuistia verkosta. */
+  if (onSivu && url.searchParams.get('tausta') === '1') {
+    e.respondWith(caches.match('./index.html').then(v => v || caches.match(SIVU)).then(v => v || fetch(req)));
+    return;
+  }
 
   if (onSivu) {
     // KORJATTU 13.9.2026. Aiemmin jokaisen navigoinnin vastaus tallennettiin
