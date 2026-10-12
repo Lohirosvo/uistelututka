@@ -2387,14 +2387,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=197" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=197" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=197" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=197" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=197" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=197" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=197" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=197" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=198" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=198" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=198" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=198" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=198" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=198" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=198" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=198" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
        uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
@@ -3460,7 +3460,7 @@ body{padding-bottom:66px}
    tilannekuvan syvyydet olisivat pelkkää MML:ää (kaksi mallia). Tässä ovat tuonti ja kortti. */
 /* ---- TUONTI ---- */
 // v195: tuonnin käsittelyversio. Saman tiedoston uudelleentuonti korvaa vanhemmalla versiolla tehdyn (v195: kellonajat).
-var OL_TUONTI_VERSIO = 197;   // v197: sivukeilan kivikko
+var OL_TUONTI_VERSIO = 198;   // v197: sivukeilan kivikko
 function olAnturi(){
   var el = document.getElementById('olAnturi'), v = el ? parseFloat(String(el.value).replace(',', '.')) : NaN;
   if (!(v >= 0 && v <= 3)) { v = 0.25; try { var s = parseFloat(localStorage.getItem(OL_ANTURI_LS)); if (s >= 0 && s <= 3) v = s; } catch (e) {} }
@@ -3523,7 +3523,9 @@ async function olLueSl2(file, edistys){
           }
         }
         olKalaPingi(kt, nayte, ul, ll, dm, t, la, lo);   // v194
+      } else if (dv.getUint16(off + 32, true) === 5 && !(ft > 1 && ft < 500)){ ks.kaikki++; ks.ilmanSyv++;   // v198: syvyys puuttuu
       } else if (dv.getUint16(off + 32, true) === 5 && ft > 1 && ft < 500){   // v197: sivukeila (SideScan, yhdistetty kanava 5)
+        ks.kaikki++;
         var spk = dv.getUint16(off + 34, true);
         if (spk >= 200 && off + 144 + spk <= buf.byteLength) olKiviRivi(ks, new Uint8Array(buf, off + 144, spk), dv.getFloat32(off + 40, true), dv.getFloat32(off + 44, true), ft*0.3048, kn, t, la, lo);
       }
@@ -3558,7 +3560,7 @@ async function olLueSl2(file, edistys){
   // v194: raidat → takilan kuula (poistaa myös sen kohdan parvisekunnit) → parvet → kalat (luokka ja olosuhde)
   var kr = olKalaRaidat(kt), tk = olTakila(kr, sekunnit), parvet = olParvet(sekunnit, alku, s0), ka = olKalat(kr, tk, parvet, alku, s0);
   var kv = olKiviLaske(ks, alku, s0);   // v197: kivet ja kivikko sivukeilasta (null, jos sivukeilaa ei tallennettu)
-  if (kv) olKivikkoKaloille(ka.kalat, kv.jaksot);
+  if (kv && kv.jaksot) olKivikkoKaloille(ka.kalat, kv.jaksot);
   return { lat: lat, lon: lon, syv: syv, kehyksia: kehyksia, hylatty: hyl, kestoS: Math.round(kestoMs/1000), diag: d,
            alku: alkuAbs, lampoMin: lMin, lampoMax: lMax,
            lampo: lampo, aikaS: aikaS, lampoKa: lk.length ? Math.round(lsum/lk.length*100)/100 : null,
@@ -3801,8 +3803,10 @@ function olKalat(RA, tk, parvet, alku, s0){
    alle 20 m² arvioitavaa → ei arviota. Luokat (luotaus.js): alle 1 ei kiviä, 1–3 harvakseltaan, 3–8 kivikko, 8– tiheä.
    Åminne: kivikko-osuudella 2–10 / 100 m², pehmeällä pohjalla 0–1.
    Sama laskenta Pythonilla testipaketissa (kivikko_viite.py). */
-var OLKV = { RAJA: 25, VARJO: 20, KIRKAS: 15, MARG: 1.2, TAUSTA: 60, PV: 20, PL: 12 };
-function olKiviAlusta(){ return { rivit: [], meta: [] }; }
+var OLKV = { RAJA: 25, VARJO: 20, KIRKAS: 15, MARG: 1.2, TAUSTA: 60, PV: 20, PL: 12, MINH: 0.05 };
+/* v198: kiven korkeus vähintään 5 cm. Hannun soutuvenetallenne Sonar0012.sl2 (29.7.2026, Kotalahden matalikko 1,2–1,7 m,
+   kasvillisuutta, ei kiviä): 146 varjoa, korkeus mediaani 1 cm → 10 jää; Åminnen kivikko 195 → 166. */
+function olKiviAlusta(){ return { rivit: [], meta: [], kaikki: 0, ilmanSyv: 0 }; }   // v198: sivukeilarivit ja syvyyden puuttuminen
 function olKiviRivi(ks, x, ulFt, llFt, H, kn, t, la, lo){
   var n = x.length, ul = ulFt*0.3048, ll = llFt*0.3048; if (!(ll > ul)) return;
   var dr = 2*(ll - ul)/n, C = -ul/dr, Wd = n >> 1;
@@ -3843,6 +3847,7 @@ function olKiviRyhma(ks, i0, i1, kivet, alat){
     for (var rq = p.r0; rq <= p.r1; rq++){ var e = p.rv[rq]; Hs.push(M[i0 + rq].H); cnt.push(e ? e.n : 0); if (e){ var z = side > 0 ? e.zR : e.zL; if (z > kirk) kirk = z; } }
     if (kirk < OLKV.KIRKAS) return;
     var Hm = olMed(Hs), Ls = olMed(cnt)*dr, rEnd = Math.abs((side > 0 ? B1 : B0) - C)*dr, near = side > 0 ? B0 : B1 - 1;
+    if (Hm*Ls/rEnd < OLKV.MINH) return;   // v198: matala kuvio (kasvillisuus, pohjan pinta), ei kivi
     var gg = Math.sqrt(Math.max(Math.pow(Math.abs(near - C)*dr, 2) - Hm*Hm, 0));
     valmiit.push({ i: i0 + p.r0, i1: i0 + p.r1 + 1, side: side, h: Hm*Ls/rEnd, g: gg, px: p.px });
   };
@@ -3889,7 +3894,7 @@ function olKiviRyhma(ks, i0, i1, kivet, alat){
   return alat;
 }
 function olKiviLaske(ks, alku, s0){
-  var M = ks.meta; if (M.length < 50) return null;
+  var M = ks.meta; if (M.length < 50) return ks.kaikki ? { eiArvioitu: true, kaikki: ks.kaikki, ilmanSyv: ks.ilmanSyv } : null;
   var kivet = [], alat = new Float64Array(M.length), i = 0;
   while (i < M.length){
     var j = i; while (j + 1 < M.length && M[j + 1].g === M[i].g) j++;
@@ -3921,7 +3926,7 @@ function olKiviLaske(ks, alku, s0){
     return { lat: m.la + kv.g*Math.cos(su)/111320, lon: m.lo + kv.g*Math.sin(su)/kx };
   };
   var isot = kivet.filter(function(kv){ return kv.h >= 0.4; }).map(function(kv){ var p = paikka(kv); return { lat: Math.round(p.lat*1e6)/1e6, lon: Math.round(p.lon*1e6)/1e6, h: r2(kv.h) }; });
-  return { kivia: kivet.length, riveja: M.length, jaksot: jaksot, isot: isot, h: kivet.map(function(kv){ return Math.round(kv.h*1000)/1000; }), ki: kivet.map(function(kv){ return kv.i; }) };
+  return { kaikki: ks.kaikki, ilmanSyv: ks.ilmanSyv, kivia: kivet.length, riveja: M.length, jaksot: jaksot, isot: isot, h: kivet.map(function(kv){ return Math.round(kv.h*1000)/1000; }), ki: kivet.map(function(kv){ return kv.i; }) };
 }
 // Kalalle lähimmän 10 m:n jakson kivikko (enintään 25 m)
 function olKivikkoKaloille(kalat, jaksot){
@@ -3963,12 +3968,18 @@ function olJalkikasittely(tulos, jarviAv, nimi){
   }
   var np = (tulos.parvet || []).filter(function(x){ return x.tyyppi === 'parvi'; }).length;
   if (tulos.sekunteja) osat.push(np + (np === 1 ? ' parvi' : ' parvea') + ' kaikukuvasta');
+  if (tulos.kivikko && tulos.kivikko.eiArvioitu){   // v198: kerrotaan, miksi kivikkoa ei arvioitu
+    osat.push('sivukeila: syvyyslukema puuttui ' + Math.round(tulos.kivikko.ilmanSyv/tulos.kivikko.kaikki*100) + ' %:sta kaikuja, kivikkoa ei voitu arvioida (kiven korkeus lasketaan syvyydestä)');
+    tulos.kivikko = null;
+  }
   if (tulos.kivikko){   // v197: sivukeila. Kivikohtaiset luvut vain testiin (window.__olViimeKivi), muistiin jaksot ja isot kivet
     window.__olViimeKivi = tulos.kivikko;
     var kv = tulos.kivikko, jt = kv.jaksot.filter(function(j){ return j.tiheys !== null; });
     var kk = jt.filter(function(j){ return j.tiheys >= 3; }).length;
     tulos.kivikko = { kivia: kv.kivia, riveja: kv.riveja, jaksot: kv.jaksot, isot: kv.isot };
-    osat.push('sivukeila: ' + kv.kivia + ' kiveä, kivikkoa ' + (kk*10) + ' m / ' + (jt.length*10) + ' m arvioitua matkaa' + (kv.isot.length ? ', ' + kv.isot.length + ' yli 0,4 m:n kiveä' : ''));
+    if (!jt.length) osat.push('sivukeila: kivikkoa ei voitu arvioida' + (kv.kaikki ? ' (syvyyslukema puuttui ' + Math.round(kv.ilmanSyv/kv.kaikki*100) + ' %:sta kaikuja; kiven korkeus lasketaan syvyydestä)' : ''));   // v198
+    else osat.push('sivukeila: ' + kv.kivia + ' kiveä, kivikkoa ' + (kk*10) + ' m / ' + (jt.length*10) + ' m arvioitua matkaa' + (kv.isot.length ? ', ' + kv.isot.length + ' yli 0,4 m:n kiveä' : '')
+      + (kv.ilmanSyv / kv.kaikki >= 0.1 ? ' (syvyyslukema puuttui ' + Math.round(kv.ilmanSyv/kv.kaikki*100) + ' %:sta, niitä ei arvioitu)' : ''));   // v198
   }
   if (Array.isArray(tulos.kalat)){   // v194
     var kl = omaLuotausKalaLuokat(tulos.kalat);
@@ -13347,7 +13358,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v197';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v198';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -21459,7 +21470,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=197';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=198';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })
