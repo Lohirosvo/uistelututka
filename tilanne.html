@@ -267,18 +267,18 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=195" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=195" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=195" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=195" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=195" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=195" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=195" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=195" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=197" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=197" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=197" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=197" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=197" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=197" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=197" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=197" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v195';
+    const APP_VERSIO = 'v197';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
@@ -291,7 +291,7 @@
     const kk = n => String(n).padStart(2, '0');
     const ilmansuunta = deg => ['P', 'KO', 'I', 'KA', 'E', 'LO', 'L', 'LU'][Math.round((((deg % 360) + 360) % 360) / 45) % 8];   // mistä tuulee
 
-    let as = { tila: 'aalto', kloonit: true, yo: false, laji: null, selite: false, vaaka: false, kuha: true, taimen: true, kulku: false, lampo: true, parvet: true, kalat: true };   // v186: kuha, taimen; v193: kulku (kulkusuunta ylös), lampo, parvet; v194: kalat
+    let as = { tila: 'aalto', kloonit: true, yo: false, laji: null, selite: false, vaaka: false, kuha: true, taimen: true, kulku: false, lampo: true, parvet: true, kalat: true, kivikko: true };   // v186: kuha, taimen; v193: kulku (kulkusuunta ylös), lampo, parvet; v194: kalat
     try { as = Object.assign(as, JSON.parse(localStorage.getItem(AS_LS) || '{}')); } catch (e) {}
     const tallennaAs = () => { try { localStorage.setItem(AS_LS, JSON.stringify(as)); } catch (e) {} };
 
@@ -460,6 +460,14 @@
       [[5.5, '#2a0a0a'], [3, varaus ? '#d9b0b0' : '#ff5a5f']].forEach(([lw, v]) => { ctx.beginPath(); ctx.arc(x, y + 5, 7, Math.PI * 1.1, Math.PI * 1.9); ctx.lineWidth = lw; ctx.strokeStyle = v; ctx.stroke(); });
       ctx.restore();
     }
+    // v197: kivikko sivukeilasta: 10 m:n jakso neliönä (harva harmaanruskea, kivikko oranssi, tiheä tummanoranssi), taimenkivikolla turkoosi kehä
+    const KIVI_VARI = ['', '#b59f86', '#e08a3c', '#c0581f'];
+    function kiviMerkki(x, y, q) {
+      ctx.fillStyle = KIVI_VARI[q.taso] || '#b59f86'; ctx.fillRect(x - 3.5, y - 3.5, 7, 7);
+      ctx.lineWidth = 1; ctx.strokeStyle = '#1a0d00'; ctx.strokeRect(x - 3.5, y - 3.5, 7, 7);
+      if (q.taimen) { ctx.beginPath(); ctx.arc(x, y, 7.5, 0, 6.2832); ctx.lineWidth = 2; ctx.strokeStyle = '#5fd7ff'; ctx.stroke(); }
+    }
+    const kivikkoJaksot = () => typeof omaLuotausKivikko === 'function' ? omaLuotausKivikko(avain) : [];
     const isotKaiut = () => typeof omaLuotausKalat === 'function' ? omaLuotausKalat(avain).filter(q => q.luokka === 'iso') : [];
 
     function piirra() {
@@ -509,6 +517,10 @@
           if (lahiNimet) nimiot.push({ t: n1(q.yla) + (q.ala ? '–' + n1(q.ala) : '') + ' m' + (q.t ? ' ' + klooniKello(q.t) : ''), x: s2.x + 10, y: s2.y, v: '#ffe39a', a: himmea ? 0.5 : 1, p: 1 });
         });
       }
+      if (as.kivikko) kivikkoJaksot().forEach(q => {   // v197: kivikko sivukeilasta (kaikki tämän järven tallenteet)
+        const s2 = naytolle(q.lat, q.lon); if (!nakyy(s2, 20)) return;
+        kiviMerkki(s2.x, s2.y, q);
+      });
       if (as.kalat) isotKaiut().forEach(q => {   // v194: isot kaiut (yksittäiset kalat) tallenteista
         const s2 = naytolle(q.lat, q.lon); if (!nakyy(s2, 30)) return;
         const himmea = q.t && Date.now() - q.t > 24 * 3600e3;
@@ -1064,11 +1076,17 @@
                                   : n1(q.yla) + '–' + n1(q.ala) + ' m, pohja ' + n1(q.pohja) + ' m')
         + '<br>' + (q.t ? pvmKlo(q.t) : '') + ' · ' + q.kestoS + ' s / ' + q.pituusM + ' m · kaikuluotaimen tallenne ' + String(q.nimi || '').replace(/</g, '&lt;')
         + '<br><span style="color:#7E93AC">Tunnistettu kaikukuvasta (malli, ei mittaus): vahva kaiku vähintään 0,7 m paksulti vesipatsaassa.</span>'));
+      if (as.kivikko) kivikkoJaksot().forEach(q => lisaa(q.lat, q.lon,   // v197
+        '<b style="color:#f0a05a">🪨 ' + q.luokka.charAt(0).toUpperCase() + q.luokka.slice(1) + '</b> ' + n1(q.tiheys) + ' kiveä / 100 m²'
+        + (q.maxH >= 0.2 ? ', suurin noin ' + n1(q.maxH) + ' m' : '') + ' · pohja ' + n1(q.pohjaP) + ' m'
+        + (q.taimen ? '<br><b style="color:#5fd7ff">Taimenkivikko</b>: kivikkoa 0–5 m:n syvyydessä (Hannun kokemus Lappajärveltä)' : '')
+        + '<br>' + (q.t ? pvmKlo(q.t) + ' · ' : '') + 'sivukeila, 10 m:n matka, ' + q.kivet + ' kiveä ' + q.ala + ' m²:llä · tallenne ' + String(q.nimi || '').replace(/</g, '&lt;')
+        + '<br><span style="color:#7E93AC">Kivi = kirkas kaiku ja sen takana varjo sivukeilakuvassa; korkeus varjon pituudesta (malli). Raja-arvot tehty Åminnen kivikolla, Lappajärven tarkistus kesken.</span>'));
       if (as.kalat) isotKaiut().forEach(q => {   // v194
         const L = omaLuotausKalaLaji(q, avain), vahvempi = typeof q.med === 'number' ? Math.round(q.yl - q.med) : null;
         lisaa(q.lat, q.lon, '<b style="color:#ff8a8d">🎣 Iso kaiku</b> ' + n1(q.zP) + ' m, pohja ' + n1(q.pohjaP) + ' m'
           + '<br>' + (q.t ? pvmKlo(q.t) + ' · ' : '') + 'täysi kaari' + (vahvempi !== null ? ', kaiku ' + vahvempi + ' yksikköä tallenteen tyypillistä kalaa vahvempi' : '')
-          + '<br>Lajiepäily: <b>' + L.lajit + '</b> · ' + L.peruste + (L.varaus ? '<br>' + L.varaus : '')
+          + '<br>Lajiepäily: <b>' + L.lajit + '</b> · ' + L.peruste + (L.varaus ? '<br>' + L.varaus : '') + (L.kivikko ? '<br>' + L.kivikko : '')
           + '<br><span style="color:#7E93AC">Olosuhdepäätelmä, ei tunnistus: kaikuluotain ei erota lajia. Koko on suhteellinen, ei senttejä: kaiku riippuu myös kalan paikasta keilassa. Tallenne ' + String(q.nimi || '').replace(/</g, '&lt;') + '.</span>');
       });
       if (as.lampo && !ehd.length && typeof omaLuotausLampoJalki === 'function') {   // v193: lähin lämpöpiste (12 px)
@@ -1192,13 +1210,14 @@
     function tallenneValikko() {
       const L = typeof omaLuotausLampoJalki === 'function' ? omaLuotausLampoJalki(avain) : { pisteet: [] };
       const P = typeof omaLuotausParvet === 'function' ? omaLuotausParvet(avain) : [];
-      const np = P.filter(x => x.tyyppi === 'parvi').length, npo = P.length - np, KI = isotKaiut();
+      const np = P.filter(x => x.tyyppi === 'parvi').length, npo = P.length - np, KI = isotKaiut(), KV = kivikkoJaksot(), KVt = KV.filter(q => q.taimen).length, KVk = KV.filter(q => q.taso >= 2).length;
       return '<div class="huom" style="margin-top:4px;color:var(--text)">Kaikuluotaimen tallenteet (7 vrk)</div>'
         + '<button class="merkki' + (as.lampo && L.pisteet.length ? ' valittu' : '') + '" data-kerros="lampo"' + (L.pisteet.length ? '' : ' disabled') + '>🌡 Lämpöjälki'
         + (L.pisteet.length ? ' (' + n1(L.min) + '–' + n1(L.max) + ' °C)' : '') + '</button>'
         + '<button class="merkki' + (as.parvet && P.length ? ' valittu' : '') + '" data-kerros="parvet"' + (P.length ? '' : ' disabled') + '>🐟 Parvet (' + np + (npo ? ' + ' + npo + ' pohjaksi luettua' : '') + ')</button>'
         + '<button class="merkki' + (as.kalat && KI.length ? ' valittu' : '') + '" data-kerros="kalat"' + (KI.length ? '' : ' disabled') + '>🎣 Isot kaiut (' + KI.length + ')</button>'
-        + '<div class="huom">' + (L.pisteet.length || P.length || KI.length ? 'Lämpö: sininen kylmin, punainen lämpimin. Keltainen = syöttikalaparvi kaikukuvasta, oranssi = laite luki parven pohjaksi. Punainen kaari = iso yksittäinen kaiku (haalea: pohjan tuntumassa, voi olla kivi). Napauta: aika, syvyys ja lajiepäily. Yli vuorokauden vanhat himmeinä.'
+        + '<button class="merkki' + (as.kivikko && KV.length ? ' valittu' : '') + '" data-kerros="kivikko"' + (KV.length ? '' : ' disabled') + '>🪨 Kivikko (' + KVk * 10 + ' m' + (KVt ? ', taimen ' + KVt * 10 + ' m' : '') + ')</button>'
+        + '<div class="huom">' + (L.pisteet.length || P.length || KI.length || KV.length ? 'Lämpö: sininen kylmin, punainen lämpimin. Keltainen = syöttikalaparvi kaikukuvasta, oranssi = laite luki parven pohjaksi. Punainen kaari = iso yksittäinen kaiku (haalea: pohjan tuntumassa, voi olla kivi). Neliö = kivikko sivukeilasta (oranssi kivikko, turkoosi kehä taimenkivikko 0–5 m; kaikki tallenteet). Napauta: aika, syvyys ja lajiepäily. Yli vuorokauden vanhat himmeinä.'
           : 'Ei tallenteita tältä järveltä 7 vrk:n ajalta. Tuo .sl2/.slg etusivun Oma luotaus -kortista.') + '</div>';
     }
     // v187: millä veneellä rajat lasketaan (sama valinta kuin etusivun aallonkorkeuskortissa)

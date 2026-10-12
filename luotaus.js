@@ -35,7 +35,7 @@ function omaLuotausLue(){
   window.__olData = d;
   return d;
 }
-function omaLuotausNollaa(){ window.__olData = undefined; window.__olPisteet = null; window.__olSolut = null; window.__olTuoreet = null; }
+function omaLuotausNollaa(){ window.__olKivikkoV = (window.__olKivikkoV || 0) + 1; window.__olData = undefined; window.__olPisteet = null; window.__olSolut = null; window.__olTuoreet = null; }
 function omaLuotausPisteet(){   // kaikki pisteet anturikorjattuina
   if (window.__olPisteet) return window.__olPisteet;
   var out = [];
@@ -162,6 +162,16 @@ function omaLuotausKalat(avain, maxIkaMs){
    ulappalajit, järvilohi ja järvitaimen lähes kokonaan istutusten varassa, myös ahven, hauki, made, siika, lahna ja särki.
    Saalistajat seuraavat muikku- ja kuoreparvia; made ja lahna ovat pohjan kaloja. Muilla järvillä yleinen luettelo. */
 function omaLuotausKalaLaji(k, avain){
+  var r0 = omaLuotausKalaLaji0(k, avain);
+  if (typeof k.kivikko === 'number'){   // v197: sivukeilan kivikko lähimmästä 10 m:n jaksosta (enintään 25 m)
+    var l = omaLuotausKivikkoLuokka(k.kivikko), p = typeof k.pohjaP === 'number' ? k.pohjaP : null;
+    r0.kivikko = 'pohja sivukeilassa: ' + l.nimi + ' (' + (Math.round(k.kivikko*10)/10).toLocaleString('fi-FI') + ' kiveä / 100 m²'
+      + (k.kiviMaxH >= 0.2 ? ', suurin noin ' + (Math.round(k.kiviMaxH*10)/10).toLocaleString('fi-FI') + ' m' : '') + ')'
+      + (l.taso >= 2 && p !== null && p <= OL_TAIMENKIVIKKO_M ? ' · taimenkivikko (0–5 m)' : '');
+  }
+  return r0;
+}
+function omaLuotausKalaLaji0(k, avain){
   var L = avain === 'lappajarvi', n1 = function(v){ return (Math.round(v*10)/10).toLocaleString('fi-FI'); };
   if (k.lahella === 'pohja'){
     var ero = k.pohja - k.z;
@@ -199,4 +209,36 @@ function omaLuotausViimeLampo(avain, maxIkaMs){   // uusin tallenne: { c (viimei
     if (!paras || loppu > paras.t) paras = { c: t.lampoViim, ka: t.lampoKa, t: loppu, nimi: t.nimi };
   });
   return paras;
+}
+
+/* ===== v197 (12.10.2026): KIVIKKO SIVUKEILASTA (index.html olKiviLaske) =====
+   Jakso (10 m matkaa): { lat, lon, t, aikaS, syv (anturista), kivet, ala (m²), maxH, tiheys (kiveä / 100 m² tai null) }.
+   Pohja ei muutu, joten kerros käyttää kaikkia tämän järven tallenteita iästä riippumatta.
+   Taimenkivikko: kivikko (vähintään 3 kiveä / 100 m²) enintään 5 m:n syvyydessä pinnasta. Hannu 12.10.: "Lappajärvellä
+   0–5 m kivikko, kirkkaammissa vesissä varmaan enemmän." Raja on Hannun kokemus Lappajärveltä; muilla järvillä sama
+   5 m, kunnes näkösyvyyteen sidottu raja tarkistetaan. Kuhalle ja ahvenelle kivikkoa ei korosteta ("Kuhalle käy kaikki"). */
+var OL_TAIMENKIVIKKO_M = 5;
+function omaLuotausKivikkoLuokka(ti){
+  if (ti === null || ti === undefined) return { nimi: 'ei arvioitavissa', taso: -1 };
+  if (ti < 1) return { nimi: 'ei kiviä', taso: 0 };
+  if (ti < 3) return { nimi: 'harvakseltaan kiviä', taso: 1 };
+  if (ti < 8) return { nimi: 'kivikko', taso: 2 };
+  return { nimi: 'tiheä kivikko', taso: 3 };
+}
+function omaLuotausKivikko(avain){
+  var k = (avain || '') + '|' + (window.__olKivikkoV || 0);
+  if (window.__olKivikko && window.__olKivikko.k === k) return window.__olKivikko.j;
+  var out = [];
+  omaLuotausLue().tuonnit.forEach(function(t){
+    if (!t.kivikko || !Array.isArray(t.kivikko.jaksot) || (avain && t.jarvi !== avain)) return;
+    var a = omaLuotausAnturi(t);
+    t.kivikko.jaksot.forEach(function(j){
+      if (j.tiheys === null || j.tiheys < 1) return;
+      var p = Math.round((j.syv + a)*10)/10, l = omaLuotausKivikkoLuokka(j.tiheys);
+      out.push({ lat: j.lat, lon: j.lon, t: j.t, tiheys: j.tiheys, maxH: j.maxH, kivet: j.kivet, ala: j.ala, pohjaP: p, luokka: l.nimi, taso: l.taso,
+                 taimen: l.taso >= 2 && p <= OL_TAIMENKIVIKKO_M, nimi: t.nimi });
+    });
+  });
+  window.__olKivikko = { k: k, j: out };
+  return out;
 }

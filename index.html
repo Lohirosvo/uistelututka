@@ -2387,14 +2387,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=195" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=195" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=195" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=195" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=195" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=195" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=195" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=195" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=197" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=197" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=197" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=197" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=197" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=197" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=197" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=197" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
        uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
@@ -3460,7 +3460,7 @@ body{padding-bottom:66px}
    tilannekuvan syvyydet olisivat pelkkää MML:ää (kaksi mallia). Tässä ovat tuonti ja kortti. */
 /* ---- TUONTI ---- */
 // v195: tuonnin käsittelyversio. Saman tiedoston uudelleentuonti korvaa vanhemmalla versiolla tehdyn (v195: kellonajat).
-var OL_TUONTI_VERSIO = 195;
+var OL_TUONTI_VERSIO = 197;   // v197: sivukeilan kivikko
 function olAnturi(){
   var el = document.getElementById('olAnturi'), v = el ? parseFloat(String(el.value).replace(',', '.')) : NaN;
   if (!(v >= 0 && v <= 3)) { v = 0.25; try { var s = parseFloat(localStorage.getItem(OL_ANTURI_LS)); if (s >= 0 && s <= 3) v = s; } catch (e) {} }
@@ -3483,6 +3483,7 @@ async function olLueSl2(file, edistys){
      lämpö ja aika, ja ensisijaisen kanavan (0) kaiuista sekunneittain syvyys, lämpö ja vesipatsaan parvi (olParviSekunti). */
   var lampo = [], aikaS = [], sekunnit = [], sek = null, OL_B = 0.1, OL_NB = 600;
   var kt = olKalaAlusta();   // v194: yksittäiset kalat pingeittäin (olKalaPingi)
+  var ks = olKiviAlusta();   // v197: sivukeilan rivit (olKiviRivi)
   // v175: ensimmäisen pisteen aika (alkuhetkeen) ja ajoaika pisteiden välisistä askelista. Aika saa hypätä taaksepäin:
   // v174:ssä yksi poikkeava aikaleima jumitti tuonnin yhteen pisteeseen (Hannu 7.10.: gigan tallenteista 1 piste).
   var t0 = null, kestoMs = 0, d = { aikaOhi: 0, matkaOhi: 0, taakse: 0, sijMuuttui: 0 }, edE = null, edN = null;
@@ -3522,6 +3523,9 @@ async function olLueSl2(file, edistys){
           }
         }
         olKalaPingi(kt, nayte, ul, ll, dm, t, la, lo);   // v194
+      } else if (dv.getUint16(off + 32, true) === 5 && ft > 1 && ft < 500){   // v197: sivukeila (SideScan, yhdistetty kanava 5)
+        var spk = dv.getUint16(off + 34, true);
+        if (spk >= 200 && off + 144 + spk <= buf.byteLength) olKiviRivi(ks, new Uint8Array(buf, off + 144, spk), dv.getFloat32(off + 40, true), dv.getFloat32(off + 44, true), ft*0.3048, kn, t, la, lo);
       }
       off += koko;
       if (!(ft > 1 && ft < 500) || !(la > 40 && la < 80) || !(lo > -30 && lo < 60) || !(kn >= 0 && kn < 32)) { hyl++; continue; }
@@ -3553,12 +3557,14 @@ async function olLueSl2(file, edistys){
   if (!lk.length) lampo.forEach(function(v){ if (v !== null){ lk.push(v/100); lsum += v/100; } });
   // v194: raidat → takilan kuula (poistaa myös sen kohdan parvisekunnit) → parvet → kalat (luokka ja olosuhde)
   var kr = olKalaRaidat(kt), tk = olTakila(kr, sekunnit), parvet = olParvet(sekunnit, alku, s0), ka = olKalat(kr, tk, parvet, alku, s0);
+  var kv = olKiviLaske(ks, alku, s0);   // v197: kivet ja kivikko sivukeilasta (null, jos sivukeilaa ei tallennettu)
+  if (kv) olKivikkoKaloille(ka.kalat, kv.jaksot);
   return { lat: lat, lon: lon, syv: syv, kehyksia: kehyksia, hylatty: hyl, kestoS: Math.round(kestoMs/1000), diag: d,
            alku: alkuAbs, lampoMin: lMin, lampoMax: lMax,
            lampo: lampo, aikaS: aikaS, lampoKa: lk.length ? Math.round(lsum/lk.length*100)/100 : null,
            lampoViim: lk.length ? Math.round(lk[lk.length - 1]*100)/100 : null,
            parvet: parvet, pohjaEhdokkaat: olPohjaEhdokkaat(sekunnit, s0), sekunteja: sekunnit.length,
-           kalat: ka.kalat, kalaMed: ka.med,
+           kalat: ka.kalat, kalaMed: ka.med, kivikko: kv,
            takila: tk.nauhat.map(function(c){ return { aikaS: Math.floor(c.t0/1000) - s0, kestoS: Math.round((c.t1 - c.t0)/1000), z: Math.round(olMed(c.jas.map(function(i){ return kr[i].zt; }))*10)/10 }; }),
            parviSekPois: tk.pois };
 }
@@ -3777,6 +3783,154 @@ function olKalat(RA, tk, parvet, alku, s0){
   });
   return { kalat: kalat, med: md };
 }
+/* ===== v197 (12.10.2026): KIVET JA KIVIKKO SIVUKEILASTA =====
+   Hannu 12.10.: ".slg ja .sl2 sisältää pohjankovuuden ja kasvillisuuden … erityisesti isot kalat yhteydessä." "Jos pystyy
+   erottelemaan erityisesti taimenta puoleensa vetävän kivikkotyypin, sitä voi korostaa. Kuhalle käy kaikki ja ahvenelle."
+   "Side scan on ja Lappajärvellä 0–5 m kivikko, kirkkaammissa vesissä varmaan enemmän."
+   Ensisijaisen kaiun pohjaviivasta kiviä ei voi erottaa veneen keinunnasta (Sonar0001: sahalaita, toinen kaiku liikkuu
+   osin mukana). Sivukeilassa kivi on kirkas kaiku, jonka takana (veneestä poispäin) on varjo. Kehitetty Hannun
+   tallenteella Sonar0003-1.sl2 (19.7.2024, Åminnen edusta, ahvenen pilkkipaikka, kivikkoa 2,5–4 m; Hannu: "luotan
+   silmämääräisesti että aineisto on ok"). Lappajärven raja-arvot tarkistetaan ensimmäisestä Lappajärven sivukeila-ajosta.
+   KIVI: rivin näytteet kahden keskiarvoina (8,6 cm), vain ±25 m. Tasoitus 3 × 3, tausta = keskiarvo ±20 riviä × ±12 lokeroa
+   (reunoilla reunarivi toistuu). Varjo: arvo ≥ 20 taustaa tummempi, lokero yli 1,2 m pohjasyvyyttä kauempana veneestä
+   (vinoetäisyys) ja tausta ≥ 60 (tummassa kaukoalueessa varjoa ei voi erottaa). Varjot yhdistetään (8-naapuruus);
+   kelpaa, kun vähintään 4 lokeroa ja 2 riviä eikä radan suuntainen juova (rivejä ≥ 3 × lokeroita = pohjan reuna).
+   Varjon lähireunan vieressä (5 lokeroa veneen puolella) kaiun on oltava ≥ 15 taustaa kirkkaampi = kivi.
+   Korkeus = syvyys × varjon pituus / varjon kaukaisen reunan vinoetäisyys (varjon geometria). Taso: Malli.
+   KIVIKKO: 10 m:n matkajaksot (nopeus × aika). Tiheys = kivet / sivukeilan arvioitava pohja-ala × 100 (kiveä / 100 m²);
+   alle 20 m² arvioitavaa → ei arviota. Luokat (luotaus.js): alle 1 ei kiviä, 1–3 harvakseltaan, 3–8 kivikko, 8– tiheä.
+   Åminne: kivikko-osuudella 2–10 / 100 m², pehmeällä pohjalla 0–1.
+   Sama laskenta Pythonilla testipaketissa (kivikko_viite.py). */
+var OLKV = { RAJA: 25, VARJO: 20, KIRKAS: 15, MARG: 1.2, TAUSTA: 60, PV: 20, PL: 12 };
+function olKiviAlusta(){ return { rivit: [], meta: [] }; }
+function olKiviRivi(ks, x, ulFt, llFt, H, kn, t, la, lo){
+  var n = x.length, ul = ulFt*0.3048, ll = llFt*0.3048; if (!(ll > ul)) return;
+  var dr = 2*(ll - ul)/n, C = -ul/dr, Wd = n >> 1;
+  var b0 = Math.max(0, Math.floor(C - OLKV.RAJA/dr)), b1 = Math.min(Wd, Math.ceil(C + OLKV.RAJA/dr));
+  var r = new Uint16Array(b1 - b0);
+  for (var b = b0; b < b1; b++) r[b - b0] = x[2*b] + x[2*b + 1];
+  ks.rivit.push(r);
+  ks.meta.push({ g: n + '|' + Math.round(ulFt*1e4)/1e4 + '|' + Math.round(llFt*1e4)/1e4 + '|' + b0 + '|' + b1, b0: b0, dr: dr, C: C, H: H, v: kn*0.514444, t: t, la: la, lo: lo });
+}
+function olKiviRyhma(ks, i0, i1, kivet, alat){
+  var M = ks.meta, m0 = M[i0], dr = m0.dr, C = m0.C, b0 = m0.b0, N = i1 - i0, W = ks.rivit[i0].length, PV = OLKV.PV, PL = OLKV.PL;
+  var cl = function(v, a, b){ return v < a ? a : v > b ? b : v; };
+  // vaakasuora 3-laatikko X-riveistä (X = summa/2) ja S-rivi pystysuoralla 3-laatikolla; S-rivit renkaassa
+  var hx = function(q){ var R = ks.rivit[i0 + q], o = new Float64Array(W); for (var c = 0; c < W; c++){ o[c] = (R[cl(c - 1, 0, W - 1)] + R[c] + R[cl(c + 1, 0, W - 1)])/2/3; } return o; };
+  var hxV = {}, hxK = function(q){ q = cl(q, 0, N - 1); if (!hxV[q]) hxV[q] = hx(q); return hxV[q]; };
+  var SV = {}, Srivi = function(q){ q = cl(q, 0, N - 1); if (SV[q]) return SV[q]; var a = hxK(q - 1), b = hxK(q), c = hxK(q + 1), o = new Float64Array(W); for (var k = 0; k < W; k++) o[k] = (a[k] + b[k] + c[k])/3; SV[q] = o; return o; };
+  var siivoa = function(q){ for (var k in SV) if (+k < q - PV - 2) delete SV[k]; for (var k2 in hxV) if (+k2 < q - PV - 3) delete hxV[k2]; };
+  var V = new Float64Array(W), jono = [];
+  for (var q = -PV; q <= PV; q++){ var Sq = Srivi(q); for (var c = 0; c < W; c++) V[c] += Sq[c]; }
+  var r = new Float64Array(W); for (var c2 = 0; c2 < W; c2++) r[c2] = Math.abs((c2 + b0 + 0.5) - C)*dr;
+  // yhdistettävät varjot (8-naapuruus), union-find
+  var vanh = [], komp = [], ed = [], etsi = function(a){ while (vanh[a] !== a){ vanh[a] = vanh[vanh[a]]; a = vanh[a]; } return a; };
+  var yhdista = function(a, b){
+    a = etsi(a); b = etsi(b); if (a === b) return a;
+    var A2 = komp[a], B2 = komp[b];
+    A2.px += B2.px; A2.r0 = Math.min(A2.r0, B2.r0); A2.r1 = Math.max(A2.r1, B2.r1); A2.c0 = Math.min(A2.c0, B2.c0); A2.c1 = Math.max(A2.c1, B2.c1);
+    for (var rq in B2.rv){ var x = B2.rv[rq], y = A2.rv[rq];
+      if (!y) A2.rv[rq] = x;
+      else { y.n += x.n; if (x.mn < y.mn){ y.mn = x.mn; y.zR = x.zR; } if (x.mx > y.mx){ y.mx = x.mx; y.zL = x.zL; } } }
+    vanh[b] = a; komp[b] = null; return a;
+  };
+  var valmiit = [], alat = new Float64Array(N);
+  var viimeistele = function(k){
+    var p = komp[k]; if (!p) return; komp[k] = null;
+    var rs = p.r1 - p.r0 + 1, bs = p.c1 - p.c0 + 1;
+    if (p.px < 4 || rs < 2 || rs >= 3*bs) return;
+    var B0 = p.c0 + b0, B1 = p.c1 + 1 + b0, side = (B0 + B1)/2 > C ? 1 : -1, kirk = -Infinity, Hs = [], cnt = [];
+    for (var rq = p.r0; rq <= p.r1; rq++){ var e = p.rv[rq]; Hs.push(M[i0 + rq].H); cnt.push(e ? e.n : 0); if (e){ var z = side > 0 ? e.zR : e.zL; if (z > kirk) kirk = z; } }
+    if (kirk < OLKV.KIRKAS) return;
+    var Hm = olMed(Hs), Ls = olMed(cnt)*dr, rEnd = Math.abs((side > 0 ? B1 : B0) - C)*dr, near = side > 0 ? B0 : B1 - 1;
+    var gg = Math.sqrt(Math.max(Math.pow(Math.abs(near - C)*dr, 2) - Hm*Hm, 0));
+    valmiit.push({ i: i0 + p.r0, i1: i0 + p.r1 + 1, side: side, h: Hm*Ls/rEnd, g: gg, px: p.px });
+  };
+  for (q = 0; q < N; q++){
+    if (q > 0){ var lis = Srivi(q + PV), pois = Srivi(q - PV - 1); for (var c3 = 0; c3 < W; c3++) V[c3] += lis[c3] - pois[c3]; }
+    var S = Srivi(q), Hq = M[i0 + q].H, P = new Float64Array(W + 1);
+    for (var c4 = 0; c4 < W; c4++) P[c4 + 1] = P[c4] + V[c4];
+    var A = new Float64Array(W), maski = new Uint8Array(W), va = 0;
+    for (var c5 = 0; c5 < W; c5++){
+      // vaakasuora 25-laatikko pystysummista; reunalla reunalokero toistuu
+      var a0 = c5 - PL, a1 = c5 + PL, sum = 0;
+      if (a0 >= 0 && a1 <= W - 1) sum = P[a1 + 1] - P[a0];
+      else { for (var cc = a0; cc <= a1; cc++) sum += V[cl(cc, 0, W - 1)]; }
+      var Bk = sum/(2*PV + 1)/(2*PL + 1);
+      A[c5] = S[c5] - Bk;
+      var ok = r[c5] > Hq + OLKV.MARG && Bk >= OLKV.TAUSTA && r[c5] <= OLKV.RAJA;
+      if (ok) va++;
+      maski[c5] = ok && A[c5] <= -OLKV.VARJO ? 1 : 0;
+    }
+    alat[q] = va*dr;
+    // rivin varjojaksot ja yhdistäminen edellisen rivin jaksoihin
+    var nyt = [], c6 = 0;
+    while (c6 < W){
+      if (!maski[c6]){ c6++; continue; }
+      var e6 = c6; while (e6 + 1 < W && maski[e6 + 1]) e6++;
+      var zR = -Infinity, zL = -Infinity, k1;
+      for (k1 = Math.max(0, c6 - 5); k1 < c6; k1++) if (A[k1] > zR) zR = A[k1];
+      for (k1 = e6 + 1; k1 < Math.min(W, e6 + 6); k1++) if (A[k1] > zL) zL = A[k1];
+      var id = vanh.length; vanh.push(id);
+      var rv = {}; rv[q] = { n: e6 - c6 + 1, mn: c6, mx: e6, zR: zR, zL: zL };
+      komp.push({ px: e6 - c6 + 1, r0: q, r1: q, c0: c6, c1: e6, rv: rv });
+      ed.forEach(function(j){ if (c6 <= j.b + 1 && j.a <= e6 + 1) id = yhdista(j.id, id); });
+      nyt.push({ a: c6, b: e6, id: id });
+      c6 = e6 + 1;
+    }
+    // valmiit: komponentit, joilla ei jatkoa tällä rivillä
+    var elossa = {}; nyt.forEach(function(j){ elossa[etsi(j.id)] = 1; });
+    ed.forEach(function(j){ var k = etsi(j.id); if (!elossa[k]) viimeistele(k); });
+    ed = nyt.map(function(j){ return { a: j.a, b: j.b, id: etsi(j.id) }; });
+    siivoa(q);
+  }
+  ed.forEach(function(j){ viimeistele(etsi(j.id)); });
+  valmiit.forEach(function(k){ kivet.push(k); });
+  return alat;
+}
+function olKiviLaske(ks, alku, s0){
+  var M = ks.meta; if (M.length < 50) return null;
+  var kivet = [], alat = new Float64Array(M.length), i = 0;
+  while (i < M.length){
+    var j = i; while (j + 1 < M.length && M[j + 1].g === M[i].g) j++;
+    if (j - i + 1 >= 5){ var a = olKiviRyhma(ks, i, j + 1, kivet, null); for (var q = i; q <= j; q++) alat[q] = a[q - i]; }
+    i = j + 1;
+  }
+  kivet.sort(function(a, b){ return a.i - b.i || a.side - b.side; });
+  // 10 m:n jaksot
+  var jaksot = [], cur = null;
+  for (var q2 = 0; q2 < M.length; q2++){
+    var dt = q2 ? Math.min(1, Math.max(0, (M[q2].t - M[q2 - 1].t)/1000)) : 0, st = M[q2].v*dt;
+    if (!cur) cur = { i0: q2, ala: 0, matka: 0 };
+    cur.ala += alat[q2]*st; cur.matka += st;
+    if (cur.matka >= 10 || q2 === M.length - 1){ cur.i1 = q2 + 1; jaksot.push(cur); cur = null; }
+  }
+  var r2 = function(v){ return Math.round(v*100)/100; }, k = 0;
+  jaksot = jaksot.map(function(sg){
+    var n = 0, mh = 0; while (k < kivet.length && kivet[k].i < sg.i1){ if (kivet[k].i >= sg.i0){ n++; if (kivet[k].h > mh) mh = kivet[k].h; } k++; }
+    var m = M[(sg.i0 + sg.i1 - 1) >> 1], Hs = []; for (var q3 = sg.i0; q3 < sg.i1; q3++) Hs.push(M[q3].H);
+    return { lat: Math.round(m.la*1e6)/1e6, lon: Math.round(m.lo*1e6)/1e6, t: alku !== null ? alku + m.t : null, aikaS: Math.floor(m.t/1000) - s0,
+             syv: r2(olMed(Hs)), kivet: n, ala: Math.round(sg.ala), maxH: r2(mh), tiheys: sg.ala >= 20 ? Math.round(n/sg.ala*1000)/10 : null };
+  });
+  // isot kivet (≥ 0,4 m) paikkoineen: kivi veneen oikealla tai vasemmalla puolella g metrin päässä
+  var paikka = function(kv){
+    var mi = (kv.i + kv.i1 - 1) >> 1, a1 = M[Math.max(0, mi - 10)], b1 = M[Math.min(M.length - 1, mi + 10)], m = M[mi];
+    var kx = 111320*Math.cos(m.la*Math.PI/180), dy = (b1.la - a1.la)*111320, dx = (b1.lo - a1.lo)*kx;
+    if (Math.hypot(dx, dy) < 1) return { lat: m.la, lon: m.lo };
+    var su = Math.atan2(dx, dy) + kv.side*Math.PI/2;
+    return { lat: m.la + kv.g*Math.cos(su)/111320, lon: m.lo + kv.g*Math.sin(su)/kx };
+  };
+  var isot = kivet.filter(function(kv){ return kv.h >= 0.4; }).map(function(kv){ var p = paikka(kv); return { lat: Math.round(p.lat*1e6)/1e6, lon: Math.round(p.lon*1e6)/1e6, h: r2(kv.h) }; });
+  return { kivia: kivet.length, riveja: M.length, jaksot: jaksot, isot: isot, h: kivet.map(function(kv){ return Math.round(kv.h*1000)/1000; }), ki: kivet.map(function(kv){ return kv.i; }) };
+}
+// Kalalle lähimmän 10 m:n jakson kivikko (enintään 25 m)
+function olKivikkoKaloille(kalat, jaksot){
+  (kalat || []).forEach(function(k){
+    var paras = null, pe = 25;
+    jaksot.forEach(function(j){ if (j.tiheys === null) return; var e = olMatkaM({ la: k.lat, lo: k.lon }, { la: j.lat, lo: j.lon }); if (e <= pe){ pe = e; paras = j; } });
+    if (paras){ k.kivikko = paras.tiheys; k.kiviMaxH = paras.maxH; }
+  });
+}
 /* v193: tuonnin jälkikäsittely: pohjaksi luettu parvi pois omasta luotauksesta (molemmat ehdot), parvet talteen ja
    tallenteen keskilämpö järven pintalämmöksi (oma mittaus, lähde kaikuluotain; Hannu 11.10.: "Keskilämpö voisi olla
    vakaampi"). Palauttaa lisätekstin tuontiviestiin. Muuttaa tulos-oliota (pisteet, parvet, pohjaPoistettu). */
@@ -3809,6 +3963,13 @@ function olJalkikasittely(tulos, jarviAv, nimi){
   }
   var np = (tulos.parvet || []).filter(function(x){ return x.tyyppi === 'parvi'; }).length;
   if (tulos.sekunteja) osat.push(np + (np === 1 ? ' parvi' : ' parvea') + ' kaikukuvasta');
+  if (tulos.kivikko){   // v197: sivukeila. Kivikohtaiset luvut vain testiin (window.__olViimeKivi), muistiin jaksot ja isot kivet
+    window.__olViimeKivi = tulos.kivikko;
+    var kv = tulos.kivikko, jt = kv.jaksot.filter(function(j){ return j.tiheys !== null; });
+    var kk = jt.filter(function(j){ return j.tiheys >= 3; }).length;
+    tulos.kivikko = { kivia: kv.kivia, riveja: kv.riveja, jaksot: kv.jaksot, isot: kv.isot };
+    osat.push('sivukeila: ' + kv.kivia + ' kiveä, kivikkoa ' + (kk*10) + ' m / ' + (jt.length*10) + ' m arvioitua matkaa' + (kv.isot.length ? ', ' + kv.isot.length + ' yli 0,4 m:n kiveä' : ''));
+  }
   if (Array.isArray(tulos.kalat)){   // v194
     var kl = omaLuotausKalaLuokat(tulos.kalat);
     osat.push(tulos.kalat.length + ' yksittäistä kalaa (iso ' + kl.iso + ', keski ' + kl.keski + ', pieni ' + kl.pieni + ')');
@@ -3886,7 +4047,7 @@ async function olTuo(files){
       var lisa = olJalkikasittely(tulos, jarviAv, nimi);
       if (vanha && (tulos.lat.length > vanha.lat.length || !Array.isArray(vanha.lampo) || !Array.isArray(vanha.kalat) || (vanha.tuontiVersio || 0) < OL_TUONTI_VERSIO)){   // v175: jumittunut tuonti korvataan; v193: vanha tuonti saa lämmön ja parvet; v194: kalat; v195: kellonajat
         var ennen = vanha.lat.length;
-        ['lat','lon','syv','kehyksia','kestoS','lampoMin','lampoMax','lampo','aikaS','lampoKa','lampoViim','parvet','pohjaPoistettu','kalat','kalaMed','takila','parviSekPois'].forEach(function(k){ vanha[k] = tulos[k]; });
+        ['lat','lon','syv','kehyksia','kestoS','lampoMin','lampoMax','lampo','aikaS','lampoKa','lampoViim','parvet','pohjaPoistettu','kalat','kalaMed','takila','parviSekPois','kivikko'].forEach(function(k){ vanha[k] = tulos[k]; });
         if (tulos.alku) vanha.alku = tulos.alku;
         vanha.tuontiVersio = OL_TUONTI_VERSIO;
         vanha.tuotu = Date.now(); uusia++;
@@ -3902,7 +4063,7 @@ async function olTuo(files){
                 kehyksia: tulos.kehyksia, kestoS: tulos.kestoS, alku: tulos.alku, lampoMin: tulos.lampoMin, lampoMax: tulos.lampoMax,
                 lat: tulos.lat, lon: tulos.lon, syv: tulos.syv,
                 lampo: tulos.lampo, aikaS: tulos.aikaS, lampoKa: tulos.lampoKa, lampoViim: tulos.lampoViim, parvet: tulos.parvet, pohjaPoistettu: tulos.pohjaPoistettu,   // v193
-                kalat: tulos.kalat, kalaMed: tulos.kalaMed, takila: tulos.takila, parviSekPois: tulos.parviSekPois,   // v194
+                kalat: tulos.kalat, kalaMed: tulos.kalaMed, takila: tulos.takila, parviSekPois: tulos.parviSekPois, kivikko: tulos.kivikko || null,   // v194, v197
                 tuontiVersio: OL_TUONTI_VERSIO };   // v195
       d.tuonnit.push(t); uusia++;
       viestit.push(nimi + ': ' + t.lat.length + ' pistettä, ' + olJarviNimi(jarviAv) + (t.alku ? ', ' + olAika(t.alku) : '') + (jarviAv ? '' : ' (ei osu sovelluksen järviin, tallennetaan silti)') + lisa + olDiagTeksti(tulos));
@@ -3955,6 +4116,7 @@ function olPiirraLista(){
       + (typeof t.lampoMin === 'number' ? ' · vesi ' + olN1(t.lampoMin) + (t.lampoMax - t.lampoMin >= 0.1 ? '–' + olN1(t.lampoMax) : '') + ' °C' + (typeof t.lampoKa === 'number' ? ' (ka ' + olN1(t.lampoKa) + ')' : '') : '')
       + (Array.isArray(t.parvet) ? ' · ' + t.parvet.filter(function(x){ return x.tyyppi === 'parvi'; }).length + ' parvea' + (t.pohjaPoistettu ? ', pohjaksi luettu parvi poistettu ' + t.pohjaPoistettu + ' pisteestä' : '') : '')
       + (Array.isArray(t.kalat) ? ' · ' + t.kalat.length + ' kalaa (' + omaLuotausKalaLuokat(t.kalat).iso + ' isoa)' + ((t.takila || []).length ? ', takila suodatettu' : '') : '')   // v194
+      + (t.kivikko && t.kivikko.jaksot ? ' · sivukeila: ' + t.kivikko.kivia + ' kiveä, kivikkoa ' + (t.kivikko.jaksot.filter(function(j){ return j.tiheys !== null && j.tiheys >= 3; }).length*10) + ' m' : '')   // v197
       + (olAikaVaarin(t) ? '<br><span style="color:var(--amber);">⚠ Kellonajat ovat 49 vrk 17 h liian aikaisin (v193–v194:n vika). Tuo tämä tiedosto uudelleen, niin ajat, lämpöjälki, parvet ja kalat korjautuvat.</span>' : '')   // v195
       + ' · tuotu ' + tt.getDate() + '.' + (tt.getMonth() + 1) + '. klo ' + pad(tt.getHours()) + '.' + pad(tt.getMinutes())
       + ' <button type="button" class="chip" style="padding:1px 8px;font-size:12px;margin-left:4px;" onclick="olPoista(\'' + t.id + '\')">Poista</button></div>';
@@ -3993,7 +4155,9 @@ function olKalaKoosteHtml(d){
       + '<div style="overflow-x:auto;"><table style="border-collapse:collapse;font-size:12px;margin-top:4px;width:100%;"><tr><th style="' + th + 'text-align:left;">klo</th><th style="' + th + '">luodattu</th>'
       + OL_SYVLUOKAT.map(function(s){ return '<th style="' + th + '">' + s[2] + '</th>'; }).join('') + '</tr>' + rivit + '</table></div>'
       + (vaarin ? '<p style="margin:4px 0 0;color:var(--amber);">⚠ ' + vaarin + (vaarin === 1 ? ' tallenne on' : ' tallennetta on') + ' väärillä tunneilla (kellonaika 49 vrk 17 h liian aikaisin): tuo ' + (vaarin === 1 ? 'se' : 'ne') + ' uudelleen.</p>' : '')
-      + '<p class="hint" style="margin:4px 0 0;">Syvyys pinnasta (anturin syvyys lisätty). Iso = kaiku selvästi tallenteen tyypillistä kalaa vahvempi ja täysi kaari (kala kulki keilan keskeltä); '
+      + '<p class="hint" style="margin:4px 0 0;">'   // v196: väriselite (Hannu 11.10.: "Värin merkitys")
+      + '<b style="color:var(--amber);">Oranssi</b> = tunnilla ja syvyydellä vähintään yksi iso kaiku · valkoinen = kaloja, ei isoja · <b>·</b> = ei kaloja. '
+      + 'Syvyys pinnasta (anturin syvyys lisätty). Iso = kaiku selvästi tallenteen tyypillistä kalaa vahvempi ja täysi kaari (kala kulki keilan keskeltä); '
       + 'kokoa senttimetreinä ei voi mitata, koska kaiku riippuu myös kalan paikasta keilassa. Ylin 1,75 m pinnasta ei näy. Lajiepäily ja paikka: tilannekuvan kerros 🎣 Isot kaiut.</p></div>';
   }).join('');
 }
@@ -13183,7 +13347,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v195';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v197';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -21295,7 +21459,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=195';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=197';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })
