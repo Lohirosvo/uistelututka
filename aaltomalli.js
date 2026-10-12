@@ -2634,6 +2634,119 @@ window.akTaimenKentta = function(o){
            } };
 };
 
+/* ===== v200 JÄRVILOHI (LINTUSELÄN MALLI) =====
+   Hannu 12.10.2026, Kivijärven Lintuselän järvilohikokemus (ei koordinaatteja, kuvaus kartan ja kovuuskartan päällä):
+   "Lintusaaren itäpuoli ja erityisesti tuon matalikon itä- ja pohjoispuoli, noin 6 m patti. Tuuli ollut ala-oikealta
+   (kaakosta) aamulla, vasen penkanreuna ja oikealtakin. 17 m vettä alla ja 9 °C vesi." Viehe: kalvosta 20 ft siimaa,
+   uistin 7 cm, ui 0,3 m pinnan alla. "60 m leveä harava, veneen alla 15–20 m vettä, veto penkan suuntaisesti."
+   Säännöt (Hannun kuvauksesta; painot oletuksia, ei mitattu):
+   1) KAISTA: ruudun syvyys 14–21 m (veneen alla 15–20 m).
+   2) PENKKA: 150 m sisällä pohja nousee 3–10 m:iin (patti tai penkka noin 6 m). Patti = laki on oma nyppylänsä (ei maata
+      250 m eikä yli 1,5 m matalampaa 300 m sisällä; Lintuselän patti); muuten penkka (uoman reunat, rannan hylly).
+   3) MAASTO 0,5–1: patti +0,15; syvä uoma 300 m sisällä (20 → 30 m) +0–0,15 (Lintuselällä 25–36 m);
+      jyrkkyys (laki 50 → 200 m päässä) +0,1–0; laen syvyys lähellä 6 m:ä +0–0,1.
+   4) TUULI: veto kulkee syvyyskäyrän suuntaan. Tuuli penkan suuntainen (cos kulmasta) ja penkan tuulenpuoleinen
+      kylki (alamäki osoittaa tuulta kohti) saavat pisteitä; alle 2 m/s tuulella tuuli ei painota.
+   Pisteet = 100 × (0,45 × maasto + 0,55 × tuuli). Ruudut harvennetaan 700 m:n välein, enintään 8 kaistaa (≥ 55).
+   Uintisyvyys: pinta (0,3 m), kun vesi on viileää (Lintuselällä 9 °C); lämpimällä ks. järvilohen syvyysarvio. */
+var akLohiVM = null;   // { jarvi, ehd: [...] } – maasto ei riipu tuulesta
+function akLohiMaasto(){
+  if (!jarvi || !jarvi.kartta || !mask || !akSyvyys) return null;
+  if (akLohiVM && akLohiVM.jarvi === jarvi && akLohiVM.syv === akSyvyys) return akLohiVM.ehd;
+  var k = jarvi.kartta, W = k.W, H = k.H, rr = k.ruutu, S = akSyvyys;
+  var rP = Math.max(1, Math.round(150/rr)), rS = Math.max(1, Math.round(300/rr)), rM = Math.max(1, Math.round(250/rr));
+  var lsz = akSileaSyvyys(), ehd = [];
+  function onPatti(i, j, laki){   // laki on oma nyppylänsä: ei maata 250 m sisällä eikä selvästi matalampaa 300 m sisällä
+    for (var a = -rS; a <= rS; a++) for (var b = -rS; b <= rS; b++){
+      var d2 = a*a + b*b; if (d2 > rS*rS) continue;
+      var ii = i + a, jj = j + b;
+      if (ii < 0 || jj < 0 || ii >= W || jj >= H || !mask[jj*W + ii]){ if (d2 <= rM*rM) return false; continue; }
+      if (S[jj*W + ii] < laki - 1.5) return false;
+    }
+    return true;
+  }
+  for (var q = 0; q < mask.length; q++){
+    if (!mask[q] || !(S[q] >= 14 && S[q] <= 21)) continue;
+    var i = q % W, j = (q/W)|0, laki = 99, lq = -1, syva = 0;
+    for (var a = -rS; a <= rS; a++) for (var b = -rS; b <= rS; b++){
+      var d2 = a*a + b*b; if (d2 > rS*rS) continue;
+      var ii = i + a, jj = j + b; if (ii < 0 || jj < 0 || ii >= W || jj >= H) continue;
+      var q2 = jj*W + ii; if (!mask[q2]) continue;
+      if (S[q2] > syva) syva = S[q2];
+      if (d2 <= rP*rP && S[q2] >= 3 && S[q2] <= 10 && S[q2] < laki){ laki = S[q2]; lq = q2; }
+    }
+    if (lq < 0) continue;
+    // syvyyskäyrän suunta pehmennetystä syvyydestä; alamäki g osoittaa syvemmälle (pohjoinen = −j)
+    var e = (i+1 < W && mask[q+1]) ? lsz[q+1] : lsz[q], w = (i > 0 && mask[q-1]) ? lsz[q-1] : lsz[q];
+    var sN = (j+1 < H && mask[q+W]) ? lsz[q+W] : lsz[q], nN = (j > 0 && mask[q-W]) ? lsz[q-W] : lsz[q];
+    var gx = e - w, gy = nN - sN, gl = Math.sqrt(gx*gx + gy*gy);   // gx itään, gy pohjoiseen
+    if (gl < 1e-6){   // tasainen: suunta kohti lakea
+      var li = lq % W, lj = (lq/W)|0; gx = i - li; gy = lj - j; gl = Math.sqrt(gx*gx + gy*gy) || 1;
+    }
+    gx /= gl; gy /= gl;
+    var patti = onPatti(lq % W, (lq/W)|0, S[lq]);
+    var lakiEtM = Math.round(Math.sqrt(Math.pow(i - lq % W, 2) + Math.pow(j - ((lq/W)|0), 2))*rr);
+    var maasto = 0.5 + (patti ? 0.15 : 0) + 0.15*Math.max(0, Math.min(1, (syva - 20)/10))
+               + 0.1*Math.max(0, Math.min(1, 1 - (lakiEtM - 50)/150)) + 0.1*Math.max(0, 1 - Math.abs(S[lq] - 6)/6);
+    ehd.push({ q: q, i: i, j: j, syv: S[q], laki: S[lq], lakiEtM: lakiEtM,
+               syva: syva, patti: patti, gx: gx, gy: gy, maasto: maasto });
+  }
+  akLohiVM = { jarvi: jarvi, syv: akSyvyys, ehd: ehd };
+  return ehd;
+}
+function akSyvLuokkaTeksti(v){   // v200: syvyysluokan väli tekstiksi (8 → "6–10"); oma luotaus (ei luokan keskikohta) pyöristetään
+  var L = (jarvi && jarvi.kartta && jarvi.kartta.luokkaM) || SYV_LUOKKA_M, ala = 0;
+  for (var n = 0; n < L.length; n++){
+    var yla = 2*L[n] - ala;
+    if (Math.abs(v - L[n]) < 0.01) return (Math.round(ala*10)/10 + '–' + Math.round(yla*10)/10).replace(/\./g, ',');
+    ala = yla;
+  }
+  return String(Math.round(v));
+}
+function akLohiKulma(gx, gy){ return (Math.atan2(gx, gy)*180/Math.PI + 360) % 360; }   // suunta asteina (0 = pohjoinen)
+window.akLohiKaistat = function(o){
+  o = o || {};
+  var ehd = akLohiMaasto(); if (!ehd) return { tila: 'eiJarvea', kaistat: [] };
+  var k = jarvi.kartta, rr = k.ruutu, U = typeof o.U === 'number' ? o.U : null, dir = typeof o.dir === 'number' ? o.dir : null;
+  var tuuliOn = U !== null && dir !== null && U >= 2;
+  var wx = 0, wy = 0; if (dir !== null){ wx = Math.sin(dir*Math.PI/180); wy = Math.cos(dir*Math.PI/180); }   // mistä tuuli tulee
+  var lista = ehd.map(function(c){
+    var kayra = (akLohiKulma(c.gx, c.gy) + 90) % 180;            // syvyyskäyrän (vedon) suunta 0–180°
+    var par = 0, kylki = 0, tuuli = 0.5;
+    if (tuuliOn){
+      var ero = Math.abs(((dir % 180) - kayra + 180) % 180); if (ero > 90) ero = 180 - ero;
+      par = Math.cos(ero*Math.PI/180);
+      kylki = Math.max(0, c.gx*wx + c.gy*wy);
+      tuuli = 0.4 + 0.35*par + 0.25*kylki;
+    }
+    var raaka = 100*(0.45*c.maasto + 0.55*tuuli);
+    return { c: c, kayra: kayra, par: par, kylki: kylki, tuuli: tuuli, raaka: raaka, pisteet: Math.round(raaka) };
+  }).sort(function(a, b){ return b.raaka - a.raaka || b.c.syva - a.c.syva; });
+  var valitut = [], vali = 700/rr, max = o.max || 8, raja = typeof o.raja === 'number' ? o.raja : 55;
+  for (var n = 0; n < lista.length && valitut.length < max; n++){
+    var x = lista[n]; if (x.pisteet < raja) break;
+    if (valitut.some(function(v){ var a = v.c.i - x.c.i, b = v.c.j - x.c.j; return a*a + b*b < vali*vali; })) continue;
+    valitut.push(x);
+  }
+  var kaistat = valitut.map(function(x, n){
+    var c = x.c, lat = k.pohjoisLat - (c.j + 0.5)*rr/111320, cosl = Math.cos(lat*Math.PI/180), lon = k.lansiLon + (c.i + 0.5)*rr/(111320*cosl);
+    var kr = x.kayra*Math.PI/180, puoli = 150;   // kaista ±150 m syvyyskäyrän suuntaan
+    var dLa = Math.cos(kr)*puoli/111320, dLo = Math.sin(kr)*puoli/(111320*cosl);
+    var syyt = [];
+    syyt.push({ taso: 'Oma kokemus', teksti: 'veneen alla ' + akSyvLuokkaTeksti(c.syv) + ' m (Lintuselällä 15–20 m)' });
+    syyt.push({ taso: 'Oma kokemus', teksti: (c.patti ? 'patti' : 'penkka') + ' nousee ' + akSyvLuokkaTeksti(c.laki) + ' m:iin ' + c.lakiEtM + ' m päässä' + (c.patti ? ' (Lintuselällä noin 6 m patti)' : ' (uoman penkanreuna)') });
+    if (c.syva >= 22) syyt.push({ taso: 'Oma kokemus', teksti: 'syvä uoma lähellä: ' + akSyvLuokkaTeksti(c.syva) + ' m 300 m sisällä' });
+    if (tuuliOn) syyt.push({ taso: 'Malli', teksti: (x.par >= 0.7 ? 'tuuli penkan suuntainen' : x.par >= 0.4 ? 'tuuli vinosti penkkaan' : 'tuuli poikki penkan')
+                             + (x.kylki >= 0.3 ? ', penkan tuulenpuoleinen kylki' : '') + ' (Lintuselällä kaakkoistuuli patin itä- ja pohjoispuolelle)' });
+    else syyt.push({ taso: 'Malli', teksti: 'heikko tai tuntematon tuuli: vain maasto painaa' });
+    var v1 = Math.round(x.kayra), v2 = (v1 + 180) % 360;
+    return { tunnus: 'L' + (n + 1), lat: lat, lon: lon, pisteet: x.pisteet, syv: c.syv, laki: c.laki, patti: c.patti, syva: c.syva,
+             veto: [v1, v2], a: { lat: lat + dLa, lon: lon + dLo }, b: { lat: lat - dLa, lon: lon - dLo }, syyt: syyt,
+             teksti: 'Veto penkan suuntaisesti ' + akKohti(v1) + ' tai ' + akKohti(v2) + ' (' + v1 + '° / ' + v2 + '°). Pintauistin noin 0,3 m, kun vesi on viileää (Lintuselällä 9 °C, 7 cm uistin, 60 m harava).' };
+  });
+  return { tila: 'ok', avain: Object.keys(JARVET).find(function(a){ return JARVET[a] === jarvi; }), ehdokkaita: ehd.length, kaistat: kaistat, tuuli: tuuliOn ? { U: U, dir: dir } : null };
+};
+
 /* Taimenmerkit kartalle (v156): oma kytkin, eri värit kuin kuhalla, mukana myös Ozi-kuvassa. */
 var akTaimenMerkit = false;
 try { akTaimenMerkit = localStorage.getItem('aaltokartta_taimen') === '1'; } catch(e){}
