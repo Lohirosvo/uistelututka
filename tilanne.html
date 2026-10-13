@@ -93,6 +93,10 @@
     kuha- ja taimenmerkit perusteluineen kirjauspohjaan (P.kartta); täällä samat merkit ja napautuksesta perustelut
     todisteen tasoineen. Kytkimet tilavalikossa. Samassa kohdassa olevat merkit (esim. kuhapaikka ja ottipaikka)
     näkyvät napautuksessa yhdessä.
+  v201 (13.10.2026): VANA SAALIIN KOHDALLE. Hannu: lohi seuraa usein ennen tärppiä, joten ottipiste on ajolinjalla
+    seurannan lopussa. Kala kiinni tallentaa viimeiset 500 m vanaa ja kulkusuunnan (kirjaus.js: saalisVana). Päivän
+    saaliille piirretään vana lajin värillä (häipyy alkua kohti), kytkin valikossa "〰 Saaliiden vanat (n)", napautus
+    kertoo vanan pituuden, keston ja kulkusuunnan. Veneen perässä näkyvä vana 50 m → 500 m (vene.js; Hannun valinta).
   -->
   <style>
     :root { --bg:#060B14; --panel:#0E1B2E; --panel-alt:#13253D; --line:#1E3350; --text:#E7EEF6; --muted:#7E93AC;
@@ -267,18 +271,18 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=200" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=200" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=200" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=200" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=200" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=200" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=200" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=200" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=201" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=201" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=201" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=201" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=201" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=201" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=201" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=201" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v200';
+    const APP_VERSIO = 'v201';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
@@ -291,7 +295,7 @@
     const kk = n => String(n).padStart(2, '0');
     const ilmansuunta = deg => ['P', 'KO', 'I', 'KA', 'E', 'LO', 'L', 'LU'][Math.round((((deg % 360) + 360) % 360) / 45) % 8];   // mistä tuulee
 
-    let as = { tila: 'aalto', kloonit: true, yo: false, laji: null, selite: false, vaaka: false, kuha: true, taimen: true, kulku: false, lampo: true, parvet: true, kalat: true, kivikko: true, lohi: true };   // v200: lohi (Lintuselän malli)   // v186: kuha, taimen; v193: kulku (kulkusuunta ylös), lampo, parvet; v194: kalat
+    let as = { tila: 'aalto', kloonit: true, yo: false, laji: null, selite: false, vaaka: false, kuha: true, taimen: true, kulku: false, lampo: true, parvet: true, kalat: true, kivikko: true, lohi: true, saalisVanat: true };   // v201: saalisVanat (saaliin vana)   // v200: lohi (Lintuselän malli)   // v186: kuha, taimen; v193: kulku (kulkusuunta ylös), lampo, parvet; v194: kalat
     try { as = Object.assign(as, JSON.parse(localStorage.getItem(AS_LS) || '{}')); } catch (e) {}
     const tallennaAs = () => { try { localStorage.setItem(AS_LS, JSON.stringify(as)); } catch (e) {} };
 
@@ -589,6 +593,8 @@
       if (as.lohi) { const L = lohiKaistat(); if (L) L.kaistat.forEach(q => lohiMerkki(q, nakyy)); }   // v200
 
       const K = (as.kloonit && kerros && kerros.avain === avain) ? kerros : null;
+      // v201: päivän saaliiden vanat (viimeiset 500 m ennen kirjausta) pallojen alle
+      if (as.saalisVanat) saaliit.forEach(x => saalisVanaPiirra(x, nakyy));
       // päivän saaliit (v180): pieni pallo lajin värillä; saalis, jolla on klooni-isku, näkyy iskuna (punainen pallo)
       saaliit.forEach(x => {
         if (K && K.iskut.some(I => I.lat === x.lat && I.lon === x.lon)) return;
@@ -803,6 +809,25 @@
       const P = kirjauspohjaLue();
       return (P && P.kalaLaji && SAALIS_LAJIT.some(x => x.v === P.kalaLaji)) ? P.kalaLaji : 'taimen';
     }
+    /* v201: saaliin vana (kirjaus.js saalisVana: [[lat, lon], …] vanhin ensin, viimeinen = saaliin kohta). Lajin väri
+       tumman reunan päällä; häipyy vanhinta päätä kohti, jotta kulkusuunta näkyy ilman nuolta. */
+    function saalisVanaPiirra(x, nakyy) {
+      const V = Array.isArray(x.vana) ? x.vana : null; if (!V || V.length < 2) return;
+      const P = V.map(q => naytolle(q[0], q[1]));
+      if (!P.some(p => nakyy(p, 40))) return;
+      const n = P.length - 1, vari = LAJIVARI[x.laji] || '#9aa7b8';
+      ctx.save(); ctx.lineCap = 'butt'; ctx.lineJoin = 'round';
+      for (const [lw, tumma] of [[5.5, true], [2.6, false]]) {
+        for (let i = 1; i <= n; i++) {
+          const a = 0.2 + 0.75 * i / n;
+          ctx.beginPath(); ctx.moveTo(P[i - 1].x, P[i - 1].y); ctx.lineTo(P[i].x, P[i].y);
+          ctx.lineWidth = lw; ctx.globalAlpha = tumma ? a * 0.7 : a; ctx.strokeStyle = tumma ? '#04121f' : vari; ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+    const saalisVanaTeksti = x => (typeof x.vanaM === 'number' ? 'vana ' + x.vanaM + ' m' + (typeof x.vanaKestoS === 'number' && x.vanaKestoS >= 60 ? ' / ' + Math.round(x.vanaKestoS / 60) + ' min' : '') : '')
+      + (typeof x.kulkusuunta === 'number' ? (typeof x.vanaM === 'number' ? ', ' : '') + 'kulku ' + klooniKohti(x.kulkusuunta) + ' ' + x.kulkusuunta + '°' : '');
     const lajiNimi = v => (SAALIS_LAJIT.find(x => x.v === v) || { l: v || '?' }).l;
     function paivitaKalaNappi() { $('kalaLaji').textContent = lajiNimi(lajiNyt()).toLowerCase(); }
     const ikaTeksti = min => min < 60 ? min + ' min' : Math.floor(min / 60) + ' h ' + (min % 60) + ' min';
@@ -825,11 +850,12 @@
           lon: gps ? gps.lon : null,
           nopeusKmh: gps && typeof gps.kmh === 'number' ? Number(gps.kmh.toFixed(1)) : null,
           avain: kohde,
+          oma: gps,   // v201: tuore GPS-suunta, jos vanaa ei ole
           veneella: dMalli => (gps && t - gps.aika <= VENE_GPS_MAX_MS) ? taimenVeneellaPohjasta(syvyysJarvella(gps.lat, gps.lon, VENE_SADE_M, ehto), dMalli) : null
         });
       } catch (e) {
         // viimeinen varmistus: aika, paikka ja laji talteen joka tapauksessa
-        snap = rakennaSaalis(kirjauspohjaTyhja(kohde && J[kohde] ? J[kohde].nimi : null), { nyt, nollareissu: false, lat: gps ? gps.lat : null, lon: gps ? gps.lon : null, nopeusKmh: null, avain: kohde });
+        snap = rakennaSaalis(kirjauspohjaTyhja(kohde && J[kohde] ? J[kohde].nimi : null), { nyt, nollareissu: false, lat: gps ? gps.lat : null, lon: gps ? gps.lon : null, nopeusKmh: null, avain: kohde, oma: gps });
         pk.kelpaa = false; pk.syy = 'virhe kirjauspohjassa (' + (e && e.message || e) + ')';
       }
       snap.laji = lajiNyt();
@@ -897,6 +923,7 @@
       const tiedot = [snap.lat !== null ? (typeof oma.tarkkuus === 'number' ? 'paikka ±' + Math.round(oma.tarkkuus) + ' m' : 'paikka') : '<span style="color:#ffb020">ei sijaintia</span>'];
       if (snap.nopeusKmh !== null) tiedot.push(n1(snap.nopeusKmh) + ' km/h');
       if (typeof snap.pohjaVeneellaM === 'number') tiedot.push('pohja ' + n1(snap.pohjaVeneellaM) + ' m');
+      if (typeof snap.vanaM === 'number') tiedot.push('vana ' + snap.vanaM + ' m');   // v201
       const pohjaRivi = pk.kelpaa
         ? 'Olot etusivulta klo ' + klooniKello(Date.parse(pk.P.aika)) + (pk.ikaMin >= 1 ? ' (' + ikaTeksti(pk.ikaMin) + ' sitten)' : '') + '.' + (pk.ikaMin > 90 ? ' Käy etusivulla, niin sää ja vesi päivittyvät.' : '')
         : '<span style="color:#ffb020">Sää, vesi ja ennusteet puuttuvat: ' + pk.syy + '.</span> Aika, paikka, laji, pohja ja mallin arviot ovat tallessa.';
@@ -1087,6 +1114,7 @@
         if (typeof x.syvyysM === 'number') o.push('pyynti ' + n1(x.syvyysM) + ' m');
         if (typeof x.pohjaVeneellaM === 'number') o.push('pohja ' + n1(x.pohjaVeneellaM) + ' m');
         if (typeof x.malliAaltoM === 'number') o.push('aalto ' + n2(x.malliAaltoM) + ' m (malli)');
+        if (saalisVanaTeksti(x)) o.push(saalisVanaTeksti(x));   // v201
         lisaa(x.lat, x.lon, '<b style="color:#ffd166">Saalis</b> ' + o.join(' · ') + (x.iskuTunnus ? ' · isku ' + x.iskuTunnus : '') + (x.taydennetty === false ? '<br><span style="color:#7E93AC">Täydennä etusivun saalislistasta.</span>' : ''));
       });
       if (avain === 'lappajarvi') {
@@ -1231,6 +1259,7 @@
       return '<div class="huom" style="margin-top:4px;color:var(--text)">Merkit etusivun analyysista</div>' + o.map(nappi).join('')
         + '<div class="huom">' + huom.join('.<br>') + '. Napauta merkkiä: perustelut.</div>'
         + lohiValikko()
+        + saalisVanaValikko()
         + tallenneValikko()
         + '<button class="merkki' + (as.kulku ? ' valittu' : '') + '" data-kulku="1">🧭 ' + (as.kulku ? 'Kulkusuunta ylös' : 'Pohjoinen ylös') + '</button>'
         + '<div class="huom">Kartan suunta (myös pohjoisnuolta napauttamalla). Seurattaessa vene on kolmanneksen keskeltä taaksepäin, jotta edessä näkyy enemmän.</div>'
@@ -1242,6 +1271,13 @@
       return '<button class="merkki' + (as.lohi && n ? ' valittu' : '') + '" data-merkit="lohi"' + (n ? '' : ' disabled') + '>🐟 Järvilohi, Lintuselän malli (' + n + ')</button>'
         + '<div class="huom">' + (n ? 'Oranssi viiva = vetokaista penkan suuntaisesti: veneen alla 15–20 m, patti tai penkka noin 6 m:iin, kartan tunnin tuuli. Pintauistin viileässä vedessä. Malli Hannun Kivijärven kokemuksesta, ei Lappajärven saaliista.'
           : 'Ei kaistoja: järvellä ei ole 15–20 m:n vettä 3–10 m:n penkan vieressä tai syvyysruudukko puuttuu.') + '</div>';
+    }
+    // v201: päivän saaliiden vanat
+    function saalisVanaValikko() {
+      const n = saaliit.filter(x => Array.isArray(x.vana) && x.vana.length > 1).length;
+      return '<button class="merkki' + (as.saalisVanat && n ? ' valittu' : '') + '" data-merkit="saalisVanat"' + (n ? '' : ' disabled') + '>〰 Saaliiden vanat (' + n + ')</button>'
+        + '<div class="huom">' + (n ? 'Viimeiset 500 m ennen Kala kiinni -kirjausta lajin värillä, häipyy alkua kohti. Lohi seuraa usein ennen tärppiä: linja kertoo enemmän kuin piste.'
+          : 'Tämän päivän saaliilla ei ole vanaa. Vana tallentuu, kun GPS on ollut päällä ennen kirjausta (v201 alkaen).') + '</div>';
     }
     // v193: kaikuluotaimen tallenteiden kerrokset (7 vrk, tämä järvi)
     function tallenneValikko() {

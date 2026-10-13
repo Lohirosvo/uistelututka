@@ -5,6 +5,7 @@
    kirjauspohja ja yhteinen saalisrivin rakentaja (rakennaSaalis), mallikenttien täydennys (saalisMalliTaydennys,
    siirretty kalaKiinnistä) ja GPS-piste avoimeen reissuun (pyyntiLisaaPiste, pyyntiGpsAvoimeen).
    v181: kumpuamisen Wedderburn-arvio parametreilla (kumpuArvioParam, kumpuHistoriaParam) etusivulle ja tilannekuvalle.
+   v201: saalisriville vana (viimeiset 500 m ennen kirjausta) ja kulkusuunta (saalisVana, saalisTuoreSuunta).
    VERSIO: sivut lataavat tiedoston nimellä kirjaus.js?v=NNN; NNN = sw.js:n VERSIO-numero. */
 
 // Saalisloki: kaikki kirjaukset yhdessä taulukossa (etusivu ja tilannekuva).
@@ -244,7 +245,87 @@ function rakennaSaalis(P, x) {
     if (hv.varpula) snap.hirviVarpulaM3s = Math.round(hv.varpula.q * 100) / 100;
     if (hv.tase && hv.tase.qTulo >= 0) snap.hirviTuloM3s = Math.round(hv.tase.qTulo * 10) / 10;
   }
+  /* v201: vana ja kulkusuunta (ks. saalisVana). Rivin lopussa, joten aiempien kenttien järjestys ei muutu. */
+  snap.kulkusuunta = null; snap.kulkusuuntaLahde = null; snap.vana = null; snap.vanaM = null; snap.vanaKestoS = null;
+  if (!x.nollareissu && typeof snap.lat === 'number' && typeof snap.lon === 'number') {
+    let V = null;
+    try { V = saalisVana(snap.lat, snap.lon, nyt.getTime(), x.vana !== undefined ? x.vana : (window.utVana ? window.utVana.pisteet() : null)); } catch (e) { V = null; }
+    if (V) {
+      snap.vana = V.pisteet; snap.vanaM = V.m; snap.vanaKestoS = V.kestoS;
+      if (V.suunta !== null) { snap.kulkusuunta = V.suunta; snap.kulkusuuntaLahde = 'vana'; }
+    }
+    if (snap.kulkusuunta === null) {
+      const ts = saalisTuoreSuunta(x.oma, nyt.getTime());
+      if (ts !== null) { snap.kulkusuunta = ts; snap.kulkusuuntaLahde = 'gps'; }
+    }
+  }
   return snap;
+}
+
+/* VANA JA KULKUSUUNTA SAALISRIVILLE — 13.10.2026 (v201).
+   Hannu 13.10.: lohi on usein havainnut vieheen jo aiemmin ja seurannut ennen tärppiä, joten ottipiste on seurannan
+   loppukohta ajolinjalla eikä välttämättä paikka, jossa kala oleskeli. Rivi tallentaa siksi myös kuljetun linjan:
+     vana               [[lat, lon], …] vanhin ensin, viimeinen = saaliin kohta; pisteet 10 m välein reittiä pitkin,
+                        enintään 500 m; 5 desimaalia (noin 1 m). null, jos vanaa on alle 20 m.
+     vanaM              vanan pituus metreinä (enintään 500)
+     vanaKestoS         sekunteja vanan alusta kirjaukseen (nopeus = vanaM / vanaKestoS)
+     kulkusuunta        aste 0–359 (0 = pohjoinen): vanasta 30 m:n takaa saaliin kohtaan; jos vanaa ei ole, tuore
+                        GPS-suunta (mitattu enintään 60 s ennen kirjausta); muuten null
+     kulkusuuntaLahde   'vana' | 'gps' | null
+   Lähde on vene.js:n vana (utVana: oikeat GPS-pisteet, välilehden muisti, enintään 45 min / 2 km). Vana ei ylitä
+   katkoa: jos viimeisin vanan piste on yli 3 min ennen kirjausta (näyttö kiinni, GPS pois), vanaa ei tallenneta.
+   Jos saaliin GPS-piste on yli 100 m vanan uusimmasta pisteestä, vanaa ei liitetä (eri lähde tai virhe).
+   Koko: 51 pistettä, noin 1 kt riviä kohden. */
+const SAALIS_VANA_M = 500, SAALIS_VANA_VALI_M = 10, SAALIS_VANA_MIN_M = 20, SAALIS_SUUNTA_M = 30;
+const SAALIS_VANA_KATKO_MS = 180e3, SAALIS_VANA_HYPPY_M = 100, SAALIS_SUUNTA_MAX_MS = 60e3;
+function saalisSuuntima(la1, lo1, la2, lo2) {   // sama kaava kuin kloonit.js:n klooniSuuntima
+  const a = la1 * Math.PI / 180, b = la2 * Math.PI / 180, dl = (lo2 - lo1) * Math.PI / 180;
+  const y = Math.sin(dl) * Math.cos(b), x = Math.cos(a) * Math.sin(b) - Math.sin(a) * Math.cos(b) * Math.cos(dl);
+  return Math.round((Math.atan2(y, x) * 180 / Math.PI + 360) % 360) % 360;
+}
+/* pisteet = utVana.pisteet() ([{ lat, lon, t }], vanhin ensin). Palauttaa { pisteet, m, kestoS, suunta } tai null. */
+function saalisVana(lat, lon, t, pisteet) {
+  if (typeof lat !== 'number' || typeof lon !== 'number' || !isFinite(lat) || !isFinite(lon) || !Array.isArray(pisteet)) return null;
+  const V = pisteet.filter(q => q && typeof q.lat === 'number' && typeof q.lon === 'number' && typeof q.t === 'number' && q.t <= t);
+  if (!V.length || t - V[V.length - 1].t > SAALIS_VANA_KATKO_MS) return null;
+  if (haversineDistMeters(lat, lon, V[V.length - 1].lat, V[V.length - 1].lon) > SAALIS_VANA_HYPPY_M) return null;
+  // reitti saaliin kohdasta taaksepäin; s = matka saaliin kohdasta reittiä pitkin, t = aika
+  const R = [{ lat, lon, s: 0, t }];
+  let s = 0;
+  for (let i = V.length - 1; i >= 0 && s < SAALIS_VANA_M; i--) {
+    const a = R[R.length - 1], q = V[i], d = haversineDistMeters(a.lat, a.lon, q.lat, q.lon);
+    if (d < 0.5) { a.t = Math.min(a.t, q.t); continue; }
+    if (s + d > SAALIS_VANA_M) {
+      const f = (SAALIS_VANA_M - s) / d;
+      R.push({ lat: a.lat + (q.lat - a.lat) * f, lon: a.lon + (q.lon - a.lon) * f, s: SAALIS_VANA_M, t: a.t + (q.t - a.t) * f });
+      s = SAALIS_VANA_M;
+    } else { s += d; R.push({ lat: q.lat, lon: q.lon, s, t: q.t }); }
+  }
+  if (s < SAALIS_VANA_MIN_M) return null;
+  const kohta = u => {   // reitin piste matkalla u saaliin kohdasta
+    for (let j = 1; j < R.length; j++) if (R[j].s >= u) {
+      const a = R[j - 1], b = R[j], f = (u - a.s) / ((b.s - a.s) || 1);
+      return { lat: a.lat + (b.lat - a.lat) * f, lon: a.lon + (b.lon - a.lon) * f };
+    }
+    return R[R.length - 1];
+  };
+  const P = [];
+  for (let u = 0; u < s; u += SAALIS_VANA_VALI_M) P.push(kohta(u));
+  P.push(R[R.length - 1]);
+  const pyor = v => Math.round(v * 1e5) / 1e5;
+  const taka = kohta(Math.min(SAALIS_SUUNTA_M, s));
+  return {
+    pisteet: P.reverse().map(p => [pyor(p.lat), pyor(p.lon)]),
+    m: Math.round(s),
+    kestoS: Math.max(0, Math.round((t - R[R.length - 1].t) / 1000)),
+    suunta: saalisSuuntima(taka.lat, taka.lon, lat, lon)
+  };
+}
+/* Tuore GPS-suunta (oma = window.utOmaSijainti tai tilannekuvan oma): mitattu enintään 60 s ennen kirjausta. */
+function saalisTuoreSuunta(oma, t) {
+  if (!oma || typeof oma.suunta !== 'number' || !isFinite(oma.suunta) || typeof oma.suuntaT !== 'number') return null;
+  if (t - oma.suuntaT > SAALIS_SUUNTA_MAX_MS || oma.suuntaT - t > 5e3) return null;
+  return ((Math.round(oma.suunta) % 360) + 360) % 360;
 }
 
 /* Mallin arviot saaliin kohdalta (siirretty etusivun kalaKiinnistä v180, sisältö ennallaan). Aaltomalli

@@ -4,6 +4,8 @@
    samoilla säännöillä. Tilannekuvan kuva pysyy bitilleen samana (testattu).
    Alkuperäinen pyyntö (v183, Hannu 10.10.): "paikan ilmaista tälläisellä iconilla joka näyttää suunnan minne
    menossa, 50 m häntä olisi plussaa mistä tullut, pituus ei niin tarkka hahmottamiseen riittävä."
+   v201 (13.10.2026): näkyvä vana 50 m → 500 m (Hannu: "Näytetään pidempänä kuin nyt eli 500 m", kaikilla kartoilla),
+   sama pituus kuin Kala kiinni -rivin vanassa (kirjaus.js: saalisVana). Lohi seuraa usein ennen tärppiä.
 
    VANA = oikea kuljettu GPS-reitti (ei piirretty arvio):
      - säilyy välilehden muistissa (sessionStorage 'ut_vana' ja viimeisimmän GPS-pisteen aika 'ut_vana_viime'),
@@ -29,7 +31,7 @@
   'use strict';
   const VENE_PX = 44, VENE_M = 6.3;            // kuvan pituus näytöllä; todellinen pituus, jos zoomattu niin lähelle, että se on isompi
   const VANA_SS = 'ut_vana', VANA_SS_V183 = 'tilanne_vana', VANA_SS_VIIME = 'ut_vana_viime';
-  const VANA_M = 50, VANA_PX = 80, VANA_MAX_M = 2000, VANA_MAX_MS = 45 * 60e3, VANA_KATKO_MS = 180e3;
+  const VANA_M = 500, VANA_PX = 80, VANA_MAX_M = 2000, VANA_MAX_MS = 45 * 60e3, VANA_KATKO_MS = 180e3;
 
   function matka(la1, lo1, la2, lo2) {   // sama kaava ja säde kuin klooniMatka ja haversineDistMeters
     const R = 6371e3, dLat = (la2 - la1) * Math.PI / 180, dLon = (lo2 - lo1) * Math.PI / 180;
@@ -92,8 +94,8 @@
   function pyorea(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
   const pituus = (mPerPx, yks) => Math.max(VENE_PX * yks, VENE_M / mPerPx);
 
-  // vana: kuljettu GPS-reitti veneestä taaksepäin, vähintään 50 m ja aina vähintään 80 px, jotta se erottuu veneen
-  // kuvan takaa myös koko järven näkymässä (siellä 50 m on alle 10 px). Häipyy hännän päätä kohti.
+  // vana: kuljettu GPS-reitti veneestä taaksepäin, vähintään 500 m (v201; ennen 50 m) ja aina vähintään 80 px, jotta se erottuu veneen
+  // kuvan takaa myös koko järven näkymässä. Häipyy hännän päätä kohti.
   function piirraVana(ctx, o) {
     const oma = o.oma, yks = o.yks || 1;
     if (!vana.length || !oma) return;
