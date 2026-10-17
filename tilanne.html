@@ -100,6 +100,9 @@
   v202 (13.10.2026): JÄRVILOHIREITTI (kokeilu). Auringonnoususta laskuun: alue (järvilohen kaistojen rypäs 1,5 km) ja sen
     kierros (suora rata 2–4 km, 100 m:n säteen käännökset), siirtymä toiselle alueelle vain, jos kaistat puuttuvat vähintään
     2 h; uistelunopeus 2,5–6 km/h (oletus veden lämmöstä), siirtymä 25 km/h. Kerros ja asetukset valikon Merkit-osassa.
+  v204 (17.10.2026): VALIKKO VIERITTYY. Hannu vesillä: Isot kaiut -nappia ei löytynyt. Valikko oli kasvanut (v200–v202)
+    puhelimen ruutua pidemmäksi (testissä 1 690 px / kartta-alue 650 px), eikä sitä voinut vierittää, koska sivu ei vieritä.
+    Valikko rajataan kartta-alueen korkeuteen ja vierittyy itse; avattaessa alkaa ylhäältä.
   -->
   <style>
     :root { --bg:#060B14; --panel:#0E1B2E; --panel-alt:#13253D; --line:#1E3350; --text:#E7EEF6; --muted:#7E93AC;
@@ -170,7 +173,8 @@
     #kirjaus.virhe { border-color: var(--puna); }
     /* v181: tilavalikko ja väriselite */
     #valikko { position: absolute; right: 8px; top: 8px; z-index: 7; background: rgba(14,27,46,.98); border: 1px solid var(--line);
-               border-radius: 12px; padding: 6px; display: none; grid-template-columns: 1fr 1fr; gap: 6px; width: min(300px, calc(100% - 16px)); }
+               border-radius: 12px; padding: 6px; display: none; grid-template-columns: 1fr 1fr; gap: 6px; width: min(300px, calc(100% - 16px));
+               max-height: calc(100% - 16px); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }   /* v204: valikko vierittyy */
     #valikko button { min-height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-alt); font-size: 17px; font-weight: 700; }
     #valikko button.valittu { border-color: var(--vihrea); color: var(--vihrea); }
     #valikko button:disabled { opacity: .35; }
@@ -216,7 +220,7 @@
       #seuraava { top: 56px; }
       #selite { top: 56px; }
       #ilmoitus { top: 104px; }
-      #valikko { left: 8px; right: auto; top: 56px; }
+      #valikko { left: 8px; right: auto; top: 56px; max-height: calc(100% - 64px); }   /* v204 */
       #kirjaus, #tieto { left: 8px; right: auto; top: 56px; bottom: 8px; width: min(48%, 400px); max-height: none; }
       #tila { max-width: calc(100% - 16px); }
     }
@@ -276,18 +280,18 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=202" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=202" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=202" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=202" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=202" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=202" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=202" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=202" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=204" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=204" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=204" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=204" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=204" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=204" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=204" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=204" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v202';
+    const APP_VERSIO = 'v204';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
@@ -1584,7 +1588,7 @@
         + merkitValikko();
       v.querySelectorAll('button[data-tila]').forEach(b => { b.onclick = () => { v.style.display = 'none'; as.tila = b.dataset.tila; tallennaAs(); renderoi(false); }; });
       kytkeMerkit(v);
-      v.style.display = 'grid';
+      v.style.display = 'grid'; v.scrollTop = 0;   // v204: valikko vierittyy; avattaessa alusta
     };
     // v186: kuha- ja taimenpaikkojen kytkimet valikon alaosaan; valikko pysyy auki, jotta tilan näkee
     function merkitValikko() {

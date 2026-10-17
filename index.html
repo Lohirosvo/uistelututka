@@ -1801,7 +1801,9 @@ body{padding-bottom:66px}
       </summary>
       <p class="hint">Tuuli ja valo vaihtuvat jokaisella kerralla. Muut vastaukset muistetaan. Veden lämpö tulee Lämpötieto-kortista.</p>
       <div id="pikaSisalto"></div>
-      <button onclick="analyze(); document.getElementById('resultsSection').scrollIntoView({behavior:'smooth'});"
+      <!-- v203: Hannun virheilmoitus 17.10. "Cannot read properties of null (reading 'scrollIntoView')": id 'resultsSection' puuttui
+           (lisätty 6.10.). analyze() → renderResult() vierittää jo tulokseen (#result), joten erillinen vieritys poistettu. -->
+      <button onclick="analyze();"
               style="width:100%; margin-top:12px; background:var(--amber); color:#1a1200; border:none; border-radius:10px; font-family:'Barlow Condensed',sans-serif; font-size:20px; font-weight:700; letter-spacing:.02em; padding:14px; cursor:pointer;">
         Analysoi näillä
       </button>
@@ -2388,14 +2390,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=202" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=202" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=202" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=202" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=202" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=202" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=202" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=202" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=204" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=204" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=204" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=204" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=204" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=204" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=204" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=204" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
        uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
@@ -13361,7 +13363,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v202';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v204';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -17836,7 +17838,7 @@ function sumuriskiAlusta(){
 
       let thermoVal = NaN;
       if (a.thermo === 'known') {
-        thermoVal = parseFloat(document.getElementById('thermoDepth').value);
+        thermoVal = parseFloat((document.getElementById('thermoDepth') || {}).value);   // v203: null-tarkistus kuten muualla
       }
 
       let activeBaitDepth = a.bait;
@@ -21473,7 +21475,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=202';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=204';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })
