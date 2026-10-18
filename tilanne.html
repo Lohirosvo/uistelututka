@@ -123,6 +123,7 @@
   v211 (18.10.2026): Ylä-Keitele järvenä (jarvet.js); tilannekuvassa järvi valittavissa ja malli toimii (ei omaa koodimuutosta).
   v212 (18.10.2026): vain versionumero (etusivulla Ylä-Keiteleen kohdelajit taimen, ahven, järvilohi, kuha).
   v213 (18.10.2026): kova pohja -kerros yksityisestä tiedostosta (valikko → ▦ Kova pohja, oletuksena pois, haalea täyttö, napautus).
+  v214 (18.10.2026): vain versionumero (etusivun auringon korkeus NOAA-kaavalla kuten tämän sivun aurinkoKorkeus).
   -->
   <style>
     :root { --bg:#060B14; --panel:#0E1B2E; --panel-alt:#13253D; --line:#1E3350; --text:#E7EEF6; --muted:#7E93AC;
@@ -311,18 +312,18 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=213" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=213" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=213" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=213" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=213" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=213" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=213" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=213" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=214" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=214" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=214" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=214" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=214" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=214" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=214" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=214" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v213';
+    const APP_VERSIO = 'v214';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
