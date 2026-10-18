@@ -20,6 +20,7 @@
 // v213: kova pohja -kerros yksityisestä tiedostosta: tuonti Oma luotaus -kortista, tilannekuvaan haalea kerros (index.html, tilanne.html); ei uusia tiedostoja.
 // v214: auringon korkeus aikayhtälön kanssa (NOAA): päivän suunnitelma, valo ja hämärä (index.html; tilanne.html vain versio); ei uusia tiedostoja.
 // v215: syöttikalakorttiin Havaittu (oma luotain) mallin rinnalle (index.html; tilanne.html vain versio); ei uusia tiedostoja.
+// v216: kaikujen lajiryhmät kausittain ja järvittäin (luotaus.js), Havaittu-rivit kuha-, hauki-, ahven- ja järvilohikorttiin (index.html); tilanne.html vain versio; ei uusia tiedostoja.
 // v198: kiven vähimmäiskorkeus 5 cm, tuontiviesti kertoo puuttuvasta syvyydestä; ei uusia tiedostoja.
 // v197: kivet ja kivikko sivukeilasta (index.html, luotaus.js), tilannekuvan kerros 🪨 Kivikko; ei uusia tiedostoja.
 // v196: kalakoosteen väriselite; ei uusia tiedostoja.
@@ -50,7 +51,7 @@
 // VERSIO: kasvata tätä aina kun julkaiset uuden version. Vanha välimuisti siivotaan.
 // Versionumeron kasvatus on se mekanismi joka SIIVOAA vanhan välimuistin,
 // index2.html mukaan lukien. Ilman tätä poisto ei näkyisi puhelimissa.
-const VERSIO = 'uistelututka-v215';
+const VERSIO = 'uistelututka-v216';
 /* v178: sivun omat tiedostot ladataan nimellä tiedosto?v=NNN, jossa NNN on tämän VERSIOn numero.
    index.html:n <script src> -riveissä ja ottiäänen haussa on SAMA numero: kun julkaiset, vaihda
    molemmat. Uusi numero on uusi osoite, joten puhelin ei voi yhdistää uutta sivua vanhaan malliin

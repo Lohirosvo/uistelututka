@@ -171,8 +171,83 @@ function omaLuotausKalaLaji(k, avain){
   }
   return r0;
 }
+/* ===== v216 (18.10.2026): KAIKUJEN LAJIRYHMÄT OLOSUHTEISTA — KAUSITTAIN JA JÄRVITTÄIN =====
+   Hannu 18.10.: "Hauki ahven kuha järvilohi kortteihin voisi jotain tehdä. Ei nyt suoraan voi sanoa mikä laji …" ja
+   "Malli saisi toimia koko kauden. Tehdään ensin tämä syksyn malli mutta tehdään sitä muistaen koko avovesikausi."
+   EI LAJITUNNISTUS: kaiku ryhmitellään paikan mukaan (pohjan tuntumassa / välivedessä / parven luona, pohjan syvyys pinnasta).
+   Tutkimuksissakin lajit jaetaan kaiuille koon ja elinympäristön mukaan pyyntisaaliiden avulla (Yule ym. 2013, Fish. Res.).
+   Rakenne: OL_LAJISAANNOT[järvi][kausi] = säännöt; kausi = sovelluksen kausi (spring, earlysummer, midsummer, autumn).
+   Nyt vain Lappajärven syksy (Hannun tallenteet 11. ja 17.10.2026). Muut kaudet ja järvet lisätään samaan taulukkoon, kun
+   niistä on havaintoja tai Hannun tieto; ilman sääntöä korttiin ei tule riviä eikä napautus muutu.
+   Muistiin kesää varten (ei toteutettu): harppauskerros erottelee kesällä kuhan (yläpuolella) ja järvilohen (viileämpi vesi);
+   hauki kasvillisuudessa (DownScan); pintakatve (ylin 1,75 m, OLK.Z + anturi) haittaa vähemmän, kun lohikalat ovat syvemmällä.
+   Hirvijärvellä kuhapaikat ovat 2,5–3,5 m:n vedessä (Hannu), joten kuhan pohjaraja ei voi olla yhteinen kaikille järville.
+   Säännön kentät: kortit (lajikortit, joille kaiku kuuluu, ja kokoluokat kortille), lahella (pohja/vali/parvi), pohjaMin/pohjaMax
+   (pohja pinnasta, m), lajit (epäily), peruste, todiste (oma havainto), napautus (true = korvaa tilannekuvan napautuksen epäilyn). */
+var OL_LAJISAANNOT = {
+  lappajarvi: {
+    autumn: [
+      { ryhma: 'kuha', kortit: { kuha: ['iso', 'keski'] }, lahella: ['pohja'], pohjaMin: 6,
+        lajit: 'kuha, made tai lahna', peruste: 'pohjan tuntumassa vähintään 6 m:n vedessä (kuha siirtyy syksyllä syvemmälle)' },
+      { ryhma: 'matala', kortit: { hauki: ['iso', 'keski'], ahven: ['iso'] }, lahella: ['pohja'], pohjaMax: 5, napautus: true,
+        lajit: 'hauki, ahven, made tai lahna', peruste: 'pohjan tuntumassa alle 5 m:n vedessä',
+        todiste: 'oma havainto: 17.10. ahven ja 11.10. hauki saatiin 1–3 min kaiun jälkeen 60–210 m:n päästä' },
+      { ryhma: 'ulappa', kortit: { jarvilohi: ['iso'] }, lahella: ['vali', 'parvi'], pohjaMin: 10,
+        lajit: 'järvilohi, taimen, kuha, siika tai lahna', peruste: 'välivedessä tai syöttikalaparven luona yli 10 m:n vedessä',
+        todiste: 'oma havainto: isot kaiut yleensä 0,5–3,7 m parven yläpinnan yläpuolella (11. ja 17.10.)' }
+    ]
+  }
+};
+var OL_PINTAKATVE_M = 1.75;   // OLK.Z 1,5 m anturista + anturi 0,25 m: ylempää kaikuja ei poimita (v194)
+// Kausi: etusivulla sovelluksen kausi (answers.season), tilannekuvassa etusivun kirjauspohjasta, muuten kuukaudesta.
+function omaLuotausKausi(){
+  try { if (typeof answers === 'object' && answers && answers.season) return answers.season; } catch (e) {}
+  try { var P = JSON.parse(localStorage.getItem('uistelututka_kirjauspohja') || 'null'); if (P && P.kentat && P.kentat.kausi) return P.kentat.kausi; } catch (e) {}
+  var m = new Date().getMonth() + 1;
+  return m >= 9 && m <= 11 ? 'autumn' : m >= 7 ? 'midsummer' : m === 6 ? 'earlysummer' : m >= 4 ? 'spring' : null;
+}
+// Kaiun sääntö (tai null). k: kaiku (z, pohja anturista; anturi tai pohjaP).
+function omaLuotausLajiSaanto(k, avain, kausi){
+  var S = (OL_LAJISAANNOT[avain] || {})[kausi || omaLuotausKausi()];
+  if (!S) return null;
+  var pohjaP = typeof k.pohjaP === 'number' ? k.pohjaP : k.pohja + (k.anturi || 0);
+  for (var i = 0; i < S.length; i++){
+    var s = S[i];
+    if (s.lahella.indexOf(k.lahella) < 0) continue;
+    if (typeof s.pohjaMin === 'number' && !(pohjaP >= s.pohjaMin)) continue;
+    if (typeof s.pohjaMax === 'number' && !(pohjaP < s.pohjaMax)) continue;
+    return s;
+  }
+  return null;
+}
+// Lajikortin havainto: kaiut, jotka kuuluvat kortille, tallenteista, jotka alkoivat enintään vrk vuorokautta ennen hetkeä.
+function omaLuotausLajiHavainto(avain, kortti, hetkiMs, kausi, vrk){
+  var raja = hetkiMs - (vrk || 7)*86400e3, R = { n: 0, iso: 0, keski: 0, z: [], pohja: [], viim: null, saanto: null };
+  omaLuotausLue().tuonnit.forEach(function(t){
+    if (t.jarvi !== avain || !t.alku || t.alku < raja || t.alku > hetkiMs || !Array.isArray(t.kalat)) return;
+    var a = omaLuotausAnturi(t);
+    t.kalat.forEach(function(k){
+      var tt = k.t || (t.alku + k.aikaS*1000); if (tt > hetkiMs) return;
+      var q = { lahella: k.lahella, z: k.z, pohja: k.pohja, anturi: a }, s = omaLuotausLajiSaanto(q, avain, kausi);
+      if (!s || !s.kortit[kortti] || s.kortit[kortti].indexOf(k.luokka) < 0) return;
+      R.n++; R[k.luokka] = (R[k.luokka] || 0) + 1; R.z.push(k.z + a); R.pohja.push(k.pohja + a); R.saanto = s;
+      if (!R.viim || tt > R.viim) R.viim = tt;
+    });
+  });
+  if (!R.n) return null;
+  R.z.sort(function(x, y){ return x - y; });
+  R.zMin = R.z[0]; R.zMax = R.z[R.z.length - 1]; R.zMed = R.z.length % 2 ? R.z[R.z.length >> 1] : (R.z[R.z.length/2 - 1] + R.z[R.z.length/2]) / 2;
+  R.pohjaMin = Math.min.apply(null, R.pohja); R.pohjaMax = Math.max.apply(null, R.pohja);
+  return R;
+}
 function omaLuotausKalaLaji0(k, avain){
   var L = avain === 'lappajarvi', n1 = function(v){ return (Math.round(v*10)/10).toLocaleString('fi-FI'); };
+  var sv = omaLuotausLajiSaanto(k, avain);   // v216: kausi- ja järvikohtainen sääntö, jos se korvaa napautuksen epäilyn
+  if (sv && sv.napautus){
+    var ero0 = k.pohja - k.z;
+    return { lajit: sv.lajit, peruste: sv.peruste + ' (' + n1(ero0) + ' m pohjasta)' + (sv.todiste ? '; ' + sv.todiste : ''),
+             varaus: k.lahella === 'pohja' && ero0 <= 0.5 ? 'Näin lähellä pohjaa kaari voi olla myös kivi tai pohjan muoto; sama kohta usealla ajolla viittaa kiveen.' : '' };
+  }
   if (k.lahella === 'pohja'){
     var ero = k.pohja - k.z;
     return { lajit: 'kuha, made tai lahna', peruste: 'pohjan tuntumassa (' + n1(ero) + ' m pohjasta)',

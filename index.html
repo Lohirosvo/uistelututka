@@ -2051,6 +2051,11 @@ body{padding-bottom:66px}
               <div class="label">Vetosyvyys</div>
               <div class="value" id="depthOutKuha">—</div>
             </div>
+            <div class="fig" id="havaintoKuhaFig" style="display:none;">   <!-- v216: kaiut omasta luotaimesta olosuhteen mukaan, ei lajitunnistus -->
+              <div class="label">Havaittu (oma luotain)</div>
+              <div class="value" id="havaintoKuha" style="opacity:.8;">—</div>
+              <div id="havaintoKuhaHuom" style="font-size:12px; color:var(--muted); line-height:1.35; margin-top:2px;"></div>
+            </div>
           </div>
         </div>
         <div class="rec-line">
@@ -2083,6 +2088,11 @@ body{padding-bottom:66px}
               <div class="label">Vetosyvyys</div>
               <div class="value" id="depthOutHauki">—</div>
             </div>
+            <div class="fig" id="havaintoHaukiFig" style="display:none;">   <!-- v216: kaiut omasta luotaimesta olosuhteen mukaan, ei lajitunnistus -->
+              <div class="label">Havaittu (oma luotain)</div>
+              <div class="value" id="havaintoHauki" style="opacity:.8;">—</div>
+              <div id="havaintoHaukiHuom" style="font-size:12px; color:var(--muted); line-height:1.35; margin-top:2px;"></div>
+            </div>
           </div>
         </div>
         <details class="reasons">
@@ -2103,6 +2113,11 @@ body{padding-bottom:66px}
               <div class="label">Vetosyvyys</div>
               <div class="value" id="depthOutAhven" style="color:var(--olive)">—</div>
             </div>
+            <div class="fig" id="havaintoAhvenFig" style="display:none;">   <!-- v216: kaiut omasta luotaimesta olosuhteen mukaan, ei lajitunnistus -->
+              <div class="label">Havaittu (oma luotain)</div>
+              <div class="value" id="havaintoAhven" style="opacity:.8;">—</div>
+              <div id="havaintoAhvenHuom" style="font-size:12px; color:var(--muted); line-height:1.35; margin-top:2px;"></div>
+            </div>
           </div>
         </div>
         <details class="reasons">
@@ -2122,6 +2137,11 @@ body{padding-bottom:66px}
             <div class="fig">
               <div class="label">Iskusyvyys</div>
               <div class="value" id="depthOutJarvilohi" style="color:var(--navy)">—</div>
+            </div>
+            <div class="fig" id="havaintoJarvilohiFig" style="display:none;">   <!-- v216: kaiut omasta luotaimesta olosuhteen mukaan, ei lajitunnistus -->
+              <div class="label">Havaittu (oma luotain)</div>
+              <div class="value" id="havaintoJarvilohi" style="opacity:.8;">—</div>
+              <div id="havaintoJarvilohiHuom" style="font-size:12px; color:var(--muted); line-height:1.35; margin-top:2px;"></div>
             </div>
           </div>
         </div>
@@ -2418,14 +2438,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=215" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=215" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=215" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=215" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=215" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=215" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=215" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=215" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=216" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=216" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=216" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=216" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=216" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=216" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=216" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=216" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
        uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
@@ -13550,7 +13570,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v215';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v216';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -16736,6 +16756,34 @@ function sumuriskiAlusta(){
         + 'Veneen alta mitattu: pinnan lähellä olevat parvet jäävät näkymättä ja parvi voi painua veneen kohdalla, joten todellinen syvyys voi olla matalampi.';
       fig.style.display = '';
     }
+    /* ===== v216 (18.10.2026): LAJIKORTTEIHIN KAIUT OMASTA LUOTAIMESTA (kuha, hauki, ahven, järvilohi) =====
+       Säännöt ja ryhmittely luotaus.js:ssä (OL_LAJISAANNOT, omaLuotausLajiHavainto): kausittain ja järvittäin, nyt vain Lappajärven
+       syksy. Ei lajitunnistus vaan paikka (pohjan tuntumassa / välivedessä, pohjan syvyys). 7 vrk ennen kortin tavoitehetkeä
+       (sama kuin otsikon "(klo …)"), kaikki kellonajat. Ei sääntöä tai ei kaikuja → rivi piilossa. Taimenelle ei riviä: taimenvieheen
+       syvyys (0,1–0,7 m) on pintakatveessa (ylin 1,75 m). */
+    const LAJI_HAV_KORTIT = [['kuha', 'Kuha'], ['hauki', 'Hauki'], ['ahven', 'Ahven'], ['jarvilohi', 'Jarvilohi']];
+    function lajiHavaintoTekstit() {
+      const avain = (typeof karttaAvain === 'function') ? karttaAvain() : null;
+      const hetki = (window.utTavoiteHetki || analyysiHetki()).getTime(), kausi = answers.season || null;
+      const k1 = v => (Math.round(v * 10) / 10).toFixed(1).replace('.', ',');
+      LAJI_HAV_KORTIT.forEach(([kortti, id]) => {
+        const fig = document.getElementById('havainto' + id + 'Fig'); if (!fig) return;
+        let H = null;
+        try { if (avain && typeof omaLuotausLajiHavainto === 'function') H = omaLuotausLajiHavainto(avain, kortti, hetki, kausi, 7); } catch (e) { H = null; }
+        if (!H) { fig.style.display = 'none'; return; }
+        const s = H.saanto, d = new Date(H.viim), maara = [];
+        if (H.iso) maara.push(H.iso + ' iso' + (H.iso === 1 ? '' : 'a'));
+        if (H.keski) maara.push(H.keski + ' keskikokoi' + (H.keski === 1 ? 'nen' : 'sta'));
+        document.getElementById('havainto' + id).textContent = (H.n === 1 ? k1(H.zMin) : k1(H.zMin) + '–' + k1(H.zMax)) + ' m';
+        document.getElementById('havainto' + id + 'Huom').textContent =
+          'Kaikuja 7 vrk: ' + maara.join(', ') + ' (mediaani ' + k1(H.zMed) + ' m, pohja ' + (Math.round(H.pohjaMin) === Math.round(H.pohjaMax) ? Math.round(H.pohjaMin) : Math.round(H.pohjaMin) + '–' + Math.round(H.pohjaMax)) + ' m), '
+          + 'viimeisin ' + d.getDate() + '.' + (d.getMonth() + 1) + '. klo ' + d.getHours() + '.' + String(d.getMinutes()).padStart(2, '0') + '. '
+          + s.peruste.charAt(0).toUpperCase() + s.peruste.slice(1) + ': ' + s.lajit + '. Olosuhde, ei lajitunnistus.'
+          + (s.todiste ? ' ' + s.todiste.charAt(0).toUpperCase() + s.todiste.slice(1) + '.' : '')
+          + (kortti === 'jarvilohi' ? ' Ylin ' + String(OL_PINTAKATVE_M).replace('.', ',') + ' m ei näy, joten pintaa uivat lohikalat jäävät pois.' : '');
+        fig.style.display = '';
+      });
+    }
     function generateForecastSVG(targetFractional, thermoVal, sunRiseHour, sunSetHour) {
       const a = answers;
       let maxY = currentLocation.maxDepth ? Math.min(20, currentLocation.maxDepth) : 15;
@@ -19174,6 +19222,7 @@ function sumuriskiAlusta(){
       naytaSyvyys('depthOutTaimen', 'taimen', lowT, highT);
       try { kaytantoTekstit(); } catch (e) {}   // v207
       try { syottiHavaintoTeksti(); } catch (e) {}   // v215
+      try { lajiHavaintoTekstit(); } catch (e) {}   // v216
       naytaSyvyys('depthOutAhven', 'ahven', lowA, highA);
       naytaSyvyys('depthOutJarvilohi', 'jarvilohi', lowJL, highJL);
       // Lajipaneelien järjestys ja kutistus. Kutsutaan vasta kun kaikki paneelit on
@@ -21785,7 +21834,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=215';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=216';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })
