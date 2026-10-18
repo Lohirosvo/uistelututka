@@ -121,6 +121,7 @@
   v209 (18.10.2026): vain versionumero (etusivun saaliskirjanpitoon ✏️ Muokkaa).
   v210 (18.10.2026): vain versionumero (etusivun järvikarttojen rakennukseen Ylä-Keitele).
   v211 (18.10.2026): Ylä-Keitele järvenä (jarvet.js); tilannekuvassa järvi valittavissa ja malli toimii (ei omaa koodimuutosta).
+  v212 (18.10.2026): vain versionumero (etusivulla Ylä-Keiteleen kohdelajit taimen, ahven, järvilohi, kuha).
   -->
   <style>
     :root { --bg:#060B14; --panel:#0E1B2E; --panel-alt:#13253D; --line:#1E3350; --text:#E7EEF6; --muted:#7E93AC;
@@ -309,18 +310,18 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=211" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=211" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=211" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=211" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=211" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=211" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=211" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=211" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=212" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=212" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=212" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=212" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=212" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=212" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=212" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=212" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v211';
+    const APP_VERSIO = 'v212';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';

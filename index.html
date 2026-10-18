@@ -2412,14 +2412,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=211" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=211" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=211" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=211" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=211" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=211" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=211" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=211" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=212" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=212" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=212" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=212" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=212" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=212" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=212" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=212" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
        uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
@@ -13500,7 +13500,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v211';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v212';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -19207,9 +19207,9 @@ function sumuriskiAlusta(){
       /* v211 (18.10.2026): Ylä-Keitele, Pihkurinselkä (Hannu 18.10.). Rantaviiva MML (rajattu 63,035–63,205 N, 25,51–25,89 E),
          syvyys Hannun 26 karttakuvasta (ks. JARVET.ylakeitele): luettu 84,1 km² / 96,6 km². maxDepth = kartan syvin luku 64 m
          (Pihkurinsaaren ja Isonsalonpään välinen syvänne), pinta-ala = rajattu vesialue, ei koko Keitele. Kirkkausluokka 3 on
-         ARVIO (näkösyvyyttä ei tarkistettu). Kohdelajit oletus taimen, järvilohi, kuha (Hannu ei vielä kertonut). */
+         ARVIO (näkösyvyyttä ei tarkistettu). Kohdelajit taimen, ahven, järvilohi, kuha (Hannu 18.10. klo 13.37, v212). */
       { name: 'Ylä-Keitele', lat: 63.105561, lon: 25.701567, maxDepth: 64, areaKm2: 96.6, clarityClass: 3, sykeTerm: 'Keitele',
-        kohdelajit: ['taimen', 'jarvilohi', 'kuha'], syvyysOsittain: true },
+        kohdelajit: ['taimen', 'ahven', 'jarvilohi', 'kuha'], syvyysOsittain: true },   // v212: Hannu 18.10.2026
       { name: 'Patanan tekojärvi', lat: 63.2776, lon: 24.00618, maxDepth: 10.7, areaKm2: 9.8, clarityClass: 2, sykeTerm: 'Patana',
         kohdelajit: ['kuha', 'hauki', 'ahven'] },
       { name: 'Kivijärvi (Kivijärven kunta)', lat: 63.12188, lon: 25.16425, maxDepth: 40, areaKm2: 133.8, clarityClass: 2, sykeTerm: 'Kivijärvi',
@@ -21666,7 +21666,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=211';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=212';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })
