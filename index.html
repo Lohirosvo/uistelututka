@@ -1998,8 +1998,13 @@ body{padding-bottom:66px}
           <div class="scale syotti" id="scaleSyotti"></div>
           <div class="result-figures">
             <div class="fig">
-              <div class="label">Parven syvyys</div>
+              <div class="label" id="depthLabelSyotti">Parven syvyys</div>
               <div class="value syotti" id="depthOutSyotti">—</div>
+            </div>
+            <div class="fig" id="havaintoSyottiFig" style="display:none;">   <!-- v215: havainto omasta luotaimesta mallin rinnalle -->
+              <div class="label">Havaittu (oma luotain)</div>
+              <div class="value syotti" id="havaintoSyotti" style="opacity:.8;">—</div>
+              <div id="havaintoSyottiHuom" style="font-size:12px; color:var(--muted); line-height:1.35; margin-top:2px;"></div>
             </div>
           </div>
         </div>
@@ -2413,14 +2418,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=214" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=214" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=214" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=214" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=214" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=214" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=214" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=214" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=215" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=215" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=215" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=215" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=215" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=215" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=215" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=215" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
        uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
@@ -13545,7 +13550,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v214';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v215';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -16677,6 +16682,60 @@ function sumuriskiAlusta(){
       if (sel) sel.textContent = 'Vaaleanpunainen kaista = taimenen käytäntö: oma sääntö matalikolla, ei malli. Pisteet = omat taimenet ' + KAYTANTO_VRK
         + ' vrk kellonajan mukaan (täysi = mitattu tai valittu viehesyvyys, ontto = lajin oletus, iso = yli 50 cm).';
     }
+    /* ===== v215 (18.10.2026): SYÖTTIKALAPARVET OMASTA LUOTAIMESTA MALLIN RINNALLE =====
+       Hannu 18.10.: "Onko opittu tallenteista mitään? Tilannekuvassa faktaa ja tallenteista syntyy." → "Havaittu"-rivi: "Kyllä".
+       Havainto ja arvio pidetään erillään (kuten syotti / syottiArvio): malli ei muutu, havainto näkyy sen vieressä.
+       Lähde: Oma luotaus -tallenteiden parvet (v193, tyyppi 'parvi') samalta järveltä, tallenne alkanut enintään SYOTTI_HAV_VRK vrk
+       ennen kortin tavoitehetkeä (analyze: nyt + 30 min tai valittu ennustepäivä, sama kuin otsikon "(klo …)") eikä sen jälkeen.
+       Parvet ryhmitellään päivän ja tasatunnin mukaan; valitaan ryhmä, jonka tunti on vuorokaudenajaltaan lähimpänä
+       tavoitehetkeä (tasapelissä uusin). Syvyys pinnasta (anturin syvyys lisätty, kuten kartalla):
+       parvien yläpinnan ja alapinnan mediaani.
+       Varaus (tutkittu): veneen alta alaspäin mittaava luotain ei näe pinnan lähellä olevia kaloja (pintakatve), ja kalat väistävät
+       venettä syvemmälle ja sivuun (Grow ym. 2020 Lake Superior; Elliot ym. 2021 Lake Ontario; De Robertis & Handegard 2013).
+       Havaittu syvyys voi siksi olla todellista syvempi ja pinnan lähellä olevat parvet puuttua. Mittakaava on tutkittu isoilla
+       aluksilla, ei omalla veneellä. */
+    const SYOTTI_HAV_VRK = 7, SYOTTI_HAV_ERO_H = 3;
+    function syottiHavainto(hetki, avain) {
+      if (!avain || typeof omaLuotausLue !== 'function') return null;
+      const h0 = hetki.getTime(), raja = h0 - SYOTTI_HAV_VRK * 86400e3, ryhmat = {};
+      (omaLuotausLue().tuonnit || []).forEach(t => {
+        if (t.jarvi !== avain || !t.alku || t.alku < raja || t.alku > h0) return;
+        const a = (typeof omaLuotausAnturi === 'function') ? omaLuotausAnturi(t) : 0;
+        (t.parvet || []).forEach(p => {
+          if (p.tyyppi !== 'parvi' || typeof p.t !== 'number' || p.t > h0 || typeof p.yla !== 'number' || typeof p.ala !== 'number') return;
+          const d = new Date(p.t), k = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate() + '-' + d.getHours();
+          (ryhmat[k] = ryhmat[k] || { pvm: d, tunti: d.getHours(), p: [], a: a }).p.push(p);
+        });
+      });
+      const med = v => { const s = v.slice().sort((x, y) => x - y), n = s.length; return n % 2 ? s[n >> 1] : (s[n / 2 - 1] + s[n / 2]) / 2; };
+      const hNyt = hetki.getHours() + hetki.getMinutes() / 60;
+      let paras = null;
+      Object.keys(ryhmat).forEach(k => {
+        const R = ryhmat[k]; R.ero = Math.abs(R.tunti + 0.5 - hNyt);
+        if (!paras || R.ero < paras.ero - 1e-9 || (Math.abs(R.ero - paras.ero) < 1e-9 && R.pvm > paras.pvm)) paras = R;
+      });
+      if (!paras) return null;
+      const P = paras.p, a = paras.a, r1 = v => Math.round(v * 10) / 10, pohjat = P.map(p => p.pohja).filter(v => typeof v === 'number');
+      return { pvm: paras.pvm, tunti: paras.tunti, n: P.length, yla: r1(med(P.map(p => p.yla)) + a), ala: r1(med(P.map(p => p.ala)) + a),
+               pohjaMin: pohjat.length ? r1(Math.min.apply(null, pohjat) + a) : null, pohjaMax: pohjat.length ? r1(Math.max.apply(null, pohjat) + a) : null,
+               ero: paras.ero, ryhmia: Object.keys(ryhmat).length };
+    }
+    function syottiHavaintoTeksti() {
+      const fig = document.getElementById('havaintoSyottiFig'); if (!fig) return;
+      let H = null; try { H = syottiHavainto(window.utTavoiteHetki || analyysiHetki(), karttaAvain()); } catch (e) { H = null; }
+      const lab = document.getElementById('depthLabelSyotti');
+      if (!H) { fig.style.display = 'none'; if (lab) lab.textContent = 'Parven syvyys'; return; }
+      const k = v => String(v).replace('.', ',');
+      if (lab) lab.textContent = (answers.bait !== null && answers.bait !== undefined) ? 'Parven syvyys (annettu)' : 'Parven syvyys (malli)';
+      document.getElementById('havaintoSyotti').textContent = k(H.yla.toFixed(1)) + '–' + k(H.ala.toFixed(1)) + ' m';
+      document.getElementById('havaintoSyottiHuom').textContent =
+        (H.ero > SYOTTI_HAV_ERO_H ? 'Eri vuorokaudenaikaan: ' : '')
+        + H.pvm.getDate() + '.' + (H.pvm.getMonth() + 1) + '. klo ' + H.tunti + '–' + (H.tunti + 1) + ' · ' + H.n + (H.n === 1 ? ' parvi' : ' parvea')
+        + (H.pohjaMin !== null ? ', pohja ' + k(Math.round(H.pohjaMin)) + '–' + k(Math.round(H.pohjaMax)) + ' m' : '')
+        + ' · mediaani yläpinnasta alapintaan, ' + SYOTTI_HAV_VRK + ' vrk tallenteista lähin kellonaika. '
+        + 'Veneen alta mitattu: pinnan lähellä olevat parvet jäävät näkymättä ja parvi voi painua veneen kohdalla, joten todellinen syvyys voi olla matalampi.';
+      fig.style.display = '';
+    }
     function generateForecastSVG(targetFractional, thermoVal, sunRiseHour, sunSetHour) {
       const a = answers;
       let maxY = currentLocation.maxDepth ? Math.min(20, currentLocation.maxDepth) : 15;
@@ -18064,6 +18123,7 @@ function sumuriskiAlusta(){
       }
       const targetHour = now.getHours();
       const targetFractional = targetHour + (now.getMinutes() / 60);
+      window.utTavoiteHetki = new Date(now.getTime());   // v215: lajikorttien tavoitehetki (syöttikalan havainto samaan hetkeen)
       const timeStr = now.toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' });
       const paivaStr = ennusteTila ? ['su','ma','ti','ke','to','pe','la'][now.getDay()] + ' ' + now.getDate() + '.' + (now.getMonth()+1) + '. ' : '';
 
@@ -19113,6 +19173,7 @@ function sumuriskiAlusta(){
       naytaSyvyys('depthOutHauki', 'hauki', lowH, highH);
       naytaSyvyys('depthOutTaimen', 'taimen', lowT, highT);
       try { kaytantoTekstit(); } catch (e) {}   // v207
+      try { syottiHavaintoTeksti(); } catch (e) {}   // v215
       naytaSyvyys('depthOutAhven', 'ahven', lowA, highA);
       naytaSyvyys('depthOutJarvilohi', 'jarvilohi', lowJL, highJL);
       // Lajipaneelien järjestys ja kutistus. Kutsutaan vasta kun kaikki paneelit on
@@ -21724,7 +21785,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=214';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=215';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })
