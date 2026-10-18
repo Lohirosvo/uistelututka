@@ -2260,7 +2260,8 @@ body{padding-bottom:66px}
       <h2>Oma luotaus kaikuluotaimelta</h2>
       <p class="hint">Lowrancen .sl2-tallenne (myös .slg, jos laite tallentaa sen sl2-muodossa) muistikortilta. Puhelin lukee sen itse ilman verkkoa, ja syvyysmallit (aalto, virtaus,
         syvyyskartta, kuha- ja taimenehdokkaat) käyttävät omaa luotausta MML:n syvyysluokkien sijaan niissä ruuduissa, joista sitä on.
-        Luotain mittaa anturista, joten anturin syvyys lisätään. Myös Clauden kanssa käsitellyt .json-pisteet tuodaan tästä.
+        Luotain mittaa anturista, joten anturin syvyys lisätään. Myös Clauden kanssa käsitellyt .json-pisteet tuodaan tästä,
+        samoin Clauden tekemä kova pohja -tiedosto (v213; tallentuu vain tähän puhelimeen, näkyy tilannekuvassa haaleana kerroksena).
         v193: tuonti poimii myös veden lämmön (jälki tilannekuvaan, keskilämpö järven pintalämmöksi), syöttikalaparvet kaikukuvasta
         (aika, paikka, syvyys) ja poistaa omasta luotauksesta kohdat, joissa laite on lukenut parven pohjaksi.</p>
       <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
@@ -2412,14 +2413,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=212" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=212" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=212" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=212" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=212" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=212" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=212" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=212" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=213" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=213" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=213" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=213" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=213" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=213" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=213" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=213" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
        uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
@@ -4055,15 +4056,56 @@ function olTallenna(d){
 function olValmisUudelleen(){
   var b = document.getElementById('olLataa'); if (b) b.style.display = '';
 }
+/* v213: KOVA POHJA YKSITYISESTÄ TIEDOSTOSTA — 18.10.2026. Hannu: "Kovat pohjat on jo C-MAP Social Mapsissa. Voisi olla hyvä
+   kuhan kalastuksessa. Jollain haalealla värillä voisi merkata. Kännykän näyttö menee helposti tukkoon informaatiota." ja
+   valinta "B riittää hyvin" (C-MAPin kerros yksityisenä tiedostona vain omaan puhelimeen). Claude teki tiedoston Hannun
+   C-MAP Genesis -kuvakaappauksista (© Navico Group, kaikki oikeudet pidätetään → EI GitHubiin eikä testipakettiin):
+   järvikohtainen 1-bittinen maski sovelluksen omassa ruudukossa (sama W, H, ruutu, pohjoisLat, lansiLon kuin jarvet.js).
+   Tuonti tämän kortin tiedostovalinnasta (.json, tyyppi 'uistelututka_kova_pohja'); tallennus vain tähän puhelimeen
+   (localStorage KOVA_LS, mukana varmuuskopiossa). Tilannekuva näyttää kerroksen haaleana täyttönä (oletuksena pois). */
+var KOVA_LS = 'uistelututka_kova_pohja';
+function kovaJarviNimi(av){ return olJarviNimi(av, (window.UT_JARVET && window.UT_JARVET[av] && window.UT_JARVET[av].nimi) || av); }
+function kovaPohjaLue(){ try { var j = JSON.parse(localStorage.getItem(KOVA_LS) || 'null'); return j && j.jarvet ? j : null; } catch (e) { return null; } }
+function kovaPohjaTuo(j){
+  if (!j.jarvet || typeof j.jarvet !== 'object' || !Object.keys(j.jarvet).length) throw new Error('kova pohja -tiedostossa ei ole järviä');
+  var K = kovaPohjaLue() || { tyyppi: 'uistelututka_kova_pohja', versio: 1, jarvet: {} }, osat = [];
+  Object.keys(j.jarvet).forEach(function(av){
+    var J = j.jarvet[av], b, k = (window.UT_JARVET && window.UT_JARVET[av] && window.UT_JARVET[av].kartta) || (typeof window.akJarviKartta === 'function' ? window.akJarviKartta(av) : null);
+    if (!J || !(J.W > 0 && J.H > 0 && J.ruutu > 0) || typeof J.maski !== 'string') throw new Error(av + ': kova pohja -tiedoston rakenne ei kelpaa');
+    try { b = atob(J.maski); } catch (e) { throw new Error(av + ': maski ei ole base64'); }
+    if (b.length !== Math.ceil(J.W * J.H / 8)) throw new Error(av + ': maskin pituus ei täsmää ruudukkoon');
+    if (k && (k.W !== J.W || k.H !== J.H || k.ruutu !== J.ruutu || Math.abs(k.pohjoisLat - J.pohjoisLat) > 1e-6 || Math.abs(k.lansiLon - J.lansiLon) > 1e-6))
+      throw new Error(av + ': ruudukko ei vastaa sovelluksen järvikarttaa (tiedosto tehty toiseen versioon)');
+    var n = 0; for (var q = 0; q < b.length; q++){ var c = b.charCodeAt(q); while (c){ n += c & 1; c >>= 1; } }
+    J.ruutuja = n; K.jarvet[av] = J; osat.push(kovaJarviNimi(av) + ' ' + n + ' ruutua');
+  });
+  localStorage.setItem(KOVA_LS, JSON.stringify(K));
+  return 'kova pohja tuotu (' + osat.join(', ') + '). Näkyy tilannekuvassa: valikko → ▦ Kova pohja.';
+}
+function kovaPohjaPoista(av){
+  var K = kovaPohjaLue(); if (K && K.jarvet[av]){ delete K.jarvet[av]; try { if (Object.keys(K.jarvet).length) localStorage.setItem(KOVA_LS, JSON.stringify(K)); else localStorage.removeItem(KOVA_LS); } catch (e) {} }
+  olPiirraLista();
+}
+function kovaPohjaRivit(){
+  var K = kovaPohjaLue(); if (!K) return '';
+  return Object.keys(K.jarvet).map(function(av){
+    var J = K.jarvet[av];
+    return '<div style="margin:6px 0;padding-top:6px;border-top:1px solid var(--line);"><strong>▦ Kova pohja</strong> · ' + kovaJarviNimi(av)
+      + (typeof J.ruutuja === 'number' ? ' · ' + J.ruutuja + ' ruutua (' + J.ruutu + ' m)' : '') + '<br>' + String(J.lahde || '').replace(/</g, '&lt;')
+      + ' <button type="button" class="chip" style="padding:1px 8px;font-size:12px;margin-left:4px;" data-kovapoista="' + av + '" onclick="kovaPohjaPoista(\'' + av + '\')">Poista</button></div>';
+  }).join('');
+}
 async function olTuo(files){
   var tila = document.getElementById('olTila'); if (!files || !files.length) return;
   olTallennaAnturi();
-  var d = JSON.parse(JSON.stringify(omaLuotausLue())), uusia = 0, viestit = [];
+  var d = JSON.parse(JSON.stringify(omaLuotausLue())), uusia = 0, viestit = [], kovaTuotu = false;
   for (var f = 0; f < files.length; f++){
     var file = files[f], nimi = file.name || 'tallenne';
     try {
       if (/\.json$/i.test(nimi)){
-        var j = JSON.parse(await file.text()), lista = Array.isArray(j.tuonnit) ? j.tuonnit : (j.lat ? [j] : []);
+        var j = JSON.parse(await file.text());
+        if (j && j.tyyppi === 'uistelututka_kova_pohja'){ viestit.push(nimi + ': ' + kovaPohjaTuo(j)); kovaTuotu = true; continue; }   // v213
+        var lista = Array.isArray(j.tuonnit) ? j.tuonnit : (j.lat ? [j] : []);
         if (!lista.length) throw new Error('JSON-tiedostossa ei ole luotauspisteitä');
         for (var li = 0; li < lista.length; li++){
           var t = lista[li];
@@ -4118,6 +4160,7 @@ async function olTuo(files){
     + (uusia ? '<div style="margin-top:4px;color:var(--amber);">Mallit käyttävät luotausta, kun sovellus käynnistetään uudelleen.</div>' : '');
   if (uusia) olValmisUudelleen();
   olPiirraLista();
+  if (kovaTuotu && !uusia && tila) tila.innerHTML += '<div style="margin-top:4px;">Avaa tilannekuva uudelleen, jos se on auki.</div>';   // v213
 }
 // v175: mihin kehykset jäivät (näytetään tuonnin jälkeen, jotta vähäisen pistemäärän syy näkyy)
 function olDiagTeksti(r){
@@ -4142,7 +4185,7 @@ function olPiirraLista(){
   var an = document.getElementById('olAnturi');
   if (an && !an.dataset.alustettu){ an.dataset.alustettu = '1'; try { var s = parseFloat(localStorage.getItem(OL_ANTURI_LS)); if (s >= 0 && s <= 3) an.value = String(s); } catch (e) {} }
   var d = omaLuotausLue();
-  if (!d.tuonnit.length){ el.innerHTML = '<p class="hint" style="margin:0;">Ei tuotuja tallenteita. Mallit käyttävät MML:n syvyysluokkia.</p>'; return; }
+  if (!d.tuonnit.length){ el.innerHTML = '<p class="hint" style="margin:0;">Ei tuotuja tallenteita. Mallit käyttävät MML:n syvyysluokkia.</p>' + kovaPohjaRivit(); return; }   // v213: kova pohja
   var pad = function(x){ return String(x).padStart(2, '0'); };
   var rivit = d.tuonnit.map(function(t){
     var a = typeof t.anturiM === 'number' ? t.anturiM : 0, mn = Infinity, mx = -Infinity;
@@ -4170,7 +4213,7 @@ function olPiirraLista(){
       return r && r.soluja ? olJarviNimi(av) + ': ' + r.soluja + ' ruutua (' + k.ruutu + ' m) saa syvyyden omasta luotauksesta' : '';
     }).filter(Boolean).join(' · ');
   } catch (e) {}
-  el.innerHTML = (kaytossa ? '<p style="margin:0 0 4px;">' + kaytossa + '.</p>' : '') + rivit.join('') + olKalaKoosteHtml(d);
+  el.innerHTML = (kaytossa ? '<p style="margin:0 0 4px;">' + kaytossa + '.</p>' : '') + rivit.join('') + kovaPohjaRivit() + olKalaKoosteHtml(d);   // v213: kova pohja
 }
 /* v194: kalat kaikukuvasta syvyyden ja kellonajan mukaan, järvittäin (kaikki tuodut tallenteet). Solussa isot / kaikki;
    rivillä tallennettu aika, koska kalamäärä riippuu siitä, kauanko sillä tunnilla luodattiin. */
@@ -13500,7 +13543,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v212';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v213';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -21666,7 +21709,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=212';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=213';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })

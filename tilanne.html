@@ -122,6 +122,7 @@
   v210 (18.10.2026): vain versionumero (etusivun järvikarttojen rakennukseen Ylä-Keitele).
   v211 (18.10.2026): Ylä-Keitele järvenä (jarvet.js); tilannekuvassa järvi valittavissa ja malli toimii (ei omaa koodimuutosta).
   v212 (18.10.2026): vain versionumero (etusivulla Ylä-Keiteleen kohdelajit taimen, ahven, järvilohi, kuha).
+  v213 (18.10.2026): kova pohja -kerros yksityisestä tiedostosta (valikko → ▦ Kova pohja, oletuksena pois, haalea täyttö, napautus).
   -->
   <style>
     :root { --bg:#060B14; --panel:#0E1B2E; --panel-alt:#13253D; --line:#1E3350; --text:#E7EEF6; --muted:#7E93AC;
@@ -310,18 +311,18 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=212" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=212" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=212" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=212" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=212" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=212" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=212" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=212" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=213" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=213" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=213" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=213" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=213" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=213" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=213" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=213" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v212';
+    const APP_VERSIO = 'v213';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
@@ -334,7 +335,7 @@
     const kk = n => String(n).padStart(2, '0');
     const ilmansuunta = deg => ['P', 'KO', 'I', 'KA', 'E', 'LO', 'L', 'LU'][Math.round((((deg % 360) + 360) % 360) / 45) % 8];   // mistä tuulee
 
-    let as = { tila: 'aalto', kloonit: true, yo: false, laji: null, selite: false, vaaka: false, kuha: true, taimen: true, kulku: false, lampo: true, parvet: true, kalat: true, kivikko: true, lohi: true, saalisVanat: true, reitti: true, reittiNopeus: null, siirtoNopeus: 25, taimenReitti: true, taimenIka: 14 };   // v206: taimenReitti, taimenIka (vrk)   // v202: järvilohireitti   // v201: saalisVanat (saaliin vana)   // v200: lohi (Lintuselän malli)   // v186: kuha, taimen; v193: kulku (kulkusuunta ylös), lampo, parvet; v194: kalat
+    let as = { tila: 'aalto', kloonit: true, yo: false, laji: null, selite: false, vaaka: false, kuha: true, taimen: true, kulku: false, lampo: true, parvet: true, kalat: true, kivikko: true, kovaPohja: false, lohi: true, saalisVanat: true, reitti: true, reittiNopeus: null, siirtoNopeus: 25, taimenReitti: true, taimenIka: 14 };   // v206: taimenReitti, taimenIka (vrk)   // v202: järvilohireitti   // v201: saalisVanat (saaliin vana)   // v200: lohi (Lintuselän malli)   // v186: kuha, taimen; v193: kulku (kulkusuunta ylös), lampo, parvet; v194: kalat
     try { as = Object.assign(as, JSON.parse(localStorage.getItem(AS_LS) || '{}')); } catch (e) {}
     const tallennaAs = () => { try { localStorage.setItem(AS_LS, JSON.stringify(as)); } catch (e) {} };
 
@@ -1072,6 +1073,52 @@
       if (q.taimen) { ctx.beginPath(); ctx.arc(x, y, 7.5, 0, 6.2832); ctx.lineWidth = 2; ctx.strokeStyle = '#5fd7ff'; ctx.stroke(); }
     }
     const kivikkoJaksot = () => typeof omaLuotausKivikko === 'function' ? omaLuotausKivikko(avain) : [];
+    // v213: kova pohja yksityisestä tiedostosta (etusivun Oma luotaus -kortin tuonti, localStorage; ei GitHubissa). Hannu 18.10.:
+    // "Jollain haalealla värillä voisi merkata. Kännykän näyttö menee helposti tukkoon" → haalea täyttö, oletuksena pois.
+    const KOVA_LS = 'uistelututka_kova_pohja';
+    let kovaVarasto = { raaka: undefined, data: null };
+    function kovaPohja() {
+      let raaka = null; try { raaka = localStorage.getItem(KOVA_LS); } catch (e) {}
+      if (raaka !== kovaVarasto.raaka) {
+        kovaVarasto = { raaka, data: null };
+        try { const j = raaka ? JSON.parse(raaka) : null; if (j && j.jarvet) kovaVarasto.data = j; } catch (e) {}
+      }
+      const J = kovaVarasto.data && kovaVarasto.data.jarvet[avain];
+      if (!J || typeof J.maski !== 'string') return null;
+      if (!J._bitit) {
+        try {
+          const b = atob(J.maski), u = new Uint8Array(b.length), r = [];
+          for (let q = 0; q < b.length; q++) u[q] = b.charCodeAt(q);
+          for (let n = 0; n < J.W * J.H; n++) if (u[n >> 3] >> (7 - (n & 7)) & 1) r.push(n);
+          J._bitit = u; J._ruudut = r;
+        } catch (e) { return null; }
+      }
+      return J;
+    }
+    function kovaRuudussa(J, lat, lon) {
+      const j = Math.floor((J.pohjoisLat - lat) * 111320 / J.ruutu), i = Math.floor((lon - J.lansiLon) * 111320 * Math.cos(lat * Math.PI / 180) / J.ruutu);
+      if (i < 0 || j < 0 || i >= J.W || j >= J.H) return false;
+      const n = j * J.W + i; return !!(J._bitit[n >> 3] >> (7 - (n & 7)) & 1);
+    }
+    function kovaPohjaPiirra(nakyy) {
+      const J = kovaPohja(); if (!J || !J._ruudut.length) return;
+      ctx.save(); ctx.fillStyle = 'rgba(255,196,120,0.30)'; ctx.beginPath();
+      J._ruudut.forEach(n => {
+        const i = n % J.W, j = (n - i) / J.W, la0 = J.pohjoisLat - j * J.ruutu / 111320, la1 = la0 - J.ruutu / 111320;
+        const c = 111320 * Math.cos((la0 + la1) / 2 * Math.PI / 180), lo0 = J.lansiLon + i * J.ruutu / c, lo1 = lo0 + J.ruutu / c;
+        const a = naytolle(la0, lo0); if (!nakyy(a, 60)) return;
+        const b = naytolle(la0, lo1), d = naytolle(la1, lo1), e = naytolle(la1, lo0);
+        ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(d.x, d.y); ctx.lineTo(e.x, e.y); ctx.closePath();
+      });
+      ctx.fill(); ctx.restore();   // yksi täyttö: vierekkäiset ruudut ilman saumoja
+    }
+    function kovaPohjaValikko() {
+      const J = kovaPohja(), n = J ? J._ruudut.length : 0;
+      return '<div class="huom" style="margin-top:4px;color:var(--text)">Kova pohja (oma tiedosto)</div>'
+        + '<button class="merkki' + (as.kovaPohja && n ? ' valittu' : '') + '" data-kerros="kovaPohja"' + (n ? '' : ' disabled') + '>▦ Kova pohja' + (n ? ' (' + n + ' ruutua)' : '') + '</button>'
+        + '<div class="huom">' + (n ? 'Haalea täyttö. ' + String(J.kuvaus || '').replace(/</g, '&lt;')
+          : 'Tälle järvelle ei ole tuotu kova pohja -tiedostoa (tuonti etusivun Oma luotaus -kortista).') + '</div>';
+    }
     const isotKaiut = () => typeof omaLuotausKalat === 'function' ? omaLuotausKalat(avain).filter(q => q.luokka === 'iso') : [];
 
     function piirra() {
@@ -1087,6 +1134,7 @@
       if (as.yo) { ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(0, 0, w, h); }
       const nakyy = (p, m) => p.x > -m && p.y > -m && p.x < w + m && p.y < h + m;
       const nimet = nak.s * pohja.S / pohja.k.ruutu > 0.05;   // nimet, kun 1 km ≥ 50 px
+      if (as.kovaPohja) { try { kovaPohjaPiirra(nakyy); } catch (e) {} }   // v213: alimmaksi, muut merkit päälle
 
       // oma luotaus syvyyskartassa: mistä mitattu syvyys on (ohut ja himmeä, kuten aaltokortissa v176)
       if (pohja.naytto === 'syvyys' && typeof omaLuotausPisteet === 'function') {
@@ -1976,6 +2024,7 @@
       let malli = null;
       try { if (window.akPisteTeksti) malli = window.akPisteTeksti(p.lat, p.lon); } catch (e) {}   // v181: sama teksti kuin aaltokortissa
       try { const sy2 = syvyysTeksti(p.lat, p.lon, true); if (sy2) o.push(sy2); } catch (e) {}   // v180: lähde pisteen mukaan
+      try { if (as.kovaPohja) { const J = kovaPohja(); if (J && kovaRuudussa(J, p.lat, p.lon)) o.push('<b style="color:#ffc47a">▦ Kova pohja</b> ' + String(J.lyhyt || '').replace(/</g, '&lt;')); } } catch (e) {}   // v213
       const tilaNimi = (TILAT.find(t => t[0] === pohja.naytto) || ['', '', ''])[2];
       nayttoTieto('<b>' + tilaNimi + '</b> <span style="color:#7E93AC">(malli' + (pohja.aika ? ', klo ' + kk(pohja.aika.getHours()) + ':00' : '') + ')</span><br>'
         + (malli || 'ei tietoa') + (o.length ? '<br>' + o.join(' · ') : '') + etaisyysVeneesta(p.lat, p.lon) + koord + ankkuri);
@@ -2069,6 +2118,7 @@
         + taimenReittiValikko()
         + saalisVanaValikko()
         + tallenneValikko()
+        + kovaPohjaValikko()   // v213
         + '<button class="merkki' + (as.kulku ? ' valittu' : '') + '" data-kulku="1">🧭 ' + (as.kulku ? 'Kulkusuunta ylös' : 'Pohjoinen ylös') + '</button>'
         + '<div class="huom">Kartan suunta (myös pohjoisnuolta napauttamalla). Seurattaessa vene on kolmanneksen keskeltä taaksepäin, jotta edessä näkyy enemmän.</div>'
         + veneValikko();
