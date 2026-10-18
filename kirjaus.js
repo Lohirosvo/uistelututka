@@ -6,6 +6,7 @@
    siirretty kalaKiinnistä) ja GPS-piste avoimeen reissuun (pyyntiLisaaPiste, pyyntiGpsAvoimeen).
    v181: kumpuamisen Wedderburn-arvio parametreilla (kumpuArvioParam, kumpuHistoriaParam) etusivulle ja tilannekuvalle.
    v201: saalisriville vana (viimeiset 500 m ennen kirjausta) ja kulkusuunta (saalisVana, saalisTuoreSuunta).
+   v205: karannut kala (tulos 'karkasi') ja iskupaikan korjaus (saalisSiirra, saalisPalautaPaikka; ks. ISKUPAIKKA JA TULOS).
    VERSIO: sivut lataavat tiedoston nimellä kirjaus.js?v=NNN; NNN = sw.js:n VERSIO-numero. */
 
 // Saalisloki: kaikki kirjaukset yhdessä taulukossa (etusivu ja tilannekuva).
@@ -389,4 +390,76 @@ function kumpuArvioParam(p, U, L, tunteja) {
 function kumpuHistoriaParam(kertyma, dir) {
   if (!kertyma || !kertyma.luotettava || typeof kertyma.suunta !== 'number') return 0;
   return Math.abs(((kertyma.suunta - dir + 540) % 360) - 180) <= 45 ? kertyma.tunteja : 0;
+}
+
+/* ISKUPAIKKA JA TULOS — 17.10.2026 (v205).
+   Hannu 17.10. Lappajärvellä: taimen (noin 60 cm) karkasi 2 m:n päästä veneestä, ja Kala kiinni painettiin vasta
+   myöhemmin, joten kirjattu kohta ei ollut iskupaikka. Oikea kohta oli tarkka ja varma (lähimmän kivikon kohta, 20 m
+   ajolinjasta rannan puolella). Hannun valinnat: iskupaikka korjataan kartalta ja tulos merkitään; karannut kala
+   lasketaan kloonien osalta kuten saatu ("isku on isku").
+   TULOS: rivin kenttä tulos = 'karkasi' (puuttuu tai null = saatu). Karannut kala on ISKU: paikka, kloonit, osumat,
+   olosuhde- ja paikkaoppiminen ja pyyntijaksojen nollahetket käyttävät sitä kuten saatua. Saaliin määrää kuvaavat
+   koosteet (etusivun päivän ja 4 vrk:n kooste) laskevat vain saadut ja mainitsevat karanneet erikseen. Karanneen
+   pituus on arvio.
+   ISKUPAIKAN KORJAUS (tilannekuva: saaliin tai iskun merkki → 📍 Korjaa iskupaikka; etusivun saalislista → 📍). Kentät,
+   jotka on laskettu kirjauskohdasta (SAALIS_PAIKKAKENTAT), siirtyvät ensimmäisellä korjauksella talteen
+   (paikkaKorjaus.alkup) ja tyhjenevät. Sivu laskee uudelleen ne, jotka voi laskea iskuhetken tiedoilla (pohja, mallin
+   arviot iskuhetkeltä, etäisyydet, jos sama kirjauspohja on yhä muistissa), ja kloonit.js laskee iskun ja kloonit
+   iskuhetken ALKUPERÄISELLÄ tuulella (klooniPaikkaKorjattu). Vana ja kulkusuunta pysyvät: ne ovat veneen todellinen
+   reitti kirjaukseen asti.
+     paikkaKorjaus = { alkup: { lat, lon, … kirjauskohdan arvot }, aika (ISO), tapa: 'kartta' | 'kivikko',
+                       siirtoM ja suunta (°) alkuperäisestä kohdasta }
+   Palautus (saalisPalautaPaikka) kopioi alkup-arvot takaisin ja poistaa paikkaKorjaus-kentän. */
+const SAALIS_PAIKKAKENTAT = ['lat', 'lon', 'pohjaVeneellaM', 'veneellaTyyppi', 'ennusteTaimenVeneellaMin', 'ennusteTaimenVeneellaMax',
+  'etaisyysSuositukseenM', 'etaisyysKuhasuositukseenM', 'kuhaEhdokasLahinM', 'kuhaEhdokasTunnus', 'taimenEhdokasLahinM', 'taimenEhdokasTunnus',
+  'taimenHarppausMalliM', 'taimenMalliVaihe', 'malliAaltoM', 'malliPintavirtausKmh', 'malliPintavirtausSuunta', 'malliSyvaKmh', 'malliSyvaSuunta',
+  'malliSyvaTuuleen', 'malliLapiKmh', 'malliLapiSuunta', 'malliTuuliMs', 'malliTuuliSuunta', 'vesiLiike',
+  'sjPohjaM', 'sjKaltevuus', 'sjAsento', 'sjAaltoM', 'sjMuotoM', 'sjRannastaM', 'sjHarppausM', 'sjTuuliMs', 'sjTuuliSuunta',
+  'klooniTunnukset', 'klooniOsuma', 'klooniOsumaPisteet', 'klooniOsumaM'];
+function saalisKarkasi(x) { return !!x && x.tulos === 'karkasi'; }
+function saalisRivi(id) { return lataaSaaliit().find(x => x && x.id === id) || null; }
+function saalisKorvaa(rivi) {   // koko rivi takaisin (epäonnistuneen korjauksen peruminen)
+  const lista = lataaSaaliit(), ix = lista.findIndex(x => x && x.id === rivi.id);
+  if (ix < 0) return false;
+  lista[ix] = rivi; return tallennaSaaliit(lista);
+}
+function saalisAsetaTulos(id, karkasi) {
+  const lista = lataaSaaliit(), s = lista.find(x => x && x.id === id);
+  if (!s) return null;
+  if (karkasi) s.tulos = 'karkasi'; else if ('tulos' in s) s.tulos = null;
+  return tallennaSaaliit(lista) ? s : null;
+}
+/* uusi = { lat, lon, tapa }, kentat = sivun uudelleen laskemat SAALIS_PAIKKAKENTAT-arvot. Palauttaa tallennetun rivin tai null. */
+function saalisSiirra(id, uusi, kentat) {
+  if (!uusi || typeof uusi.lat !== 'number' || typeof uusi.lon !== 'number' || !isFinite(uusi.lat) || !isFinite(uusi.lon)) return null;
+  const lista = lataaSaaliit(), s = lista.find(x => x && x.id === id);
+  if (!s) return null;
+  if (!s.paikkaKorjaus || !s.paikkaKorjaus.alkup) {
+    const A0 = {}; SAALIS_PAIKKAKENTAT.forEach(k => { if (k in s) A0[k] = s[k]; });
+    s.paikkaKorjaus = { alkup: A0 };
+  }
+  const K = s.paikkaKorjaus, A = K.alkup;
+  SAALIS_PAIKKAKENTAT.forEach(k => { if (k !== 'lat' && k !== 'lon' && k in s) s[k] = null; });   // laskettu kirjauskohdasta
+  s.lat = Math.round(uusi.lat * 1e6) / 1e6; s.lon = Math.round(uusi.lon * 1e6) / 1e6;
+  Object.keys(kentat || {}).forEach(k => { if (k !== 'lat' && k !== 'lon' && SAALIS_PAIKKAKENTAT.indexOf(k) >= 0 && kentat[k] !== undefined) s[k] = kentat[k]; });
+  K.aika = new Date().toISOString(); K.tapa = uusi.tapa || 'kartta';
+  K.siirtoM = typeof A.lat === 'number' ? Math.round(haversineDistMeters(A.lat, A.lon, s.lat, s.lon)) : null;
+  K.suunta = typeof A.lat === 'number' ? saalisSuuntima(A.lat, A.lon, s.lat, s.lon) : null;
+  return tallennaSaaliit(lista) ? s : null;
+}
+function saalisPalautaPaikka(id) {
+  const lista = lataaSaaliit(), s = lista.find(x => x && x.id === id);
+  if (!s || !s.paikkaKorjaus || !s.paikkaKorjaus.alkup) return null;
+  Object.assign(s, s.paikkaKorjaus.alkup); delete s.paikkaKorjaus;
+  return tallennaSaaliit(lista) ? s : null;
+}
+/* Etusivun täydennys korvaa rivin muistissa olevalla kopiolla. Jos paikka on korjattu toisessa välilehdessä (tilannekuva)
+   lomakkeen avaamisen jälkeen, korjattu paikka ja sen kentät otetaan tallennetusta rivistä. */
+function saalisSailytaKorjaus(uusi, tallessa) {
+  if (!uusi || !tallessa) return uusi;
+  const a = tallessa.paikkaKorjaus ? tallessa.paikkaKorjaus.aika : null, b = uusi.paikkaKorjaus ? uusi.paikkaKorjaus.aika : null;
+  if (a === b) return uusi;
+  SAALIS_PAIKKAKENTAT.forEach(k => { if (k in tallessa) uusi[k] = tallessa[k]; });
+  if (tallessa.paikkaKorjaus) uusi.paikkaKorjaus = tallessa.paikkaKorjaus; else delete uusi.paikkaKorjaus;
+  return uusi;
 }

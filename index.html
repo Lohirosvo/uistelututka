@@ -1251,6 +1251,9 @@ body{padding-bottom:66px}
 
           <p class="hint" style="margin:0 0 6px;">Laji</p>
           <div class="options" id="opts-kalaLaji" style="margin-bottom:12px;"></div>
+          <!-- v205: karannut kala on isku (paikka ja kloonit kuten saaliilla), ei saalis koosteissa; pituus arvio -->
+          <p class="hint" style="margin:0 0 6px;">Tulos</p>
+          <div class="options" id="opts-kalaTulos" style="margin-bottom:12px;"></div>
 
           <div class="numfield">
             <div>
@@ -2390,14 +2393,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=204" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=204" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=204" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=204" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=204" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=204" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=204" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=204" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=205" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=205" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=205" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=205" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=205" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=205" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=205" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=205" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
        uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
@@ -8031,6 +8034,8 @@ function sumuriskiAlusta(){
       }
       pyyntiNayta();
     }
+    // v205: karannut kala on pyyntijaksossa kalakontakti (nollahetki ei synny), luvun perään "(joista n karannut)"
+    function pyyntiKalatTeksti(k) { const n = k.filter(saalisKarkasi).length; return k.length + (n ? ' (joista ' + n + ' karannut)' : ''); }
     function pyyntiSaaliit(alku, loppu) {
       let lista = [];
       try { lista = lataaSaaliit(); } catch (e) { lista = []; }
@@ -8137,7 +8142,7 @@ function sumuriskiAlusta(){
         btn.textContent = '■ LOPETA UISTELU';
         btn.style.borderColor = 'var(--amber)'; btn.style.color = 'var(--amber)';
         tila.textContent = 'Uistelu käynnissä ' + pyyntiKesto(min) + ' (alkoi klo ' + pyyntiKlo(r.alku) + '), jakso '
-          + (Math.floor(min / PYYNTI_JAKSO_MIN) + 1) + ', kaloja ' + pyyntiSaaliit(r.alku, Date.now() + 1).length
+          + (Math.floor(min / PYYNTI_JAKSO_MIN) + 1) + ', kaloja ' + pyyntiKalatTeksti(pyyntiSaaliit(r.alku, Date.now() + 1))
           + '. GPS-pisteitä ' + r.pisteet.length + ' (vain kun mittari käy ja sovellus on auki).';
       } else {
         btn.textContent = '▶ ALOITA UISTELU';
@@ -8145,7 +8150,7 @@ function sumuriskiAlusta(){
         if (!pidaTila) {
           const kaikki = pyyntiLue(LS_PYYNTI, []), v = kaikki[kaikki.length - 1];
           tila.textContent = v ? 'Edellinen reissu ' + pyyntiPvm(v.alku) + ': ' + pyyntiKesto(v.minuutit) + ', '
-            + pyyntiSaaliit(v.alku, v.loppu).length + ' kalaa.' : 'Paina, kun vieheet ovat vedessä. Pyyntiaika tekee saaliista vertailukelpoisen.';
+            + pyyntiKalatTeksti(pyyntiSaaliit(v.alku, v.loppu)) + ' kalaa.' : 'Paina, kun vieheet ovat vedessä. Pyyntiaika tekee saaliista vertailukelpoisen.';
         }
       }
     }
@@ -8182,12 +8187,12 @@ function sumuriskiAlusta(){
       if (!kaikki.length) { el.innerHTML = '<p class="hint">Ei vielä reissuja. Paina Vesillä-ruudulla Aloita uistelu, kun vieheet ovat vedessä, ja Lopeta, kun nostat ne.</p>'; return; }
       const nro = (x, d) => x.toFixed(d).replace('.', ',');
       const paikat = {}, lajit = {};
-      let tunnit = 0, jaksot = 0, nollat = 0, kaloja = 0;
+      let tunnit = 0, jaksot = 0, nollat = 0, kaloja = 0, karanneita = 0;
       kaikki.forEach(r => {
         const h = r.minuutit / 60, k = pyyntiSaaliit(r.alku, r.loppu);
         const p = paikat[r.paikka || '?'] = paikat[r.paikka || '?'] || { reissut: 0, h: 0, kalat: 0 };
         p.reissut++; p.h += h; p.kalat += k.length;
-        tunnit += h; kaloja += k.length;
+        tunnit += h; kaloja += k.length; karanneita += k.filter(saalisKarkasi).length;
         k.forEach(x => { const l = x.laji || 'laji puuttuu'; lajit[l] = (lajit[l] || 0) + 1; });
         r.jaksot.forEach(j => {
           if (j.min < 10) return;   // vajaa loppujakso ei ole nollahetki
@@ -8207,7 +8212,8 @@ function sumuriskiAlusta(){
       const lj = Object.keys(lajit).sort((a, b) => lajit[b] - lajit[a])
         .map(l => l + ' ' + lajit[l] + ' (' + nro(lajit[l] / tunnit, 2) + '/h)').join(', ');
       h += '<p style="font-size:13px;margin:8px 0 0;">Yhteensä ' + nro(tunnit, 1) + ' uistelutuntia, ' + kaloja + ' kalaa'
-        + (lj ? ': ' + lj : '') + '. Nollajaksoja (30 min ilman kalaa) ' + nollat + '/' + jaksot + '.</p>';
+        + (lj ? ': ' + lj : '') + '. Nollajaksoja (30 min ilman kalaa) ' + nollat + '/' + jaksot + '.'
+        + (karanneita ? ' Kaloissa ' + karanneita + ' karannutta (iskuja, ei saalista).' : '') + '</p>';
       let ulkona = 0;
       try { ulkona = lataaSaaliit().filter(x => x && !x.nollareissu && x.aika && !kaikki.some(r => { const t = Date.parse(x.aika); return t >= r.alku && t < r.loppu; })).length; } catch (e) {}
       h += '<p class="hint" style="margin-top:6px;">' + (ulkona ? ulkona + ' kalaa on kirjattu reissujen ulkopuolella; ne eivät ole tunneissa mukana. ' : '')
@@ -8300,6 +8306,7 @@ function sumuriskiAlusta(){
     }
 
     let kalaLaji = 'taimen';
+    let kalaTulos = null;   // v205: null = saatu, 'karkasi'
 
 
 
@@ -8334,12 +8341,16 @@ function sumuriskiAlusta(){
         : nyt.getTime() - 96 * 3600e3;
       const otsikko = tyyppi === 'paiva' ? 'Tänään' : 'Neljä vuorokautta';
       const kaikki = lataaSaaliit().filter(x => new Date(x.aika).getTime() >= alku);
-      const kalat = kaikki.filter(x => !x.nollareissu && x.laji);
+      // v205: karannut kala (kirjaus.js: tulos 'karkasi') ei ole saalis; mainitaan erikseen
+      const karanneet = kaikki.filter(x => !x.nollareissu && x.laji && saalisKarkasi(x));
+      const kalat = kaikki.filter(x => !x.nollareissu && x.laji && !saalisKarkasi(x));
       const nollat = kaikki.filter(x => x.nollareissu).length;
       const k = [], p = [];       // kirjoitettu, puhe
+      const karT = karanneet.length ? (karanneet.length === 1 ? '1 karannut' : karanneet.length + ' karannutta') + ' ('
+        + karanneet.map(x => (KOOSTE_LAJI[x.laji] || [x.laji])[0] + (x.pituusCm ? ' noin ' + x.pituusCm + ' cm' : '')).join(', ') + ')' : '';
 
       if (!kalat.length) {
-        const t = otsikko + ' ei saaliita' + (nollat ? ', ' + nollat + ' nollareissua kirjattu' : '') + '.';
+        const t = otsikko + ' ei saaliita' + (karT ? ', ' + karT : '') + (nollat ? ', ' + nollat + ' nollareissua kirjattu' : '') + '.';
         return { kirjoitettu: t, puhe: t, n: 0 };
       }
       // lajit
@@ -8350,7 +8361,8 @@ function sumuriskiAlusta(){
       const kaloja = kalat.length === 1 ? '1 kala' : kalat.length + ' kalaa';
       p.push(otsikko + ' ' + kaloja + ': ' + lajit.join(', ') + '.');
       k.push('<b>' + otsikko + ': ' + kaloja + '</b> — ' + lajit.join(', ')
-        + (nollat ? ' · nollareissuja ' + nollat : ''));
+        + (karT ? ' · ' + karT : '') + (nollat ? ' · nollareissuja ' + nollat : ''));
+      if (karT) p.push('Lisäksi ' + karT.replace(/ \(.*$/, '') + '.');
       // aika
       const ajat = kalat.map(x => new Date(x.aika)).sort((a, b) => a - b);
       const hm = d => d.toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' });
@@ -8708,6 +8720,7 @@ function sumuriskiAlusta(){
         (typeof snap.vanaM === 'number' ? ' · vana ' + snap.vanaM + ' m' : '');   // v201
       document.getElementById('kalaTaydennaBox').style.display = 'block';
       renderKalaLajit();
+      kalaTulos = null; renderKalaTulos();   // v205
       // Esitäyttö viehevalinnasta: jos suositus on juuri katsottu, se on
       // todennäköisin viehe vedessä. Käyttäjä voi vaihtaa yhdellä napautuksella.
       if (saalisViehe === null && typeof vvViimeisinViehe === 'string') {
@@ -8721,6 +8734,18 @@ function sumuriskiAlusta(){
       saalisMalliTaydennys(snap);   // v180: kirjaus.js (sama tilannekuvassa): mallin arviot ja veden liike saaliin kohdalta
     }
 
+    function renderKalaTulos() {   // v205
+      const el = document.getElementById('opts-kalaTulos');
+      if (!el) return;
+      el.innerHTML = '';
+      [[null, 'Saatu'], ['karkasi', 'Karkasi']].forEach(([v, l]) => {
+        const chip = document.createElement('div');
+        chip.className = 'chip' + (v === kalaTulos ? ' selected' : '');
+        chip.textContent = l;
+        chip.onclick = () => { kalaTulos = v; el.querySelectorAll('.chip').forEach(c => c.classList.remove('selected')); chip.classList.add('selected'); };
+        el.appendChild(chip);
+      });
+    }
     function renderKalaLajit() {
       const el = document.getElementById('opts-kalaLaji');
       if (!el) return;
@@ -8786,8 +8811,11 @@ function sumuriskiAlusta(){
         ? (VV_TAVAT[vvTila.tapa] ? VV_TAVAT[vvTila.tapa].nimi : vvTila.tapa) : null;
 
       keskenerainenSaalis.taydennetty = true;   // v151
+      // v205: tulos (karkasi) vain, kun valittu tai jo kirjattu, jotta tavalliset rivit pysyvät ennallaan
+      if (kalaTulos === 'karkasi') keskenerainenSaalis.tulos = 'karkasi'; else if ('tulos' in keskenerainenSaalis) keskenerainenSaalis.tulos = null;
       const lista = lataaSaaliit();
       const ix = lista.findIndex(function (x) { return x && x.id === keskenerainenSaalis.id; });
+      if (ix >= 0) saalisSailytaKorjaus(keskenerainenSaalis, lista[ix]);   // v205: tilannekuvassa korjattu iskupaikka säilyy
       if (ix >= 0) lista[ix] = keskenerainenSaalis; else lista.push(keskenerainenSaalis);
       const ok = tallennaSaaliit(lista);
       const tiedostoOk = true;   // v151: ei automaattista CSV-latausta (Chromen kysely veneessä); varmuuskopio: Raportit → Vie ja jaa
@@ -8839,7 +8867,8 @@ function sumuriskiAlusta(){
       const d = new Date(t.aika);
       document.getElementById('kalaTaydennaAika').textContent = d.toLocaleDateString('fi-FI') + ' klo ' + d.toLocaleTimeString('fi-FI', {hour:'2-digit',minute:'2-digit'}) + ' (täydennetään)';
       document.getElementById('kalaTaydennaBox').style.display = 'block';
-      renderKalaLajit(); renderSaalisVieheet();
+      kalaTulos = t.tulos === 'karkasi' ? 'karkasi' : null;   // v205
+      renderKalaLajit(); renderKalaTulos(); renderSaalisVieheet();
       document.getElementById('kalaTaydennaBox').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
     function varmuuskopioMuistutus() {
@@ -9252,7 +9281,7 @@ function sumuriskiAlusta(){
           osuma = ` <span style="color:${Math.abs(ero) <= 1.5 ? 'var(--cyan)' : 'var(--amber)'};">(malli ${ennuste.toFixed(1)} m, ero ${ero >= 0 ? '+' : ''}${ero.toFixed(1)})</span>`;
         }
         return `<div style="padding:6px 0;border-bottom:1px solid rgba(30,51,80,0.5);font-size:13px;">
-          <strong style="color:var(--text);">${pvm} · ${s.laji || '?'}</strong>${s.taydennetty === false ? ` <button class="chip" onclick="saalisTaydenna(${s.id})" style="padding:1px 8px;font-size:11px;border-color:var(--amber);color:var(--amber);">✏️ Täydennä</button>` : ''}${klD ? klooniNappi(s, klD) : ''}${s.pituusCm ? ' ' + s.pituusCm + ' cm' : ''}${typeof s.syvyysM === 'number' ? ' · ' + s.syvyysM.toFixed(1) + ' m' : ''}${osuma}
+          <strong style="color:var(--text);">${pvm} · ${s.laji || '?'}${saalisKarkasi(s) ? ' · karkasi' : ''}</strong>${typeof s.lat === 'number' ? ` <a class="chip" href="tilanne.html#korjaa=${s.id}" title="Korjaa iskupaikka kartalla" style="padding:1px 8px;font-size:11px;border-color:#f5b700;color:#f5b700;text-decoration:none;">📍${s.paikkaKorjaus ? ' ' + (s.paikkaKorjaus.siirtoM != null ? s.paikkaKorjaus.siirtoM + ' m' : 'korjattu') : ''}</a>` : ''}${s.taydennetty === false ? ` <button class="chip" onclick="saalisTaydenna(${s.id})" style="padding:1px 8px;font-size:11px;border-color:var(--amber);color:var(--amber);">✏️ Täydennä</button>` : ''}${klD ? klooniNappi(s, klD) : ''}${s.pituusCm ? ' ' + s.pituusCm + ' cm' : ''}${typeof s.syvyysM === 'number' ? ' · ' + s.syvyysM.toFixed(1) + ' m' : ''}${osuma}
           ${s.viehe ? `<br><span style="color:var(--amber);">${s.viehe}${s.vari ? ' · ' + s.vari : ''}${s.esitystapa ? ' · ' + s.esitystapa : ''}</span>` : ''}
           <br><span style="color:var(--muted);">${typeof s.vesiC === 'number' ? 'vesi ' + s.vesiC.toFixed(1) + ' °C · ' : ''}${typeof s.tuuliMs === 'number' ? 'tuuli ' + s.tuuliMs.toFixed(1) + ' m/s · ' : ''}${s.taimenkeli !== null && s.taimenkeli !== undefined ? 'taimenkeli ' + s.taimenkeli + ' %' : ''}</span>
         </div>`;
@@ -9283,12 +9312,19 @@ function sumuriskiAlusta(){
       // 10.10.2026 (v177): kloonipisteet — iskun sormenjälki (malli, iskuruutu) ja osuma aiempaan klooniin
       'iskuTunnus','klooniTunnukset','klooniOsuma','klooniOsumaPisteet','klooniOsumaM',
       'sjPohjaM','sjKaltevuus','sjAsento','sjAaltoM','sjMuotoM','sjRannastaM','sjHarppausM','sjTuuliMs','sjTuuliSuunta',
-      'kirjausLahde','kirjauspohjaAika','gpsIkaS'];   // v180: tilannekuvan kirjaus (tyhjä = etusivu)
+      'kirjausLahde','kirjauspohjaAika','gpsIkaS',   // v180: tilannekuvan kirjaus (tyhjä = etusivu)
+      // 17.10.2026 (v205): karannut kala ja korjattu iskupaikka (siirto metreinä ja kirjauskohta)
+      'tulos','paikkaKorjattuM','alkupLat','alkupLon'];
+    const SAALIS_CSV_JOHDETUT = {   // v205: sarakkeet, jotka luetaan paikkaKorjaus-oliosta
+      paikkaKorjattuM: s => s.paikkaKorjaus ? s.paikkaKorjaus.siirtoM : null,
+      alkupLat: s => s.paikkaKorjaus && s.paikkaKorjaus.alkup ? s.paikkaKorjaus.alkup.lat : null,
+      alkupLon: s => s.paikkaKorjaus && s.paikkaKorjaus.alkup ? s.paikkaKorjaus.alkup.lon : null
+    };
 
     function saaliitCsv(lista) {
       return [SAALIS_KENTAT.join(';')].concat(
         lista.map(s => SAALIS_KENTAT.map(k => {
-          const v = s[k];
+          const v = SAALIS_CSV_JOHDETUT[k] ? SAALIS_CSV_JOHDETUT[k](s) : s[k];
           return (v === null || v === undefined) ? '' : String(v).replace(/;/g, ',');
         }).join(';'))
       ).join('\n');
@@ -13363,7 +13399,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v204';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v205';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -21475,7 +21511,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=204';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=205';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })

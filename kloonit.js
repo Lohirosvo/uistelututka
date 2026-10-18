@@ -8,6 +8,8 @@
    v180: myös laskenta ja saalisrivit (klooniLaske, osuma, saaliskentät, lajin vaihto, poisto) ovat tässä, koska
    Kala kiinni toimii myös tilannekuvassa. Sivukohtaiset osat: paneeli, hälytys ja vienti (index.html), kartta ja
    ilmoitukset (tilanne.html).
+   v205: iskupaikan korjaus (klooniPaikkaKorjattu: isku uudessa kohdassa iskuhetken alkuperäisellä tuulella, osumat
+   uudelleen) ja karannut kala kerroksen teksteissä (kirjaus.js: tulos 'karkasi'; isku on isku, kloonit kuten saaliilla).
    OMA SIJAINTI: sivut asettavat window.utOmaSijainti = { lat, lon, suunta, tarkkuus, kmh, aika }.
    Seuraava kohde lasketaan siitä, jos se on enintään 10 min vanha; muuten viimeisestä iskusta.
    Taustan OODA-silmukka, sormenjälki ja painot: index.html KLOONIPISTEET-kommentti ja aaltomalli.js.
@@ -164,14 +166,16 @@ function klooniKerros(d, aktiivinenId, lahto) {
   const seur = klooniSeuraava(d, lahto);
   const seuraava = (seur && seur.I.pvm === akt.pvm && seur.I.avain === akt.avain) ? seur.c.tunnus : null;
   const km = klooniN1(akt.sadeM / 1000).replace(',0', '');
+  let karanneet = {};   // v205: karannut kala (kirjaus.js) iskun tekstiin
+  try { lataaSaaliit().forEach(x => { if (x && x.tulos === 'karkasi') karanneet[x.id] = true; }); } catch (e) { karanneet = {}; }
   const info = 'Kloonit ' + klooniPvmTeksti(akt.pvm) + ' (' + iskut.length + ' iskua): <b>violetti salmiakki</b> on paikka, jossa iskun pohja, penkan asento tuuleen ja aalto toistuvat iskuhetken tuulella (malli). '
     + '<b>Punainen pallo</b> on isku, katkoviivaympyrä ' + km + ' km hakusäde iskusta ' + akt.tunnus
     + (seuraava ? ', <b>keltainen rengas</b> seuraavaksi (' + seuraava + ')' : '') + '. Vaalea = käyty, kultainen = osuma. Napauta merkkiä.';
   return {
     avain: akt.avain, pvm: akt.pvm, aktiivinen: akt.tunnus, seuraava, seur, info,
     iskut: iskut.map(I => ({
-      tunnus: I.tunnus, lat: I.lat, lon: I.lon, sadeM: I.sadeM, lajiNimi: KLOONI_LAJINIMI[I.laji] || I.laji || '',
-      teksti: 'isku klo ' + klooniKello(new Date(I.aika).getTime()) + (I.laji ? ' (' + (KLOONI_LAJINIMI[I.laji] || I.laji) + ')' : '') + ': ' + klooniIskuTeksti(I),
+      id: I.id, tunnus: I.tunnus, lat: I.lat, lon: I.lon, sadeM: I.sadeM, lajiNimi: KLOONI_LAJINIMI[I.laji] || I.laji || '', karkasi: !!karanneet[I.id],
+      teksti: 'isku klo ' + klooniKello(new Date(I.aika).getTime()) + (I.laji ? ' (' + (KLOONI_LAJINIMI[I.laji] || I.laji) + (karanneet[I.id] ? ', karkasi' : '') + ')' : '') + ': ' + klooniIskuTeksti(I),
       kloonit: I.kloonit.map(c => ({ tunnus: c.tunnus, lat: c.lat, lon: c.lon, pisteet: c.pisteet, kayty: c.kayty, osuma: c.osuma, teksti: klooniTeksti(I, c) }))
     }))
   };
@@ -255,7 +259,8 @@ function klooniOmaPohja(lat, lon) {
   return { m: v.length % 2 ? v[v.length >> 1] : (v[(v.length >> 1) - 1] + v[v.length >> 1]) / 2, n: v.length };
 }
 // HAVAINNOI + SUUNTAA: sormenjälki ja kloonit yhdelle saaliille. Palauttaa { ok, isku } tai { ok:false, syy }.
-async function klooniLaske(s) {
+// v205: opts.tuuli = { U, dir, tunteja, lahde, oletusKesto } ohittaa ennusteen (iskupaikan korjaus: iskuhetken alkuperäinen tuuli).
+async function klooniLaske(s, opts) {
   if (!s || typeof s.lat !== 'number' || typeof s.lon !== 'number') return { ok: false, syy: 'kirjauksella ei ole GPS-sijaintia (mittari ei ollut päällä)' };
   const avain = karttaAvainNimesta(s.paikka || '') || KLOONI_SIVU.avainNyt();
   if (!avain) return { ok: false, syy: 'järvellä ei ole syvyysruudukkoa' };
@@ -265,8 +270,8 @@ async function klooniLaske(s) {
   // ennuste odotetaan enintään 8 s (hidas yhteys veneessä); muuten tuuli kirjauksesta
   try { if (typeof window.akValmiina === 'function') await Promise.race([window.akValmiina(), new Promise(r => setTimeout(r, 8000))]); } catch (e) {}
   const t = new Date(s.aika).getTime();
-  let tuuli = null;
-  try { tuuli = window.akTuuliHetkella(t, avain); } catch (e) { tuuli = null; }
+  let tuuli = (opts && opts.tuuli && typeof opts.tuuli.U === 'number' && typeof opts.tuuli.dir === 'number') ? Object.assign({}, opts.tuuli) : null;
+  if (!tuuli) { try { tuuli = window.akTuuliHetkella(t, avain); } catch (e) { tuuli = null; } }
   if (!tuuli) {
     const fmi = typeof s.malliTuuliMs === 'number' && typeof s.malliTuuliSuunta === 'number';
     const U = fmi ? s.malliTuuliMs : s.tuuliMs, dir = fmi ? s.malliTuuliSuunta : s.tuuliSuunta;
@@ -361,4 +366,34 @@ function klooniSaalisPoistettu(id) {
   d.iskut.forEach(I => I.kloonit.forEach(c => { if (c.osuma && c.osuma.id === id) { c.osuma = null; muutos = true; } }));
   if (muutos) klooniTallenna(d);
   return muutos;
+}
+/* v205: iskupaikka korjattu (kirjaus.js: saalisSiirra tai saalisPalautaPaikka; s = tallennettu rivi uudessa kohdassa).
+   Isku lasketaan uudelleen uudessa kohdassa iskuhetken ALKUPERÄISELLÄ tuulella (ennuste on voinut päivittyä tai poistua
+   muistista), isku pitää tunnuksensa ja kloonit saavat uudet. Tämän saaliin osuma aiemman iskun klooniin tarkistetaan
+   uudesta kohdasta, ja myöhemmät saaliit (≤ 24 h), joiden osuma oli tämän iskun vanhoissa klooneissa, tarkistetaan uusiin.
+   Jos isku ei laskeudu (esim. kohta ruudukon ulkopuolella), mitään ei muuteta ja kutsuja perii siirron.
+   Palauttaa { ok, isku, osuma } tai { ok:false, syy }. */
+async function klooniPaikkaKorjattu(s) {
+  if (!s) return { ok: false, syy: 'saalista ei löydy' };
+  const I0 = klooniIskuSaaliille(s.id);
+  let r = { ok: true, isku: null };
+  if (KLOONI_LAJIT.includes(s.laji) && typeof s.lat === 'number') {
+    r = await klooniLaske(s, I0 ? { tuuli: I0.tuuli } : null);
+    if (!r.ok) return r;
+  }
+  const d = klooniLue(); let muutos = false;
+  d.iskut.forEach(J => J.kloonit.forEach(c => { if (c.osuma && c.osuma.id === s.id) { c.osuma = null; muutos = true; } }));
+  if (muutos) klooniTallenna(d);
+  if (s.klooniOsuma) klooniSaalisKentat(s, { klooniOsuma: null, klooniOsumaPisteet: null, klooniOsumaM: null });
+  let os = null; try { os = klooniOsumaTarkistus(s); } catch (e) { os = null; }
+  const t = new Date(s.aika).getTime(), d2 = klooniLue();
+  lataaSaaliit().forEach(x => {
+    if (!x || x.id === s.id || !x.klooniOsuma || typeof x.lat !== 'number') return;
+    const tx = new Date(x.aika).getTime();
+    if (!(tx > t && tx - t <= KLOONI_TUOREUS_MS)) return;
+    if (d2.iskut.some(J => J.kloonit.some(c => c.osuma && c.osuma.id === x.id))) return;   // osuma on yhä voimassa
+    klooniSaalisKentat(x, { klooniOsuma: null, klooniOsumaPisteet: null, klooniOsumaM: null });
+    try { klooniOsumaTarkistus(x); } catch (e) {}
+  });
+  return { ok: true, isku: r.isku || klooniIskuSaaliille(s.id), osuma: os };
 }
