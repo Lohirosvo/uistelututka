@@ -83,6 +83,8 @@ function klooniIskuTeksti(I) {
   if (typeof s.hq === 'number') o.push('harppaus ' + klooniN1(s.hq) + ' m (malli)');
   const t = I.tuuli || {};
   o.push('tuuli ' + Math.round(t.U) + ' m/s ' + klooniMista(t.dir) + ' (' + (t.lahde || '?') + (t.oletusKesto ? ', kesto oletettu 6 h' : '') + ')');
+  const tyyniMs = typeof window.AK_TYYNI_MS === 'number' ? window.AK_TYYNI_MS : 2.5;   // v208: tyynen sääntö (aaltomalli.js)
+  if (typeof t.U === 'number' && Math.max(0.5, t.U) < tyyniMs) o.push('tyyni (alle ' + String(tyyniMs).replace('.', ',') + ' m/s): penkan asento ja aalto eivät ole vertailussa');
   if (typeof I.pyyntiSyvyys === 'number') o.push('pyyntisyvyys ' + klooniN1(I.pyyntiSyvyys) + ' m');
   if (typeof I.vesiC === 'number') o.push('vesi ' + klooniN1(I.vesiC) + ' °C (koko järvi)');
   if (I.tutkittu) o.push('kaava toistuu ' + Math.max(1, Math.round(100 * I.ehdokkaita / I.tutkittu)) + ' %:ssa hakualueen vedestä (raja ' + I.kynnys + ' %)');
@@ -118,18 +120,28 @@ function klooniLahto() {   // oma sijainti, jos tuore (≤ 10 min); muuten null
   return (p && typeof p.lat === 'number' && Date.now() - (p.aika || 0) <= 600e3) ? p : null;
 }
 /* Avoimista klooneista (ei käyty, ei osumaa, isku ≤ 24 h) paras = pisteet − 4 %-yksikköä veneen
-   etäisyyden kilometriä kohden. Ilman tuoretta sijaintia matka lasketaan viimeisestä iskusta. */
+   etäisyyden kilometriä kohden. Ilman tuoretta sijaintia matka lasketaan viimeisestä iskusta.
+   v208: sijainti kelpaa lähtöpisteeksi vain iskun järvellä. Hannun kuva 18.10. klo 9.04: "K20 · 48,5 km", kun puhelin
+   oli kaukana järveltä; 4 %/km ei silloin erottele klooneja, ja matka on hyödytön. Järveltä pois matka lasketaan iskusta.
+   Rannassa tai satamassa (ei vesiruutua) sijainti kelpaa, jos isku on alle 25 km päässä (Lappajärvi on noin 23 km pitkä). */
+function klooniLahtoJarvella(lahto, I) {
+  if (!lahto || typeof window.akJarviPisteessa !== 'function') return !!lahto;
+  let j = null; try { j = window.akJarviPisteessa(lahto.lat, lahto.lon); } catch (e) { return true; }
+  if (j) return j === I.avain;
+  return klooniMatka(lahto.lat, lahto.lon, I.lat, I.lon) <= 25000;
+}
 function klooniSeuraava(d, lahto) {
   d = d || klooniLue();
   if (lahto === undefined) lahto = klooniLahto();
   const nyt = Date.now(), avoimet = [];
   d.iskut.forEach(I => { if (nyt - new Date(I.aika).getTime() > KLOONI_TUOREUS_MS) return; I.kloonit.forEach(c => { if (!c.kayty && !c.osuma) avoimet.push({ I, c }); }); });
   if (!avoimet.length) return null;
-  const viim = d.iskut[d.iskut.length - 1], L = lahto || { lat: viim.lat, lon: viim.lon };
+  const viim = d.iskut[d.iskut.length - 1], Lisku = { lat: viim.lat, lon: viim.lon };
   let paras = null;
   avoimet.forEach(x => {
+    const gps = klooniLahtoJarvella(lahto, x.I), L = gps ? lahto : Lisku;
     const e = klooniMatka(L.lat, L.lon, x.c.lat, x.c.lon), arvo = x.c.pisteet - 4 * e / 1000;
-    if (!paras || arvo > paras.arvo) paras = { I: x.I, c: x.c, e, s: klooniSuuntima(L.lat, L.lon, x.c.lat, x.c.lon), arvo, gps: !!lahto };
+    if (!paras || arvo > paras.arvo) paras = { I: x.I, c: x.c, e, s: klooniSuuntima(L.lat, L.lon, x.c.lat, x.c.lon), arvo, gps };
   });
   return paras;
 }
