@@ -2412,14 +2412,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=209" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=209" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=209" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=209" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=209" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=209" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=209" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=209" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=210" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=210" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=210" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=210" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=210" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=210" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=210" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=210" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
        uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
@@ -2988,7 +2988,10 @@ body{padding-bottom:66px}
       { nimi: 'Kalajärven tekoallas',   lat: [62.51, 62.61], lon: [23.04, 23.24] },
       // v141: Etelä-Saimaa Imatran edustalla (Hannu 3.10.2026, SM 2027 -alue Hannun tiedon mukaan).
       // Väljä rajaus noin 24 × 29 km; rajauksen reuna toimii mallissa rantana.
-      { nimi: 'Saimaa (Imatra)',        lat: [61.10, 61.32], lon: [28.40, 28.95] }
+      { nimi: 'Saimaa (Imatra)',        lat: [61.10, 61.32], lon: [28.40, 28.95] },
+      // v210: Ylä-Keitele Viitasaaren edustalla (Hannu 18.10.2026: kartta Keitelepohja–Huopana–Jurvansalo, siemen
+      // Pihkurinselältä 63°06'20.02" N 25°42'05.64" E). Rajaus kartan alue + noin 0,5 km, noin 19 × 19 km; reuna on mallissa rantaa.
+      { nimi: 'Ylä-Keitele',            lat: [63.035, 63.205], lon: [25.51, 25.89] }
     ];
     var LUOT_LAPPA_TUNNUS = '47.031.1.001';
     var luotausData = null, luotTulosTeksti = '';
@@ -4278,7 +4281,13 @@ window.addEventListener('load', function(){
          DataDeck-ruudukon malleissa. Syvyydet jo puhelimessa (MML, v122). Siemen = järven keskiosa. */
       { ohita: true, avain: 'lappajarvi', nimi: 'Lappajärvi', laatikko: 'Lappajärvi', siemen: [63.1561, 23.6704], ruutu: 50, virallinen: 'Järviwiki: 145 km², suurin syvyys 38 m' },
       { ohita: true, avain: 'saimaa_imatra', nimi: 'Saimaa (Imatra)', laatikko: 'Saimaa (Imatra)', siemen: [61.2033597, 28.6897126], lataaSyvyydet: true, rajaa: true,
-        virallinen: null }
+        virallinen: null },
+      /* v210: Ylä-Keitele (Pihkurinselkä), Hannu 18.10.2026. Keitele on väyläjärvi: MML:n avoimessa rajapinnassa ei
+         ehkä ole syvyyksiä (Toisvedellä ja Saimaalla ei ollut). rantaIlmanSyvyytta: rantaviiva ja ruudukko rakennetaan
+         silloinkin (ruutujen syvyys 3 m oletus), ja syvyydet luetaan myöhemmin Hannun karttakuvista kuten Saimaalla.
+         50 m ruudut kuten Lappajärvellä (Hannu 18.10.: tarkkuus). */
+      { avain: 'ylakeitele', nimi: 'Ylä-Keitele', laatikko: 'Ylä-Keitele', siemen: [63.105561, 25.701567], ruutu: 50, lataaSyvyydet: true, rajaa: true,
+        rantaIlmanSyvyytta: true, virallinen: null }
     ];
     var jkTulos = null;
     function jkRenkaat(geom) {   // [[ [lon,lat], ... ], ...] kaikki renkaat
@@ -4388,7 +4397,8 @@ window.addEventListener('load', function(){
           }
           var B = LUOT_LAATIKOT.find(function (x) { return x.nimi === K.laatikko; });
           var D = mmlSyvData.jarvet.find(function (x) { return x.nimi === K.laatikko; });
-          if (!B || !D || (!D.E.length && !K.korkeus)) { rivit.push(K.nimi + ': ei syvyysdataa, ohitetaan.'); continue; }
+          if (!B || !D || (!D.E.length && !K.korkeus && !K.rantaIlmanSyvyytta)) { rivit.push(K.nimi + ': ei syvyysdataa, ohitetaan.'); continue; }
+          if (!D.E.length && K.rantaIlmanSyvyytta) rivit.push(K.nimi + ': MML:ssä ei syvyyksiä tältä alueelta. Rakennetaan rantaviiva ja ruudukko (syvyys 3 m oletus); syvyydet karttakuvista.');   // v210
           var haku = await mmlHaeKaikki(jid, B, avain, function (n) { nayta(K.nimi + ': järvialueita haettu ' + n + '…'); });
           /* v132: JÄRVI VALITAAN SIEMENPISTEESTÄ, EI SYVYYSNÄYTTEISTÄ. v131:ssä Patanalle valittiin
              pieni naapurijärvi (sillä oli näytteitä, Patanalla ei) ja Toisvedeltä naapurivedet.
@@ -13490,7 +13500,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v209';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v210';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -21650,7 +21660,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=209';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=210';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })
