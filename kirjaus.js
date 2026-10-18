@@ -7,6 +7,7 @@
    v181: kumpuamisen Wedderburn-arvio parametreilla (kumpuArvioParam, kumpuHistoriaParam) etusivulle ja tilannekuvalle.
    v201: saalisriville vana (viimeiset 500 m ennen kirjausta) ja kulkusuunta (saalisVana, saalisTuoreSuunta).
    v205: karannut kala (tulos 'karkasi') ja iskupaikan korjaus (saalisSiirra, saalisPalautaPaikka; ks. ISKUPAIKKA JA TULOS).
+   v206: taimenen kokoluokka (koko 'yli50' | 'alle50'; saalisIsoTaimen, saalisAsetaKoko) taimenreittiä varten.
    VERSIO: sivut lataavat tiedoston nimellä kirjaus.js?v=NNN; NNN = sw.js:n VERSIO-numero. */
 
 // Saalisloki: kaikki kirjaukset yhdessä taulukossa (etusivu ja tilannekuva).
@@ -462,4 +463,19 @@ function saalisSailytaKorjaus(uusi, tallessa) {
   SAALIS_PAIKKAKENTAT.forEach(k => { if (k in tallessa) uusi[k] = tallessa[k]; });
   if (tallessa.paikkaKorjaus) uusi.paikkaKorjaus = tallessa.paikkaKorjaus; else delete uusi.paikkaKorjaus;
   return uusi;
+}
+
+/* TAIMENEN KOKOLUOKKA — 18.10.2026 (v206). Hannu: taimenelle kaksi kokoa, yli ja alle 50 cm; taimenreitti käyttää vain yli
+   50 cm. Kala kiinni -paneelin (tilannekuva) ja täydennyksen (etusivu) napit: rivin koko = 'yli50' | 'alle50' (kenttä
+   lisätään vain, kun valitaan). Mitattu pituus ratkaisee, jos se on täydennetty (≥ 50 cm = iso); karanneen pituus on arvio. */
+function saalisIsoTaimen(x) {
+  if (!x || x.nollareissu || x.laji !== 'taimen') return false;
+  if (typeof x.pituusCm === 'number' && x.pituusCm > 0) return x.pituusCm >= 50;
+  return x.koko === 'yli50';
+}
+function saalisAsetaKoko(id, koko) {
+  const lista = lataaSaaliit(), s = lista.find(x => x && x.id === id);
+  if (!s) return null;
+  if (koko === 'yli50' || koko === 'alle50') s.koko = koko; else if ('koko' in s) s.koko = null;
+  return tallennaSaaliit(lista) ? s : null;
 }

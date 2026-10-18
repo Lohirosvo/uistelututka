@@ -2089,7 +2089,7 @@ window.akMalliSync = function(lat, lon, aikaMs){ return akMalliLaske(lat, lon, a
 window.akValmis = function(){ return !!(akSyvyys && mask && data.length); };
 window.akSyvyysPisteessa = function(lat, lon, sadeM){
   if (!akSyvyys || !mask || !jarvi || !jarvi.kartta) return null;
-  var k = jarvi.kartta, r = Math.max(1, Math.round((sadeM || 300)/k.ruutu));
+  var k = jarvi.kartta, r = sadeM === 0 ? 0 : Math.max(1, Math.round((sadeM || 300)/k.ruutu));   // v206: 0 = vain pisteen ruutu (taimenreitti)
   var i0 = Math.floor((lon - k.lansiLon)*111320*Math.cos(lat*Math.PI/180)/k.ruutu);
   var j0 = Math.floor((k.pohjoisLat - lat)*111320/k.ruutu);
   var mn = Infinity, mx = -Infinity, n = 0;
@@ -3008,6 +3008,74 @@ window.akKloonit = function(o){
            isku: { lat: cI.lat, lon: cI.lon, sj: A }, kloonit: kloonit, ehdokkaita: ehd.length, tutkittu: tutkittu,
            rajattuSyvyys: rajattuSyvyys, harppaus: !!hqF, tuuli: { U: U, dir: dir, tunteja: tunteja } };
 };
+/* v206: TAIMENREITIN KAISTAT — 18.10.2026. Hannu: "Taimenelle voisi luoda samanlaisen [kuin järvilohireitti] mutta
+   viimeisimmän tärpin/saaliin mukaan … käytettäisiin vain yli 50 cm merkittyä. Näin tehtynä seuraisi ajankohtaa ja olisi
+   nopeasti päivän hetkessä." Valinnat: koko järvi; isku enintään 14 vrk (oletus); ilman iskua oletuspiste kartalta.
+   Kaista = ruutu, jossa iskun sormenjälki (akKlooniPiirteet: pohja, kaltevuus, penkan asento tuuleen, aalto, muoto,
+   etäisyys rannasta) toistuu TÄMÄN TUNNIN tuulella vähintään kynnyksen verran (akKlooniVertaa, sama vertailu kuin
+   kloonit). Iskun sormenjälki on iskuhetken tuulelta (o.A = isku.sj); oletuspisteen sormenjälki lasketaan saman tunnin
+   tuulella (o.piste). Harppausta ei verrata (kenttä on vain iskuhetken ±3 h). Harvennus 400 m (kuten kloonit), enintään
+   o.max kaistaa, kaista ±150 m syvyyskäyrän suuntaan. Malli, ei mitattu; ajankohta tulee vain tunnin tuulesta. */
+function akSjKonteksti(avain, U, dir, tunteja){
+  var k = jarvi.kartta, R = k.ruutu;
+  var c = { kentta: akKentta(Math.round(dir/5)*5), Fkesto: kestonPyyhkaisy(tunteja*3600, U), U: U, katto: syvyysKatto(jarvi.syvyys, U),
+            ranta: akRantaMatka(avain), kulku: (dir + 180) % 360, rr: Math.max(2, Math.round(150/R)), omaSolut: null };
+  try { var ol = (typeof omaLuotausSolut === 'function') ? omaLuotausSolut(k) : null; c.omaSolut = ol && ol.soluja ? ol.solut : null; } catch(e){}
+  return c;
+}
+function akSjPisteessa(P, c, lat, lon, pohjaMitattu){
+  var q = akRuutuPisteelle(P.k, lat, lon); if (q < 0 || !P.m[q]) return null;
+  var A = akKlooniPiirteet(P, q, c);
+  A.pohjaLahde = A.oma ? 'oma luotaus' : 'MML-luokka';
+  if (typeof pohjaMitattu === 'number' && pohjaMitattu > 0){ A.pohjaRuutu = A.pohja; A.pohja = pohjaMitattu; A.pohjaLahde = 'oma luotaus 60 m'; if (typeof A.rengas === 'number') A.muoto = A.pohja - A.rengas; }
+  return A;
+}
+window.akSormenjalki = function(o){   // { avain, lat, lon, U, dir, tunteja, pohjaMitattu } -> { tila, sj }
+  if (!o || !JARVET[o.avain]) return { tila: 'eiJarvea' };
+  if (jarvi !== JARVET[o.avain] || !mask || !akSyvyys) return { tila: 'eriJarvi' };
+  var P = akKuhaPohjaLaske(o.avain); if (!P) return { tila: 'eiSyvyytta' };
+  var U = Math.max(0.5, +o.U || 0), dir = ((+o.dir % 360) + 360) % 360, tunteja = Math.max(1, +o.tunteja || 6);
+  var A = akSjPisteessa(P, akSjKonteksti(o.avain, U, dir, tunteja), o.lat, o.lon, o.pohjaMitattu);
+  return A ? { tila: 'ok', sj: A } : { tila: 'eiRuutua' };
+};
+window.akTaimenKaistat = function(o){
+  // o: { avain, A (sormenjälki) | piste { lat, lon, pohjaMitattu }, U, dir, tunteja, kynnys (%), max, pyyntiSyvyys }
+  if (!o || !JARVET[o.avain]) return { tila: 'eiJarvea', kaistat: [] };
+  if (jarvi !== JARVET[o.avain] || !mask || !akSyvyys) return { tila: 'eriJarvi', kaistat: [] };
+  var P = akKuhaPohjaLaske(o.avain); if (!P) return { tila: 'eiSyvyytta', kaistat: [] };
+  var k = P.k, W = k.W, H = k.H, R = k.ruutu;
+  var U = Math.max(0.5, +o.U || 0), dir = ((+o.dir % 360) + 360) % 360, tunteja = Math.max(1, +o.tunteja || 6);
+  var c = akSjKonteksti(o.avain, U, dir, tunteja), A0 = o.A || null;
+  if (!A0 && o.piste) A0 = akSjPisteessa(P, c, o.piste.lat, o.piste.lon, o.piste.pohjaMitattu);
+  if (!A0 || typeof A0.pohja !== 'number') return { tila: 'eiSormenjalkea', kaistat: [] };
+  var A = {}; for (var x0 in A0) A[x0] = A0[x0]; A.hq = null;
+  var kynnys = +o.kynnys || 70, max = Math.max(1, Math.min(40, +o.max || 20)), vali2 = (400/R)*(400/R);
+  var ps = (typeof o.pyyntiSyvyys === 'number' && o.pyyntiSyvyys > 0) ? o.pyyntiSyvyys : null;
+  var ehd = [], tutkittu = 0;
+  for (var q = 0; q < W*H; q++){
+    if (!P.m[q] || (P.kat && !P.kat[q])) continue;
+    tutkittu++;
+    if (ps !== null && P.s[q] < ps + 0.3) continue;
+    var B = akKlooniPiirteet(P, q, c), v = akKlooniVertaa(A, B);
+    if (v.pisteet < kynnys) continue;
+    ehd.push({ q: q, i: q % W, j: (q/W)|0, pisteet: v.pisteet, osat: v.osat, sj: B });
+  }
+  ehd.sort(function(a, b){ return b.pisteet - a.pisteet || a.q - b.q; });
+  var valitut = [];
+  for (var n = 0; n < ehd.length && valitut.length < max; n++){
+    var x = ehd[n], ok = true;
+    for (var m = 0; m < valitut.length && ok; m++){ var a1 = x.i - valitut[m].i, b1 = x.j - valitut[m].j; if (a1*a1 + b1*b1 < vali2) ok = false; }
+    if (ok) valitut.push(x);
+  }
+  var kaistat = valitut.map(function(x, n){
+    var p = akKlooniKohta(k, x.q), cosl = Math.cos(p.lat*Math.PI/180);
+    var kayra = (x.sj.syvaSuunta + 90) % 180, kr = kayra*Math.PI/180, puoli = 150;   // syvyyskäyrän suunta 0–180°
+    var dLa = Math.cos(kr)*puoli/111320, dLo = Math.sin(kr)*puoli/(111320*cosl), v1 = Math.round(kayra), v2 = (v1 + 180) % 360;
+    return { tunnus: 'TK' + (n + 1), lat: p.lat, lon: p.lon, pisteet: x.pisteet, osat: x.osat, syv: x.sj.pohja, g: x.sj.g, aalto: x.sj.aalto,
+             veto: [v1, v2], a: { lat: p.lat + dLa, lon: p.lon + dLo }, b: { lat: p.lat - dLa, lon: p.lon - dLo } };
+  });
+  return { tila: 'ok', avain: o.avain, kaistat: kaistat, ehdokkaita: ehd.length, tutkittu: tutkittu, A: A, kynnys: kynnys, tuuli: { U: U, dir: dir, tunteja: tunteja } };
+};
 /* Iskuhetken tuuli kortin ennusteesta (FMI, havaintokorjattu), jos lähin tunti on ≤ 3 h päässä
    ja kortilla on sama järvi. Muuten null: pääkoodi käyttää kirjauksen tuulta. */
 window.akTuuliHetkella = function(aikaMs, avain){
@@ -3153,7 +3221,7 @@ window.akJarviPisteessa = function(lat, lon){
   return null;
 };
 window.akTunnit = function(){
-  return data.map(function(d, i){ return { i: i, aika: d.aika, U: d.U, dir: d.dir, puuska: d.puuska }; });
+  return data.map(function(d, i){ return { i: i, aika: d.aika, U: d.U, dir: d.dir, puuska: d.puuska, tunteja: d.tunteja }; });   // v206: tunteja (taimenreitti)
 };
 window.akRenderoi = function(o){
   o = o || {};
