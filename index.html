@@ -2412,14 +2412,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=210" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=210" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=210" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=210" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=210" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=210" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=210" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=210" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=211" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=211" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=211" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=211" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=211" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=211" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=211" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=211" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
        uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
@@ -4286,7 +4286,7 @@ window.addEventListener('load', function(){
          ehkä ole syvyyksiä (Toisvedellä ja Saimaalla ei ollut). rantaIlmanSyvyytta: rantaviiva ja ruudukko rakennetaan
          silloinkin (ruutujen syvyys 3 m oletus), ja syvyydet luetaan myöhemmin Hannun karttakuvista kuten Saimaalla.
          50 m ruudut kuten Lappajärvellä (Hannu 18.10.: tarkkuus). */
-      { avain: 'ylakeitele', nimi: 'Ylä-Keitele', laatikko: 'Ylä-Keitele', siemen: [63.105561, 25.701567], ruutu: 50, lataaSyvyydet: true, rajaa: true,
+      { ohita: true, avain: 'ylakeitele', nimi: 'Ylä-Keitele', laatikko: 'Ylä-Keitele', siemen: [63.105561, 25.701567], ruutu: 50, lataaSyvyydet: true, rajaa: true,   // v211: upotettu
         rantaIlmanSyvyytta: true, virallinen: null }
     ];
     var jkTulos = null;
@@ -6071,7 +6071,7 @@ window.addEventListener('load', function(){
        Pintaa ei ekstrapoloida yli 2,5 m (sama raja kuin ltProfiili). */
     const LP_NIMET = { lappajarvi: 'Lappajärvi', hirvijarvi: 'Hirvijärvi', ahtarinjarvi: 'Ähtärinjärvi', kivijarvi: 'Kivijärvi',
       alajarvi: 'Alajärvi', evijarvi: 'Evijärvi', patana: 'Patana', toisvesi: 'Toisvesi', kyrkosjarvi: 'Kyrkösjärvi',
-      kalajarvi: 'Kalajärvi', saimaa_imatra: 'Saimaa (Imatra)' };
+      kalajarvi: 'Kalajärvi', saimaa_imatra: 'Saimaa (Imatra)', ylakeitele: 'Ylä-Keitele' };
     const LP_VARIT = ['#4ea8ff', '#ffb020', '#3ddc84', '#ff5c7a', '#b388ff', '#22d3ee', '#c6e05a', '#ff8a3d', '#f472b6', '#2dd4bf', '#facc15', '#a3a3ff'];
     const LP_VIIVAT = ['', '7 4', '2 3', '9 3 2 3'];
     let lpTila = { avain: null, vuosi: null, valittu: null };
@@ -11731,7 +11731,7 @@ function sumuriskiAlusta(){
        kaikilla kuha on lajineuvon kohdelaji. Saimaalla ehdokkaat vain alueelta, jonka syvyys on luettu
        karttakuvista (kattavuusmaski, ks. akKuhaPohjaLaske). */
     const KUHA_EHDOKASJARVET = ['lappajarvi', 'hirvijarvi', 'alajarvi', 'evijarvi', 'toisvesi', 'patana', 'kyrkosjarvi', 'kalajarvi',
-                                'ahtarinjarvi', 'kivijarvi', 'saimaa_imatra'];
+                                'ahtarinjarvi', 'kivijarvi', 'saimaa_imatra', 'ylakeitele'];   // v211: Ylä-Keitele
     let viimeisinKuhaEhdokkaat = [];   // saaliskirjaukselle, myös järvillä ilman nimettyjä kuhapaikkoja
     const KUHA_INESS = ['pohjoisessa','koillisessa','idässä','kaakossa','etelässä','lounaassa','lännessä','luoteessa'];
     const KUHA_ILLAT = ['pohjoiseen','koilliseen','itään','kaakkoon','etelään','lounaaseen','länteen','luoteeseen'];
@@ -11804,7 +11804,7 @@ function sumuriskiAlusta(){
       if (e.tila === 'eiSyvyytta') return otsikko + '<p class="hint" style="margin:4px 0 0;">Kuhan mallisyvyyttä ei ole, joten ehdokkaita ei lasketa.</p>';
       const intro = '<p style="font-size:13px;line-height:1.45;margin:4px 0 0;">' + chip('Konsensus')
         + 'Ehdokas on kohta, jossa pohja laskee jyrkästi kuhan tämän hetken mallisyvyyden läpi. Reunan ajaminen on uistelijoiden yleinen tapa, mutta tutkimusnäyttöä reunan merkityksestä kuhalle en löytänyt. '
-        + 'Omia saaliita näistä kohdista ei ole. Syvyydet ovat ' + (e.avain === 'hirvijarvi' ? 'omista luotainlokeistasi' : (e.avain === 'toisvesi' || e.avain === 'saimaa_imatra') ? 'karttakuvista' : 'MML:n käyristä')
+        + 'Omia saaliita näistä kohdista ei ole. Syvyydet ovat ' + (e.avain === 'hirvijarvi' ? 'omista luotainlokeistasi' : (e.avain === 'toisvesi' || e.avain === 'saimaa_imatra' || e.avain === 'ylakeitele') ? 'karttakuvista' : 'MML:n käyristä')
         + ' pehmennettyjä: kivet ja jyrkät matalikot voivat puuttua, joten tarkista kaikulla.</p>';
       if (!e.lista.length)
         return otsikko + intro + '<p class="hint" style="margin:6px 0 0;">Kuhan ' + n1(d) + ' metrin syvyys ei nyt kulje yhdessäkään reunassa, joka on vähintään 100 m rannasta'
@@ -11972,7 +11972,7 @@ function sumuriskiAlusta(){
            (Jarić ym. 2023)]
        Ehdokas tarvitsee fysiikasta ≥ 6 p. Valinta: 20 parasta (v158; v156 3), ≥ 1 km toisistaan ja ≥ 700 m nimetyistä
        paikoista, aalto veneen rajan yli → pois (kuten kuha). Saaliit eivät vaikuta pisteisiin. */
-    const TAIMEN_HOTSPOTJARVET = ['lappajarvi', 'kivijarvi', 'toisvesi'];
+    const TAIMEN_HOTSPOTJARVET = ['lappajarvi', 'kivijarvi', 'toisvesi', 'ylakeitele'];   // v211: Ylä-Keitele
     /* v158 (Hannu 5.10.2026): kolme on vähän, koska Lappajärvi on valtava ja päivän uistelualue on osa siitä.
        20 ehdokasta kaikilla kolmella järvellä, järjestys pisteiden mukaan; paneelissa 3 parasta, kaikki kartalla. */
     const TAIMEN_EHDOKKAITA = 20;
@@ -13500,7 +13500,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v210';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v211';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -19204,6 +19204,12 @@ function sumuriskiAlusta(){
          Uistelutoimikunta ei ole kertonut sääntöjä). */
       { name: 'Saimaa (Imatra)', lat: 61.2033597, lon: 28.6897126, maxDepth: 23.0, areaKm2: 235.5, clarityClass: 4, sykeTerm: 'Saimaa',
         kohdelajit: ['hauki', 'kuha', 'ahven'], syvyysOsittain: true },   // v143: syvyydet karttakuvista kilpailualueelle
+      /* v211 (18.10.2026): Ylä-Keitele, Pihkurinselkä (Hannu 18.10.). Rantaviiva MML (rajattu 63,035–63,205 N, 25,51–25,89 E),
+         syvyys Hannun 26 karttakuvasta (ks. JARVET.ylakeitele): luettu 84,1 km² / 96,6 km². maxDepth = kartan syvin luku 64 m
+         (Pihkurinsaaren ja Isonsalonpään välinen syvänne), pinta-ala = rajattu vesialue, ei koko Keitele. Kirkkausluokka 3 on
+         ARVIO (näkösyvyyttä ei tarkistettu). Kohdelajit oletus taimen, järvilohi, kuha (Hannu ei vielä kertonut). */
+      { name: 'Ylä-Keitele', lat: 63.105561, lon: 25.701567, maxDepth: 64, areaKm2: 96.6, clarityClass: 3, sykeTerm: 'Keitele',
+        kohdelajit: ['taimen', 'jarvilohi', 'kuha'], syvyysOsittain: true },
       { name: 'Patanan tekojärvi', lat: 63.2776, lon: 24.00618, maxDepth: 10.7, areaKm2: 9.8, clarityClass: 2, sykeTerm: 'Patana',
         kohdelajit: ['kuha', 'hauki', 'ahven'] },
       { name: 'Kivijärvi (Kivijärven kunta)', lat: 63.12188, lon: 25.16425, maxDepth: 40, areaKm2: 133.8, clarityClass: 2, sykeTerm: 'Kivijärvi',
@@ -21660,7 +21666,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=210';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=211';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })

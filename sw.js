@@ -15,6 +15,7 @@
 // v208: taimenlinja rantaa myöten, tyynen sääntö, iskun oma alue, banneri iskusta järven ulkopuolella (aaltomalli.js, kloonit.js, tilanne.html, index.html); ei uusia tiedostoja.
 // v209: saaliskirjanpitoon ✏️ Muokkaa kaikille kirjauksille (index.html; tilanne.html vain versio); ei uusia tiedostoja.
 // v210: järvikarttojen rakennukseen Ylä-Keitele (Pihkurinselkä), rantaviiva myös ilman MML-syvyyksiä (index.html; tilanne.html vain versio); ei uusia tiedostoja.
+// v211: Ylä-Keitele järveksi: ruudukko ja syvyys karttakuvista (jarvet.js, paikat.js, syvyys.js, aaltomalli.js, index.html, tilanne.html); ei uusia tiedostoja.
 // v198: kiven vähimmäiskorkeus 5 cm, tuontiviesti kertoo puuttuvasta syvyydestä; ei uusia tiedostoja.
 // v197: kivet ja kivikko sivukeilasta (index.html, luotaus.js), tilannekuvan kerros 🪨 Kivikko; ei uusia tiedostoja.
 // v196: kalakoosteen väriselite; ei uusia tiedostoja.
@@ -45,7 +46,7 @@
 // VERSIO: kasvata tätä aina kun julkaiset uuden version. Vanha välimuisti siivotaan.
 // Versionumeron kasvatus on se mekanismi joka SIIVOAA vanhan välimuistin,
 // index2.html mukaan lukien. Ilman tätä poisto ei näkyisi puhelimissa.
-const VERSIO = 'uistelututka-v210';
+const VERSIO = 'uistelututka-v211';
 /* v178: sivun omat tiedostot ladataan nimellä tiedosto?v=NNN, jossa NNN on tämän VERSIOn numero.
    index.html:n <script src> -riveissä ja ottiäänen haussa on SAMA numero: kun julkaiset, vaihda
    molemmat. Uusi numero on uusi osoite, joten puhelin ei voi yhdistää uutta sivua vanhaan malliin

@@ -242,6 +242,7 @@ function karttaAvainNimesta(n) {
   if (n.startsWith('Kyrkösjärv')) return 'kyrkosjarvi';   // v139
   if (n.startsWith('Kalajärv')) return 'kalajarvi';
   if (n.startsWith('Saimaa')) return 'saimaa_imatra';   // v142
+  if (n.startsWith('Ylä-Keitele') || n.startsWith('Keitele')) return 'ylakeitele';   // v211
   return null;
 }
 

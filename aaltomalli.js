@@ -1810,7 +1810,7 @@ function akNaytaPisteSisalto(){
 function akSyvyysLahde(){   // v145: syvyyslähde järven mukaan (ennen DataDeck kaikille)
   if (jarvi === JARVET.hirvijarvi) return 'oma luotauskartta (omat lokit)';
   if (jarvi === JARVET.lappajarvi) return jarvi.kartta.ruutu === 50 ? '© MML, 50 m ruudut' : 'DataDeck-kartta · © MML · © Väylävirasto · © SYKE';
-  if (jarvi === JARVET.toisvesi || jarvi === JARVET.saimaa_imatra) return 'karttakuvat, rantaviiva © MML';
+  if (jarvi === JARVET.toisvesi || jarvi === JARVET.saimaa_imatra || jarvi === JARVET.ylakeitele) return 'karttakuvat, rantaviiva © MML';   // v211: Ylä-Keitele
   return '© Maanmittauslaitos, maastotietokanta';
 }
 function naytaTiedot(d){

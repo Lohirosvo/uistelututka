@@ -179,7 +179,7 @@ function syvyysJarvella(lat, lon, sadeM, ehto) {
   if (avain && typeof window.akSyvyysJarvessa === 'function') a = window.akSyvyysJarvessa(avain, lat, lon, sadeM);
   else if (typeof window.akSyvyysPisteessa === 'function') a = window.akSyvyysPisteessa(lat, lon, sadeM);
   // v128: varalähteen nimi järven mukaan (Ähtäri ja Kivijärvi: MML:stä rakennettu ruudukko)
-  if (a) a.lahde = avain === 'hirvijarvi' ? 'oma kartta' : ['ahtarinjarvi', 'kivijarvi', 'alajarvi', 'evijarvi', 'patana', 'kyrkosjarvi', 'kalajarvi'].indexOf(avain) >= 0 ? 'MML-ruudukko' : (avain === 'toisvesi' || avain === 'saimaa_imatra') ? 'karttakuva' : avain === 'lappajarvi' ? 'MML-ruudukko' : 'DataDeck';
+  if (a) a.lahde = avain === 'hirvijarvi' ? 'oma kartta' : ['ahtarinjarvi', 'kivijarvi', 'alajarvi', 'evijarvi', 'patana', 'kyrkosjarvi', 'kalajarvi'].indexOf(avain) >= 0 ? 'MML-ruudukko' : (avain === 'toisvesi' || avain === 'saimaa_imatra' || avain === 'ylakeitele') ? 'karttakuva' : avain === 'lappajarvi' ? 'MML-ruudukko' : 'DataDeck';
   return omaLuotausYhdista(a, oma);   // v172
 }
 
