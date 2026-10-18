@@ -187,10 +187,12 @@ function omaLuotausKalaLaji0(k, avain){
 /* Syvyys × kellonaika kaikista tämän järven tallenteista (iästä riippumatta): tunneittain tallennetut minuutit ja kalat
    syvyysluokittain pinnasta. Hannu 11.10.: "Niiden esiintymissyvyyden eri kellonaikoina". */
 var OL_SYVLUOKAT = [[0, 3, '≤ 3 m'], [3, 6, '3–6 m'], [6, 9, '6–9 m'], [9, 12, '9–12 m'], [12, 999, 'yli 12 m']];
-function omaLuotausKalaKooste(avain){
+// v207: avain null ja vainTunnistamattomat = vain tallenteet, joiden järveä ei tunnistettu (ennen: null = kaikki tallenteet,
+// jolloin "ei tunnistettu järvi" -taulukko laski yhteen kaikki; Hannun varmuuskopiossa 17.10. 23 tallennetta / 2000 kalaa, oikein 2 / 17)
+function omaLuotausKalaKooste(avain, vainTunnistamattomat){
   var tunnit = {}, tallenteita = 0, kaloja = 0;
   omaLuotausLue().tuonnit.forEach(function(t){
-    if (!Array.isArray(t.kalat) || !t.alku || (avain && t.jarvi !== avain)) return;
+    if (!Array.isArray(t.kalat) || !t.alku || (avain && t.jarvi !== avain) || (vainTunnistamattomat && t.jarvi)) return;
     tallenteita++;
     var a = omaLuotausAnturi(t), h = function(ms){ var x = tunnit[new Date(ms).getHours()]; if (!x) x = tunnit[new Date(ms).getHours()] = { s: 0, n: OL_SYVLUOKAT.map(function(){ return 0; }), iso: OL_SYVLUOKAT.map(function(){ return 0; }) }; return x; };
     if (Array.isArray(t.aikaS)) for (var i = 1; i < t.aikaS.length; i++){ var dt = t.aikaS[i] - t.aikaS[i - 1]; if (dt > 0 && dt <= 120) h(t.alku + t.aikaS[i - 1]*1000).s += dt; }

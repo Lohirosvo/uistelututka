@@ -1257,6 +1257,9 @@ body{padding-bottom:66px}
           <!-- v206: taimenen kokoluokka; taimenreitti käyttää vain yli 50 cm (mitattu pituus ratkaisee, jos täydennetty) -->
           <p class="hint" style="margin:0 0 6px;">Koko (taimen)</p>
           <div class="options" id="opts-kalaKoko" style="margin-bottom:12px;"></div>
+          <!-- v207: viehesyvyys käytäntöviivaa varten; lajin oletus (taimen 0–1 m) merkitään oletukseksi; mitattu pyyntisyvyys ratkaisee -->
+          <p class="hint" style="margin:0 0 6px;">Viehesyvyys <span id="kalaVieheSyvHuom" style="color:var(--muted);"></span></p>
+          <div class="options" id="opts-kalaVieheSyv" style="margin-bottom:12px;"></div>
 
           <div class="numfield">
             <div>
@@ -1969,12 +1972,20 @@ body{padding-bottom:66px}
           <div class="leg-item">
             <div class="leg-box" style="background:var(--navy)"></div> Järvilohi
           </div>
+          <!-- v207: käytäntö teorian rinnalle (Hannu 18.10.) -->
+          <div class="leg-item">
+            <div class="leg-box" style="background:rgba(255,105,180,0.22); border:1px dashed var(--pink)"></div> Taimen käytäntö
+          </div>
+          <div class="leg-item">
+            <div class="leg-box" style="width:10px; height:10px; border-radius:50%; background:var(--pink)"></div> Omat taimenet
+          </div>
         </div>
         <div id="forecastGraph"></div>
         <p class="hint" style="margin:6px 0 0; text-align:center;">
           Haalea viiva = lajille on kyseisellä syvyydellä varmasti liian pimeää.
           Vihje perustuu laskettuun valoon, ei mittaukseen — se ei muuta syvyyslukemaa
           eikä taimenkeliä.
+          <br><span id="kaytantoSelite"></span>
         </p>
       </div>
 
@@ -2009,6 +2020,11 @@ body{padding-bottom:66px}
             <div class="fig">
               <div class="label">Iskusyvyys (tavoite)</div>
               <div class="value taimen" id="depthOutTaimen">—</div>
+            </div>
+            <div class="fig">   <!-- v207: käytäntö teorian rinnalle -->
+              <div class="label">Käytäntö (matalikko)</div>
+              <div class="value taimen" id="kaytantoTaimen" style="opacity:.8;">0,1–0,7 m</div>
+              <div id="kaytantoTaimenHuom" style="font-size:12px; color:var(--muted); line-height:1.35; margin-top:2px;"></div>
             </div>
           </div>
         </div>
@@ -2396,14 +2412,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=206" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=206" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=206" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=206" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=206" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=206" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=206" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=206" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=207" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=207" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=207" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=207" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=207" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=207" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=207" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=207" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
        uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
@@ -4130,6 +4146,7 @@ function olPiirraLista(){
     t.syv.forEach(function(v){ v = v/100 + a; if (v < mn) mn = v; if (v > mx) mx = v; });
     var tt = new Date(t.tuotu || 0), m = olMatka(t);
     return '<div style="margin:6px 0;padding-top:6px;border-top:1px solid var(--line);"><strong>' + String(t.nimi || t.id).replace(/</g, '&lt;') + '</strong> · ' + olJarviNimi(t.jarvi, t.jarviNimi)
+      + (!t.jarvi && t.lat.length ? ' (alku ' + (t.lat[0]/1e6).toFixed(5).replace('.', ',') + ' N ' + (t.lon[0]/1e6).toFixed(5).replace('.', ',') + ' E)' : '')   // v207: tunnistamattoman paikka
       + (t.alku ? ' · ' + olAika(t.alku) : '')
       + '<br>' + t.lat.length + ' pistettä, ' + (m >= 1000 ? olN1(m/1000) + ' km' : Math.round(m) + ' m') + (t.kestoS ? ', ' + Math.round(t.kestoS/60) + ' min' : '')
       + ' · syvyys ' + olN1(mn) + '–' + olN1(mx) + ' m (anturi +' + a.toLocaleString('fi-FI', { maximumFractionDigits: 2 }) + ' m)'
@@ -4158,9 +4175,9 @@ function olPiirraLista(){
 function olAikaVaarin(t){ return (t.tuontiVersio || 0) < OL_TUONTI_VERSIO && Array.isArray(t.aikaS) && t.aikaS.some(function(s){ return s < -86400; }); }
 function olKalaKoosteHtml(d){
   if (typeof omaLuotausKalaKooste !== 'function') return '';
-  var jarvet = [], nimet = {}; d.tuonnit.forEach(function(t){ if (Array.isArray(t.kalat) && t.alku && jarvet.indexOf(t.jarvi) < 0){ jarvet.push(t.jarvi); nimet[t.jarvi] = t.jarviNimi; } });
+  var jarvet = [], nimet = {}; d.tuonnit.forEach(function(t){ var j = t.jarvi || null; if (Array.isArray(t.kalat) && t.alku && jarvet.indexOf(j) < 0){ jarvet.push(j); nimet[j] = t.jarviNimi; } });   // v207: null ja undefined samaan ryhmään
   return jarvet.map(function(av){
-    var K = omaLuotausKalaKooste(av), tunnit = Object.keys(K.tunnit).map(Number).sort(function(a, b){ return a - b; });
+    var K = omaLuotausKalaKooste(av, !av), tunnit = Object.keys(K.tunnit).map(Number).sort(function(a, b){ return a - b; });   // v207: tunnistamattomat erikseen
     if (!tunnit.length) return '';
     var th = 'padding:2px 5px;text-align:right;border-bottom:1px solid var(--line);font-weight:600;', td = 'padding:2px 5px;text-align:right;';
     var pad = function(x){ return String(x).padStart(2, '0'); };
@@ -4171,6 +4188,7 @@ function olKalaKoosteHtml(d){
     }).join('');
     var vaarin = d.tuonnit.filter(function(t){ return t.jarvi === av && Array.isArray(t.kalat) && olAikaVaarin(t); }).length;   // v195
     return '<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--line);"><strong>🎣 Kalat kaikukuvasta · ' + olJarviNimi(av, nimet[av]) + '</strong>'
+      + (!av ? ' <span class="hint">(' + d.tuonnit.filter(function(t){ return !t.jarvi && Array.isArray(t.kalat) && t.alku; }).map(function(t){ return String(t.nimi || t.id).replace(/</g, '&lt;'); }).join(', ') + ')</span>' : '')   // v207
       + ' <span class="hint">(' + K.tallenteita + (K.tallenteita === 1 ? ' tallenne, ' : ' tallennetta, ') + K.kaloja + ' kalaa; solussa isot / kaikki)</span>'
       + '<div style="overflow-x:auto;"><table style="border-collapse:collapse;font-size:12px;margin-top:4px;width:100%;"><tr><th style="' + th + 'text-align:left;">klo</th><th style="' + th + '">luodattu</th>'
       + OL_SYVLUOKAT.map(function(s){ return '<th style="' + th + '">' + s[2] + '</th>'; }).join('') + '</tr>' + rivit + '</table></div>'
@@ -8311,6 +8329,7 @@ function sumuriskiAlusta(){
     let kalaLaji = 'taimen';
     let kalaTulos = null;   // v205: null = saatu, 'karkasi'
     let kalaKoko = null;    // v206: null | 'yli50' | 'alle50' (taimen)
+    let kalaVieheSyv = { k: null, lahde: null };   // v207: { k: luokka | null, lahde: 'oletus' | 'valittu' | null }
 
 
 
@@ -8711,6 +8730,7 @@ function sumuriskiAlusta(){
          (Peru tai seuraava kala ennen täydennystä hävitti edellisen). Nyt Kala kiinni tallentaa heti:
          paikka, aika, olot ja laji (nykyinen valinta). Täydennys päivittää saman tietueen id:n mukaan. */
       snap.laji = kalaLaji || null;
+      saalisVieheSyvOletukseen(snap);   // v207: lajin viehesyvyyden oletus (taimen 0–1 m), merkitty oletukseksi
       snap.taydennetty = false;
       { const lista0 = lataaSaaliit(); lista0.push(snap); tallennaSaaliit(lista0); paivitaSaalisLista(); }
       keskenerainenSaalis = snap;
@@ -8726,6 +8746,7 @@ function sumuriskiAlusta(){
       renderKalaLajit();
       kalaTulos = null; renderKalaTulos();   // v205
       kalaKoko = null; renderKalaKoko();     // v206
+      kalaVieheSyv = { k: vieheSyvLuokka(snap), lahde: snap.vieheSyvLahde || null }; renderKalaVieheSyv();   // v207
       // Esitäyttö viehevalinnasta: jos suositus on juuri katsottu, se on
       // todennäköisin viehe vedessä. Käyttäjä voi vaihtaa yhdellä napautuksella.
       if (saalisViehe === null && typeof vvViimeisinViehe === 'string') {
@@ -8748,6 +8769,19 @@ function sumuriskiAlusta(){
         chip.className = 'chip' + (v === kalaTulos ? ' selected' : '');
         chip.textContent = l;
         chip.onclick = () => { kalaTulos = v; el.querySelectorAll('.chip').forEach(c => c.classList.remove('selected')); chip.classList.add('selected'); };
+        el.appendChild(chip);
+      });
+    }
+    function renderKalaVieheSyv() {   // v207: oletus näkyy merkittynä; napautus valitsee, valitun uusi napautus poistaa
+      const el = document.getElementById('opts-kalaVieheSyv'), h = document.getElementById('kalaVieheSyvHuom');
+      if (!el) return;
+      el.innerHTML = '';
+      if (h) h.textContent = kalaVieheSyv.k && kalaVieheSyv.lahde === 'oletus' ? '(lajin oletus, vaihda tarvittaessa)' : '';
+      VIEHESYV_LUOKAT.forEach(c => {
+        const chip = document.createElement('div');
+        chip.className = 'chip' + (c.k === kalaVieheSyv.k ? ' selected' : '');
+        chip.textContent = c.l;
+        chip.onclick = () => { kalaVieheSyv = (kalaVieheSyv.k === c.k && kalaVieheSyv.lahde === 'valittu') ? { k: null, lahde: 'valittu' } : { k: c.k, lahde: 'valittu' }; renderKalaVieheSyv(); };
         el.appendChild(chip);
       });
     }
@@ -8831,6 +8865,8 @@ function sumuriskiAlusta(){
       // v205: tulos (karkasi) vain, kun valittu tai jo kirjattu, jotta tavalliset rivit pysyvät ennallaan
       if (kalaTulos === 'karkasi') keskenerainenSaalis.tulos = 'karkasi'; else if ('tulos' in keskenerainenSaalis) keskenerainenSaalis.tulos = null;
       if (kalaKoko) keskenerainenSaalis.koko = kalaKoko; else if ('koko' in keskenerainenSaalis) keskenerainenSaalis.koko = null;   // v206
+      if (kalaVieheSyv.lahde === 'valittu') saalisVieheSyvAseta(keskenerainenSaalis, kalaVieheSyv.k, 'valittu');   // v207
+      else saalisVieheSyvOletukseen(keskenerainenSaalis);   // laji on voinut vaihtua: oletus lajin mukaan
       const lista = lataaSaaliit();
       const ix = lista.findIndex(function (x) { return x && x.id === keskenerainenSaalis.id; });
       if (ix >= 0) saalisSailytaKorjaus(keskenerainenSaalis, lista[ix]);   // v205: tilannekuvassa korjattu iskupaikka säilyy
@@ -8887,7 +8923,8 @@ function sumuriskiAlusta(){
       document.getElementById('kalaTaydennaBox').style.display = 'block';
       kalaTulos = t.tulos === 'karkasi' ? 'karkasi' : null;   // v205
       kalaKoko = t.koko === 'yli50' || t.koko === 'alle50' ? t.koko : null;   // v206
-      renderKalaLajit(); renderKalaTulos(); renderKalaKoko(); renderSaalisVieheet();
+      kalaVieheSyv = { k: vieheSyvLuokka(t), lahde: t.vieheSyvLahde || null };   // v207
+      renderKalaLajit(); renderKalaTulos(); renderKalaKoko(); renderKalaVieheSyv(); renderSaalisVieheet();
       document.getElementById('kalaTaydennaBox').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
     function varmuuskopioMuistutus() {
@@ -9300,7 +9337,7 @@ function sumuriskiAlusta(){
           osuma = ` <span style="color:${Math.abs(ero) <= 1.5 ? 'var(--cyan)' : 'var(--amber)'};">(malli ${ennuste.toFixed(1)} m, ero ${ero >= 0 ? '+' : ''}${ero.toFixed(1)})</span>`;
         }
         return `<div style="padding:6px 0;border-bottom:1px solid rgba(30,51,80,0.5);font-size:13px;">
-          <strong style="color:var(--text);">${pvm} · ${s.laji || '?'}${s.koko === 'yli50' ? ' yli 50' : s.koko === 'alle50' ? ' alle 50' : ''}${saalisKarkasi(s) ? ' · karkasi' : ''}</strong>${typeof s.lat === 'number' ? ` <a class="chip" href="tilanne.html#korjaa=${s.id}" title="Korjaa iskupaikka kartalla" style="padding:1px 8px;font-size:11px;border-color:#f5b700;color:#f5b700;text-decoration:none;">📍${s.paikkaKorjaus ? ' ' + (s.paikkaKorjaus.siirtoM != null ? s.paikkaKorjaus.siirtoM + ' m' : 'korjattu') : ''}</a>` : ''}${s.taydennetty === false ? ` <button class="chip" onclick="saalisTaydenna(${s.id})" style="padding:1px 8px;font-size:11px;border-color:var(--amber);color:var(--amber);">✏️ Täydennä</button>` : ''}${klD ? klooniNappi(s, klD) : ''}${s.pituusCm ? ' ' + s.pituusCm + ' cm' : ''}${typeof s.syvyysM === 'number' ? ' · ' + s.syvyysM.toFixed(1) + ' m' : ''}${osuma}
+          <strong style="color:var(--text);">${pvm} · ${s.laji || '?'}${s.koko === 'yli50' ? ' yli 50' : s.koko === 'alle50' ? ' alle 50' : ''}${saalisKarkasi(s) ? ' · karkasi' : ''}</strong>${typeof s.lat === 'number' ? ` <a class="chip" href="tilanne.html#korjaa=${s.id}" title="Korjaa iskupaikka kartalla" style="padding:1px 8px;font-size:11px;border-color:#f5b700;color:#f5b700;text-decoration:none;">📍${s.paikkaKorjaus ? ' ' + (s.paikkaKorjaus.siirtoM != null ? s.paikkaKorjaus.siirtoM + ' m' : 'korjattu') : ''}</a>` : ''}${s.taydennetty === false ? ` <button class="chip" onclick="saalisTaydenna(${s.id})" style="padding:1px 8px;font-size:11px;border-color:var(--amber);color:var(--amber);">✏️ Täydennä</button>` : ''}${klD ? klooniNappi(s, klD) : ''}${s.pituusCm ? ' ' + s.pituusCm + ' cm' : ''}${typeof s.syvyysM === 'number' ? ' · ' + s.syvyysM.toFixed(1) + ' m' : ''}${vieheSyvLuokka(s) ? ' · viehe ' + VIEHESYV_LUOKAT.find(c => c.k === vieheSyvLuokka(s)).l + (s.vieheSyvLahde === 'oletus' ? ' (oletus)' : '') : ''}${osuma}
           ${s.viehe ? `<br><span style="color:var(--amber);">${s.viehe}${s.vari ? ' · ' + s.vari : ''}${s.esitystapa ? ' · ' + s.esitystapa : ''}</span>` : ''}
           <br><span style="color:var(--muted);">${typeof s.vesiC === 'number' ? 'vesi ' + s.vesiC.toFixed(1) + ' °C · ' : ''}${typeof s.tuuliMs === 'number' ? 'tuuli ' + s.tuuliMs.toFixed(1) + ' m/s · ' : ''}${s.taimenkeli !== null && s.taimenkeli !== undefined ? 'taimenkeli ' + s.taimenkeli + ' %' : ''}</span>
         </div>`;
@@ -9335,7 +9372,9 @@ function sumuriskiAlusta(){
       // 17.10.2026 (v205): karannut kala ja korjattu iskupaikka (siirto metreinä ja kirjauskohta)
       'tulos','paikkaKorjattuM','alkupLat','alkupLon',
       // 18.10.2026 (v206): taimenen kokoluokka (yli50 | alle50)
-      'koko'];
+      'koko',
+      // 18.10.2026 (v207): viehesyvyyden pikaluokka (yli 6 m: max tyhjä) ja lähde (oletus | valittu)
+      'vieheSyvMin','vieheSyvMax','vieheSyvLahde'];
     const SAALIS_CSV_JOHDETUT = {   // v205: sarakkeet, jotka luetaan paikkaKorjaus-oliosta
       paikkaKorjattuM: s => s.paikkaKorjaus ? s.paikkaKorjaus.siirtoM : null,
       alkupLat: s => s.paikkaKorjaus && s.paikkaKorjaus.alkup ? s.paikkaKorjaus.alkup.lat : null,
@@ -13420,7 +13459,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v206';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v207';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -16507,6 +16546,38 @@ function sumuriskiAlusta(){
       return 'Tasaisella pohjalla seuraa lähinnä syöttikalan liikkeitä.';
     }
 
+    // v207: taimenen käytäntö (oma sääntö ja omat taimenet 60 vrk) käyrään ja taimenkorttiin
+    const KAYTANTO_VRK = 60;
+    function taimenKaytanto() {
+      const nyt = Date.now(), pisteet = [];
+      let n = 0, oletus = 0;
+      (lataaSaaliit() || []).forEach(x => {
+        if (!x || x.nollareissu || x.laji !== 'taimen' || !x.aika) return;
+        const t = Date.parse(x.aika); if (!(nyt - t <= KAYTANTO_VRK * 86400e3 && t <= nyt + 60e3)) return;
+        n++;
+        const v = saalisVieheSyvyys(x); if (!v) return;
+        if (v.lahde === 'oletus') oletus++;
+        const d = new Date(t), h = d.getHours() + d.getMinutes() / 60;
+        pisteet.push({ h, m: v.m, min: v.min, max: v.max, lahde: v.lahde, iso: saalisIsoTaimen(x),
+          teksti: 'Taimen ' + d.getDate() + '.' + (d.getMonth() + 1) + '. klo ' + d.getHours() + '.' + String(d.getMinutes()).padStart(2, '0')
+            + ': viehe ' + (v.lahde === 'mitattu' ? v.m.toFixed(1).replace('.', ',') + ' m (mitattu)' : (v.max === null ? 'yli ' + v.min : v.min + '–' + v.max) + ' m (' + v.lahde + ')')
+            + (saalisIsoTaimen(x) ? ', yli 50 cm' : '') + (saalisKarkasi(x) ? ', karkasi' : '') });
+      });
+      return { saanto: [PINTASAANTO.viehe[0], PINTASAANTO.viehe[1]], pohja: [PINTASAANTO.pohjaMin, PINTASAANTO.pohjaMax], pisteet, n, oletus };
+    }
+    function kaytantoTekstit() {
+      let K = null; try { K = taimenKaytanto(); } catch (e) { K = null; }
+      const h = document.getElementById('kaytantoTaimenHuom'), sel = document.getElementById('kaytantoSelite');
+      if (!K) { if (h) h.textContent = ''; if (sel) sel.textContent = ''; return; }
+      const nyk = n => String(n).replace('.', ',');
+      const omat = K.pisteet.length
+        ? 'Omat taimenet ' + KAYTANTO_VRK + ' vrk: ' + K.pisteet.length + '/' + K.n + ' syvyyden kanssa' + (K.oletus ? ', joista ' + K.oletus + ' oletus' : '')
+          + ' (mediaani ' + nyk(Math.round(K.pisteet.map(q => q.m).sort((a, b) => a - b)[K.pisteet.length >> 1] * 10) / 10) + ' m).'
+        : 'Omat taimenet ' + KAYTANTO_VRK + ' vrk: ' + K.n + ', ei kirjattua viehesyvyyttä.';
+      if (h) h.textContent = 'Oma sääntö, kun pohjaa ' + nyk(K.pohja[0]) + '–' + nyk(K.pohja[1]) + ' m (ei malli). ' + omat + ' Kertoo, missä olet saanut, ei sitä, missä kala on.';
+      if (sel) sel.textContent = 'Vaaleanpunainen kaista = taimenen käytäntö: oma sääntö matalikolla, ei malli. Pisteet = omat taimenet ' + KAYTANTO_VRK
+        + ' vrk kellonajan mukaan (täysi = mitattu tai valittu viehesyvyys, ontto = lajin oletus, iso = yli 50 cm).';
+    }
     function generateForecastSVG(targetFractional, thermoVal, sunRiseHour, sunSetHour) {
       const a = answers;
       let maxY = currentLocation.maxDepth ? Math.min(20, currentLocation.maxDepth) : 15;
@@ -16588,6 +16659,21 @@ function sumuriskiAlusta(){
         return ulos;
       };
 
+      // v207: TAIMEN KÄYTÄNTÖ teorian rinnalle (Hannu 18.10.: "Teorian rinnalle saisi piirtää viivan käytännössä. Kumpikin
+      // hyödyllistä."). Kaista = Hannun oma sääntö matalikolla (pohja 0,5–8 m → vieheet 0,1–0,7 m; syvyys.js PINTASAANTO), ei
+      // malli. Pisteet = omat taimenet 60 vrk kellonajan mukaan: mitattu pyyntisyvyys tai pikaluokan keskikohta (pystyviiva =
+      // luokan väli); täysi = mitattu tai valittu, ontto = lajin oletus (kirjaus.js saalisVieheSyvyys).
+      try {
+        const K = taimenKaytanto();
+        const yA = getY(K.saanto[0]), yB = getY(K.saanto[1]);
+        svg += `<rect data-kaytanto="saanto" x="${padX}" y="${yA}" width="${drawW}" height="${Math.max(2, yB - yA)}" fill="rgba(255,105,180,0.18)" stroke="var(--pink)" stroke-width="1" stroke-dasharray="4 3"/>`;
+        svg += `<text x="${w - padX}" y="${yB + 11}" fill="var(--pink)" font-size="9" text-anchor="end" font-family="'JetBrains Mono',monospace">taimen käytäntö ${String(K.saanto[0]).replace('.', ',')}–${String(K.saanto[1]).replace('.', ',')} m (matalikko)</text>`;
+        K.pisteet.forEach(q => {
+          const x = getX(q.h), y = getY(q.m), r0 = q.iso ? 6 : 4.5;
+          if (q.min !== q.max) svg += `<line x1="${x}" y1="${getY(q.min)}" x2="${x}" y2="${getY(q.max === null ? q.min + 2 : q.max)}" stroke="var(--pink)" stroke-width="1.5" opacity="0.6"/>`;
+          svg += `<circle data-kaytanto="piste" data-lahde="${q.lahde}" cx="${x}" cy="${y}" r="${r0}" fill="${q.lahde === 'oletus' ? 'none' : 'var(--pink)'}" stroke="var(--pink)" stroke-width="2"><title>${q.teksti}</title></circle>`;
+        });
+      } catch (e) { console.warn('Käytäntöviiva:', e); }
       svg += makePath(pts.S, 'var(--silver)', true);
       svg += makePath(pts.KO, '#7E93AC', true);
       svg += makePath(pts.H, 'var(--cyan)', false, 'hauki');
@@ -18927,6 +19013,7 @@ function sumuriskiAlusta(){
       naytaSyvyys('depthOutKuha', 'kuha', lowK, highK);
       naytaSyvyys('depthOutHauki', 'hauki', lowH, highH);
       naytaSyvyys('depthOutTaimen', 'taimen', lowT, highT);
+      try { kaytantoTekstit(); } catch (e) {}   // v207
       naytaSyvyys('depthOutAhven', 'ahven', lowA, highA);
       naytaSyvyys('depthOutJarvilohi', 'jarvilohi', lowJL, highJL);
       // Lajipaneelien järjestys ja kutistus. Kutsutaan vasta kun kaikki paneelit on
@@ -21532,7 +21619,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=206';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=207';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })

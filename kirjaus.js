@@ -8,6 +8,7 @@
    v201: saalisriville vana (viimeiset 500 m ennen kirjausta) ja kulkusuunta (saalisVana, saalisTuoreSuunta).
    v205: karannut kala (tulos 'karkasi') ja iskupaikan korjaus (saalisSiirra, saalisPalautaPaikka; ks. ISKUPAIKKA JA TULOS).
    v206: taimenen kokoluokka (koko 'yli50' | 'alle50'; saalisIsoTaimen, saalisAsetaKoko) taimenreittiä varten.
+   v207: viehesyvyyden pikaluokka (vieheSyvMin, vieheSyvMax, vieheSyvLahde; lajin oletus, taimen 0–1 m) käytäntöviivaa varten.
    VERSIO: sivut lataavat tiedoston nimellä kirjaus.js?v=NNN; NNN = sw.js:n VERSIO-numero. */
 
 // Saalisloki: kaikki kirjaukset yhdessä taulukossa (etusivu ja tilannekuva).
@@ -478,4 +479,47 @@ function saalisAsetaKoko(id, koko) {
   if (!s) return null;
   if (koko === 'yli50' || koko === 'alle50') s.koko = koko; else if ('koko' in s) s.koko = null;
   return tallennaSaaliit(lista) ? s : null;
+}
+
+/* VIEHESYVYYS KÄYTÄNTÖVIIVAA VARTEN — 18.10.2026 (v207). Hannu: "Teorian rinnalle saisi piirtää viivan käytännössä. Kumpikin
+   hyödyllistä." Valinnat: oman säännön kaista + omat saaliit; viehesyvyys "lajin oletus, muokattava"; taimen ensin.
+   Kala kiinni -paneelissa (tilannekuva) ja täydennyksessä (etusivu) pikaluokka; rivin kentät vieheSyvMin, vieheSyvMax (m,
+   yli 6 m: max null) ja vieheSyvLahde 'oletus' | 'valittu'. Oletus vain lajeille, joilla se on (taimen 0–1 m: Hannun
+   pintaharava); muilla tyhjä. Oletus merkitään, jotta käytäntöviiva ei näytä pelkkää oletusta mittauksena. Kentät
+   lisätään vain, kun luokka on (tavalliset rivit ennallaan). Täydennyksen mitattu pyyntisyvyys (syvyysM) ratkaisee. */
+const VIEHESYV_LUOKAT = [{ k: '0-1', min: 0, max: 1, l: '0–1 m' }, { k: '1-3', min: 1, max: 3, l: '1–3 m' }, { k: '3-6', min: 3, max: 6, l: '3–6 m' }, { k: '6+', min: 6, max: null, l: 'yli 6 m' }];
+const VIEHESYV_OLETUS = { taimen: '0-1' };
+function vieheSyvLuokka(x) {   // rivin luokka-avain tai null
+  if (!x || typeof x.vieheSyvMin !== 'number') return null;
+  const L = VIEHESYV_LUOKAT.find(c => c.min === x.vieheSyvMin && c.max === (typeof x.vieheSyvMax === 'number' ? x.vieheSyvMax : null));
+  return L ? L.k : null;
+}
+function saalisVieheSyvAseta(s, luokka, lahde) {   // muuttaa rivioliota (ei tallenna)
+  const L = VIEHESYV_LUOKAT.find(c => c.k === luokka);
+  if (L) { s.vieheSyvMin = L.min; s.vieheSyvMax = L.max; s.vieheSyvLahde = lahde === 'oletus' ? 'oletus' : 'valittu'; }
+  else if ('vieheSyvMin' in s) { s.vieheSyvMin = null; s.vieheSyvMax = null; s.vieheSyvLahde = null; }
+  return s;
+}
+// Lajin oletus riviin, jos riviltä puuttuu valittu luokka (myös lajin vaihtuessa: oletus vaihtuu tai poistuu)
+function saalisVieheSyvOletukseen(s) {
+  if (!s || s.nollareissu || s.vieheSyvLahde === 'valittu') return s;
+  const o = VIEHESYV_OLETUS[s.laji];
+  if (o) saalisVieheSyvAseta(s, o, 'oletus'); else if (s.vieheSyvLahde === 'oletus') saalisVieheSyvAseta(s, null);
+  return s;
+}
+function saalisAsetaVieheSyv(id, luokka) {   // tallentaa valitun luokan (null = poisto)
+  const lista = lataaSaaliit(), s = lista.find(x => x && x.id === id);
+  if (!s) return null;
+  saalisVieheSyvAseta(s, luokka, 'valittu');
+  return tallennaSaaliit(lista) ? s : null;
+}
+// Käytäntöviivan syvyys rivistä: mitattu pyyntisyvyys ensin, sitten pikaluokan keskikohta (yli 6 m → 7 m)
+function saalisVieheSyvyys(x) {
+  if (!x) return null;
+  if (typeof x.syvyysM === 'number' && x.syvyysLahde === 'mitattu') return { m: x.syvyysM, min: x.syvyysM, max: x.syvyysM, lahde: 'mitattu' };
+  if (typeof x.vieheSyvMin === 'number') {
+    const mx = typeof x.vieheSyvMax === 'number' ? x.vieheSyvMax : null;
+    return { m: mx === null ? x.vieheSyvMin + 1 : (x.vieheSyvMin + mx) / 2, min: x.vieheSyvMin, max: mx, lahde: x.vieheSyvLahde || 'valittu' };
+  }
+  return null;
 }

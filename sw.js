@@ -11,6 +11,7 @@
 // v204: tilannekuvan valikko vierittyy (oli ruutua pidempi, alaosa ei ulottuvilla); ei uusia tiedostoja.
 // v205: iskupaikan korjaus ja karannut kala (kirjaus.js, kloonit.js, tilanne.html, index.html); ei uusia tiedostoja.
 // v206: taimenreitti ja taimenen kokoluokka (aaltomalli.js, kirjaus.js, tilanne.html, index.html); ei uusia tiedostoja.
+// v207: viehesyvyys ja taimenen käytäntöviiva, kalataulukon tunnistamattomat (kirjaus.js, luotaus.js, tilanne.html, index.html); ei uusia tiedostoja.
 // v198: kiven vähimmäiskorkeus 5 cm, tuontiviesti kertoo puuttuvasta syvyydestä; ei uusia tiedostoja.
 // v197: kivet ja kivikko sivukeilasta (index.html, luotaus.js), tilannekuvan kerros 🪨 Kivikko; ei uusia tiedostoja.
 // v196: kalakoosteen väriselite; ei uusia tiedostoja.
@@ -41,7 +42,7 @@
 // VERSIO: kasvata tätä aina kun julkaiset uuden version. Vanha välimuisti siivotaan.
 // Versionumeron kasvatus on se mekanismi joka SIIVOAA vanhan välimuistin,
 // index2.html mukaan lukien. Ilman tätä poisto ei näkyisi puhelimissa.
-const VERSIO = 'uistelututka-v206';
+const VERSIO = 'uistelututka-v207';
 /* v178: sivun omat tiedostot ladataan nimellä tiedosto?v=NNN, jossa NNN on tämän VERSIOn numero.
    index.html:n <script src> -riveissä ja ottiäänen haussa on SAMA numero: kun julkaiset, vaihda
    molemmat. Uusi numero on uusi osoite, joten puhelin ei voi yhdistää uutta sivua vanhaan malliin

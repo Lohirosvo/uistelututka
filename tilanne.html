@@ -112,6 +112,8 @@
     enintään 14 vrk, valittavissa 1/3/7/14) sormenjälki verrataan koko järveen joka tunnin tuulella (aaltomalli.js:
     akTaimenKaistat); kaistoista alue ja kierros samoilla säännöillä kuin järvilohireitti. Ilman iskua valikko kysyy
     oletuspisteen kartalta. Kala kiinni -paneelissa taimenelle yli 50 / alle 50 cm.
+  v207 (18.10.2026): VIEHESYVYYS Kala kiinni -paneeliin (0–1 / 1–3 / 3–6 / yli 6 m; taimenelle oletus 0–1 m, merkitään
+    oletukseksi) etusivun käytäntöviivaa varten (kirjaus.js).
   -->
   <style>
     :root { --bg:#060B14; --panel:#0E1B2E; --panel-alt:#13253D; --line:#1E3350; --text:#E7EEF6; --muted:#7E93AC;
@@ -300,18 +302,18 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=206" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=206" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=206" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=206" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=206" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=206" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=206" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=206" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=207" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=207" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=207" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=207" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=207" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=207" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=207" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=207" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v206';
+    const APP_VERSIO = 'v207';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
@@ -1451,6 +1453,7 @@
         pk.kelpaa = false; pk.syy = 'virhe kirjauspohjassa (' + (e && e.message || e) + ')';
       }
       snap.laji = lajiNyt();
+      saalisVieheSyvOletukseen(snap);   // v207: lajin viehesyvyyden oletus (taimen 0–1 m), merkitty oletukseksi
       snap.taydennetty = false;
       snap.kirjausLahde = 'tilanne';
       snap.kirjauspohjaAika = pk.kelpaa ? P.aika : null;
@@ -1524,6 +1527,7 @@
         + '<div class="hint">' + tiedot.join(' · ') + '</div>'
         + '<div class="lajit">' + SAALIS_LAJIT.map(x => '<button class="laji' + (x.v === snap.laji ? ' valittu' : '') + '" data-laji="' + x.v + '">' + x.l + '</button>').join('') + '</div>'
         + '<div id="kirjausKoko"></div>'   // v206: taimenen kokoluokka
+        + '<div id="kirjausViehe"></div>'   // v207: viehesyvyys
         + '<div id="kirjausKlooni"></div>'
         + '<div class="hint" style="margin-top:4px;">' + pohjaRivi + ' Pituus ja syvyys: etusivun saalislista → ✏️ Täydennä.</div>'
         + '<div class="rivi2"><button id="kirjausKarkasi">✕ Kala karkasi</button>' + (snap.lat !== null ? '<button id="kirjausKorjaa">📍 Iskupaikka</button>' : '') + '</div>'   // v205
@@ -1539,20 +1543,22 @@
         kirjausAjastin();
       };
       if ($('kirjausKorjaa')) $('kirjausKorjaa').onclick = () => { const s = kirjattu; if (s) korjausAloita(s.id); };
-      kirjausKoko(snap);
+      kirjausKoko(snap); kirjausViehe(snap);
       el.onpointerdown = kirjausAjastin;
       poistoT = 0; kirjausAjastin();
     }
     function vaihdaLaji(v) {
       const s = kirjattu; if (!s || s.laji === v) return;
       s.laji = v; as.laji = v; tallennaAs(); paivitaKalaNappi();
+      saalisVieheSyvOletukseen(s);   // v207: oletus vaihtuu lajin mukana (valittu pysyy)
       try {
         const lista = lataaSaaliit(), ix = lista.findIndex(x => x && x.id === s.id);
-        if (ix >= 0) { lista[ix].laji = v; tallennaSaaliit(lista); }
+        if (ix >= 0) { lista[ix].laji = v; if ('vieheSyvMin' in s) ['vieheSyvMin', 'vieheSyvMax', 'vieheSyvLahde'].forEach(k => { lista[ix][k] = s[k]; }); tallennaSaaliit(lista); }
       } catch (e) {}
       kirjausOtsikko(s);
       $('kirjaus').querySelectorAll('.laji[data-laji]').forEach(b => b.classList.toggle('valittu', b.dataset.laji === v));
       kirjausKoko(s);   // v206
+      kirjausViehe(s);  // v207
       let r = null; try { r = klooniLajiMuutos(s); } catch (e) {}
       if (r && r.poistettu) kirjausKlooni('Kloonit poistettu: ' + (KLOONI_LAJINIMI[v] || v) + ' ei käynnistä klooneja.');
       else if (r && r.laske) klooniKirjauksesta(s);
@@ -1568,6 +1574,18 @@
       el.querySelectorAll('button[data-koko]').forEach(b => { b.onclick = () => {
         const r = saalisAsetaKoko(s.id, s.koko === b.dataset.koko ? null : b.dataset.koko);
         if (r) { s.koko = r.koko; kirjausKoko(s); tulosMuuttui(); }
+        kirjausAjastin();
+      }; });
+    }
+    function kirjausViehe(s) {   // v207: viehesyvyys; lajin oletus (taimen 0–1 m) näkyy merkittynä, napautus valitsee, uusi napautus poistaa
+      const el = document.getElementById('kirjausViehe'); if (!el || !s) return;
+      const nyt = vieheSyvLuokka(s), ol = s.vieheSyvLahde === 'oletus';
+      el.innerHTML = '<div class="lajit"><span class="hint" style="align-self:center">Viehe' + (nyt && ol ? ' (oletus)' : '') + '</span>'
+        + VIEHESYV_LUOKAT.map(c => '<button class="laji' + (c.k === nyt ? ' valittu' : '') + '" data-viehe="' + c.k + '">' + c.l + '</button>').join('') + '</div>';
+      el.querySelectorAll('button[data-viehe]').forEach(b => { b.onclick = () => {
+        const uusi = (nyt === b.dataset.viehe && !ol) ? null : b.dataset.viehe;
+        const r = saalisAsetaVieheSyv(s.id, uusi);
+        if (r) { ['vieheSyvMin', 'vieheSyvMax', 'vieheSyvLahde'].forEach(k => { s[k] = r[k]; }); kirjausViehe(s); }
         kirjausAjastin();
       }; });
     }
