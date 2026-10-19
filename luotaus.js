@@ -229,15 +229,20 @@ var OL_LAJISAANNOT = {
    Lämpötila erottelee vasta kesän kerrostuneisuudessa ja vaatii syvyyden lämmön (ei luotaimesta). Salakka on kesällä pinnassa
    (pintakatve); parvi tunnistetaan vasta 1,75 m:stä 0,8 m pohjan yläpuolelle ja vähintään 0,7 m paksuna, joten alle noin 3,3 m:n
    vedessä parvia ei löydy lainkaan. */
+/* v219 (19.10.2026): Lappajärvellä kuore ensin. Hannu 19.10.: saaliskalojen vatsoissa kuoretta PALJON enemmän kuin muikkua ("varma
+   tieto"). Lähteet: tehokalastuksessa 2001–2004 kuoretta 322,7 t ja muikkua 23,5 t, minkä jälkeen kuore harveni ja muikku runsastui
+   (Teppo ym. 2010, Etelä-Pohjanmaan ELY 3/2010); kalatalousalueen KHS-ehdotus 2022: lajien suhteesta ei ole tutkimustietoa.
+   Pallosääntö pysyy muikkuna (Hannun kokemus). Lajin runsaus ei nimeä yksittäistä parvea, joten molemmat lajit jäävät nimeen. */
+var OL_KUORE_TODISTE = 'oma havainto (Hannu 19.10.): saaliskalojen vatsoissa kuoretta paljon enemmän kuin muikkua; tehokalastuksessa 2001–2004 kuoretta 323 t, muikkua 24 t (Teppo ym. 2010)';
 var OL_PALLO = { suhde: 1.0, korkeusMin: 1.5, keila: 0.35 };
 var OL_PARVISAANNOT = {
   lappajarvi: {
     autumn: [
       { ryhma: 'muikku', pallo: true, vari: '#7fd4ff', nimi: 'muikku (pallo)', lajit: 'muikku',
         peruste: 'pallomainen parvi (pituus keilalla korjattuna enintään korkeus)', todiste: 'konsensus: pallomaista parvea pidetään muikkuna (Hannu)' },
-      { ryhma: 'ulappa', pohjaValiMin: 2, vari: '#ffd166', nimi: 'muikku tai kuore', lajit: 'muikku tai kuore',
-        peruste: 'välivedessä, alapinta vähintään 2 m pohjasta', todiste: 'tutkittu: muikku ja kuore parvina ulapalla päivällä (Jurvelius ym. 2000)' },
-      { ryhma: 'pohja', pohjaValiMax: 1, vari: '#c0ca33', nimi: 'ahven, kuore tai muikku', lajit: 'ahven, kuore tai muikku',
+      { ryhma: 'ulappa', pohjaValiMin: 2, vari: '#ffd166', nimi: 'kuore tai muikku', lajit: 'kuore tai muikku',
+        peruste: 'välivedessä, alapinta vähintään 2 m pohjasta', todiste: 'tutkittu: muikku ja kuore parvina ulapalla päivällä (Jurvelius ym. 2000); ' + OL_KUORE_TODISTE },
+      { ryhma: 'pohja', pohjaValiMax: 1, vari: '#c0ca33', nimi: 'kuore, ahven tai muikku', lajit: 'kuore, ahven tai muikku',
         peruste: 'pohjan tuntumassa, alapinta alle 1 m pohjasta', todiste: 'tutkittu: ahven päivällä pohjassa (Eckmann & Imbrock 1996); myös muikku ja kuore painuvat päivällä pohjaan (Jurvelius ym. 2000)' }
     ]
   }

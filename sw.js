@@ -22,6 +22,7 @@
 // v215: syöttikalakorttiin Havaittu (oma luotain) mallin rinnalle (index.html; tilanne.html vain versio); ei uusia tiedostoja.
 // v216: kaikujen lajiryhmät kausittain ja järvittäin (luotaus.js), Havaittu-rivit kuha-, hauki-, ahven- ja järvilohikorttiin (index.html); tilanne.html vain versio; ei uusia tiedostoja.
 // v217: taimenkorttiin rannan ja selän pintalämpö omasta luotaimesta ja luotaimen rajoitus (index.html, luotaus.js); tilanne.html vain versio; ei uusia tiedostoja.
+// v219: Lappajärvellä kuore ensin parvien nimissä ja väriehdotuksessa kuorekuosit kärkeen järvilohelle, taimenelle ja kuhalle (Hannu 19.10.: vatsoissa kuoretta paljon enemmän); luotaus.js, index.html, tilanne.html vain versio.
 // v218: parvien lajiepäily (pallo = muikku, välivesi = muikku tai kuore, pohja = ahven, kuore tai muikku) ja järvilohi- ja taimenepäily kaiuille, värit tilannekuvaan (luotaus.js, tilanne.html; index.html vain versio); ei uusia tiedostoja.
 // v198: kiven vähimmäiskorkeus 5 cm, tuontiviesti kertoo puuttuvasta syvyydestä; ei uusia tiedostoja.
 // v197: kivet ja kivikko sivukeilasta (index.html, luotaus.js), tilannekuvan kerros 🪨 Kivikko; ei uusia tiedostoja.
@@ -53,7 +54,7 @@
 // VERSIO: kasvata tätä aina kun julkaiset uuden version. Vanha välimuisti siivotaan.
 // Versionumeron kasvatus on se mekanismi joka SIIVOAA vanhan välimuistin,
 // index2.html mukaan lukien. Ilman tätä poisto ei näkyisi puhelimissa.
-const VERSIO = 'uistelututka-v218';
+const VERSIO = 'uistelututka-v219';
 /* v178: sivun omat tiedostot ladataan nimellä tiedosto?v=NNN, jossa NNN on tämän VERSIOn numero.
    index.html:n <script src> -riveissä ja ottiäänen haussa on SAMA numero: kun julkaiset, vaihda
    molemmat. Uusi numero on uusi osoite, joten puhelin ei voi yhdistää uutta sivua vanhaan malliin

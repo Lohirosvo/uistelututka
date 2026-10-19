@@ -2443,14 +2443,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=218" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=218" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=218" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=218" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=218" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=218" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=218" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=218" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=219" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=219" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=219" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=219" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=219" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=219" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=219" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=219" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
        uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
@@ -5194,8 +5194,16 @@ window.addEventListener('load', function(){
       tumma:  [['Mustaa Kuparia','kromi'],['Mustakulta','kromi'],['Kyykäärme','kromi']],
       rajut:  [['Pinkkisini','kromi'],['Sinipinkki','kromi'],['Raatokärpänen','hologrammi'],
                ['Kymppiuutinen','hile'],['Papukaija','maali'],['Rainbow','maali']],
-      muikku: [['Hilemuikku','hopeahile'],['Kulta Muikku','kultahologrammi'],['Pinkkiposki Muikku','tinapaperi']]
+      muikku: [['Hilemuikku','hopeahile'],['Kulta Muikku','kultahologrammi'],['Pinkkiposki Muikku','tinapaperi']],
+      // v219 (19.10.2026): kuorekuosit, Hannun valinta 19.10. (väritaulukon kuorenimiset). Kuoreen selkä on vaalean
+      // oliivinvihreä, muikun vihreä tai tumman sinivihreä (FishBase; Kottelat & Freyhof 2007). Vieheiden omaa
+      // selkäväriä ei ole tarkistettu.
+      kuore:  [['Hilekuore','hile'],['Holokuore','hologrammi'],['Kulta Kuore','kultahologrammi']]
     };
+    // v219: järvet, joilla saaliskalojen vatsoissa on ollut kuoretta enemmän kuin muikkua (oma havainto).
+    // Hannu 19.10.2026: Lappajärvellä kuoretta PALJON enemmän, "vaikuttaa vaapun selkäväriinkin", varma tieto.
+    const VV_KUOREJARVET = { lappajarvi: true };
+    const VV_KUORELAJIT = { jarvilohi: true, taimen: true, kuha: true };
 
     // ===== PINTA — lisätty 9.9.2026 =====
     // PUUTE JOKA KORJATTIIN: pinta oli tallessa jokaisen värin kohdalla
@@ -5533,7 +5541,18 @@ window.addEventListener('load', function(){
              + (secchi < 2.6 ? 'hopeasävyt' : 'kultasävyt') + ' olisivat lähes yhtä perusteltuja.';
       }
       let lista = VV_VARIT[ryhma].slice();
-      if (kala === 'jarvilohi' && ryhma !== 'rajut') { lista = VV_VARIT.muikku.concat(lista); syy += ' Järvilohelle painotetaan muikkukuoseja.'; }
+      // v219: kuorejärvellä kuorekuosit kärkeen järvilohelle, taimenelle ja kuhalle. Ei räikeissä (kontrasti ratkaisee)
+      // eikä tummissa (alle 1 lx tai hämärä: väri ei välity, siluetti ratkaisee).
+      let jarviAv = null;
+      try { jarviAv = (typeof karttaAvain === 'function') ? karttaAvain() : null; } catch (e) { jarviAv = null; }
+      if (VV_KUOREJARVET[jarviAv]) {
+        // Kuorejärvellä ei muikkupainotusta lainkaan (ei myöskään hämärässä).
+        if (VV_KUORELAJIT[kala] && ryhma !== 'rajut' && ryhma !== 'tumma') {
+          lista = VV_VARIT.kuore.concat(lista);
+          syy += ' Tällä järvellä saaliskalojen vatsoissa on ollut kuoretta paljon enemmän kuin muikkua (oma havainto), joten kuorekuosit '
+               + '(kuoreen selkä vaalean oliivinvihreä) on nostettu kärkeen.';
+        }
+      } else if (kala === 'jarvilohi' && ryhma !== 'rajut') { lista = VV_VARIT.muikku.concat(lista); syy += ' Järvilohelle painotetaan muikkukuoseja.'; }
 
       // PINTA JÄRJESTÄÄ LISTAN. Väriryhmä päätetään ensin — se on aallonpituus-
       // kysymys. Pinta ei vaihda ryhmää vaan nostaa ryhmän sisältä ne mallit,
@@ -13575,7 +13594,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v218';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v219';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -21867,7 +21886,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=218';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=219';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })
