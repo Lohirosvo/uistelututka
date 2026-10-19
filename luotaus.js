@@ -480,3 +480,22 @@ function omaLuotausAlueet(avain, paikat, hetkiMs, vrk, maxM, kausi){
   window.__olAlueet = { k: ck, r: R };
   return R;
 }
+/* ===== v221 (19.10.2026): LAJIRYHMÄN ISOT KAIUT AIKAIKKUNASTA (järvilohireitin lenkki, tilanne.html) =====
+   Hannu 19.10.: "Huomioidaan järvilohi epäiltyjen kaikuluotaus tulosten sijainnit apuna Kivijärven mallin kanssa vaikka
+   pidentämällä ajettavaa ohjelenkkiä. Jos on 2 km säteellä. Näin pienellä otannalla se vaikutti lupaavalta."
+   Isot kaiut, joiden sääntö (OL_LAJISAANNOT) on ryhmää ryhma, aikavälillä [hetki − vrk, hetki]. Syvyydet pinnasta. */
+function omaLuotausRyhmaKaiut(avain, ryhma, hetkiMs, vrk, kausi){
+  var raja = hetkiMs - (vrk || 10)*86400e3, out = [];
+  omaLuotausLue().tuonnit.forEach(function(t){
+    if (t.jarvi !== avain || !t.alku || t.alku > hetkiMs || !Array.isArray(t.kalat)) return;
+    var a = omaLuotausAnturi(t);
+    t.kalat.forEach(function(k){
+      if (k.luokka !== 'iso') return;
+      var ms = k.t || (t.alku + k.aikaS*1000); if (ms < raja || ms > hetkiMs) return;
+      var s = omaLuotausLajiSaanto({ lahella: k.lahella, z: k.z, pohja: k.pohja, anturi: a, muuParvi: k.muuParvi, parviYla: omaLuotausParviYla(t, k) }, avain, kausi);
+      if (!s || s.ryhma !== ryhma) return;
+      out.push({ lat: k.lat, lon: k.lon, t: ms, z: Math.round((k.z + a)*10)/10, pohja: Math.round((k.pohja + a)*10)/10, nimi: t.nimi });
+    });
+  });
+  return out.sort(function(x, y){ return x.t - y.t; });
+}

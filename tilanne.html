@@ -127,6 +127,9 @@
   v215 (18.10.2026): vain versionumero (etusivun syöttikalakorttiin havaittu parven syvyys omasta luotaimesta).
   v216 (18.10.2026): isojen kaikujen napautuksessa matalan pohjan lajiepäily (hauki, ahven, made tai lahna) luotaus.js:n kausisäännöstä; muuten vain versionumero.
   v217 (18.10.2026): vain versionumero (taimenkorttiin rannan pintalämpö; matalan pohjan todisteeseen Hannun ahven- ja haukikoot luotaus.js:ssä).
+  v221 (19.10.2026): JÄRVILOHIREITIN LENKKI JÄRVILOHI-EPÄILYJEN KAUTTA (Hannu: "pidentämällä ajettavaa ohjelenkkiä. Jos on 2 km säteellä"):
+    omat järvilohi-epäilykaiut 10 vrk:n tallenteista enintään 2 km lenkistä → lenkki lasketaan uudelleen kaiut mukana ja suorat enintään
+    3 km; kelpaa, jos kaistoja vähintään yhtä monta ja kaikuja enemmän; violetit renkaat ja reitin teksti (reittiKaikuLenkki).
   v220 (19.10.2026): vain versio (etusivun Raportteihin viimeiset 10 vrk tallenteista; Kärnän eteläkärjen yleispaikkapisteet 10 → 3).
   v219 (19.10.2026): Lappajärven parvien nimissä kuore ensin (kuore tai muikku; kuore, ahven tai muikku), Hannun havainto vatsoista; vain luotaus.js:n sääntöteksti, ei logiikkaa.
   v218 (19.10.2026): parvet ja isot kaiut väritetään lajiepäilyn mukaan (luotaus.js OL_PARVISAANNOT, OL_LAJISAANNOT); valikon selite; napautukseen parven lajiepäily ja kaiun ryhmä.
@@ -318,18 +321,18 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=220" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=220" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=220" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=220" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=220" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=220" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=220" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=220" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=221" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=221" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=221" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=221" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=221" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=221" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=221" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=221" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v220';
+    const APP_VERSIO = 'v221';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
@@ -542,6 +545,50 @@
     const REITTI_ALUE_M = 1500, REITTI_R_M = 100, REITTI_LEG = [1700, 1400, 1100, 900, 700], REITTI_MIN_SYV = 4.5, REITTI_TYHJA_H = 2;
     const REITTI_LAHELLA_M = 120, REITTI_SIJAT = 20, REITTI_EHDOKKAAT = 6, REITTI_NOPEUDET = [2.5, 3, 4, 5, 6], REITTI_SIIRTO = [10, 15, 20, 25, 30];
     const REITTI_VARI = '#2EE6C5';
+    /* v221 (19.10.2026): JÄRVILOHI-EPÄILYT LENKIN APUNA. Hannu 19.10.: "Huomioidaan järvilohi epäiltyjen kaikuluotaus tulosten
+       sijainnit apuna Kivijärven mallin kanssa vaikka pidentämällä ajettavaa ohjelenkkiä. Jos on 2 km säteellä. Näin pienellä
+       otannalla se vaikutti lupaavalta." (11. ja 17.10.: 7/8 järvilohi-epäilyä 0,2–1,9 km lähimmästä mallin kaistasta, laskettu.)
+       SÄÄNNÖT (oletuksia): omat isot kaiut ryhmästä "järvilohi-epäily" (luotaus.js OL_LAJISAANNOT: välivedessä syöttikalaparven
+       yläpuolella, pohja yli 10 m) viimeisten REITTI_KAIKU_VRK vuorokauden tallenteista; kaiku on mukana, jos se on enintään
+       REITTI_KAIKU_M lenkistä. Lenkki lasketaan uudelleen kaistat + kaiut samalla painolla (kaiun paino = alueen kaistojen
+       keskipaino) ja pidemmillä suorilla (REITTI_LEG_PITKA, enintään 3 km). Uusi lenkki kelpaa, jos se kulkee vähintään yhtä
+       monen kaistan ja useamman kaiun kautta (alle REITTI_LAHELLA_M) ja on vedessä vähintään REITTI_MIN_SYV. Muuten vanha lenkki
+       ja maininta. Kaiku ei ole lajitunnistus. Alueen valinta ennallaan (kaistat ja tuuli). */
+    const REITTI_KAIKU_M = 2000, REITTI_KAIKU_VRK = 10, REITTI_LEG_PITKA = [3000, 2500, 2100, 1700, 1400, 1100, 900, 700], REITTI_KAIKU_VARI = '#b388ff';
+    const reittiPv = ms => { const d = new Date(ms); return ['su', 'ma', 'ti', 'ke', 'to', 'pe', 'la'][d.getDay()] + ' ' + d.getDate() + '.' + (d.getMonth() + 1) + '.'; };
+    function reittiLohiKaiut(nytMs) {
+      if (typeof omaLuotausRyhmaKaiut !== 'function') return [];
+      try { return omaLuotausRyhmaKaiut(avain, 'lohi', nytMs, REITTI_KAIKU_VRK, null); } catch (e) { return []; }
+    }
+    function reittiKaikuLenkki(K, ks, minSyv, E) {
+      if (!E || !E.length || !K || !K.LL || !K.LL.length) return K;
+      const dMin = (la, lo, LL) => { let pe = Infinity; for (const g of LL) { const e = klooniMatka(g[0], g[1], la, lo); if (e < pe) pe = e; } return pe; };
+      const lahella = E.filter(e => dMin(e.lat, e.lon, K.LL) <= REITTI_KAIKU_M);
+      if (!lahella.length) return K;
+      const peitto = (LL, P) => P.filter(p => dMin(p.lat, p.lon, LL) <= REITTI_LAHELLA_M);
+      const kaistat = ks.map(x => x.q).filter((q, i, A) => A.findIndex(r => r.lat.toFixed(5) === q.lat.toFixed(5) && r.lon.toFixed(5) === q.lon.toFixed(5)) === i);   // tunneittain toistuvat kerran
+      const kp0 = peitto(K.LL, kaistat).length, kk0 = peitto(K.LL, lahella);
+      const info = { lahella: lahella.length, ennen: K.m, paivat: lahella.map(e => reittiPv(e.t)).filter((d, i, A) => A.indexOf(d) === i) };
+      const kohteet = LL => lahella.map(e => ({ lat: e.lat, lon: e.lon, t: e.t, z: e.z, pohja: e.pohja, lenkilla: dMin(e.lat, e.lon, LL) <= REITTI_LAHELLA_M }));
+      if (kk0.length < lahella.length) {
+        const wk = ks.reduce((a, x) => a + x.w, 0) / ks.length, th = typeof K.th === 'number' ? K.th : 0;
+        const ks2 = ks.concat(lahella.map(e => ({ q: { lat: e.lat, lon: e.lon, pisteet: 0, veto: [th, (th + 180) % 360], a: { lat: e.lat, lon: e.lon }, b: { lat: e.lat, lon: e.lon }, kaiku: true }, w: wk })));
+        let K2 = null; try { K2 = reittiKierros(ks2, minSyv, null, REITTI_LEG_PITKA); } catch (e) { K2 = null; }
+        if (K2 && K2.tapa === 'rata') {
+          const kp = peitto(K2.LL, kaistat).length, kk = peitto(K2.LL, lahella);
+          if (kp >= kp0 && kk.length > kk0.length) { K2.osui = kp; K2.kaiut = Object.assign(info, { kautta: kk.length, jatkettu: true, kohteet: kohteet(K2.LL) }); return K2; }
+        }
+      }
+      K.kaiut = Object.assign(info, { kautta: kk0.length, jatkettu: false, kohteet: kohteet(K.LL) });
+      return K;
+    }
+    function reittiKaikuTeksti(K) {
+      const k = K.kaiut; if (!k) return '';
+      const pv = ' (' + k.paivat.join(', ') + ')';
+      if (k.jatkettu) return 'Lenkkiä jatkettu järvilohi-epäilyjen kautta: ' + k.kautta + '/' + k.lahella + ' kaikua 2 km:n sisällä' + pv + ', lenkki ' + km1(K.m) + ' km (ilman kaikuja ' + km1(k.ennen) + ' km).';
+      if (k.kautta === k.lahella) return 'Lenkki kulkee jo ' + (k.kautta === 1 ? 'järvilohi-epäilyn' : k.kautta + ' järvilohi-epäilyn') + ' kautta' + pv + '.';
+      return 'Järvilohi-epäilyjä 2 km:n sisällä ' + k.lahella + pv + (k.kautta ? ', lenkillä ' + k.kautta : '') + '. Pidempi lenkki ei ulotu ' + (k.kautta ? 'muihin' : 'niihin') + ' menettämättä kaistoja tai osumatta alle ' + n1(REITTI_MIN_SYV) + ' m:n veteen.';
+    }
     function aurinkoKorkeus(ms, lat, lon) {   // NOAA / Meeus: auringon korkeus asteina hetkellä ms
       const D = Math.PI / 180, jd = ms / 86400000 + 2440587.5, T = (jd - 2451545) / 36525;
       const L0 = (280.46646 + T * (36000.76983 + T * 0.0003032)) % 360, M = 357.52911 + T * (35999.05029 - 0.0001537 * T);
@@ -596,12 +643,12 @@
       return { P, m: 2 * L + 2 * Math.PI * R };
     }
     const reittiKierrosVM = new Map();
-    function reittiKierros(kaistat0, minSyv, linja) {   // linja (taimen, v208): { k, laske(kaistat) } rantalinja ensin ja syvyys vain radan omasta ruudusta   // kaistat: [{ q, w }] alueen kaistat sen tunneilla; palauttaa kierroksen tai null
+    function reittiKierros(kaistat0, minSyv, linja, legs) {   // v221: legs = suorien pituudet (oletus REITTI_LEG)   // linja (taimen, v208): { k, laske(kaistat) } rantalinja ensin ja syvyys vain radan omasta ruudusta   // kaistat: [{ q, w }] alueen kaistat sen tunneilla; palauttaa kierroksen tai null
       const linjaEnsin = !!linja;
       if (!kaistat0.length) return null;
       if (typeof minSyv !== 'number') minSyv = REITTI_MIN_SYV;   // v206: taimenreitillä matalampi
       const yht = new Map(); kaistat0.forEach(x => { const a = x.q.lat.toFixed(5) + ',' + x.q.lon.toFixed(5), o = yht.get(a); if (o) o.w += x.w; else yht.set(a, { q: x.q, w: x.w }); });
-      const kaistat = Array.from(yht.values()), avainK = avain + '|' + minSyv + '|' + (linjaEnsin ? 'L' + linja.k : '') + '|' + Array.from(yht.keys()).sort().join(';') + '|' + kaistat.map(x => x.w).join(',');
+      const kaistat = Array.from(yht.values()), avainK = avain + '|' + minSyv + '|' + (linjaEnsin ? 'L' + linja.k : '') + '|' + Array.from(yht.keys()).sort().join(';') + '|' + kaistat.map(x => x.w).join(',') + '|' + (legs ? legs.join('/') : '');
       if (reittiKierrosVM.has(avainK)) return JSON.parse(JSON.stringify(reittiKierrosVM.get(avainK)));
       const T0 = reittiTaso(kaistat[0].q.lat, kaistat[0].q.lon), X = kaistat.map(x => T0.xy(x.q.lat, x.q.lon)), W = kaistat.map(x => x.w);
       const sw = W.reduce((s, w) => s + w, 0), mx = X.reduce((s, p, i) => s + p[0] * W[i], 0) / sw, my = X.reduce((s, p, i) => s + p[1] * W[i], 0) / sw;
@@ -631,7 +678,7 @@
         try { RL = linja.laske(kaistat); } catch (e) { console.warn('Rantalinja:', e); RL = null; }
         if (RL && RL.m >= 2 * TREITTI_MIN_M - 60 && RL.LL.length >= 2) return linjaKierros(RL);   // vähimmäislinja 2 × 300 m; tasoitus lyhentää hieman
       }
-      ulko: for (const L of REITTI_LEG) for (const dth of [0, -10, 10, -20, 20, -30, 30]) {
+      ulko: for (const L of (legs || REITTI_LEG)) for (const dth of [0, -10, 10, -20, 20, -30, 30]) {
         const th = th0 + dth, a = th * Math.PI / 180, u = [Math.sin(a), Math.cos(a)], n = [Math.cos(a), -Math.sin(a)];
         for (const t of [0, -300, 300]) for (let s = -300; s <= 300; s += 50) {
           const cx = mx + u[0] * t + n[0] * s, cy = my + u[1] * t + n[1] * s, K = kilparata(cx, cy, th, L, REITTI_R_M);
@@ -705,7 +752,8 @@
       const gps = (oma && window.akJarviPisteessa && window.akJarviPisteessa(oma.lat, oma.lon) === avain && nyt - oma.aika < 10 * 60e3) ? oma : null;
       const lahto = gps ? { lat: gps.lat, lon: gps.lon, nimi: 'veneestä' } : lp ? { lat: lp.lat, lon: lp.lon, nimi: 'lähtöpaikalta ⚓' } : null;
       const Tn = window.akTunnit();
-      const k = [avain, Tn.length, Tn.length ? Tn[0].aika.getTime() : 0, Tn.length ? Tn[Tn.length - 1].U : 0, alku, loppu, nop.kmh, siirto, turva,
+      const E = cfg.laji === 'lohi' ? reittiLohiKaiut(nyt) : [];   // v221
+      const k = [avain, E.length + ':' + (E.length ? E[E.length - 1].t : 0), Tn.length, Tn.length ? Tn[0].aika.getTime() : 0, Tn.length ? Tn[Tn.length - 1].U : 0, alku, loppu, nop.kmh, siirto, turva,
                  lahto ? Math.round(lahto.lat * 100) + ':' + Math.round(lahto.lon * 50) : '-', lp ? lp.lat + ':' + lp.lon : '-', cfg.laji, cfg.avainLisa, cfg.minSyv].join('|');
       if (reittiVM[laji] && reittiVM[laji].k === k) return reittiVM[laji].R;
       const T = []; let hylatty = 0;
@@ -770,7 +818,9 @@
           // kierros alueen kaistoista tunneilla hA..hB (ilman rajaa: kaikki); alkaa lähinnä saapumissuuntaa
           const kierrosOsa = (a, hA, hB, alkuMs, loppuMs, saapuu) => {
             const ks = []; a.kaistat.forEach(x => { if (x.h >= hA && (hB === null || x.h < hB)) ks.push({ q: x.q, w: x.q.pisteet }); });
-            const K = reittiKierros(ks.length ? ks : a.kaistat.map(x => ({ q: x.q, w: x.q.pisteet })), cfg.minSyv, cfg.rantaLinja || null);
+            const ks1 = ks.length ? ks : a.kaistat.map(x => ({ q: x.q, w: x.q.pisteet }));
+            let K = reittiKierros(ks1, cfg.minSyv, cfg.rantaLinja || null);
+            if (K && cfg.laji === 'lohi') K = reittiKaikuLenkki(K, ks1, cfg.minSyv, E);   // v221
             if (K && saapuu) { const i = lahinIndeksi(K.LL, saapuu[0], saapuu[1]); if ((K.tapa === 'rata' || K.tapa === 'linja') && i > 0) K.LL = K.LL.slice(i, -1).concat(K.LL.slice(0, i + 1)); }
             return { tyyppi: 'alue', a, nimi: a.nimi, K };
           };
@@ -817,7 +867,8 @@
                  + (o.K.paat ? '; linja päättyy: ' + o.K.paat.map(x => x.syy + ' (' + km1(x.m) + ' km)').join(' ja ') : '') + (o.K.tyyni ? '; tyyni: penkan asento ja aalto eivät vertailussa' : '')
                  : o.K.tapa === 'rata' ? 'kierros ' + km1(o.K.m) + ' km, ' + Math.round(o.kmin) + ' min, noin ' + Math.max(1, Math.round(o.kierroksia)) + ' kierrosta, suunta ' + Math.round(o.K.th) + '°/' + Math.round((o.K.th + 180) % 360) + '°'
                           : 'rataa ei löytynyt (matalikko tai ranta): edestakaisin kaistaa ' + km1(o.K.m / 2) + ' km') : 'ei kierrosta')
-          + '; kaistoja ' + o.kaistaTunteja + '/' + o.tunteja + ' tunnilla, kierros kulkee ' + o.kaistoja + ' kaistan kautta. ' + (o.syy ? 'Syy: ' + o.syy + '.' : ''));
+          + '; kaistoja ' + o.kaistaTunteja + '/' + o.tunteja + ' tunnilla, kierros kulkee ' + o.kaistoja + ' kaistan kautta. ' + (o.syy ? 'Syy: ' + o.syy + '.' : '')
+          + (o.K && o.K.kaiut ? ' ' + reittiKaikuTeksti(o.K) : ''));   // v221
       });
       if (R.osat.filter(o => o.tyyppi === 'alue').length === 1 && !R.huom.some(h => /puuttuvat/.test(h))) r.push('Ei siirtymää: alueella on kaista joka tunti tai tauko alle ' + REITTI_TYHJA_H + ' h (korkea kynnys).');
       if (R.paluu) r.push('Paluu ' + reittiKlo(R.paluu.alku) + '–' + reittiKlo(R.paluu.loppu) + ' lähtöpaikalle ' + km1(R.paluu.m) + ' km' + (R.paluu.aalto !== null ? ', aalto ' + n2(R.paluu.aalto) + ' m ' + (R.paluu.ok ? '✓' : '<b style="color:#ffb020">yli ajorajan</b>') : '') + '.');
@@ -827,7 +878,8 @@
     }
     function reittiTietoHtml(R) {
       return '<b style="color:' + REITTI_VARI + '">🧭 Järvilohireitti (kokeilu)</b> <span style="color:#7E93AC">Lintuselän malli, tunnin tuuli</span><br>'
-        + reittiRivit(R).join('<br>') + '<br><span style="color:#7E93AC">Malli ei tiedä kellonaikaa, valoa eikä vuodenaikaa: ajankohta tulee vain tuuliennusteesta. Rata ei tunne kiviä (MML-ruudukko).</span>';
+        + reittiRivit(R).join('<br>') + '<br><span style="color:#7E93AC">Malli ei tiedä kellonaikaa, valoa eikä vuodenaikaa: ajankohta tulee vain tuuliennusteesta. Rata ei tunne kiviä (MML-ruudukko).'
+        + ' Järvilohi-epäilyt (violetit renkaat) ovat omia isoja kaikuja ' + REITTI_KAIKU_VRK + ' vrk:n tallenteista syöttikalaparven yläpuolella yli 10 m:n vedessä, eivät lajitunnistus.</span>';
     }
     function reittiViiva(LL, lw, vari, katko) {
       if (!LL || LL.length < 2) return;
@@ -848,7 +900,16 @@
         ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(4,10,18,.85)'; ctx.stroke(); ctx.lineWidth = 2.4; ctx.strokeStyle = vari; ctx.stroke(); ctx.restore();
       }
     }
-    function reittiPiirra(nakyy) { reittiPiirraR(reittiLaske(), nakyy, REITTI_VARI, 'rgba(46,230,197,.55)', '🧭', '#bff7ec'); }
+    function reittiPiirra(nakyy) {
+      const R = reittiLaske();
+      reittiPiirraR(R, nakyy, REITTI_VARI, 'rgba(46,230,197,.55)', '🧭', '#bff7ec');
+      // v221: lenkin apuna olleet järvilohi-epäilyt renkaina (täysi = lenkillä, katkoviiva = 2 km:n sisällä, ei lenkillä)
+      if (R && R.tila === 'ok') R.osat.forEach(o => { if (o.K && o.K.kaiut) o.K.kaiut.kohteet.forEach(e => {
+        const p = naytolle(e.lat, e.lon); if (!nakyy(p, 30)) return;
+        ctx.save(); if (!e.lenkilla) ctx.setLineDash([3, 3]);
+        [[5, 'rgba(4,10,18,.85)'], [2.4, REITTI_KAIKU_VARI]].forEach(([lw, v]) => { ctx.beginPath(); ctx.arc(p.x, p.y, 11, 0, 2 * Math.PI); ctx.lineWidth = lw; ctx.strokeStyle = v; ctx.stroke(); });
+        ctx.restore(); }); });
+    }
     function reittiPiirraR(R, nakyy, VARI, VARI2, merkki, tvari) {
       if (!R || R.tila !== 'ok') return;
       const nyt = Date.now(), alueet = R.osat.filter(o => o.tyyppi === 'alue');
