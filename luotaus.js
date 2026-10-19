@@ -144,12 +144,27 @@ function omaLuotausKalaLuokat(K){
   (K || []).forEach(function(k){ if (r[k.luokka] !== undefined) r[k.luokka]++; });
   return r;
 }
+/* v218: parven luona (lahella 'parvi') olevalle kaiulle parven yläpinta samasta tallenteesta (±90 s, enintään 150 m, lähin ajassa),
+   jotta "parven yläpuolella" voidaan päätellä myös silloin, kun kaiku on alle 2 m parven yläpuolella (järvilohi-epäily). Anturista. */
+function omaLuotausParviYla(t, k){
+  if (k.lahella !== 'parvi' || !Array.isArray(t.parvet)) return null;
+  var kt = k.t || (t.alku + k.aikaS*1000), paras = null, pe = Infinity;
+  t.parvet.forEach(function(p){
+    if (p.tyyppi !== 'parvi' || typeof p.t !== 'number') return;
+    var dt = Math.abs(p.t - kt); if (dt > 90000) return;
+    var dy = (p.lat - k.lat) * 111320, dx = (p.lon - k.lon) * 111320 * Math.cos(k.lat * Math.PI / 180);
+    if (Math.sqrt(dx*dx + dy*dy) > 150) return;
+    if (dt < pe){ pe = dt; paras = p; }
+  });
+  return paras ? paras.yla : null;
+}
 function omaLuotausKalat(avain, maxIkaMs){
   var out = [];
   omaLuotausTuoreet(avain, maxIkaMs).forEach(function(t){
     var a = omaLuotausAnturi(t);
     (t.kalat || []).forEach(function(k){
       var q = {}; for (var x in k) q[x] = k[x];
+      q.parviYla = omaLuotausParviYla(t, k);   // v218
       q.zP = Math.round((k.z + a)*10)/10; q.pohjaP = Math.round((k.pohja + a)*10)/10; q.nimi = t.nimi; q.med = t.kalaMed; q.jarvi = t.jarvi; q.anturi = a;
       out.push(q);
     });
@@ -187,17 +202,60 @@ function omaLuotausKalaLaji(k, avain){
 var OL_LAJISAANNOT = {
   lappajarvi: {
     autumn: [
-      { ryhma: 'kuha', kortit: { kuha: ['iso', 'keski'] }, lahella: ['pohja'], pohjaMin: 6,
+      { ryhma: 'kuha', kortit: { kuha: ['iso', 'keski'] }, lahella: ['pohja'], pohjaMin: 6, vari: '#ffa53d', nimi: 'kuha',
         lajit: 'kuha, made tai lahna', peruste: 'pohjan tuntumassa vähintään 6 m:n vedessä (kuha siirtyy syksyllä syvemmälle)' },
-      { ryhma: 'matala', kortit: { hauki: ['iso', 'keski'], ahven: ['iso'] }, lahella: ['pohja'], pohjaMax: 5, napautus: true,
+      { ryhma: 'matala', kortit: { hauki: ['iso', 'keski'], ahven: ['iso'] }, lahella: ['pohja'], pohjaMax: 5, napautus: true, vari: '#7bd389', nimi: 'hauki tai ahven',
         lajit: 'hauki, ahven, made tai lahna', peruste: 'pohjan tuntumassa alle 5 m:n vedessä',
         todiste: 'oma havainto: 17.10. ahven ja 11.10. hauki saatiin 1–3 min kaiun jälkeen 60–210 m:n päästä; Hannu: matalassa ahvenia kiloon ja haukia noin 2 kg:aan asti' },   // v217: Hannu 18.10.
-      { ryhma: 'ulappa', kortit: { jarvilohi: ['iso'] }, lahella: ['vali', 'parvi'], pohjaMin: 10,
+      // v218: Hannu 19.10.: "Myös järvilohi ja taimen epäily saisi erottua." Ennen ulappaa (ensimmäinen osuva sääntö voittaa).
+      { ryhma: 'lohi', kortit: { jarvilohi: ['iso'] }, lahella: ['vali', 'parvi'], pohjaMin: 10, parvenYlla: true, napautus: true, vari: '#b388ff', nimi: 'järvilohi-epäily',
+        lajit: 'järvilohi, taimen tai kuha', peruste: 'syöttikalaparven yläpuolella yli 10 m:n vedessä',
+        todiste: 'oma havainto: isot kaiut yleensä 0,5–3,7 m parven yläpinnan yläpuolella (11. ja 17.10.); Hannu: järvilohi Lintuselällä 15–20 m:n veden päällä' },
+      { ryhma: 'taimen', kortit: {}, lahella: ['vali'], pohjaMax: 5, napautus: true, vari: '#ff6fb1', nimi: 'taimen-epäily',
+        lajit: 'taimen, ahven tai hauki', peruste: 'välivedessä rantavyöhykkeellä (pohja alle 5 m)',
+        todiste: 'Hannu: syksyn taimenet 1,2–4 m:n syvyydessä; luotain näkee vasta 1,75 m:stä, joten pintaa uiva taimen ei näy' },
+      { ryhma: 'ulappa', kortit: { jarvilohi: ['iso'] }, lahella: ['vali', 'parvi'], pohjaMin: 10, vari: '#ff5a5f', nimi: 'laji avoin',
         lajit: 'järvilohi, taimen, kuha, siika tai lahna', peruste: 'välivedessä tai syöttikalaparven luona yli 10 m:n vedessä',
         todiste: 'oma havainto: isot kaiut yleensä 0,5–3,7 m parven yläpinnan yläpuolella (11. ja 17.10.)' }
     ]
   }
 };
+/* v218 (19.10.2026): SYÖTTIKALAPARVIEN LAJIEPÄILY samalla periaatteella (Hannu 19.10.: "Voidaanko parvien syvyydestä, sijainnista ja
+   muodosta sekä kellonajasta, lämpötilavyöhykkeestä epäillä lajia … ahven muikku salakka kuore?" ja "Pallomaista parvea on pidetty
+   muikkuna. Erotellaan eri väreillä epäilyt tilannekuvaan."). Tutkittu: muikku ja kuore parvina päivällä, yöllä hajaantuvat ja nousevat
+   (Jurvelius ym. 2000, kaksi suomalaista järveä); ahven syksyllä syvemmälle ja päivällä pohjassa (Eckmann & Imbrock 1996).
+   Pallomuoto 2D-kaikukuvasta: veneen alittama poikkileikkaus, pituus korjataan keilan leveydellä (0,35 × syvyys, noin 20° keila,
+   arvio) ja verrataan korkeuteen. Lyhyt parvi voi olla myös reunalta ylitetty, joten raja on säädettävä (OL_PALLO).
+   Lämpötila erottelee vasta kesän kerrostuneisuudessa ja vaatii syvyyden lämmön (ei luotaimesta). Salakka on kesällä pinnassa
+   (pintakatve); parvi tunnistetaan vasta 1,75 m:stä 0,8 m pohjan yläpuolelle ja vähintään 0,7 m paksuna, joten alle noin 3,3 m:n
+   vedessä parvia ei löydy lainkaan. */
+var OL_PALLO = { suhde: 1.0, korkeusMin: 1.5, keila: 0.35 };
+var OL_PARVISAANNOT = {
+  lappajarvi: {
+    autumn: [
+      { ryhma: 'muikku', pallo: true, vari: '#7fd4ff', nimi: 'muikku (pallo)', lajit: 'muikku',
+        peruste: 'pallomainen parvi (pituus keilalla korjattuna enintään korkeus)', todiste: 'konsensus: pallomaista parvea pidetään muikkuna (Hannu)' },
+      { ryhma: 'ulappa', pohjaValiMin: 2, vari: '#ffd166', nimi: 'muikku tai kuore', lajit: 'muikku tai kuore',
+        peruste: 'välivedessä, alapinta vähintään 2 m pohjasta', todiste: 'tutkittu: muikku ja kuore parvina ulapalla päivällä (Jurvelius ym. 2000)' },
+      { ryhma: 'pohja', pohjaValiMax: 1, vari: '#c0ca33', nimi: 'ahven, kuore tai muikku', lajit: 'ahven, kuore tai muikku',
+        peruste: 'pohjan tuntumassa, alapinta alle 1 m pohjasta', todiste: 'tutkittu: ahven päivällä pohjassa (Eckmann & Imbrock 1996); myös muikku ja kuore painuvat päivällä pohjaan (Jurvelius ym. 2000)' }
+    ]
+  }
+};
+// Parven sääntö (tai null). p: parvi anturista (yla, ala, pohja, pituusM); 1–2 m pohjasta jää ilman sääntöä (epäselvä).
+function omaLuotausParviSaanto(p, avain, kausi){
+  var S = (OL_PARVISAANNOT[avain] || {})[kausi || omaLuotausKausi()];
+  if (!S || p.tyyppi === 'pohjaksi' || typeof p.yla !== 'number' || typeof p.ala !== 'number') return null;
+  var H = p.ala - p.yla, z = (p.ala + p.yla) / 2, Lk = Math.max(0, (p.pituusM || 0) - OL_PALLO.keila * z), vali = typeof p.pohja === 'number' ? p.pohja - p.ala : null;
+  for (var i = 0; i < S.length; i++){
+    var s = S[i];
+    if (s.pallo && !(H >= OL_PALLO.korkeusMin && Lk <= OL_PALLO.suhde * H)) continue;
+    if (typeof s.pohjaValiMin === 'number' && !(vali !== null && vali >= s.pohjaValiMin)) continue;
+    if (typeof s.pohjaValiMax === 'number' && !(vali !== null && vali < s.pohjaValiMax)) continue;
+    return s;
+  }
+  return null;
+}
 var OL_PINTAKATVE_M = 1.75;   // OLK.Z 1,5 m anturista + anturi 0,25 m: ylempää kaikuja ei poimita (v194)
 // Kausi: etusivulla sovelluksen kausi (answers.season), tilannekuvassa etusivun kirjauspohjasta, muuten kuukaudesta.
 function omaLuotausKausi(){
@@ -216,6 +274,8 @@ function omaLuotausLajiSaanto(k, avain, kausi){
     if (s.lahella.indexOf(k.lahella) < 0) continue;
     if (typeof s.pohjaMin === 'number' && !(pohjaP >= s.pohjaMin)) continue;
     if (typeof s.pohjaMax === 'number' && !(pohjaP < s.pohjaMax)) continue;
+    if (s.parvenYlla && !((k.muuParvi && typeof k.muuParvi.yla === 'number' && k.z < k.muuParvi.yla - 0.3)
+                          || (typeof k.parviYla === 'number' && k.z < k.parviYla - 0.3))) continue;   // v218: yli 0,3 m parven yläpinnan yläpuolella
     return s;
   }
   return null;
@@ -228,7 +288,7 @@ function omaLuotausLajiHavainto(avain, kortti, hetkiMs, kausi, vrk){
     var a = omaLuotausAnturi(t);
     t.kalat.forEach(function(k){
       var tt = k.t || (t.alku + k.aikaS*1000); if (tt > hetkiMs) return;
-      var q = { lahella: k.lahella, z: k.z, pohja: k.pohja, anturi: a }, s = omaLuotausLajiSaanto(q, avain, kausi);
+      var q = { lahella: k.lahella, z: k.z, pohja: k.pohja, anturi: a, muuParvi: k.muuParvi, parviYla: omaLuotausParviYla(t, k) }, s = omaLuotausLajiSaanto(q, avain, kausi);
       if (!s || !s.kortit[kortti] || s.kortit[kortti].indexOf(k.luokka) < 0) return;
       R.n++; R[k.luokka] = (R[k.luokka] || 0) + 1; R.z.push(k.z + a); R.pohja.push(k.pohja + a); R.saanto = s;
       if (!R.viim || tt > R.viim) R.viim = tt;
@@ -274,8 +334,11 @@ function omaLuotausKalaLaji0(k, avain){
   var L = avain === 'lappajarvi', n1 = function(v){ return (Math.round(v*10)/10).toLocaleString('fi-FI'); };
   var sv = omaLuotausLajiSaanto(k, avain);   // v216: kausi- ja järvikohtainen sääntö, jos se korvaa napautuksen epäilyn
   if (sv && sv.napautus){
-    var ero0 = k.pohja - k.z;
-    return { lajit: sv.lajit, peruste: sv.peruste + ' (' + n1(ero0) + ' m pohjasta)' + (sv.todiste ? '; ' + sv.todiste : ''),
+    var ero0 = k.pohja - k.z, mp0 = k.muuParvi, a0 = k.anturi || 0;
+    return { lajit: sv.lajit, vari: sv.vari, ryhma: sv.ryhma,
+             peruste: sv.peruste + (k.lahella === 'pohja' ? ' (' + n1(ero0) + ' m pohjasta)' : mp0 ? ' (syöttikalaparvi ' + mp0.m + ' m:n päässä, ' + n1(mp0.yla + a0) + '–' + n1(mp0.ala + a0) + ' m)'
+               : typeof k.parviYla === 'number' ? ' (parven yläpinta ' + n1(k.parviYla + a0) + ' m' + (typeof k.parviM === 'number' ? ', ' + k.parviM + ' m:n päässä' : '') + ')' : '')
+               + (sv.todiste ? '; ' + sv.todiste : ''),
              varaus: k.lahella === 'pohja' && ero0 <= 0.5 ? 'Näin lähellä pohjaa kaari voi olla myös kivi tai pohjan muoto; sama kohta usealla ajolla viittaa kiveen.' : '' };
   }
   if (k.lahella === 'pohja'){
