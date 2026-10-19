@@ -191,7 +191,7 @@ var OL_LAJISAANNOT = {
         lajit: 'kuha, made tai lahna', peruste: 'pohjan tuntumassa vähintään 6 m:n vedessä (kuha siirtyy syksyllä syvemmälle)' },
       { ryhma: 'matala', kortit: { hauki: ['iso', 'keski'], ahven: ['iso'] }, lahella: ['pohja'], pohjaMax: 5, napautus: true,
         lajit: 'hauki, ahven, made tai lahna', peruste: 'pohjan tuntumassa alle 5 m:n vedessä',
-        todiste: 'oma havainto: 17.10. ahven ja 11.10. hauki saatiin 1–3 min kaiun jälkeen 60–210 m:n päästä' },
+        todiste: 'oma havainto: 17.10. ahven ja 11.10. hauki saatiin 1–3 min kaiun jälkeen 60–210 m:n päästä; Hannu: matalassa ahvenia kiloon ja haukia noin 2 kg:aan asti' },   // v217: Hannu 18.10.
       { ryhma: 'ulappa', kortit: { jarvilohi: ['iso'] }, lahella: ['vali', 'parvi'], pohjaMin: 10,
         lajit: 'järvilohi, taimen, kuha, siika tai lahna', peruste: 'välivedessä tai syöttikalaparven luona yli 10 m:n vedessä',
         todiste: 'oma havainto: isot kaiut yleensä 0,5–3,7 m parven yläpinnan yläpuolella (11. ja 17.10.)' }
@@ -239,6 +239,36 @@ function omaLuotausLajiHavainto(avain, kortti, hetkiMs, kausi, vrk){
   R.zMin = R.z[0]; R.zMax = R.z[R.z.length - 1]; R.zMed = R.z.length % 2 ? R.z[R.z.length >> 1] : (R.z[R.z.length/2 - 1] + R.z[R.z.length/2]) / 2;
   R.pohjaMin = Math.min.apply(null, R.pohja); R.pohjaMax = Math.max.apply(null, R.pohja);
   return R;
+}
+/* ===== v217 (18.10.2026): RANNAN JA SELÄN PINTALÄMPÖ OMASTA LUOTAIMESTA (taimenkortti) =====
+   Hannu 18.10.: taimenkorttiin luotaimen rajoitus ja rantavyöhykkeen pintalämpö. Havainto 11.10.: ranta (alle 3 m) 0,6–0,8 °C selkää
+   kylmempi samoilla puolen tunnin jaksoilla, kun ilma oli 6–8 °C vettä kylmempää; 17.10. ei eroa (ilma lähes veden lämpöinen).
+   Uusin tallennepäivä enintään vrk vuorokautta ennen hetkeä. Ranta = pohja pinnasta alle OL_RANTA_M (taimenkivikon 0–5 m),
+   selkä = vähintään OL_SELKA_M. Ero lasketaan vain puolen tunnin jaksoista, joilla molempia on vähintään 5 pistettä (kellonajan
+   vaikutus pois). Lämpö mitataan anturilta (0,25 m), ei syvyydeltä. */
+var OL_RANTA_M = 5, OL_SELKA_M = 8;
+function omaLuotausRantaLampo(avain, hetkiMs, vrk){
+  var raja = hetkiMs - (vrk || 7)*86400e3, P = [];
+  omaLuotausLue().tuonnit.forEach(function(t){
+    if (t.jarvi !== avain || !t.alku || t.alku < raja || t.alku > hetkiMs || !Array.isArray(t.lampo) || !Array.isArray(t.aikaS) || !Array.isArray(t.syv)) return;
+    var a = omaLuotausAnturi(t);
+    for (var i = 0; i < t.lampo.length; i++){
+      var c = t.lampo[i], s = t.syv[i], ms = t.alku + t.aikaS[i]*1000;
+      if (c === null || c === undefined || s === null || s === undefined || s <= 0 || ms > hetkiMs) continue;
+      P.push({ ms: ms, c: c/100, p: s/100 + a });
+    }
+  });
+  if (!P.length) return null;
+  var viim = Math.max.apply(null, P.map(function(q){ return q.ms; })), d = new Date(viim), pv = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  P = P.filter(function(q){ return q.ms >= pv && q.ms < pv + 86400e3; });
+  var ka = function(A){ return A.length ? A.reduce(function(s, q){ return s + q.c; }, 0) / A.length : null; };
+  var R = P.filter(function(q){ return q.p < OL_RANTA_M; }), S = P.filter(function(q){ return q.p >= OL_SELKA_M; }), W = {};
+  P.forEach(function(q){ var k = Math.floor(q.ms / 1800000), w = W[k] || (W[k] = { r: [], s: [] }); if (q.p < OL_RANTA_M) w.r.push(q); else if (q.p >= OL_SELKA_M) w.s.push(q); });
+  var erot = [];
+  Object.keys(W).forEach(function(k){ var w = W[k]; if (w.r.length >= 5 && w.s.length >= 5) erot.push(ka(w.r) - ka(w.s)); });
+  return { pv: new Date(pv), ranta: ka(R), selka: ka(S), nRanta: R.length, nSelka: S.length,
+           ero: erot.length ? erot.reduce(function(s, x){ return s + x; }, 0) / erot.length : null, jaksoja: erot.length,
+           min: Math.min.apply(null, P.map(function(q){ return q.c; })), max: Math.max.apply(null, P.map(function(q){ return q.c; })) };
 }
 function omaLuotausKalaLaji0(k, avain){
   var L = avain === 'lappajarvi', n1 = function(v){ return (Math.round(v*10)/10).toLocaleString('fi-FI'); };

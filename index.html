@@ -2031,6 +2031,11 @@ body{padding-bottom:66px}
               <div class="value taimen" id="kaytantoTaimen" style="opacity:.8;">0,1–0,7 m</div>
               <div id="kaytantoTaimenHuom" style="font-size:12px; color:var(--muted); line-height:1.35; margin-top:2px;"></div>
             </div>
+            <div class="fig" id="luotainTaimenFig" style="display:none;">   <!-- v217: rannan pintalämpö ja luotaimen rajoitus -->
+              <div class="label">Oma luotain (pintalämpö)</div>
+              <div class="value taimen" id="luotainTaimen" style="opacity:.8;">—</div>
+              <div id="luotainTaimenHuom" style="font-size:12px; color:var(--muted); line-height:1.35; margin-top:2px;"></div>
+            </div>
           </div>
         </div>
         <details class="reasons">
@@ -2438,14 +2443,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=216" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=216" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=216" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=216" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=216" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=216" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=216" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=216" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=217" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=217" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=217" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=217" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=217" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=217" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=217" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=217" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
        uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
@@ -13570,7 +13575,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v216';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v217';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -16784,6 +16789,33 @@ function sumuriskiAlusta(){
         fig.style.display = '';
       });
     }
+    /* ===== v217 (18.10.2026): TAIMENKORTTIIN OMA LUOTAIN — RANNAN PINTALÄMPÖ JA RAJOITUS =====
+       Hannu 18.10.: kohdat 1 (luotain ei näe taimenvieheen syvyyttä) ja 2 (rantavyöhykkeen pintalämpö). Lämpö luotaus.js:n
+       omaLuotausRantaLampo: uusin tallennepäivä 7 vrk ennen tavoitehetkeä; ero vain samoilta puolen tunnin jaksoilta.
+       Rivi näkyy, kun tältä järveltä on lämmöllinen tallenne 7 vrk:n sisällä. */
+    function luotainTaimenTeksti() {
+      const fig = document.getElementById('luotainTaimenFig'); if (!fig) return;
+      const avain = (typeof karttaAvain === 'function') ? karttaAvain() : null;
+      let R = null;
+      try { if (avain && typeof omaLuotausRantaLampo === 'function') R = omaLuotausRantaLampo(avain, (window.utTavoiteHetki || analyysiHetki()).getTime(), 7); } catch (e) { R = null; }
+      if (!R) { fig.style.display = 'none'; return; }
+      const c1 = v => (Math.round(v * 10) / 10).toFixed(1).replace('.', ','), pv = R.pv.getDate() + '.' + (R.pv.getMonth() + 1) + '.';
+      const osat = [];
+      if (R.ranta !== null) osat.push('ranta (pohja alle ' + OL_RANTA_M + ' m) ' + c1(R.ranta) + ' °C');
+      if (R.selka !== null) osat.push('selkä (vähintään ' + OL_SELKA_M + ' m) ' + c1(R.selka) + ' °C');
+      let ero = '';
+      if (R.ero !== null) {
+        const e = Math.round(R.ero * 10) / 10;
+        const jj = R.jaksoja + (R.jaksoja === 1 ? ' jakso' : ' jaksoa');
+        ero = ' Samoilla puolen tunnin jaksoilla ranta ' + (Math.abs(e) < 0.1 ? 'yhtä lämmin (ero alle 0,1 °C, ' + jj + ').'
+            : c1(Math.abs(e)) + ' °C ' + (e < 0 ? 'kylmempi' : 'lämpimämpi') + ' (' + jj + ').');
+      } else if (R.ranta !== null && R.selka !== null) ero = ' Ranta ja selkä mitattu eri aikaan, joten eroa ei laskettu.';
+      document.getElementById('luotainTaimen').textContent = R.ranta !== null ? c1(R.ranta) + ' °C ranta' : (R.selka !== null ? c1(R.selka) + ' °C selkä' : c1(R.min) + '–' + c1(R.max) + ' °C');
+      document.getElementById('luotainTaimenHuom').textContent = 'Pintalämpö ' + pv + ': ' + (osat.length ? osat.join(', ') : 'vain ' + OL_RANTA_M + '–' + OL_SELKA_M + ' m:n vedestä, ' + c1(R.min) + '–' + c1(R.max) + ' °C') + '.' + ero
+        + ' Syysohje käyttää järven lämpöä. Luotain ei näe taimenvieheen syvyyttä (0,1–0,7 m): kaiut poimitaan vasta '
+        + String(OL_PINTAKATVE_M).replace('.', ',') + ' m:stä, joten taimen ei näy kaikuina.';
+      fig.style.display = '';
+    }
     function generateForecastSVG(targetFractional, thermoVal, sunRiseHour, sunSetHour) {
       const a = answers;
       let maxY = currentLocation.maxDepth ? Math.min(20, currentLocation.maxDepth) : 15;
@@ -19223,6 +19255,7 @@ function sumuriskiAlusta(){
       try { kaytantoTekstit(); } catch (e) {}   // v207
       try { syottiHavaintoTeksti(); } catch (e) {}   // v215
       try { lajiHavaintoTekstit(); } catch (e) {}   // v216
+      try { luotainTaimenTeksti(); } catch (e) {}   // v217
       naytaSyvyys('depthOutAhven', 'ahven', lowA, highA);
       naytaSyvyys('depthOutJarvilohi', 'jarvilohi', lowJL, highJL);
       // Lajipaneelien järjestys ja kutistus. Kutsutaan vasta kun kaikki paneelit on
@@ -21834,7 +21867,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=216';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=217';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })
