@@ -417,3 +417,66 @@ function omaLuotausKivikko(avain){
   window.__olKivikko = { k: k, j: out };
   return out;
 }
+/* ===== v220 (19.10.2026): VIIMEISET 10 VRK TALLENTEISTA PAIKOITTAIN (Raportit, ottipaikkojen perustelut) =====
+   Hannu 19.10.: "Raportteihin saisi laittaa luotauksista tehtyjä päätelmiä viimeisen 10 päivän ajalta eli jos perjantaina on käyty
+   siitä muistellaan seuraavana sunnuntainakin." Valinta 19.10.: EI pisteitä, vain teksti, koska kaikkea ajoa ei voi tallentaa
+   (.sl2:ssa muistikortin raja tulee vastaan): puuttuva tallenne ei tarkoita, ettei paikalla käyty.
+   Alue = lähin annetuista paikoista, enintään maxM (päällekkäisyys pois: jokainen piste, kaiku ja parvi yhdelle paikalle).
+   Uisteltu = tallenteen pisteet nopeudella 1–7 km/h (siirtoajo pois), väli enintään 120 s. Isot kaiut lajiepäilyn ryhmittäin
+   (OL_LAJISAANNOT), parvet (OL_PARVISAANNOT). Ikkuna: tallenteen piste, kaiku tai parvi aikavälillä [hetki − vrk, hetki]. */
+var OL_ALUE_M = 1500, OL_ALUE_VRK = 10;
+function omaLuotausAlueet(avain, paikat, hetkiMs, vrk, maxM, kausi){
+  vrk = vrk || OL_ALUE_VRK; maxM = maxM || OL_ALUE_M;
+  var raja = hetkiMs - vrk*86400e3, T = omaLuotausLue().tuonnit;
+  var ck = [avain, Math.floor(hetkiMs / 600000), vrk, maxM, kausi || '', T.length, window.__olKivikkoV || 0, paikat.map(function(p){ return p.key; }).join(',')].join('|');
+  if (window.__olAlueet && window.__olAlueet.k === ck) return window.__olAlueet.r;
+  var R = { raja: raja, loppu: hetkiMs, paivat: {}, tallenteita: 0, sek: 0, alueet: {} };
+  paikat.forEach(function(p){ R.alueet[p.key] = { sek: 0, paivat: {}, kaiutN: 0, kaiut: {}, parvetN: 0, parvet: {} }; });
+  var cosL = Math.cos((paikat.length ? paikat[0].lat : 63) * Math.PI / 180), m2 = maxM * maxM;
+  function lahin(lat, lon){
+    var paras = null, pe = m2;
+    for (var i = 0; i < paikat.length; i++){
+      var dy = (lat - paikat[i].lat) * 111320, dx = (lon - paikat[i].lon) * 111320 * cosL, e = dx*dx + dy*dy;
+      if (e <= pe){ pe = e; paras = paikat[i].key; }
+    }
+    return paras;
+  }
+  function pv(ms){ var d = new Date(ms); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  T.forEach(function(t){
+    if (t.jarvi !== avain || !t.alku || !Array.isArray(t.aikaS) || !t.aikaS.length) return;
+    var loppuT = t.alku + t.aikaS[t.aikaS.length - 1]*1000;
+    if (loppuT < raja || t.alku > hetkiMs) return;
+    var mukana = false;
+    for (var i = 1; i < t.lat.length; i++){
+      var ms = t.alku + t.aikaS[i]*1000, dt = t.aikaS[i] - t.aikaS[i-1];
+      if (ms < raja || ms > hetkiMs || dt <= 0 || dt > 120) continue;
+      var la = t.lat[i]/1e6, lo = t.lon[i]/1e6, la0 = t.lat[i-1]/1e6, lo0 = t.lon[i-1]/1e6;
+      var v = Math.sqrt(Math.pow((la - la0)*111320, 2) + Math.pow((lo - lo0)*111320*cosL, 2)) / dt * 3.6;
+      mukana = true; R.paivat[pv(ms)] = 1;
+      if (v < 1 || v > 7) continue;
+      R.sek += dt;
+      var k = lahin(la, lo); if (!k) continue;
+      R.alueet[k].sek += dt; R.alueet[k].paivat[pv(ms)] = (R.alueet[k].paivat[pv(ms)] || 0) + dt;
+    }
+    if (!mukana) return;
+    R.tallenteita++;
+    var a = omaLuotausAnturi(t);
+    (t.kalat || []).forEach(function(q){
+      if (q.luokka !== 'iso') return;
+      var ms = q.t || (t.alku + q.aikaS*1000); if (ms < raja || ms > hetkiMs) return;
+      var k = lahin(q.lat, q.lon); if (!k) return;
+      var s = omaLuotausLajiSaanto({ lahella: q.lahella, z: q.z, pohja: q.pohja, anturi: a, muuParvi: q.muuParvi, parviYla: omaLuotausParviYla(t, q) }, avain, kausi);
+      var n = s ? s.nimi : 'muu';
+      R.alueet[k].kaiutN++; R.alueet[k].kaiut[n] = (R.alueet[k].kaiut[n] || 0) + 1;
+    });
+    (t.parvet || []).forEach(function(p){
+      if (p.tyyppi !== 'parvi') return;
+      var ms = p.t || (t.alku + (p.aikaS || 0)*1000); if (ms < raja || ms > hetkiMs) return;
+      var k = lahin(p.lat, p.lon); if (!k) return;
+      var s = omaLuotausParviSaanto(p, avain, kausi), n = s ? s.nimi : 'epäselvä';
+      R.alueet[k].parvetN++; R.alueet[k].parvet[n] = (R.alueet[k].parvet[n] || 0) + 1;
+    });
+  });
+  window.__olAlueet = { k: ck, r: R };
+  return R;
+}

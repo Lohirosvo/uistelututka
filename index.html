@@ -2443,14 +2443,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=219" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=219" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=219" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=219" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=219" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=219" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=219" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=219" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=220" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=220" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=220" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=220" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=220" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=220" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=220" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=220" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
        uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
@@ -11034,6 +11034,56 @@ function sumuriskiAlusta(){
       return { m: m ? parseFloat(m[1].replace(',', '.')) : null, teksti: h.arvo, lahde: h.lahde };
     }
 
+    /* ===== v220 (19.10.2026): VIIMEISET 10 VRK TALLENTEISTA JA SAALIISTA PAIKOITTAIN =====
+       Hannu 19.10.: "Raportteihin saisi laittaa luotauksista tehtyjä päätelmiä viimeisen 10 päivän ajalta eli jos perjantaina on
+       käyty siitä muistellaan seuraavana sunnuntainakin." Valinta: ei pisteitä, vain teksti ("Kaikkea ei voi tallentaa. .sl2
+       muodossa kortin raja tulee vastaan"). Alue = lähin taimen- ja lohipaikka (PAIKKA_LISA), enintään 1,5 km (luotaus.js
+       omaLuotausAlueet). Saaliit kaikki lajit (myös karanneet), ei nollareissuja, samalla aluejaolla. */
+    const L10_VK = ['su', 'ma', 'ti', 'ke', 'to', 'pe', 'la'];
+    const l10Pv = ms => { const d = new Date(ms); return L10_VK[d.getDay()] + ' ' + d.getDate() + '.' + (d.getMonth() + 1) + '.'; };
+    const l10PvAvain = a => { const [y, m, d] = a.split('-').map(Number); return new Date(y, m - 1, d, 12).getTime(); };
+    const l10Lista = O => Object.keys(O).sort((x, y) => O[y] - O[x]).map(k => k + ' ' + O[k]).join(', ');
+    function paikkaLuotaus10(hetki, kausi) {
+      if (typeof omaLuotausAlueet !== 'function' || typeof lappajarviHotspots !== 'object') return null;
+      const hMs = new Date(hetki).getTime();
+      const paikat = Object.keys(PAIKKA_LISA).filter(k => lappajarviHotspots[k]).map(k => ({ key: k, lat: lappajarviHotspots[k].lat, lon: lappajarviHotspots[k].lon }));
+      const A = omaLuotausAlueet('lappajarvi', paikat, hMs, OL_ALUE_VRK, OL_ALUE_M, kausi);
+      const raja = A.raja, cosL = Math.cos(63.15 * Math.PI / 180);
+      const S = {}; let saaliitN = 0;
+      let sl = []; try { sl = lataaSaaliit(); } catch (e) { sl = []; }
+      sl.forEach(x => {
+        if (x.nollareissu || typeof x.lat !== 'number' || typeof x.lon !== 'number' || !x.aika) return;
+        const ms = new Date(x.aika).getTime(); if (!(ms >= raja && ms <= hMs)) return;
+        let paras = null, pe = OL_ALUE_M * OL_ALUE_M;
+        paikat.forEach(p => { const dy = (x.lat - p.lat) * 111320, dx = (x.lon - p.lon) * 111320 * cosL, e = dx * dx + dy * dy; if (e <= pe) { pe = e; paras = p.key; } });
+        if (!paras) return;
+        (S[paras] = S[paras] || []).push({ laji: x.laji || 'tuntematon', ms, karkasi: x.tulos === 'karkasi' });
+        saaliitN++;
+      });
+      const pvt = Object.keys(A.paivat).sort();
+      const tallTxt = pvt.length ? 'tallenteet ' + pvt.map(a => l10Pv(l10PvAvain(a))).join(', ') : 'ei tallenteita';
+      if (!pvt.length && !saaliitN) return { rivi: {}, A, S, pvt, tallTxt, tyhja: true };
+      const rivi = {}, osat = {};
+      paikat.forEach(p => {
+        const a = A.alueet[p.key], sa = (S[p.key] || []).sort((x, y) => x.ms - y.ms), o = [];
+        const min = Math.round(a.sek / 60);
+        const pvMin = Object.keys(a.paivat).sort().filter(k => a.paivat[k] >= 30).map(k => l10Pv(l10PvAvain(k)) + ' ' + Math.round(a.paivat[k] / 60) + ' min');
+        if (min >= 1) o.push('uisteltu noin ' + min + ' min' + (pvMin.length > 1 ? ' (' + pvMin.join(', ') + ')' : pvMin.length ? ' (' + pvMin[0].split(' ').slice(0, 2).join(' ') + ')' : ''));
+        else o.push('ei uistelua tallenteissa');
+        if (sa.length) {
+          const L = {}; sa.forEach(x => { const n = x.laji + (x.karkasi ? ' karkasi' : ''); (L[n] = L[n] || []).push(l10Pv(x.ms)); });
+          o.push('saaliit: ' + Object.keys(L).map(n => { const pv = L[n].filter((d, i, A) => A.indexOf(d) === i);
+            return n + (L[n].length > 1 ? ' ' + L[n].length : '') + ' (' + pv.join(', ') + ')'; }).join(', '));
+        } else o.push('ei saalista');
+        if (a.kaiutN) o.push('isoja kaikuja ' + a.kaiutN + ' (' + l10Lista(a.kaiut) + ')');
+        else if (min >= 1) o.push('ei isoja kaikuja');
+        if (a.parvetN) o.push('syöttikalaparvia ' + a.parvetN + ' (' + l10Lista(a.parvet) + ')');
+        osat[p.key] = { min, saaliit: sa.length, kaiut: a.kaiutN, parvet: a.parvetN, teksti: o.join('; ') };
+        rivi[p.key] = 'Viimeiset 10 vrk: ' + o.join('; ') + '. (' + tallTxt + '; kaikkea ajoa ei tallenneta, joten tästä ei pisteitä.)';
+      });
+      return { rivi, osat, A, S, pvt, tallTxt, tyhja: false };
+    }
+
     function pisteytaPaikat(o) {
       // o: { tunti, hetki, tuuliSuunta, tuuliMs, tuuliLahde, lampo, kausi, valoPorras, syvyysTaimen, syvyysLohi }
       const kerr = kerrostuneisuus();
@@ -11044,6 +11094,8 @@ function sumuriskiAlusta(){
       try { saaliit = lataaSaaliit().filter(x => !x.nollareissu && (x.laji === 'taimen' || x.laji === 'jarvilohi')
                                                 && typeof x.lat === 'number' && typeof x.lon === 'number'); } catch (e) {}
       const puuttuu = new Set();
+      let L10 = null;   // v220: viimeiset 10 vrk tallenteista ja saaliista (teksti, ei pisteitä)
+      try { L10 = paikkaLuotaus10(o.hetki, o.kausi); } catch (e) { L10 = null; }
 
       return Object.keys(PAIKKA_LISA).map(key => {
         const s = lappajarviHotspots[key], lisa = PAIKKA_LISA[key];
@@ -11087,7 +11139,9 @@ function sumuriskiAlusta(){
           lisaa(20, 'Konsensus', 'Syksyn 4–10 asteen ikkunassa taimen partioi lähellä rantaa (Harri Hotti). Kärnänsaaren länsiranta on tähän ikkunaan merkitty paikkasi.');
         // 5 Kärnänsaaren eteläkärki: yleispaikka
         if (key === 'karna') {
-          lisaa(10, 'Paikkatieto', 'Kärki jakaa kraatterin päävirtaukset, joten se toimii tuulella kuin tuulella. Jos muuta perustetta ei ole, tästä on hyvä aloittaa.');
+          // v220: 10 → 3 (Hannu 19.10.: kärki oli raporteissa aina ykkönen ilman yhtään tämän kauden havaintoa; valinta "yleispaikka 10 → 3").
+          // Kiinteä lisä on vain tasapelin ratkaisija, kuten teksti sanoo.
+          lisaa(3, 'Paikkatieto', 'Kärki jakaa kraatterin päävirtaukset, joten se toimii tuulella kuin tuulella. Pieni lisä ratkaisee tasapelin: jos muuta perustetta ei ole, tästä on hyvä aloittaa.');
           if (o.lampo > 8 && o.lampo <= 16) lisaa(10, 'Paikkatieto', '8–16 asteen vedessä iso kala nousee syvänteestä pöydän reunaan syömään.');
         }
         // 6 Selkäsaarten merkitty tuuli
@@ -11137,6 +11191,8 @@ function sumuriskiAlusta(){
             + (samat ? ', niistä ' + samat + ' samankaltaisissa oloissa (tuulen suunta, veden lämpö, kausi).' : '. Olot olivat silloin toiset, joten paino on pienempi.')
             + (lahella.length < 5 ? ' Aineistoa on vielä vähän.' : ''));
         }
+        // 11 v220: viimeiset 10 vrk tallenteista ja saaliista (Hannu 19.10.), ei pisteitä
+        if (L10 && L10.rivi[key]) lisaa(0, 'Oma luotaus', L10.rivi[key]);
         const pisteet = syyt.reduce((acc, x) => acc + x.p, 0);
         return { key, spot: s, pisteet, syyt, suljettu, puuttuu };
       }).filter(Boolean).sort((x, y) => (x.suljettu - y.suljettu) || (y.pisteet - x.pisteet));
@@ -13185,6 +13241,22 @@ function sumuriskiAlusta(){
       el.innerHTML = h;
     }
 
+    // v220: Raportit-ruudun osio "Viimeiset 10 vrk tallenteista ja saaliista" (kaikki alueet, joilla on ajoa, saalis tai kaikuja).
+    function l10Html(hetki, kausi) {
+      let L = null; try { L = paikkaLuotaus10(hetki, kausi); } catch (e) { L = null; }
+      if (!L) return '';
+      const ots = '<p style="font-size:14px;margin:10px 0 0;" id="l10Otsikko"><strong>Viimeiset 10 vrk tallenteista ja saaliista</strong> — muistiksi, ei pisteitä</p>';
+      if (L.tyhja) return ots + '<p class="hint" style="margin:4px 0 0;" id="l10Lista">Ei Lappajärven tallenteita eikä saaliita 10 vuorokauden ajalta.</p>';
+      const keys = Object.keys(L.osat).filter(k => L.osat[k].min >= 1 || L.osat[k].saaliit || L.osat[k].kaiut || L.osat[k].parvet)
+        .sort((x, y) => (L.osat[y].saaliit - L.osat[x].saaliit) || (L.osat[y].min - L.osat[x].min));
+      const tunnit = Math.round(L.A.sek / 360) / 10;
+      const rivit = keys.map(k => '<div style="margin:5px 0;"><strong>' + lappajarviHotspots[k].name + '</strong>: ' + L.osat[k].teksti + '.</div>').join('');
+      return ots + '<div style="font-size:13px;line-height:1.45;" id="l10Lista">'
+        + '<div class="hint" style="margin:3px 0;">' + L.tallTxt.charAt(0).toUpperCase() + L.tallTxt.slice(1) + ' (' + L.A.tallenteita + ' tallennetta, uisteltu noin ' + String(tunnit).replace('.', ',') + ' h). '
+        + 'Alue on lähin nimetty taimen- ja lohipaikka, enintään 1,5 km. Kaikkea ajoa ei tallenneta (muistikortin raja), joten puuttuva ajo ei tarkoita, ettei paikalla käyty.</div>'
+        + (rivit || '<div class="hint">Tallenteissa ei ajoa nimettyjen paikkojen lähellä.</div>') + '</div>';
+    }
+
     function evaluateHotspots(o) {
       const tulos = pisteytaPaikat(o);
       const kaytossa = tulos.filter(x => !x.suljettu);
@@ -13594,7 +13666,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v219';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v220';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -14366,7 +14438,7 @@ function sumuriskiAlusta(){
     }
     const TASO_PUHE = { 'Tutkittu': 'Tämä on tutkittua tietoa.', 'Oma saalis': 'Tämä perustuu omiin saaliisiisi.', 'Oma kokemus': 'Tämä perustuu omaan kokemukseesi.',
       'Konsensus': 'Tämä on uistelijoiden yleinen käsitys, ei tieteellistä näyttöä.', 'Malli': 'Tämä on mallin arvio.',
-      'Paikkatieto': 'Tämä on omista merkinnöistäsi.', 'Rekisteri': 'Tämä on Suurkalarekisteristä.' };
+      'Paikkatieto': 'Tämä on omista merkinnöistäsi.', 'Rekisteri': 'Tämä on Suurkalarekisteristä.', 'Oma luotaus': 'Tämä on omista luotaintallenteistasi.' };
     // "kello 6 05", ei "06.05": puhemoottori lukee välilyönnin luontevasti
     const kelloPuhe = d => d.getHours() + (d.getMinutes() ? ' ' + String(d.getMinutes()).padStart(2, '0') : '');
     function eroPuhe(x) {
@@ -18791,6 +18863,7 @@ function sumuriskiAlusta(){
       </p>
       <div style="font-size:14px;line-height:1.45;color:var(--text);">${syyt}</div>${lataa}
       ${vaihto ? '<p style="font-size:14px;margin:10px 0 0;"><strong>Seuraavat vaihtoehdot</strong></p><div style="font-size:13px;line-height:1.45;">' + vaihto + '</div>' : ''}
+      ${l10Html(new Date(hotspotResult.hetki || now), answers.season)}
       ${vinkitHtml ? '<p style="font-size:14px;margin:10px 0 0;"><strong>Yleisvinkit kartasta</strong> — ei nimettyä paikkaa, mutta peruste on</p><div style="font-size:13px;line-height:1.45;">' + vinkitHtml + '</div>' : ''}
       <p style="font-size:14px;margin:10px 0 0;"><strong>Päivän aktiivisuus</strong> — kertoo milloin, ei missä</p>
       <div style="font-size:13px;line-height:1.45;">${aktiivisuusHtml(now, targetHour)}</div>
@@ -21886,7 +21959,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=219';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=220';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })
