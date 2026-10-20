@@ -2443,14 +2443,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=223" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=223" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=223" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=223" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=223" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=223" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=223" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=223" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=224" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=224" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=224" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=224" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=224" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=224" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=224" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=224" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
        uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
@@ -3008,6 +3008,12 @@ body{padding-bottom:66px}
       { nimi: 'Päijänne',               lat: [61.10, 62.30], lon: [25.15, 26.05] },
       { nimi: 'Pielinen',               lat: [62.90, 63.65], lon: [29.00, 30.20] },
       { nimi: 'Inarijärvi',             lat: [68.60, 69.30], lon: [26.80, 28.80] },
+      /* v224 (20.10.2026): Hannu: "Tehdään Inarinjärvi ainakin rantaviiva json ja Veskoniemen jääsaarten alue". Koko järvi
+         (1 040 km², yli 3 000 saarta) on liian iso 50 m:n ruudukoksi, joten järvikartta rakennetaan tältä rajaukselta.
+         Tarkistettu Luontoon.fi:stä 20.10.: Veskoniemen venesatama 68° 47,141' N 27° 38,744' E (ETRS-TM35FIN N 7630602 E 526077)
+         ja Jääsaaren veneilytukikohta (Iso Jääsaaren kaakkoisranta) 68° 52,1344' N 27° 43,5452' E (N 7639917 E 529198), väli
+         noin 9,8 km pohjoiskoilliseen. Rajaus niiden keskipisteestä noin 10 km joka suuntaan (20 × 20 km), arvio. */
+      { nimi: 'Inarijärvi (Veskoniemi–Jääsaaret)', lat: [68.74, 68.92], lon: [27.44, 27.94] },
       /* v131: Pohjanmaa Cupin järvet (Hannu 3.10.2026). Väljät rajaukset; järvi valitaan
          siemenpisteestä (JK_KOHTEET). Kuhalordi, Kivitippu ja Vimpeli = Lappajärvi (tehty). */
       { nimi: 'Alajärvi',               lat: [62.92, 63.10], lon: [23.65, 23.95] },
@@ -4360,7 +4366,12 @@ window.addEventListener('load', function(){
          silloinkin (ruutujen syvyys 3 m oletus), ja syvyydet luetaan myöhemmin Hannun karttakuvista kuten Saimaalla.
          50 m ruudut kuten Lappajärvellä (Hannu 18.10.: tarkkuus). */
       { ohita: true, avain: 'ylakeitele', nimi: 'Ylä-Keitele', laatikko: 'Ylä-Keitele', siemen: [63.105561, 25.701567], ruutu: 50, lataaSyvyydet: true, rajaa: true,   // v211: upotettu
-        rantaIlmanSyvyytta: true, virallinen: null }
+        rantaIlmanSyvyytta: true, virallinen: null },
+      /* v224: Inarijärvi, Veskoniemen–Jääsaarten alue (ks. LUOT_LAATIKOT). Siemen = Veskoniemen venesatama (rannalla: lähin
+         vesiruutu 2 km sisältä). 50 m ruudut ja rajaus kuten Ylä-Keiteleellä. Jos MML:ssä ei ole syvyyksiä, rantaviiva ja
+         ruudukko rakennetaan silti (3 m oletus), ja syvyydet luetaan myöhemmin karttakuvista. */
+      { avain: 'inarijarvi', nimi: 'Inarijärvi', laatikko: 'Inarijärvi (Veskoniemi–Jääsaaret)', siemen: [68.785683, 27.645733], ruutu: 50, lataaSyvyydet: true, rajaa: true,
+        rantaIlmanSyvyytta: true, virallinen: 'Wikipedia: koko järvi 1 040 km², suurin syvyys 92 m, keskisyvyys 15 m; tässä vain Veskoniemen–Jääsaarten alue' }
     ];
     var jkTulos = null;
     function jkRenkaat(geom) {   // [[ [lon,lat], ... ], ...] kaikki renkaat
@@ -13669,7 +13680,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v223';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v224';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -21989,7 +22000,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=223';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=224';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })
