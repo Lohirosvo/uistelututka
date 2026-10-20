@@ -127,6 +127,8 @@
   v215 (18.10.2026): vain versionumero (etusivun syöttikalakorttiin havaittu parven syvyys omasta luotaimesta).
   v216 (18.10.2026): isojen kaikujen napautuksessa matalan pohjan lajiepäily (hauki, ahven, made tai lahna) luotaus.js:n kausisäännöstä; muuten vain versionumero.
   v217 (18.10.2026): vain versionumero (taimenkorttiin rannan pintalämpö; matalan pohjan todisteeseen Hannun ahven- ja haukikoot luotaus.js:ssä).
+  v223 (20.10.2026): saaliin napautukseen järvilohen kaista (kirjaus.js saalisLohiKaista: etäisyys lähimpään kaistaan kirjaushetken
+    tunnin tuulella, tunnus, pisteet, sija).
   v222 (19.10.2026): JÄRVILOHEN LENKKI PIDEMMÄKSI (Hannu kuva 13.39: "pidempi … tynkä 2 x"): suorat enintään 3,5 km (lenkki noin
     7,6 km, ennen 4 km), kaikujen kautta suorat enintään 5,5 km (REITTI_LEG_LOHI, REITTI_LEG_PITKA). Taimenreitti ennallaan.
   v221 (19.10.2026): JÄRVILOHIREITIN LENKKI JÄRVILOHI-EPÄILYJEN KAUTTA (Hannu: "pidentämällä ajettavaa ohjelenkkiä. Jos on 2 km säteellä"):
@@ -323,18 +325,18 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=222" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=222" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=222" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=222" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=222" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=222" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=222" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=222" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=223" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=223" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=223" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=223" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=223" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=223" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=223" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=223" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v222';
+    const APP_VERSIO = 'v223';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
@@ -2062,6 +2064,7 @@
         if (typeof x.pohjaVeneellaM === 'number') o.push('pohja ' + n1(x.pohjaVeneellaM) + ' m');
         if (typeof x.malliAaltoM === 'number') o.push('aalto ' + n2(x.malliAaltoM) + ' m (malli)');
         if (saalisVanaTeksti(x)) o.push(saalisVanaTeksti(x));   // v201
+        if (typeof x.lohiKaistaM === 'number') o.push('järvilohikaista ' + x.lohiKaistaTunnus + ' (' + x.lohiKaistaPisteet + ' %) ' + x.lohiKaistaM + ' m');   // v223
         lisaa(x.lat, x.lon, '<b style="color:#ffd166">' + (saalisKarkasi(x) ? 'Karkasi' : 'Saalis') + '</b> ' + o.join(' · ') + (x.iskuTunnus ? ' · isku ' + x.iskuTunnus : '')
           + (x.paikkaKorjaus ? '<br>' + korjausTeksti(x) : '')
           + (x.taydennetty === false ? '<br><span style="color:#7E93AC">Täydennä etusivun saalislistasta.</span>' : ''), x.id);

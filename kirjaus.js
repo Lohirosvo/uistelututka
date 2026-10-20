@@ -34,7 +34,7 @@ function saalisPaivitaTalteen(snap) {
     if (ix < 0) return;
     // säilytetään käyttäjän täydennykset, lisätään vain mallikentät ja veden liike
     const t = lista[ix];
-    Object.keys(snap).forEach(function (k) { if (/^malli|^vesiLiike$/.test(k) && snap[k] !== undefined && snap[k] !== null) t[k] = snap[k]; });
+    Object.keys(snap).forEach(function (k) { if (/^malli|^vesiLiike$|^lohiKaist/.test(k) && snap[k] !== undefined && snap[k] !== null) t[k] = snap[k]; });   // v223: lohiKaista*
     tallennaSaaliit(lista);
   } catch (e) {}
 }
@@ -334,6 +334,38 @@ function saalisTuoreSuunta(oma, t) {
 /* Mallin arviot saaliin kohdalta (siirretty etusivun kalaKiinnistä v180, sisältö ennallaan). Aaltomalli
    käynnistetään hiljaa, jos sitä ei ole avattu; arvot täydentyvät samaan tallennettuun riviin, kun ennuste on
    haettu. 4.10.2026 (v149): veden liike saaliin kohdalla ja järven osuus kussakin luokassa samalla hetkellä. */
+/* JÄRVILOHEN KAISTA SAALISRIVILLE — 20.10.2026 (v223). Hannu 20.10.: "Tee kaistatiedot" (ehdotus: jokainen tärppi suoraan
+   Lintuselän mallin kokeeksi; ennuste lukittuu kirjaushetkellä, ei jälkikäteen laskettuna). Kala kiinni -rivin täydennyksessä
+   (saalisMalliTaydennys) lasketaan järvilohen kaistat (aaltomalli.js akLohiKaistat, sijat 1–20) samalla tunnin tuulella kuin
+   mallikentät (malliTuuliMs, malliTuuliSuunta; tilannekuvan kaistat käyttävät samaa tuntia) ja etäisyys lähimpään kaistaan
+   (300 m:n janaan, ei keskipisteeseen):
+     lohiKaistaM        metriä lähimpään kaistaan
+     lohiKaistaTunnus   kaistan tunnus sillä tunnilla (L1 = paras)
+     lohiKaistaPisteet  kaistan pisteet (%)
+     lohiKaistaSija     kaistan sija 1–20 (= tunnuksen numero)
+     lohiKaistoja       kaistojen määrä sillä tunnilla
+     lohiKaistaVersio   sovelluksen versio, jolla laskettiin (malli voi muuttua)
+   Kaikille lajeille ja myös karanneille (vertailu järvilohen ja muiden lajien välillä); ei nollareissuille. Vain jos piste on
+   saman järven vedessä, jonka kaistat on laskettu. Paikan korjaus (saalisSiirra) laskee uudelleen. */
+const SAALIS_KAISTA_KENTAT = ['lohiKaistaM', 'lohiKaistaTunnus', 'lohiKaistaPisteet', 'lohiKaistaSija', 'lohiKaistoja', 'lohiKaistaVersio'];
+function saalisLohiKaista(snap, U, dir) {
+  if (!snap || snap.nollareissu || typeof snap.lat !== 'number' || typeof snap.lon !== 'number' || typeof window.akLohiKaistat !== 'function') return false;
+  const jp = typeof window.akJarviPisteessa === 'function' ? window.akJarviPisteessa(snap.lat, snap.lon) : null;
+  if (!jp) return false;
+  let L = null; try { L = window.akLohiKaistat({ U: U, dir: dir, max: 20 }); } catch (e) { L = null; }
+  if (!L || L.tila !== 'ok' || L.avain !== jp || !L.kaistat || !L.kaistat.length) return false;
+  const c = Math.cos(snap.lat * Math.PI / 180), xy = (la, lo) => [(lo - snap.lon) * 111320 * c, (la - snap.lat) * 111320];
+  let paras = null;
+  L.kaistat.forEach(function (q, i) {
+    const A = xy(q.a.lat, q.a.lon), B = xy(q.b.lat, q.b.lon), dx = B[0] - A[0], dy = B[1] - A[1], l2 = dx * dx + dy * dy;
+    const t = l2 > 0 ? Math.max(0, Math.min(1, -(A[0] * dx + A[1] * dy) / l2)) : 0, ex = A[0] + t * dx, ey = A[1] + t * dy, d = Math.sqrt(ex * ex + ey * ey);
+    if (!paras || d < paras.d) paras = { d: d, q: q, i: i };
+  });
+  snap.lohiKaistaM = Math.round(paras.d); snap.lohiKaistaTunnus = paras.q.tunnus; snap.lohiKaistaPisteet = paras.q.pisteet;
+  snap.lohiKaistaSija = paras.i + 1; snap.lohiKaistoja = L.kaistat.length;
+  snap.lohiKaistaVersio = typeof APP_VERSIO === 'string' ? APP_VERSIO : null;
+  return true;
+}
 function saalisMalliTaydennys(snap) {
   if (typeof window.akKaynnistaHiljaa === 'function') window.akKaynnistaHiljaa();
   if (typeof window.akMalliPisteessa === 'function' && snap.lat !== null) {
@@ -350,6 +382,7 @@ function saalisMalliTaydennys(snap) {
       snap.malliLapiSuunta = pyor(m.lapiSuunta, 0);
       snap.malliTuuliMs = pyor(m.tuuliMs, 1);
       snap.malliTuuliSuunta = pyor(m.tuuliSuunta, 0);
+      try { saalisLohiKaista(snap, m.tuuliMs, m.tuuliSuunta); } catch (e) {}   // v223: järvilohen kaista saman tunnin tuulella
       saalisPaivitaTalteen(snap);   // v151: tietue on jo tallessa, päivitetään mallikentät
     }).catch(function () {});
   }
@@ -417,7 +450,8 @@ const SAALIS_PAIKKAKENTAT = ['lat', 'lon', 'pohjaVeneellaM', 'veneellaTyyppi', '
   'taimenHarppausMalliM', 'taimenMalliVaihe', 'malliAaltoM', 'malliPintavirtausKmh', 'malliPintavirtausSuunta', 'malliSyvaKmh', 'malliSyvaSuunta',
   'malliSyvaTuuleen', 'malliLapiKmh', 'malliLapiSuunta', 'malliTuuliMs', 'malliTuuliSuunta', 'vesiLiike',
   'sjPohjaM', 'sjKaltevuus', 'sjAsento', 'sjAaltoM', 'sjMuotoM', 'sjRannastaM', 'sjHarppausM', 'sjTuuliMs', 'sjTuuliSuunta',
-  'klooniTunnukset', 'klooniOsuma', 'klooniOsumaPisteet', 'klooniOsumaM'];
+  'klooniTunnukset', 'klooniOsuma', 'klooniOsumaPisteet', 'klooniOsumaM',
+  'lohiKaistaM', 'lohiKaistaTunnus', 'lohiKaistaPisteet', 'lohiKaistaSija', 'lohiKaistoja', 'lohiKaistaVersio'];   // v223
 function saalisKarkasi(x) { return !!x && x.tulos === 'karkasi'; }
 function saalisRivi(id) { return lataaSaaliit().find(x => x && x.id === id) || null; }
 function saalisKorvaa(rivi) {   // koko rivi takaisin (epäonnistuneen korjauksen peruminen)

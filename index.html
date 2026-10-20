@@ -2443,14 +2443,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=222" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=222" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=222" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=222" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=222" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=222" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=222" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=222" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=223" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=223" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=223" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=223" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=223" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=223" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=223" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=223" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
        uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
@@ -9507,7 +9507,9 @@ function sumuriskiAlusta(){
       // 18.10.2026 (v206): taimenen kokoluokka (yli50 | alle50)
       'koko',
       // 18.10.2026 (v207): viehesyvyyden pikaluokka (yli 6 m: max tyhjä) ja lähde (oletus | valittu)
-      'vieheSyvMin','vieheSyvMax','vieheSyvLahde'];
+      'vieheSyvMin','vieheSyvMax','vieheSyvLahde',
+      // 20.10.2026 (v223): järvilohen kaista saaliin kohdalla (Lintuselän malli, kirjaushetken tunnin tuuli)
+      'lohiKaistaM','lohiKaistaTunnus','lohiKaistaPisteet','lohiKaistaSija','lohiKaistoja','lohiKaistaVersio'];
     const SAALIS_CSV_JOHDETUT = {   // v205: sarakkeet, jotka luetaan paikkaKorjaus-oliosta
       paikkaKorjattuM: s => s.paikkaKorjaus ? s.paikkaKorjaus.siirtoM : null,
       alkupLat: s => s.paikkaKorjaus && s.paikkaKorjaus.alkup ? s.paikkaKorjaus.alkup.lat : null,
@@ -13667,7 +13669,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v222';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v223';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -20924,7 +20926,7 @@ function laskeOsuvuus(){
   });
 
   // 30.9.2026 (v108): hudit ja paikkaosuvuus näkyvät myös alle kolmella kalalla
-  const lisat = osuvuusHudit(parit) + osuvuusPaikka(lista);
+  const lisat = osuvuusHudit(parit) + osuvuusPaikka(lista) + osuvuusLohiKaista(lista);   // v223
   if(parit.length < 3){
     tila.innerHTML = 'Vertailuun tarvitaan vähintään kolme kirjausta joissa on sekä '
       + 'saalissyvyys että mallin ennuste. Nyt niitä on <strong>' + parit.length + '</strong>. '
@@ -21048,6 +21050,33 @@ function osuvuusPaikka(lista){
     + '<p class="hint" style="margin-top:6px;">Varaus: jos ajoit suosituksen perusteella, kala tulee sen lähelle '
     + 'joka tapauksessa. Luku kertoo, missä olit, ei sitä, oliko suositus paras. Siihen tarvitaan myös hetket, '
     + 'jolloin suosituksella ei syönyt.</p>';
+}
+
+/* JÄRVILOHEN KAISTAT JA SAALIIT — 20.10.2026 (v223). Kala kiinni -rivin lohiKaista* (kirjaus.js saalisLohiKaista): etäisyys
+   lähimpään Lintuselän mallin kaistaan kirjaushetken tunnin tuulella. Järvilohi ja karanneet erikseen, muut lajit vertailuksi.
+   Sama varaus kuin paikkaosuvuudessa: jos ajoit kaistoja, kala tulee niiden lähelle joka tapauksessa. */
+const OSUVUUS_KAISTA_LAHELLA_M = 150;
+function osuvuusLohiKaista(lista){
+  const R = (lista || []).filter(function(x){ return x && !x.nollareissu && typeof x.lohiKaistaM === 'number'; });
+  const otsikko = '<h3 style="font-size:14px;margin:14px 0 4px;">Järvilohen kaistat ja saaliit</h3>';
+  if(!R.length) return otsikko + '<p class="hint">Yhdessäkään kirjauksessa ei ole vielä etäisyyttä järvilohen kaistaan (kenttä lisättiin 20.10.2026, v223). '
+    + 'Se tallentuu Kala kiinni -kirjauksen yhteydessä, kun syvyyskartta ja tuuliennuste ovat ladattuina.</p>';
+  const km = function(m){ return m < 1000 ? Math.round(m) + ' m' : (m/1000).toFixed(1).replace('.', ',') + ' km'; };
+  const ryhma = function(nimi, A){
+    if(!A.length) return '';
+    const e = A.map(function(x){ return x.lohiKaistaM; }).sort(function(a,b){ return a-b; }), n = e.length;
+    const med = n % 2 ? e[(n-1)/2] : (e[n/2-1] + e[n/2]) / 2, lah = e.filter(function(v){ return v <= OSUVUUS_KAISTA_LAHELLA_M; }).length;
+    const sijat = A.filter(function(x){ return x.lohiKaistaM <= OSUVUUS_KAISTA_LAHELLA_M; }).map(function(x){ return x.lohiKaistaTunnus + ' (' + x.lohiKaistaPisteet + ' %)'; });
+    return '<div style="margin:3px 0;" data-kaistaryhma="' + nimi + '"><strong>' + nimi + '</strong>: ' + lah + '/' + n + ' alle ' + OSUVUUS_KAISTA_LAHELLA_M + ' m kaistasta, mediaani ' + km(med)
+      + (sijat.length ? '; kaistalla: ' + sijat.join(', ') : '') + '.</div>';
+  };
+  const lohi = R.filter(function(x){ return x.laji === 'jarvilohi' && x.tulos !== 'karkasi'; });
+  const lohiK = R.filter(function(x){ return x.laji === 'jarvilohi' && x.tulos === 'karkasi'; });
+  const muut = R.filter(function(x){ return x.laji !== 'jarvilohi'; });
+  return otsikko + '<div style="font-size:13px;line-height:1.45;">'
+    + ryhma('Järvilohi', lohi) + ryhma('Järvilohi, karannut', lohiK) + ryhma('Muut lajit (vertailu)', muut) + '</div>'
+    + '<p class="hint" style="margin-top:6px;">Etäisyys kirjaushetken tunnin tuulella lasketun kaistan (300 m) lähimpään kohtaan. '
+    + 'Jos ajoit kaistoja, kala tulee niiden lähelle joka tapauksessa: vertaa järvilohta muihin lajeihin samalla ajolla. Malli voi muuttua; versio on rivillä (lohiKaistaVersio).</p>';
 }
 
 /* ===== SYVYYS HAARUKKANA =====
@@ -21960,7 +21989,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=222';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=223';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })
