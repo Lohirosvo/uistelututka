@@ -1759,6 +1759,13 @@ function akNaytaPisteSisalto(){
   }
   if (akTila === 'syvyys' && akViime.syvK){
     var omaQ = null; try { var ro2 = omaLuotausSolut(jarvi.kartta); omaQ = ro2 && ro2.solut ? ro2.solut[q] : null; } catch (e) {}   // v176
+    /* v225: kohta, jonka syvyyttä ei ole luettu (kattavuus; Inarijärvi kokonaan, Ylä-Keiteleen ja Saimaan aukot): ruudun arvo on
+       vain mallin oletus, joten sitä ei näytetä syvyytenä. */
+    var katKb = null; try { var avK = akNykyAvain(); if (avK && jarvi.kartta.kattavuus) katKb = akKattavuusPurku[avK] || (akKattavuusPurku[avK] = atob(jarvi.kartta.kattavuus)); } catch (e) { katKb = null; }
+    if ((omaQ === null || omaQ === undefined) && katKb && !((katKb.charCodeAt(q >> 3) >> (7 - (q & 7))) & 1)){
+      el.innerHTML = "Syvyyttä ei ole luettu tästä kohdasta · malli olettaa noin " + akViime.syvK[q].toFixed(1).replace(".", ",") + " m (" + akSyvyysLahde() + "), ei navigointiin";
+      return;
+    }
     el.innerHTML = "Syvyys tässä noin <b>" + akViime.syvK[q].toFixed(1).replace(".", ",") + " m</b> · "
       + (omaQ !== null && omaQ !== undefined ? "oma luotaus, ruudun (" + jarvi.kartta.ruutu + " m) mediaani, ei tasoitettu" : akSyvyysLahde() + " · pehmennetty ±75 m") + ", ei navigointiin";
     return;
@@ -1807,10 +1814,12 @@ function akNaytaPisteSisalto(){
     + (akSyvyys && akSyvyys[q] > 0 && h >= 0.98*akGamma(q)*Math.max(0.2, akSyvyys[q]) ? "<br>syvyys rajaa aallon tässä: aallot murtuvat (katso Murtuva aallokko)" : "");   // v167
 }
 
+window.akSyvyysLahde = function(){ return jarvi ? akSyvyysLahde() : null; };   // v225: testeille
 function akSyvyysLahde(){   // v145: syvyyslähde järven mukaan (ennen DataDeck kaikille)
   if (jarvi === JARVET.hirvijarvi) return 'oma luotauskartta (omat lokit)';
   if (jarvi === JARVET.lappajarvi) return jarvi.kartta.ruutu === 50 ? '© MML, 50 m ruudut' : 'DataDeck-kartta · © MML · © Väylävirasto · © SYKE';
   if (jarvi === JARVET.toisvesi || jarvi === JARVET.saimaa_imatra || jarvi === JARVET.ylakeitele) return 'karttakuvat, rantaviiva © MML';   // v211: Ylä-Keitele
+  if (jarvi === JARVET.inarijarvi) return 'syvyys tuntematon (malli olettaa 10–15 m), rantaviiva © MML';   // v225
   return '© Maanmittauslaitos, maastotietokanta';
 }
 function naytaTiedot(d){
