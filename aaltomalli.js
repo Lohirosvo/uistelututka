@@ -1819,7 +1819,7 @@ function akSyvyysLahde(){   // v145: syvyyslähde järven mukaan (ennen DataDeck
   if (jarvi === JARVET.hirvijarvi) return 'oma luotauskartta (omat lokit)';
   if (jarvi === JARVET.lappajarvi) return jarvi.kartta.ruutu === 50 ? '© MML, 50 m ruudut' : 'DataDeck-kartta · © MML · © Väylävirasto · © SYKE';
   if (jarvi === JARVET.toisvesi || jarvi === JARVET.saimaa_imatra || jarvi === JARVET.ylakeitele) return 'karttakuvat, rantaviiva © MML';   // v211: Ylä-Keitele
-  if (jarvi === JARVET.inarijarvi) return 'syvyys tuntematon (malli olettaa 10–15 m), rantaviiva © MML';   // v225
+  if (jarvi === JARVET.inarijarvi) return 'karttakuvat ja luotaus osalta aluetta (muualla malli olettaa 10–15 m), rantaviiva © MML';   // v225, v227
   return '© Maanmittauslaitos, maastotietokanta';
 }
 function naytaTiedot(d){

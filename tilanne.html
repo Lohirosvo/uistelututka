@@ -127,6 +127,7 @@
   v215 (18.10.2026): vain versionumero (etusivun syöttikalakorttiin havaittu parven syvyys omasta luotaimesta).
   v216 (18.10.2026): isojen kaikujen napautuksessa matalan pohjan lajiepäily (hauki, ahven, made tai lahna) luotaus.js:n kausisäännöstä; muuten vain versionumero.
   v217 (18.10.2026): vain versionumero (taimenkorttiin rannan pintalämpö; matalan pohjan todisteeseen Hannun ahven- ja haukikoot luotaus.js:ssä).
+  v227 (20.10.2026): vain versio (Inarijärven syvyydet jarvet.js:ssä).
   v226 (20.10.2026): vain versio (Inarijärven rakennusrajaus laajennettu index.html:ssä).
   v225 (20.10.2026): Inarijärvi järvenä (jarvet.js, Veskoniemen–Jääsaarten alue, vain rantaviiva); tilannekuvassa valittavissa (ei omaa koodimuutosta).
   v224 (20.10.2026): vain versio (etusivun järvikarttojen rakennukseen Inarijärvi, Veskoniemen–Jääsaarten alue).
@@ -328,18 +329,18 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=226" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=226" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=226" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=226" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=226" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=226" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=226" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=226" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=227" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=227" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=227" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=227" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=227" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=227" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=227" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=227" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v226';
+    const APP_VERSIO = 'v227';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
