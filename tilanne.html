@@ -127,6 +127,7 @@
   v215 (18.10.2026): vain versionumero (etusivun syöttikalakorttiin havaittu parven syvyys omasta luotaimesta).
   v216 (18.10.2026): isojen kaikujen napautuksessa matalan pohjan lajiepäily (hauki, ahven, made tai lahna) luotaus.js:n kausisäännöstä; muuten vain versionumero.
   v217 (18.10.2026): vain versionumero (taimenkorttiin rannan pintalämpö; matalan pohjan todisteeseen Hannun ahven- ja haukikoot luotaus.js:ssä).
+  v230 (21.10.2026): Vuosi sitten samassa vedessä -kerros (vuosiKaiut, vuosiMerkki, vuosiValikko, napautus; as.vuosi).
   v229 (21.10.2026): vain versio (tiivis muisti luotaus.js:ssä).
   v228 (21.10.2026): syvyystilan oman luotauksen jälki vain viimeiset 10 vrk (omaLuotausJalki).
   v227 (20.10.2026): vain versio (Inarijärven syvyydet jarvet.js:ssä).
@@ -331,18 +332,18 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=229" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=229" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=229" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=229" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=229" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=229" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=229" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=229" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=230" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=230" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=230" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=230" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=230" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=230" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=230" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=230" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v229';
+    const APP_VERSIO = 'v230';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
@@ -355,7 +356,7 @@
     const kk = n => String(n).padStart(2, '0');
     const ilmansuunta = deg => ['P', 'KO', 'I', 'KA', 'E', 'LO', 'L', 'LU'][Math.round((((deg % 360) + 360) % 360) / 45) % 8];   // mistä tuulee
 
-    let as = { tila: 'aalto', kloonit: true, yo: false, laji: null, selite: false, vaaka: false, kuha: true, taimen: true, kulku: false, lampo: true, parvet: true, kalat: true, kivikko: true, kovaPohja: false, lohi: true, saalisVanat: true, reitti: true, reittiNopeus: null, siirtoNopeus: 25, taimenReitti: true, taimenIka: 14 };   // v206: taimenReitti, taimenIka (vrk)   // v202: järvilohireitti   // v201: saalisVanat (saaliin vana)   // v200: lohi (Lintuselän malli)   // v186: kuha, taimen; v193: kulku (kulkusuunta ylös), lampo, parvet; v194: kalat
+    let as = { tila: 'aalto', kloonit: true, yo: false, laji: null, selite: false, vaaka: false, kuha: true, taimen: true, kulku: false, lampo: true, parvet: true, kalat: true, vuosi: true, kivikko: true, kovaPohja: false, lohi: true, saalisVanat: true, reitti: true, reittiNopeus: null, siirtoNopeus: 25, taimenReitti: true, taimenIka: 14 };   // v206: taimenReitti, taimenIka (vrk)   // v202: järvilohireitti   // v201: saalisVanat (saaliin vana)   // v200: lohi (Lintuselän malli)   // v186: kuha, taimen; v193: kulku (kulkusuunta ylös), lampo, parvet; v194: kalat
     try { as = Object.assign(as, JSON.parse(localStorage.getItem(AS_LS) || '{}')); } catch (e) {}
     const tallennaAs = () => { try { localStorage.setItem(AS_LS, JSON.stringify(as)); } catch (e) {} };
 
@@ -1211,6 +1212,24 @@
           : 'Tälle järvelle ei ole tuotu kova pohja -tiedostoa (tuonti etusivun Oma luotaus -kortista).') + '</div>';
     }
     const isotKaiut = () => typeof omaLuotausKalat === 'function' ? omaLuotausKalat(avain).filter(q => q.luokka === 'iso') : [];
+    /* v230: VUOSI SITTEN SAMASSA VEDESSÄ (omaLuotausVuosiSitten, luotaus.js). Nykyinen pintalämpö reittiVesi():stä (oma luotaus
+       24 h tai etusivun kirjauspohja 12 h); ilman sitä kalenteriviikko ±7 vrk. Katkoviivarengas lajiepäilyn värillä (iso suurempi). */
+    let vuosiVali = { k: null, r: null };
+    function vuosiKaiut() {
+      const v = reittiVesi(), k = avain + '|' + Math.floor(Date.now() / 600000) + '|' + (v ? v.c : '-') + '|' + (window.__olKivikkoV || 0);
+      if (vuosiVali.k !== k) {
+        let r = { kaiut: [], vesi: null, lampo: 0, kalenteri: 0, puolisko: null };
+        try { if (typeof omaLuotausVuosiSitten === 'function') r = omaLuotausVuosiSitten(avain, Date.now(), v ? v.c : null); } catch (e) {}
+        r.vesiLahde = v ? v.lahde : null; vuosiVali = { k, r };
+      }
+      return vuosiVali.r;
+    }
+    function vuosiMerkki(x, y, vari, iso) {
+      ctx.save(); const r = iso ? 6.5 : 4.5;
+      ctx.setLineDash([3, 2]);
+      [[4, '#1a0a1a'], [2, vari]].forEach(([lw, c]) => { ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.lineWidth = lw; ctx.strokeStyle = c; ctx.stroke(); });
+      ctx.restore();
+    }
     // v218: lajiepäilyn sääntö (väri, nimi) kaiulle ja parvelle; null = ei sääntöä tälle järvelle ja kaudelle
     const kaikuSaanto = q => { try { return typeof omaLuotausLajiSaanto === 'function' ? omaLuotausLajiSaanto(q, avain) : null; } catch (e) { return null; } };
     const parviSaanto = q => { try { return typeof omaLuotausParviSaanto === 'function' ? omaLuotausParviSaanto(q, avain) : null; } catch (e) { return null; } };
@@ -1289,6 +1308,12 @@
         kalaMerkki(s2.x, s2.y, q.pohja - q.z <= 0.5, ks ? ks.vari : null);
         ctx.restore();
         if (lahiNimet) nimiot.push({ t: n1(q.zP) + ' m' + (q.t ? ' ' + klooniKello(q.t) : ''), x: s2.x + 10, y: s2.y - 2, v: '#ffb3b5', a: himmea ? 0.5 : 1, p: 0 });
+      });
+      if (as.vuosi) vuosiKaiut().kaiut.forEach(q => {   // v230: aiempien vuosien kaiut samassa vedessä
+        const s2 = naytolle(q.lat, q.lon); if (!nakyy(s2, 20)) return;
+        const ks = kaikuSaanto(q);
+        vuosiMerkki(s2.x, s2.y, ks ? ks.vari : (q.luokka === 'iso' ? '#ff5a5f' : '#d9b0b0'), q.luokka === 'iso');
+        if (lahiNimet && q.luokka === 'iso') nimiot.push({ t: "'" + String(new Date(q.t).getFullYear()).slice(2) + ' ' + n1(q.zP) + ' m', x: s2.x + 9, y: s2.y - 2, v: '#e8d6ff', a: 0.9, p: 2 });
       });
       if (nimiot.length) {
         const varatut = [];
@@ -2108,6 +2133,14 @@
           + '<br>Lajiepäily: <b>' + L.lajit + '</b> · ' + L.peruste + (L.varaus ? '<br>' + L.varaus : '') + (L.kivikko ? '<br>' + L.kivikko : '')
           + '<br><span style="color:#7E93AC">Olosuhdepäätelmä, ei tunnistus: kaikuluotain ei erota lajia. Koko on suhteellinen, ei senttejä: kaiku riippuu myös kalan paikasta keilassa. Tallenne ' + String(q.nimi || '').replace(/</g, '&lt;') + '.</span>');
       });
+      if (as.vuosi) { const VS = vuosiKaiut(); VS.kaiut.forEach(q => {   // v230
+        const ks = kaikuSaanto(q);
+        lisaa(q.lat, q.lon, '<b style="color:' + (ks ? ks.vari : '#e8d6ff') + '">📅 Vuosi sitten: ' + (q.luokka === 'iso' ? 'iso' : 'keskikokoinen') + ' kaiku' + (ks ? ' · ' + ks.nimi : '') + '</b> '
+          + n1(q.zP) + ' m, pohja ' + n1(q.pohjaP) + ' m<br>' + (function (d) { return d.getDate() + '.' + (d.getMonth() + 1) + '.' + d.getFullYear() + ' klo ' + String(d.getHours()).padStart(2, '0') + '.' + String(d.getMinutes()).padStart(2, '0'); })(new Date(q.t)) + ' · vesi ' + (typeof q.vesi === 'number' ? n1(q.vesi) + ' °C' : 'ei tiedossa')
+          + (q.peruste === 'lampo' ? ' (nyt ' + n1(VS.vesi) + ' °C, ' + VS.vesiLahde + '; ±' + n1(OL_VUOSI_LAMPO) + ' °C)' : ' (kalenteriviikko ±' + OL_VUOSI_VRK + ' vrk)')
+          + '<br><span style="color:#7E93AC">Aiemman vuoden kaiku samalla vuodenpuoliskolla (' + (VS.puolisko === 'jaahtyva' ? 'jäähtyvä vesi 16.7. alkaen' : 'lämpenevä vesi 15.7. asti')
+          + '). Lajiepäily tämän päivän säännöillä, ei tunnistus. ' + String(q.nimi || '').replace(/</g, '&lt;') + '.</span>');
+      }); }
       if (as.lampo && !ehd.length && typeof omaLuotausLampoJalki === 'function') {   // v193: lähin lämpöpiste (12 px)
         let lp = null, le = 12;
         omaLuotausLampoJalki(avain).pisteet.forEach(q => { const s2 = naytolle(q.lat, q.lon), e = Math.hypot(s2.x - sx, s2.y - sy); if (e < le) { le = e; lp = q; } });
@@ -2230,6 +2263,7 @@
         + taimenReittiValikko()
         + saalisVanaValikko()
         + tallenneValikko()
+        + vuosiValikko()   // v230
         + kovaPohjaValikko()   // v213
         + '<button class="merkki' + (as.kulku ? ' valittu' : '') + '" data-kulku="1">🧭 ' + (as.kulku ? 'Kulkusuunta ylös' : 'Pohjoinen ylös') + '</button>'
         + '<div class="huom">Kartan suunta (myös pohjoisnuolta napauttamalla). Seurattaessa vene on kolmanneksen keskeltä taaksepäin, jotta edessä näkyy enemmän.</div>'
@@ -2262,6 +2296,16 @@
         + '<button class="merkki' + (as.kivikko && KV.length ? ' valittu' : '') + '" data-kerros="kivikko"' + (KV.length ? '' : ' disabled') + '>🪨 Kivikko (' + KVk * 10 + ' m' + (KVt ? ', taimen ' + KVt * 10 + ' m' : '') + ')</button>'
         + '<div class="huom">' + (L.pisteet.length || P.length || KI.length || KV.length ? 'Lämpö: sininen kylmin, punainen lämpimin. ' + lajiSelite() + ' Vaalea kaari: pohjan tuntumassa (alle 0,5 m), voi olla kivi. Neliö = kivikko sivukeilasta (oranssi kivikko, turkoosi kehä taimenkivikko 0–5 m; kaikki tallenteet). Napauta: aika, syvyys ja lajiepäily. Yli vuorokauden vanhat himmeinä.'
           : 'Ei tallenteita tältä järveltä 7 vrk:n ajalta. Tuo .sl2/.slg etusivun Oma luotaus -kortista.') + '</div>';
+    }
+    function vuosiValikko() {   // v230
+      const V = vuosiKaiut(), n = V.kaiut.length, ni = V.kaiut.filter(q => q.luokka === 'iso').length;
+      return '<div class="huom" style="margin-top:4px;color:var(--text)">Vuosi sitten samassa vedessä</div>'
+        + '<button class="merkki' + (as.vuosi && n ? ' valittu' : '') + '" data-kerros="vuosi"' + (n ? '' : ' disabled') + '>📅 Vuosi sitten (' + n + (n ? ', isoja ' + ni : '') + ')</button>'
+        + '<div class="huom">Aiempien vuosien isot ja keskikokoiset kaiut tältä järveltä samalla vuodenpuoliskolla ('
+        + (V.puolisko === 'jaahtyva' ? 'jäähtyvä vesi 16.7. alkaen' : 'lämpenevä vesi 15.7. asti') + ') '
+        + (typeof V.vesi === 'number' ? 'pintaveden ollessa ' + n1(V.vesi - OL_VUOSI_LAMPO) + '–' + n1(V.vesi + OL_VUOSI_LAMPO) + ' °C (nyt ' + n1(V.vesi) + ' °C, ' + V.vesiLahde + ')'
+          : 'kalenteriviikolla ±' + OL_VUOSI_VRK + ' vrk (veden lämpö ei tiedossa: tuo päivän tallenne tai analysoi etusivulla)')
+        + (V.kalenteri && typeof V.vesi === 'number' ? '; ' + V.kalenteri + ' kaikua ilman lämpöä kalenteriviikolta' : '') + '. Katkoviivarengas, väri lajiepäilyn mukaan.</div>';
     }
     // v187: millä veneellä rajat lasketaan (sama valinta kuin etusivun aallonkorkeuskortissa)
     function veneValikko() {

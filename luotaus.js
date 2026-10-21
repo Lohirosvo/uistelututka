@@ -595,9 +595,11 @@ function omaLuotausRyhmaKaiut(avain, ryhma, hetkiMs, vrk, kausi){
      jarvet: { avain|'_': { syv, kaiut, parvet, kivikko } } }, kaikki taulukkoina (ei kenttänimiä) tilan säästämiseksi:
      syv     [lat·1e5, lon·1e5, syvyys cm (anturi mukana), n]  — 50 m:n kiinteä ruutu (ei järven ruudukko, joka voi vaihtua);
              sama ruutu uudessa tiivistyksessä: n-painotettu keskiarvo; pisteet → omaLuotausPisteet (n-painotettu mediaani)
-     kaiut   [t s, lat·1e5, lon·1e5, z cm, pohja cm, voimakkuus, 'i'|'k', kaari 0/1, lahella, parviM, muuParvi [m, yla dm, ala dm]|null]
-             — isot ja keskikokoiset kaikki (pohja = kuha, väli/parvi = järvilohi, taimen); lajisäännöt voi ajaa uudelleen
-     parvet  [t s, lat·1e5, lon·1e5, yla dm, ala dm, pohja dm, voima, tyyppi, pituusM, kestoS]
+     kaiut   [t s, lat·1e5, lon·1e5, z cm, pohja cm, voimakkuus, 'i'|'k', kaari 0/1, lahella, parviM, muuParvi [m, yla dm, ala dm]|null,
+              vesi °C·10|null, parviYla dm|null] — isot ja keskikokoiset kaikki (pohja = kuha, väli/parvi = järvilohi, taimen); lajisäännöt
+             voi ajaa uudelleen. v230: 13 kenttää, syvyydet anturi mukana, vesi = pintalämpö kaiun hetkellä (lähin piste ajassa) ja
+             parviYla (parven yläpinta, sääntö "parven yläpuolella"); v229:n 11 kentän riveissä syvyydet anturista, ei lämpöä.
+     parvet  [t s, lat·1e5, lon·1e5, yla dm, ala dm, pohja dm, voima, tyyppi, pituusM, kestoS, vesi °C·10|null (v230)]
      kivikko [t s, lat·1e5, lon·1e5, syv cm (anturi mukana), tiheys, maxH cm, kivet, ala] — 50 m:n ruuduittain tihein jakso (≥ 1)
    POISTUU: pisteittäinen jälki (sijainti, syvyys, lämpö, aika), pienet kaiut, kiviyksityiskohdat, takila, pohjaksi luetut.
    Mitattu 18.10. varmuuskopiolla: ks. tilannekuva v229. Kokonaiset tallenteet säilyvät, kunnes ne tiivistetään (nappi:
@@ -641,14 +643,19 @@ function omaLuotausTiivista(d, valitse, nyt){
         e[0] = Math.round((e[0]*n0 + la*1e5*n)/N); e[1] = Math.round((e[1]*n0 + lo*1e5*n)/N); e[2] = Math.round((e[2]*n0 + m*100*n)/N); e[3] = N;
       } else { I[q] = J.syv.length; J.syv.push([e5(la), e5(lo), Math.round(m*100), n]); }
     });
-    // isot ja keskikokoiset kaiut (kaikki sijainnit)
+    // isot ja keskikokoiset kaiut (kaikki sijainnit); v230: anturi mukaan, pintalämpö ja parven yläpinta
+    var dC = function(v){ return typeof v === 'number' && isFinite(v) ? Math.round(v*10) : null; };
     (t.kalat || []).forEach(function(k){
       if (k.luokka !== 'iso' && k.luokka !== 'keski') return;
-      J.kaiut.push([s(k.t), e5(k.lat), e5(k.lon), Math.round((k.z || 0)*100), Math.round((k.pohja || 0)*100), k.yl, k.luokka === 'iso' ? 'i' : 'k', k.kaari ? 1 : 0,
-                    k.lahella || null, typeof k.parviM === 'number' ? k.parviM : null, k.muuParvi ? [k.muuParvi.m, Math.round(k.muuParvi.yla*10), Math.round(k.muuParvi.ala*10)] : null]);
+      var py = omaLuotausParviYla(t, k);
+      J.kaiut.push([s(k.t || (t.alku ? t.alku + (k.aikaS || 0)*1000 : null)), e5(k.lat), e5(k.lon), Math.round(((k.z || 0) + a)*100), Math.round(((k.pohja || 0) + a)*100), k.yl,
+                    k.luokka === 'iso' ? 'i' : 'k', k.kaari ? 1 : 0, k.lahella || null, typeof k.parviM === 'number' ? k.parviM : null,
+                    k.muuParvi ? [k.muuParvi.m, Math.round((k.muuParvi.yla + a)*10), Math.round((k.muuParvi.ala + a)*10)] : null,
+                    dC(omaLuotausHetkenLampo(t, k.aikaS)), typeof py === 'number' ? Math.round((py + a)*10) : null]);
     });
     (t.parvet || []).forEach(function(p){
-      J.parvet.push([s(p.t), e5(p.lat), e5(p.lon), Math.round((p.yla || 0)*10), Math.round((p.ala || 0)*10), Math.round((p.pohja || 0)*10), p.voima, p.tyyppi, p.pituusM, p.kestoS]);
+      J.parvet.push([s(p.t), e5(p.lat), e5(p.lon), Math.round((p.yla || 0)*10), Math.round((p.ala || 0)*10), Math.round((p.pohja || 0)*10), p.voima, p.tyyppi, p.pituusM, p.kestoS,
+                     dC(omaLuotausHetkenLampo(t, p.aikaS))]);
     });
     // kivikko: 50 m:n ruuduittain tihein jakso (tiheys ≥ 1)
     if (t.kivikko && Array.isArray(t.kivikko.jaksot)){
@@ -662,7 +669,7 @@ function omaLuotausTiivista(d, valitse, nyt){
       });
     }
     M.tallenteet.push({ tunniste: t.tunniste || null, id: t.id, nimi: t.nimi, jarvi: t.jarvi || null, alku: t.alku || null, pisteita: t.lat.length,
-                        kestoS: t.kestoS || null, tiivistetty: nyt || Date.now() });
+                        kestoS: t.kestoS || null, tiivistetty: nyt || Date.now(), lampoKa: omaLuotausKeskilampo(t), anturiM: a });   // v230: lampoKa, anturiM
   });
   d.tuonnit = d.tuonnit.filter(function(t){ return pois.indexOf(t) < 0; });
   return { tallenteita: pois.length, ennen: ennen, jalkeen: JSON.stringify(d).length };
@@ -675,4 +682,66 @@ function omaLuotausMuistiYhteenveto(d){
     y.syv += (J.syv || []).length; y.kaiut += (J.kaiut || []).length; y.isot += (J.kaiut || []).filter(function(e){ return e[6] === 'i'; }).length;
     y.parvet += (J.parvet || []).length; y.kivikko += (J.kivikko || []).length; });
   return y;
+}
+
+/* v230: pintalämpö tallenteen hetkellä (sekunteina alusta): lähin piste ajassa (t.aikaS, t.lampo sadasosa-asteina); jos pisteillä
+   ei ole lämpöä, tallenteen keskilämpö (lampoKa tai lampoMin/Max puoliväli). */
+function omaLuotausKeskilampo(t){
+  if (typeof t.lampoKa === 'number') return Math.round(t.lampoKa*100)/100;
+  if (typeof t.lampoMin === 'number' && typeof t.lampoMax === 'number') return Math.round((t.lampoMin + t.lampoMax)*50)/100;
+  return null;
+}
+function omaLuotausHetkenLampo(t, aikaS){
+  var A = t.aikaS, L = t.lampo;
+  if (typeof aikaS === 'number' && Array.isArray(A) && Array.isArray(L) && A.length === L.length && A.length){
+    var lo = 0, hi = A.length - 1;
+    while (hi - lo > 1){ var m = (lo + hi) >> 1; if (A[m] < aikaS) lo = m; else hi = m; }
+    var ehd = [lo, hi].sort(function(x, y){ return Math.abs(A[x] - aikaS) - Math.abs(A[y] - aikaS); });
+    for (var e = 0; e < 2; e++){ var v = L[ehd[e]]; if (v !== null && v !== undefined && Math.abs(A[ehd[e]] - aikaS) <= 120) return v/100; }
+  }
+  return omaLuotausKeskilampo(t);
+}
+
+/* ===== v230 (21.10.2026): VUOSI SITTEN SAMASSA VEDESSÄ =====
+   Hannu 21.10.: "Tehdään se vuosi sitten unohtuu muuten mutta pohditaan ensin olisiko helppo tehdä vuosisitten vastaavassa veden
+   lämpötilassa? 1 asteen tarkkuudella olisi parempaa dataa." → valinnat 21.10. klo 5.48: jako lämpenevään ja jäähtyvään
+   vuodenpuoliskoon heinäkuun puolivälistä: kyllä; lämmöttömille kaiuille kalenteriviikko ±7 vrk: kyllä ("oletan että on harvinaista").
+   Aiempien vuosien (vuosi < nyt) isot ja keskikokoiset kaiut tältä järveltä, samalta vuodenpuoliskolta (lämpenevä 1.1.–15.7.,
+   jäähtyvä 16.7.–31.12.), joiden pintavesi oli ±OL_VUOSI_LAMPO °C nykyisestä. Jos kaiulta puuttuu lämpö (v229:n tiivistys) tai
+   nykyistä lämpöä ei tiedetä: kalenteripäivä ±OL_VUOSI_VRK. Lähteet: kokonaiset tallenteet ja tiivis muisti. */
+var OL_VUOSI_LAMPO = 1.0, OL_VUOSI_VRK = 7;
+function omaLuotausPuolisko(ms){ var d = new Date(ms), m = d.getMonth() + 1; return (m < 7 || (m === 7 && d.getDate() <= 15)) ? 'lampeneva' : 'jaahtyva'; }
+function omaLuotausVuosiSitten(avain, nytMs, nytLampo){
+  var nyt = new Date(nytMs), vuosi = nyt.getFullYear(), puol = omaLuotausPuolisko(nytMs), lampoOn = typeof nytLampo === 'number' && isFinite(nytLampo);
+  var paivaEro = function(ms){
+    var a = new Date(ms), A = Date.UTC(2001, a.getMonth(), a.getDate()), B = Date.UTC(2001, nyt.getMonth(), nyt.getDate()), e = Math.abs(A - B)/86400e3;
+    return Math.min(e, 365 - e);
+  };
+  var peruste = function(tms, vesi){
+    if (!tms || new Date(tms).getFullYear() >= vuosi || omaLuotausPuolisko(tms) !== puol) return null;
+    if (lampoOn && typeof vesi === 'number') return Math.abs(vesi - nytLampo) <= OL_VUOSI_LAMPO + 1e-9 ? 'lampo' : null;
+    return paivaEro(tms) <= OL_VUOSI_VRK ? 'kalenteri' : null;
+  };
+  var out = [], d = omaLuotausLue();
+  d.tuonnit.forEach(function(t){
+    if ((avain && t.jarvi !== avain) || !t.alku || new Date(t.alku).getFullYear() >= vuosi) return;
+    var a = omaLuotausAnturi(t);
+    (t.kalat || []).forEach(function(k){
+      if (k.luokka !== 'iso' && k.luokka !== 'keski') return;
+      var kt = k.t || (t.alku + (k.aikaS || 0)*1000), vesi = omaLuotausHetkenLampo(t, k.aikaS), p = peruste(kt, vesi); if (!p) return;
+      var q = {}; for (var x in k) q[x] = k[x];
+      q.t = kt; q.parviYla = omaLuotausParviYla(t, k); q.zP = Math.round((k.z + a)*10)/10; q.pohjaP = Math.round((k.pohja + a)*10)/10;
+      q.anturi = a; q.nimi = t.nimi; q.vesi = vesi; q.peruste = p; q.jarvi = t.jarvi; out.push(q);
+    });
+  });
+  var J = d.muisti && d.muisti.jarvet && d.muisti.jarvet[avain];
+  ((J && J.kaiut) || []).forEach(function(e){
+    var tms = e[0] ? e[0]*1000 : null, uusi = e.length >= 13, vesi = uusi && e[11] !== null ? e[11]/10 : null, p = peruste(tms, vesi); if (!p) return;
+    out.push({ t: tms, lat: e[1]/1e5, lon: e[2]/1e5, z: e[3]/100, pohja: e[4]/100, zP: Math.round(e[3]/10)/10, pohjaP: Math.round(e[4]/10)/10, anturi: 0,
+               yl: e[5], luokka: e[6] === 'i' ? 'iso' : 'keski', kaari: !!e[7], lahella: e[8], parviM: e[9],
+               muuParvi: e[10] ? { m: e[10][0], yla: e[10][1]/10, ala: e[10][2]/10 } : null, parviYla: uusi && e[12] !== null ? e[12]/10 : null,
+               vesi: vesi, peruste: p, nimi: 'tiivistetty muisti', jarvi: avain });
+  });
+  return { kaiut: out, vesi: lampoOn ? nytLampo : null, puolisko: puol, lampo: out.filter(function(q){ return q.peruste === 'lampo'; }).length,
+           kalenteri: out.filter(function(q){ return q.peruste === 'kalenteri'; }).length };
 }
