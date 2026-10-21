@@ -127,6 +127,7 @@
   v215 (18.10.2026): vain versionumero (etusivun syöttikalakorttiin havaittu parven syvyys omasta luotaimesta).
   v216 (18.10.2026): isojen kaikujen napautuksessa matalan pohjan lajiepäily (hauki, ahven, made tai lahna) luotaus.js:n kausisäännöstä; muuten vain versionumero.
   v217 (18.10.2026): vain versionumero (taimenkorttiin rannan pintalämpö; matalan pohjan todisteeseen Hannun ahven- ja haukikoot luotaus.js:ssä).
+  v228 (21.10.2026): syvyystilan oman luotauksen jälki vain viimeiset 10 vrk (omaLuotausJalki).
   v227 (20.10.2026): vain versio (Inarijärven syvyydet jarvet.js:ssä).
   v226 (20.10.2026): vain versio (Inarijärven rakennusrajaus laajennettu index.html:ssä).
   v225 (20.10.2026): Inarijärvi järvenä (jarvet.js, Veskoniemen–Jääsaarten alue, vain rantaviiva); tilannekuvassa valittavissa (ei omaa koodimuutosta).
@@ -329,18 +330,18 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=227" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=227" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=227" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=227" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=227" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=227" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=227" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=227" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=228" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=228" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=228" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=228" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=228" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=228" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=228" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=228" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v227';
+    const APP_VERSIO = 'v228';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
@@ -1241,10 +1242,10 @@
       const nimet = nak.s * pohja.S / pohja.k.ruutu > 0.05;   // nimet, kun 1 km ≥ 50 px
       if (as.kovaPohja) { try { kovaPohjaPiirra(nakyy); } catch (e) {} }   // v213: alimmaksi, muut merkit päälle
 
-      // oma luotaus syvyyskartassa: mistä mitattu syvyys on (ohut ja himmeä, kuten aaltokortissa v176)
+      // oma luotaus syvyyskartassa: mistä mitattu syvyys on (ohut ja himmeä, kuten aaltokortissa v176); v228: vain viimeiset 10 vrk
       if (pohja.naytto === 'syvyys' && typeof omaLuotausPisteet === 'function') {
         ctx.fillStyle = 'rgba(45,18,80,.28)';
-        const P = omaLuotausPisteet(), askel = mPerPx() > 8 ? 3 : 1;
+        const P = typeof omaLuotausJalki === 'function' ? omaLuotausJalki() : omaLuotausPisteet(), askel = mPerPx() > 8 ? 3 : 1;   // v228: vain 10 vrk
         for (let n = 0; n < P.length; n += askel) {
           const q = naytolle(P[n].lat, P[n].lon); if (q.x < -2 || q.y < -2 || q.x > w + 2 || q.y > h + 2) continue;
           ctx.fillRect(q.x - 1, q.y - 1, 2, 2);

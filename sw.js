@@ -22,6 +22,7 @@
 // v215: syöttikalakorttiin Havaittu (oma luotain) mallin rinnalle (index.html; tilanne.html vain versio); ei uusia tiedostoja.
 // v216: kaikujen lajiryhmät kausittain ja järvittäin (luotaus.js), Havaittu-rivit kuha-, hauki-, ahven- ja järvilohikorttiin (index.html); tilanne.html vain versio; ei uusia tiedostoja.
 // v217: taimenkorttiin rannan ja selän pintalämpö omasta luotaimesta ja luotaimen rajoitus (index.html, luotaus.js); tilanne.html vain versio; ei uusia tiedostoja.
+// v228: oma luotaus: kartan jälki vain 10 vrk, lähiruudut 150 m tarkentuvat syvyysluokan sisällä (luotaus.js, aaltomalli.js, tilanne.html, index.html).
 // v227: Inarijärvi laajennettuna (932 × 638, 50 m) ja syvyydet osalta aluetta: 18 Maastokartat-kuvaa + kaverin luotaus (jarvet.js, aaltomalli.js, index.html; tilanne.html vain versio).
 // v226: Inarijärven järvikarttojen rakennus laajennetulle rajaukselle 68,74–69,025 N, 27,19–28,34 E (kaverin luotainajot 2024); index.html, tilanne.html vain versio.
 // v225: Inarijärvi järveksi, Veskoniemen–Jääsaarten alue, vain rantaviiva (jarvet.js, paikat.js, aaltomalli.js, index.html; tilanne.html vain versio); syvyys tuntematon.
@@ -62,7 +63,7 @@
 // VERSIO: kasvata tätä aina kun julkaiset uuden version. Vanha välimuisti siivotaan.
 // Versionumeron kasvatus on se mekanismi joka SIIVOAA vanhan välimuistin,
 // index2.html mukaan lukien. Ilman tätä poisto ei näkyisi puhelimissa.
-const VERSIO = 'uistelututka-v227';
+const VERSIO = 'uistelututka-v228';
 /* v178: sivun omat tiedostot ladataan nimellä tiedosto?v=NNN, jossa NNN on tämän VERSIOn numero.
    index.html:n <script src> -riveissä ja ottiäänen haussa on SAMA numero: kun julkaiset, vaihda
    molemmat. Uusi numero on uusi osoite, joten puhelin ei voi yhdistää uutta sivua vanhaan malliin

@@ -2443,14 +2443,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=227" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=227" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=227" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=227" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=227" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=227" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=227" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=227" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=228" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=228" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=228" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=228" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=228" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=228" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=228" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=228" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
        uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
@@ -4250,10 +4250,11 @@ function olPiirraLista(){
     kaytossa = Object.keys(jarvet).map(function(av){
       var k = typeof window.akJarviKartta === 'function' ? window.akJarviKartta(av) : null; if (!k) return '';
       var r = omaLuotausSolut(k);
-      return r && r.soluja ? olJarviNimi(av) + ': ' + r.soluja + ' ruutua (' + k.ruutu + ' m) saa syvyyden omasta luotauksesta' : '';
+      return r && r.soluja ? olJarviNimi(av) + ': ' + r.soluja + ' ruutua (' + k.ruutu + ' m) saa syvyyden omasta luotauksesta'
+        + (r.lahiRuutuja ? ', ' + r.lahiRuutuja + ' lähiruutua tarkentui (' + OL_LAHI_M + ' m, syvyysluokan sisällä)' : '') : '';   // v228
     }).filter(Boolean).join(' · ');
   } catch (e) {}
-  el.innerHTML = (kaytossa ? '<p style="margin:0 0 4px;">' + kaytossa + '.</p>' : '') + rivit.join('') + kovaPohjaRivit() + olKalaKoosteHtml(d);   // v213: kova pohja
+  el.innerHTML = (kaytossa ? '<p style="margin:0 0 4px;">' + kaytossa + '. Kartalla näkyy jälki viimeisiltä ' + OL_JALKI_VRK + ' vrk:lta.</p>' : '') + rivit.join('') + kovaPohjaRivit() + olKalaKoosteHtml(d);   // v213: kova pohja
 }
 /* v194: kalat kaikukuvasta syvyyden ja kellonajan mukaan, järvittäin (kaikki tuodut tallenteet). Solussa isot / kaikki;
    rivillä tallennettu aika, koska kalamäärä riippuu siitä, kauanko sillä tunnilla luodattiin. */
@@ -13685,7 +13686,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v227';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v228';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -22014,7 +22015,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=227';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=228';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })

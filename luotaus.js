@@ -35,7 +35,7 @@ function omaLuotausLue(){
   window.__olData = d;
   return d;
 }
-function omaLuotausNollaa(){ window.__olKivikkoV = (window.__olKivikkoV || 0) + 1; window.__olData = undefined; window.__olPisteet = null; window.__olSolut = null; window.__olTuoreet = null; }
+function omaLuotausNollaa(){ window.__olKivikkoV = (window.__olKivikkoV || 0) + 1; window.__olData = undefined; window.__olPisteet = null; window.__olSolut = null; window.__olTuoreet = null; window.__olJalki = null; }
 function omaLuotausPisteet(){   // kaikki pisteet anturikorjattuina
   if (window.__olPisteet) return window.__olPisteet;
   var out = [];
@@ -65,9 +65,29 @@ function omaLuotausSolut(k){
     var v = arvot[q].sort(function(x, y){ return x - y; }), h = v.length >> 1;
     solut[q] = v.length % 2 ? v[h] : (v[h - 1] + v[h]) / 2; m++;
   });
-  var r = { solut: solut, soluja: m, pisteita: n, tarkiste: n ? n + ':' + t : '' };
+  // v228: tarkisteessa lähiruutujen säde, jotta v228:aa vanhempi kiertomallin välimuisti lasketaan uudelleen
+  var r = { solut: solut, soluja: m, pisteita: n, tarkiste: n ? 'L' + OL_LAHI_M + ':' + n + ':' + t : '' };
   vm.set(k, r);
   return r;
+}
+/* v228 (21.10.2026): LÄHIRUUDUT TARKENTUVAT OMASTA LUOTAUKSESTA. Hannu 21.10.: "Odotin että kartta paranisi latausten
+   myötä … Saisiko myös kartan parantumaan kuten Inarinjärvellä, oma data päivittymään". Ennen v228:aa vain ne ruudut, joissa
+   on luotauspisteitä, saivat mitatun syvyyden (mediaani); viereiset ruudut jäivät kartan syvyysluokan keskiarvoon (esim. 3–6 m
+   → 4,5 m), joten ajolinja näkyi kartassa erillisenä nauhana. Nyt jokainen mittaamaton vesiruutu enintään OL_LAHI_M päässä
+   mitatuista saa niiden 1/d²-painotetun syvyyden (vähintään 25 m:n etäisyys), RAJATTUNA OMAN SYVYYSLUOKKANSA VÄLIIN (kartan
+   luokka säilyy, luvun tarkkuus paranee; sama menetelmä kuin Inarin ja Ylä-Keiteleen karttakuvissa). Laskenta on kevyt
+   (mitatut ruudut × 7 × 7), joten erillistä kotona ajettavaa vaihetta ei tarvita (mitattu, ks. tilannekuva v228).
+   Ristiintarkistus Hannun tallenteilla (tallenne vuorollaan pois): ks. tilannekuva v228. */
+var OL_LAHI_M = 150;
+var OL_LUOKKA_VALI = { '0.75': [0, 1.5], '2.25': [1.5, 3], '4.5': [3, 6], '8': [6, 10], '12.5': [10, 15], '17.5': [15, 20], '22.5': [20, 25],
+  '27.5': [25, 30], '32.5': [30, 35], '35': [30, 40], '37.5': [35, 40], '45': [40, 50], '55': [50, 60], '65': [60, Infinity] };
+function omaLuotausLuokkaValit(k){   // [[ala, yla]] luokkaM:n järjestyksessä; tuntematon keskiarvo → puoliväli naapureihin
+  var L = k && k.luokkaM; if (!L || !L.length) return null;
+  var tunnetut = L.every(function(v){ return OL_LUOKKA_VALI[String(v)]; });
+  return L.map(function(v, i){
+    if (tunnetut) return OL_LUOKKA_VALI[String(v)];
+    return [i ? (L[i - 1] + v)/2 : 0, i < L.length - 1 ? (v + L[i + 1])/2 : Infinity];
+  });
 }
 // Kutsutaan puraSyvyysLuokat-funktiosta: vain vesiruudut (s > 0) korvataan
 function omaLuotausKorvaa(k, s){
@@ -75,7 +95,34 @@ function omaLuotausKorvaa(k, s){
   if (!r || !r.soluja) return 0;
   var c = 0;
   for (var q in r.solut){ var qi = +q; if (s[qi] > 0){ s[qi] = r.solut[q]; c++; } }
+  r.lahiRuutuja = omaLuotausLahiruudut(k, s, r);   // v228
   return c;
+}
+function omaLuotausLahiruudut(k, s, r){   // v228: palauttaa tarkentuneiden ruutujen määrän
+  var V = omaLuotausLuokkaValit(k); if (!V || !(OL_LAHI_M > 0)) return 0;
+  var W = k.W, H = k.H, R = Math.max(1, Math.round(OL_LAHI_M/k.ruutu)), an = k.anturiM || 0, L = k.luokkaM;
+  var sw = new Float64Array(W*H), sd = new Float64Array(W*H), kosketut = [];
+  for (var q in r.solut){
+    var qi = +q, d = r.solut[q], j0 = Math.floor(qi/W), i0 = qi - j0*W;
+    if (!(s[qi] > 0)) continue;
+    for (var dj = -R; dj <= R; dj++) for (var di = -R; di <= R; di++){
+      if (di*di + dj*dj > R*R) continue;
+      var i = i0 + di, j = j0 + dj; if (i < 0 || j < 0 || i >= W || j >= H) continue;
+      var q2 = j*W + i; if (!(s[q2] > 0) || r.solut[q2] !== undefined) continue;
+      var m = Math.max(0.5, Math.sqrt(di*di + dj*dj))*k.ruutu, w = 1/(m*m);
+      if (!sw[q2]) kosketut.push(q2);
+      sw[q2] += w; sd[q2] += w*d;
+    }
+  }
+  var n = 0;
+  for (var a = 0; a < kosketut.length; a++){
+    var q3 = kosketut[a], v = s[q3] - an, l = -1;
+    for (var b = 0; b < L.length; b++) if (Math.abs(L[b] - v) < 1e-3){ l = b; break; }
+    if (l < 0) continue;   // ei luokan keskiarvo (esim. jo korvattu) → ennallaan
+    var e = sd[q3]/sw[q3] - an, lo = V[l][0], hi = V[l][1];
+    s[q3] = Math.min(Math.max(e, lo), hi - 0.05) + an; n++;   // luokan sisällä (yläraja kuuluu seuraavaan luokkaan)
+  }
+  return n;
 }
 // Pisteen ympäriltä (sadeM) luotausten min/max; vähintään 3 pistettä
 function omaLuotausMinMax(lat, lon, sadeM){
@@ -94,6 +141,22 @@ function omaLuotausYhdista(a, oma){
   if (!oma) return a;
   if (!a) return oma;
   return { min: Math.min(a.min, oma.min), max: Math.max(a.max, oma.max), n: (a.n || 0) + oma.n, lahde: (a.lahde || '') + ' + oma luotaus' };
+}
+/* v228 (21.10.2026): kartan jälki vain viimeiseltä OL_JALKI_VRK vuorokaudelta. Hannu 21.10.: "Näyttö alkaa suttaantumaan
+   reiteistä. 10 vrk olisi sopiva aika ilman haittaa." Jälki kertoo, mistä mitattu syvyys on; vanhemmat tallenteet ja tallenteet
+   ilman aikaa (esim. syvyyskartasta luetut) ovat edelleen syvyysmallissa (omaLuotausPisteet), vain piirto jää pois. */
+var OL_JALKI_VRK = 10;
+function omaLuotausJalki(){
+  var raja = Date.now() - OL_JALKI_VRK*86400e3, kk = Math.floor(raja/600000);
+  if (window.__olJalki && window.__olJalki.k === kk) return window.__olJalki.p;
+  var out = [];
+  omaLuotausLue().tuonnit.forEach(function(t){
+    if (!t.alku || t.alku < raja) return;
+    var a = typeof t.anturiM === 'number' ? t.anturiM : 0;
+    for (var i = 0; i < t.lat.length; i++) out.push({ lat: t.lat[i] / 1e6, lon: t.lon[i] / 1e6, syv: t.syv[i] / 100 + a });
+  });
+  window.__olJalki = { k: kk, p: out };
+  return out;
 }
 function omaLuotausTarkiste(k){ try { var r = omaLuotausSolut(k); return r ? r.tarkiste : ''; } catch (e) { return ''; } }
 

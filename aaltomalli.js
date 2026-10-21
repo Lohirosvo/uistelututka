@@ -482,7 +482,7 @@ window.akLapiPaivita = function(){
 // Kartta: jälki pisteinä Syvyyskartta-tilassa
 function akPiirraOmaLuotaus(ctx, win, S){
   if (akTila !== 'syvyys' || !jarvi || !jarvi.kartta || akKayraLeveys) return;   // v179: tilannekuva piirtää jäljen itse ohuena
-  var P = omaLuotausPisteet(); if (!P.length) return;
+  var P = typeof omaLuotausJalki === 'function' ? omaLuotausJalki() : omaLuotausPisteet(); if (!P.length) return;   // v228: 10 vrk
   var k = jarvi.kartta, kerr = akVientiKerroin > 1 ? akVientiKerroin : 1, r = 1.5*kerr;
   ctx.fillStyle = 'rgba(45,18,80,.16)';   // v176: himmeä, kertoo vain mistä mitattu syvyys on (Hannu 7.10.)
   for (var a = 0; a < P.length; a++){
