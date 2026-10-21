@@ -36,13 +36,15 @@ function omaLuotausLue(){
   return d;
 }
 function omaLuotausNollaa(){ window.__olKivikkoV = (window.__olKivikkoV || 0) + 1; window.__olData = undefined; window.__olPisteet = null; window.__olSolut = null; window.__olTuoreet = null; window.__olJalki = null; }
-function omaLuotausPisteet(){   // kaikki pisteet anturikorjattuina
+function omaLuotausPisteet(){   // kaikki pisteet anturikorjattuina; v229: + tiiviin muistin syvyysruudut (n = pisteiden määrä)
   if (window.__olPisteet) return window.__olPisteet;
-  var out = [];
-  omaLuotausLue().tuonnit.forEach(function(t){
+  var out = [], d = omaLuotausLue();
+  d.tuonnit.forEach(function(t){
     var a = typeof t.anturiM === 'number' ? t.anturiM : 0;
     for (var i = 0; i < t.lat.length; i++) out.push({ lat: t.lat[i] / 1e6, lon: t.lon[i] / 1e6, syv: t.syv[i] / 100 + a });
   });
+  var M = d.muisti && d.muisti.jarvet;
+  if (M) Object.keys(M).forEach(function(av){ (M[av].syv || []).forEach(function(e){ out.push({ lat: e[0] / 1e5, lon: e[1] / 1e5, syv: e[2] / 100, n: e[3] || 1 }); }); });
   window.__olPisteet = out;
   return out;
 }
@@ -56,14 +58,23 @@ function omaLuotausSolut(k){
     var p = P[a];
     var i = Math.floor((p.lon - k.lansiLon)*111320*Math.cos(p.lat*Math.PI/180)/k.ruutu), j = Math.floor((k.pohjoisLat - p.lat)*111320/k.ruutu);
     if (i < 0 || j < 0 || i >= k.W || j >= k.H) continue;
-    var q = j*k.W + i;
-    (arvot[q] || (arvot[q] = [])).push(p.syv);
-    n++; t = (t*31 + Math.round(p.syv*100) + q) % 1000000007;
+    var q = j*k.W + i, w = p.n || 1;
+    (arvot[q] || (arvot[q] = [])).push(w > 1 ? [p.syv, w] : p.syv);
+    n++; t = (t*31 + Math.round(p.syv*100) + q + (w > 1 ? w*7 : 0)) % 1000000007;
   }
   var solut = {}, m = 0;
   Object.keys(arvot).forEach(function(q){
-    var v = arvot[q].sort(function(x, y){ return x - y; }), h = v.length >> 1;
-    solut[q] = v.length % 2 ? v[h] : (v[h - 1] + v[h]) / 2; m++;
+    var A = arvot[q];
+    if (A.every(function(x){ return typeof x === 'number'; })){
+      var v = A.sort(function(x, y){ return x - y; }), h = v.length >> 1;
+      solut[q] = v.length % 2 ? v[h] : (v[h - 1] + v[h]) / 2;
+    } else {   // v229: painotettu mediaani (tiiviin muistin ruutu edustaa n pistettä)
+      var P2 = A.map(function(x){ return typeof x === 'number' ? [x, 1] : x; }).sort(function(x, y){ return x[0] - y[0]; });
+      var W2 = P2.reduce(function(s, x){ return s + x[1]; }, 0), c = 0, r2 = P2[P2.length - 1][0];
+      for (var z = 0; z < P2.length; z++){ c += P2[z][1]; if (c >= W2/2){ r2 = P2[z][0]; break; } }
+      solut[q] = r2;
+    }
+    m++;
   });
   // v228: tarkisteessa lähiruutujen säde, jotta v228:aa vanhempi kiertomallin välimuisti lasketaan uudelleen
   var r = { solut: solut, soluja: m, pisteita: n, tarkiste: n ? 'L' + OL_LAHI_M + ':' + n + ':' + t : '' };
@@ -133,7 +144,7 @@ function omaLuotausMinMax(lat, lon, sadeM){
     if (Math.abs(p.lat - lat) > dLat || Math.abs(p.lon - lon) > dLon) continue;
     var dy = (p.lat - lat)*111320, dx = (p.lon - lon)*kx;
     if (dx*dx + dy*dy > r*r) continue;
-    if (p.syv < mn) mn = p.syv; if (p.syv > mx) mx = p.syv; n++;
+    if (p.syv < mn) mn = p.syv; if (p.syv > mx) mx = p.syv; n += p.n || 1;   // v229: muistin ruutu = n pistettä
   }
   return n >= 3 ? { min: mn, max: mx, n: n, lahde: 'oma luotaus' } : null;
 }
@@ -477,6 +488,16 @@ function omaLuotausKivikko(avain){
                  taimen: l.taso >= 2 && p <= OL_TAIMENKIVIKKO_M, nimi: t.nimi });
     });
   });
+  // v229: tiiviin muistin kivikkoruudut (50 m, tihein jakso; anturi jo mukana)
+  var M = omaLuotausLue().muisti, MJ = M && M.jarvet ? M.jarvet : {};
+  Object.keys(MJ).forEach(function(av){
+    if (avain && av !== avain) return;
+    (MJ[av].kivikko || []).forEach(function(e){
+      var p = e[3] / 100, l = omaLuotausKivikkoLuokka(e[4]);
+      out.push({ lat: e[1] / 1e5, lon: e[2] / 1e5, t: e[0] ? e[0]*1000 : null, tiheys: e[4], maxH: e[5] / 100, kivet: e[6], ala: e[7], pohjaP: Math.round(p*10)/10,
+                 luokka: l.nimi, taso: l.taso, taimen: l.taso >= 2 && p <= OL_TAIMENKIVIKKO_M, nimi: 'tiivistetty muisti' });
+    });
+  });
   window.__olKivikko = { k: k, j: out };
   return out;
 }
@@ -561,4 +582,97 @@ function omaLuotausRyhmaKaiut(avain, ryhma, hetkiMs, vrk, kausi){
     });
   });
   return out.sort(function(x, y){ return x.t - y.t; });
+}
+
+
+/* ===== v229 (21.10.2026): TIIVIS MUISTI — vanhat tallenteet tiivistetään, tila ei lopu =====
+   Hannu 21.10.: "poistetaan yli 10 vrk tallenteet millä ei ole käyttöä joiden muutokset on jo kartassa kivikoissa jne" →
+   (Claude: muutokset EIVÄT olleet pysyvästi kartassa, vaan ne laskettiin tallenteista joka kerta) → tiivistys ennen poistoa.
+   "vuodenvanhat isot järvilohi ja taimen epäilykaiut samalta viikolta saisi näkyviin tulevina vuosina vaatisi niiden
+   tallentamisen" → "Lisätään kuhakin joukkoon ja keskikokoiset oletus yli 40 cm kala" (Claude: kokoluokka on kaiun voimakkuudesta,
+   pituutta ei ole kalibroitu) → "Kun tulee täyteen 3 % ennen vanhojen automaattinen poisto ettei kaadu" → "Tehdään".
+   MUISTI d.muisti = { versio, tallenteet: [{ tunniste, id, nimi, jarvi, alku, pisteita, kestoS, tiivistetty }],
+     jarvet: { avain|'_': { syv, kaiut, parvet, kivikko } } }, kaikki taulukkoina (ei kenttänimiä) tilan säästämiseksi:
+     syv     [lat·1e5, lon·1e5, syvyys cm (anturi mukana), n]  — 50 m:n kiinteä ruutu (ei järven ruudukko, joka voi vaihtua);
+             sama ruutu uudessa tiivistyksessä: n-painotettu keskiarvo; pisteet → omaLuotausPisteet (n-painotettu mediaani)
+     kaiut   [t s, lat·1e5, lon·1e5, z cm, pohja cm, voimakkuus, 'i'|'k', kaari 0/1, lahella, parviM, muuParvi [m, yla dm, ala dm]|null]
+             — isot ja keskikokoiset kaikki (pohja = kuha, väli/parvi = järvilohi, taimen); lajisäännöt voi ajaa uudelleen
+     parvet  [t s, lat·1e5, lon·1e5, yla dm, ala dm, pohja dm, voima, tyyppi, pituusM, kestoS]
+     kivikko [t s, lat·1e5, lon·1e5, syv cm (anturi mukana), tiheys, maxH cm, kivet, ala] — 50 m:n ruuduittain tihein jakso (≥ 1)
+   POISTUU: pisteittäinen jälki (sijainti, syvyys, lämpö, aika), pienet kaiut, kiviyksityiskohdat, takila, pohjaksi luetut.
+   Mitattu 18.10. varmuuskopiolla: ks. tilannekuva v229. Kokonaiset tallenteet säilyvät, kunnes ne tiivistetään (nappi:
+   yli 10 vrk; automaattisesti, kun tila on 97 % täynnä: vanhin ensin). */
+var OL_MUISTI_RUUTU_M = 50;
+function omaLuotausMuistiRuutu(lat, lon){ return Math.floor(lat*111320/OL_MUISTI_RUUTU_M) + ':' + Math.floor(lon*111320*Math.cos(lat*Math.PI/180)/OL_MUISTI_RUUTU_M); }
+function omaLuotausMuisti(d){
+  if (!d.muisti || typeof d.muisti !== 'object') d.muisti = { versio: 1, tallenteet: [], jarvet: {} };
+  if (!Array.isArray(d.muisti.tallenteet)) d.muisti.tallenteet = [];
+  if (!d.muisti.jarvet) d.muisti.jarvet = {};
+  return d.muisti;
+}
+function omaLuotausMuistissa(d, tunniste, id){
+  var T = d && d.muisti && d.muisti.tallenteet; if (!T) return null;
+  for (var i = 0; i < T.length; i++) if ((tunniste && T[i].tunniste === tunniste) || (id && T[i].id === id)) return T[i];
+  return null;
+}
+var omaLuotausR1 = function(x){ return Math.round(x*10)/10; };
+// Tiivistää valitut tuonnit muistiin ja poistaa ne d.tuonnit-listasta. Palauttaa { tallenteita, ennen, jalkeen } (merkkejä).
+function omaLuotausTiivista(d, valitse, nyt){
+  var ennen = JSON.stringify(d).length, M = omaLuotausMuisti(d), pois = d.tuonnit.filter(valitse);
+  if (!pois.length) return { tallenteita: 0, ennen: ennen, jalkeen: ennen };
+  var e5 = function(x){ return Math.round(x*1e5); }, s = function(ms){ return ms ? Math.round(ms/1000) : null; };
+  var indeksit = {};
+  pois.forEach(function(t){
+    var av = t.jarvi || '_', J = M.jarvet[av] || (M.jarvet[av] = { syv: [], kaiut: [], parvet: [], kivikko: [] });
+    ['syv', 'kaiut', 'parvet', 'kivikko'].forEach(function(x){ if (!Array.isArray(J[x])) J[x] = []; });
+    // syvyys 50 m:n ruuduittain: mediaani ja painotettu keskisijainti
+    var I = indeksit[av];
+    if (!I){ I = indeksit[av] = {}; J.syv.forEach(function(e, n){ I[omaLuotausMuistiRuutu(e[0]/1e5, e[1]/1e5)] = n; }); }
+    var a = typeof t.anturiM === 'number' ? t.anturiM : 0, R = {};
+    for (var i = 0; i < t.lat.length; i++){
+      var la = t.lat[i]/1e6, lo = t.lon[i]/1e6, q = omaLuotausMuistiRuutu(la, lo), r = R[q] || (R[q] = { la: 0, lo: 0, v: [] });
+      r.la += la; r.lo += lo; r.v.push(t.syv[i]/100 + a);
+    }
+    Object.keys(R).forEach(function(q){
+      var r = R[q], v = r.v.sort(function(x, y){ return x - y; }), h = v.length >> 1, m = v.length % 2 ? v[h] : (v[h - 1] + v[h])/2, n = v.length;
+      var la = r.la/n, lo = r.lo/n;
+      if (I[q] !== undefined){
+        var e = J.syv[I[q]], n0 = e[3] || 1, N = n0 + n;
+        e[0] = Math.round((e[0]*n0 + la*1e5*n)/N); e[1] = Math.round((e[1]*n0 + lo*1e5*n)/N); e[2] = Math.round((e[2]*n0 + m*100*n)/N); e[3] = N;
+      } else { I[q] = J.syv.length; J.syv.push([e5(la), e5(lo), Math.round(m*100), n]); }
+    });
+    // isot ja keskikokoiset kaiut (kaikki sijainnit)
+    (t.kalat || []).forEach(function(k){
+      if (k.luokka !== 'iso' && k.luokka !== 'keski') return;
+      J.kaiut.push([s(k.t), e5(k.lat), e5(k.lon), Math.round((k.z || 0)*100), Math.round((k.pohja || 0)*100), k.yl, k.luokka === 'iso' ? 'i' : 'k', k.kaari ? 1 : 0,
+                    k.lahella || null, typeof k.parviM === 'number' ? k.parviM : null, k.muuParvi ? [k.muuParvi.m, Math.round(k.muuParvi.yla*10), Math.round(k.muuParvi.ala*10)] : null]);
+    });
+    (t.parvet || []).forEach(function(p){
+      J.parvet.push([s(p.t), e5(p.lat), e5(p.lon), Math.round((p.yla || 0)*10), Math.round((p.ala || 0)*10), Math.round((p.pohja || 0)*10), p.voima, p.tyyppi, p.pituusM, p.kestoS]);
+    });
+    // kivikko: 50 m:n ruuduittain tihein jakso (tiheys ≥ 1)
+    if (t.kivikko && Array.isArray(t.kivikko.jaksot)){
+      var K = {};
+      J.kivikko.forEach(function(e, n){ K[omaLuotausMuistiRuutu(e[1]/1e5, e[2]/1e5)] = n; });
+      t.kivikko.jaksot.forEach(function(j){
+        if (j.tiheys === null || j.tiheys === undefined || j.tiheys < 1) return;
+        var q = omaLuotausMuistiRuutu(j.lat, j.lon), uusi = [s(j.t), e5(j.lat), e5(j.lon), Math.round((j.syv + a)*100), omaLuotausR1(j.tiheys), Math.round((j.maxH || 0)*100), j.kivet, j.ala];
+        if (K[q] === undefined){ K[q] = J.kivikko.length; J.kivikko.push(uusi); }
+        else if (J.kivikko[K[q]][4] < uusi[4]) J.kivikko[K[q]] = uusi;
+      });
+    }
+    M.tallenteet.push({ tunniste: t.tunniste || null, id: t.id, nimi: t.nimi, jarvi: t.jarvi || null, alku: t.alku || null, pisteita: t.lat.length,
+                        kestoS: t.kestoS || null, tiivistetty: nyt || Date.now() });
+  });
+  d.tuonnit = d.tuonnit.filter(function(t){ return pois.indexOf(t) < 0; });
+  return { tallenteita: pois.length, ennen: ennen, jalkeen: JSON.stringify(d).length };
+}
+function omaLuotausMuistiYhteenveto(d){
+  var M = d && d.muisti; if (!M || !M.tallenteet || !M.tallenteet.length) return null;
+  var y = { tallenteita: M.tallenteet.length, syv: 0, kaiut: 0, isot: 0, parvet: 0, kivikko: 0, alku: null, loppu: null, merkkeja: JSON.stringify(M).length };
+  M.tallenteet.forEach(function(t){ if (t.alku){ if (!y.alku || t.alku < y.alku) y.alku = t.alku; if (!y.loppu || t.alku > y.loppu) y.loppu = t.alku; } });
+  Object.keys(M.jarvet || {}).forEach(function(av){ var J = M.jarvet[av];
+    y.syv += (J.syv || []).length; y.kaiut += (J.kaiut || []).length; y.isot += (J.kaiut || []).filter(function(e){ return e[6] === 'i'; }).length;
+    y.parvet += (J.parvet || []).length; y.kivikko += (J.kivikko || []).length; });
+  return y;
 }
