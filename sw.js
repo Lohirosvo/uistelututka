@@ -22,6 +22,7 @@
 // v215: syöttikalakorttiin Havaittu (oma luotain) mallin rinnalle (index.html; tilanne.html vain versio); ei uusia tiedostoja.
 // v216: kaikujen lajiryhmät kausittain ja järvittäin (luotaus.js), Havaittu-rivit kuha-, hauki-, ahven- ja järvilohikorttiin (index.html); tilanne.html vain versio; ei uusia tiedostoja.
 // v217: taimenkorttiin rannan ja selän pintalämpö omasta luotaimesta ja luotaimen rajoitus (index.html, luotaus.js); tilanne.html vain versio; ei uusia tiedostoja.
+// v231: oman luotauksen tuonti tunnistaa saman tallenteen koosta, alkupisteestä ja alkuhetkestä (sama nimi eri päivänä tuodaan, sama tallenne eri nimellä torjutaan, pidempi versio korvaa kesken jääneen); ilmoituksiin päiväykset; nimen rinnalle alkuhetki; usean tiedoston valinta tuo kaikki (index.html, luotaus.js; tilanne.html vain versio).
 // v230: tilannekuvaan Vuosi sitten samassa vedessä (±1 °C, sama vuodenpuolisko; ilman lämpöä ±7 vrk); tiivistykseen kaikujen ja parvien pintalämpö (luotaus.js, tilanne.html; index.html vain versio).
 // v229: oman luotauksen tiivis muisti (yli 10 vrk vanhat napista, 97 %:ssa automaattisesti), tallennustila Oma luotaus -kortissa (luotaus.js, index.html; tilanne.html vain versio).
 // v228: oma luotaus: kartan jälki vain 10 vrk, lähiruudut 150 m tarkentuvat syvyysluokan sisällä (luotaus.js, aaltomalli.js, tilanne.html, index.html).
@@ -65,7 +66,7 @@
 // VERSIO: kasvata tätä aina kun julkaiset uuden version. Vanha välimuisti siivotaan.
 // Versionumeron kasvatus on se mekanismi joka SIIVOAA vanhan välimuistin,
 // index2.html mukaan lukien. Ilman tätä poisto ei näkyisi puhelimissa.
-const VERSIO = 'uistelututka-v230';
+const VERSIO = 'uistelututka-v231';
 /* v178: sivun omat tiedostot ladataan nimellä tiedosto?v=NNN, jossa NNN on tämän VERSIOn numero.
    index.html:n <script src> -riveissä ja ottiäänen haussa on SAMA numero: kun julkaiset, vaihda
    molemmat. Uusi numero on uusi osoite, joten puhelin ei voi yhdistää uutta sivua vanhaan malliin

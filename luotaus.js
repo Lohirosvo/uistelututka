@@ -189,7 +189,7 @@ function omaLuotausLampoJalki(avain, maxIkaMs){   // { pisteet: [{ lat, lon, c, 
     for (var i = 0; i < t.lat.length; i++){
       var v = t.lampo[i]; if (v === null || v === undefined) continue;
       var c = v/100; if (c < mn) mn = c; if (c > mx) mx = c;
-      out.push({ lat: t.lat[i]/1e6, lon: t.lon[i]/1e6, c: c, t: Array.isArray(t.aikaS) ? t.alku + t.aikaS[i]*1000 : null, nimi: t.nimi });
+      out.push({ lat: t.lat[i]/1e6, lon: t.lon[i]/1e6, c: c, t: Array.isArray(t.aikaS) ? t.alku + t.aikaS[i]*1000 : null, nimi: omaLuotausNimi(t) });   // v231: nimi + alku
     }
   });
   return { pisteet: out, min: out.length ? mn : null, max: out.length ? mx : null };
@@ -199,7 +199,7 @@ function omaLuotausParvet(avain, maxIkaMs){
   omaLuotausTuoreet(avain, maxIkaMs).forEach(function(t){
     var a = omaLuotausAnturi(t), r1 = function(v){ return Math.round(v*10)/10; };
     (t.parvet || []).forEach(function(p){
-      var q = {}; for (var k in p) q[k] = p[k]; q.nimi = t.nimi;
+      var q = {}; for (var k in p) q[k] = p[k]; q.nimi = omaLuotausNimi(t);
       // v194: syvyydet pinnasta (tallenne mittaa anturista; laitteen näyttö lisää anturin syvyyden). Pohjaksi luetun pohja on kartasta.
       if (typeof q.yla === 'number') q.yla = r1(q.yla + a);
       if (typeof q.ala === 'number') q.ala = r1(q.ala + a);
@@ -239,7 +239,7 @@ function omaLuotausKalat(avain, maxIkaMs){
     (t.kalat || []).forEach(function(k){
       var q = {}; for (var x in k) q[x] = k[x];
       q.parviYla = omaLuotausParviYla(t, k);   // v218
-      q.zP = Math.round((k.z + a)*10)/10; q.pohjaP = Math.round((k.pohja + a)*10)/10; q.nimi = t.nimi; q.med = t.kalaMed; q.jarvi = t.jarvi; q.anturi = a;
+      q.zP = Math.round((k.z + a)*10)/10; q.pohjaP = Math.round((k.pohja + a)*10)/10; q.nimi = omaLuotausNimi(t); q.med = t.kalaMed; q.jarvi = t.jarvi; q.anturi = a;
       out.push(q);
     });
   });
@@ -455,7 +455,7 @@ function omaLuotausViimeLampo(avain, maxIkaMs){   // uusin tallenne: { c (viimei
   omaLuotausTuoreet(avain, maxIkaMs).forEach(function(t){
     if (typeof t.lampoViim !== 'number' || !Array.isArray(t.aikaS) || !t.aikaS.length) return;
     var loppu = t.alku + t.aikaS[t.aikaS.length - 1]*1000;
-    if (!paras || loppu > paras.t) paras = { c: t.lampoViim, ka: t.lampoKa, t: loppu, nimi: t.nimi };
+    if (!paras || loppu > paras.t) paras = { c: t.lampoViim, ka: t.lampoKa, t: loppu, nimi: omaLuotausNimi(t) };
   });
   return paras;
 }
@@ -485,7 +485,7 @@ function omaLuotausKivikko(avain){
       if (j.tiheys === null || j.tiheys < 1) return;
       var p = Math.round((j.syv + a)*10)/10, l = omaLuotausKivikkoLuokka(j.tiheys);
       out.push({ lat: j.lat, lon: j.lon, t: j.t, tiheys: j.tiheys, maxH: j.maxH, kivet: j.kivet, ala: j.ala, pohjaP: p, luokka: l.nimi, taso: l.taso,
-                 taimen: l.taso >= 2 && p <= OL_TAIMENKIVIKKO_M, nimi: t.nimi });
+                 taimen: l.taso >= 2 && p <= OL_TAIMENKIVIKKO_M, nimi: omaLuotausNimi(t) });
     });
   });
   // v229: tiiviin muistin kivikkoruudut (50 m, tihein jakso; anturi jo mukana)
@@ -495,7 +495,7 @@ function omaLuotausKivikko(avain){
     (MJ[av].kivikko || []).forEach(function(e){
       var p = e[3] / 100, l = omaLuotausKivikkoLuokka(e[4]);
       out.push({ lat: e[1] / 1e5, lon: e[2] / 1e5, t: e[0] ? e[0]*1000 : null, tiheys: e[4], maxH: e[5] / 100, kivet: e[6], ala: e[7], pohjaP: Math.round(p*10)/10,
-                 luokka: l.nimi, taso: l.taso, taimen: l.taso >= 2 && p <= OL_TAIMENKIVIKKO_M, nimi: 'tiivistetty muisti' });
+                 luokka: l.nimi, taso: l.taso, taimen: l.taso >= 2 && p <= OL_TAIMENKIVIKKO_M, nimi: omaLuotausMuistiNimi(M, e[0] ? e[0]*1000 : null, av) });   // v231
     });
   });
   window.__olKivikko = { k: k, j: out };
@@ -578,7 +578,7 @@ function omaLuotausRyhmaKaiut(avain, ryhma, hetkiMs, vrk, kausi){
       var ms = k.t || (t.alku + k.aikaS*1000); if (ms < raja || ms > hetkiMs) return;
       var s = omaLuotausLajiSaanto({ lahella: k.lahella, z: k.z, pohja: k.pohja, anturi: a, muuParvi: k.muuParvi, parviYla: omaLuotausParviYla(t, k) }, avain, kausi);
       if (!s || s.ryhma !== ryhma) return;
-      out.push({ lat: k.lat, lon: k.lon, t: ms, z: Math.round((k.z + a)*10)/10, pohja: Math.round((k.pohja + a)*10)/10, nimi: t.nimi });
+      out.push({ lat: k.lat, lon: k.lon, t: ms, z: Math.round((k.z + a)*10)/10, pohja: Math.round((k.pohja + a)*10)/10, nimi: omaLuotausNimi(t) });
     });
   });
   return out.sort(function(x, y){ return x.t - y.t; });
@@ -669,7 +669,8 @@ function omaLuotausTiivista(d, valitse, nyt){
       });
     }
     M.tallenteet.push({ tunniste: t.tunniste || null, id: t.id, nimi: t.nimi, jarvi: t.jarvi || null, alku: t.alku || null, pisteita: t.lat.length,
-                        kestoS: t.kestoS || null, tiivistetty: nyt || Date.now(), lampoKa: omaLuotausKeskilampo(t), anturiM: a });   // v230: lampoKa, anturiM
+                        kestoS: t.kestoS || null, tiivistetty: nyt || Date.now(), lampoKa: omaLuotausKeskilampo(t), anturiM: a, tuotu: t.tuotu || null,
+      loppu: t.alku && Array.isArray(t.aikaS) && t.aikaS.length ? t.alku + t.aikaS[t.aikaS.length - 1]*1000 : null });   // v230: lampoKa, anturiM; v231: tuotu, loppu (kaikujen ja kivikon tallenne)
   });
   d.tuonnit = d.tuonnit.filter(function(t){ return pois.indexOf(t) < 0; });
   return { tallenteita: pois.length, ennen: ennen, jalkeen: JSON.stringify(d).length };
@@ -731,7 +732,7 @@ function omaLuotausVuosiSitten(avain, nytMs, nytLampo){
       var kt = k.t || (t.alku + (k.aikaS || 0)*1000), vesi = omaLuotausHetkenLampo(t, k.aikaS), p = peruste(kt, vesi); if (!p) return;
       var q = {}; for (var x in k) q[x] = k[x];
       q.t = kt; q.parviYla = omaLuotausParviYla(t, k); q.zP = Math.round((k.z + a)*10)/10; q.pohjaP = Math.round((k.pohja + a)*10)/10;
-      q.anturi = a; q.nimi = t.nimi; q.vesi = vesi; q.peruste = p; q.jarvi = t.jarvi; out.push(q);
+      q.anturi = a; q.nimi = omaLuotausNimi(t); q.vesi = vesi; q.peruste = p; q.jarvi = t.jarvi; out.push(q);
     });
   });
   var J = d.muisti && d.muisti.jarvet && d.muisti.jarvet[avain];
@@ -740,8 +741,81 @@ function omaLuotausVuosiSitten(avain, nytMs, nytLampo){
     out.push({ t: tms, lat: e[1]/1e5, lon: e[2]/1e5, z: e[3]/100, pohja: e[4]/100, zP: Math.round(e[3]/10)/10, pohjaP: Math.round(e[4]/10)/10, anturi: 0,
                yl: e[5], luokka: e[6] === 'i' ? 'iso' : 'keski', kaari: !!e[7], lahella: e[8], parviM: e[9],
                muuParvi: e[10] ? { m: e[10][0], yla: e[10][1]/10, ala: e[10][2]/10 } : null, parviYla: uusi && e[12] !== null ? e[12]/10 : null,
-               vesi: vesi, peruste: p, nimi: 'tiivistetty muisti', jarvi: avain });
+               vesi: vesi, peruste: p, nimi: omaLuotausMuistiNimi(d.muisti, tms, avain), jarvi: avain });   // v231
   });
   return { kaiut: out, vesi: lampoOn ? nytLampo : null, puolisko: puol, lampo: out.filter(function(q){ return q.peruste === 'lampo'; }).length,
            kalenteri: out.filter(function(q){ return q.peruste === 'kalenteri'; }).length };
+}
+
+/* ===== v231 (23.10.2026): SAMAN TALLENTEEN TUNNISTUS =====
+   Hannu 23.10.: kortti luetaan joskus kesken päivän ja tyhjennetään, ja Lowrance aloittaa nimet alusta (Sonar0000…), joten sama
+   nimi toistuu. Tuonti ilmoitti "Sonar0011.sl2 oli jo tuotu ja tiivistetty muistiin" (tila 38 %). Selvitys (v230:n koodi):
+   tunniste = nimi|koko tavuina|lat[0]|lon[0]; muu koodi ei vertaa pelkkää nimeä; eri tallenteella sama tunniste vaatisi saman
+   tavumäärän ja alkupisteen → torjuttu oli lähes varmasti sama vanha tiedosto (ei varmistettu). Aukot: sama tallenne eri nimellä
+   ("Sonar0011 (1).sl2") meni tuplana, ja pidempi versio samasta tallenteesta sai eri tunnisteen.
+   UUSI: tunniste nimi|koko|lat0|lon0|a<alku ms> (vanhat 4 kentän tunnisteet luetaan edelleen). Vertailu (omaLuotausVertaa):
+   alkupiste sama JA (alkuhetket samat ±OL_ALKU_TOL_MS tai jommaltakummalta puuttuu) → koko sama = sama tallenne (nimestä
+   riippumatta), koko eri ja alku tiedossa molemmilla = pidempi/lyhyempi versio samasta; alkuhetket eroavat yli 2 s = eri tallenne,
+   vaikka nimi, koko ja alkupiste täsmäävät. */
+var OL_ALKU_TOL_MS = 2000;
+function omaLuotausAikaTeksti(ms){
+  if (!ms) return 'alku ei tiedossa';
+  var d = new Date(ms), p = function(x){ return String(x).padStart(2, '0'); };
+  return d.getDate() + '.' + (d.getMonth() + 1) + '.' + d.getFullYear() + ' klo ' + p(d.getHours()) + '.' + p(d.getMinutes());
+}
+function omaLuotausNimi(t){   // näyttönimi: samannimiset erottuvat alkuhetkestä
+  var n = (t && (t.nimi || t.id)) || 'tallenne';
+  return t && t.alku ? n + ' (' + omaLuotausAikaTeksti(t.alku) + ')' : n;
+}
+function omaLuotausTunnisteOsat(tunniste){
+  if (typeof tunniste !== 'string') return null;
+  var o = tunniste.split('|'), alku = null;
+  if (o.length >= 5 && /^a\d*$/.test(o[o.length - 1])){ alku = +o.pop().slice(1) || null; }
+  if (o.length < 4) return null;
+  var lon0 = +o.pop(), lat0 = +o.pop(), koko = +o.pop();
+  return { nimi: o.join('|'), koko: koko, lat0: lat0, lon0: lon0, alku: alku };
+}
+function omaLuotausTunniste(nimi, koko, lat0, lon0, alku){ return nimi + '|' + koko + '|' + lat0 + '|' + lon0 + '|a' + (alku ? Math.round(alku) : ''); }
+// F ja R: { koko, lat0, lon0, alku }. Palauttaa 'sama' | 'pidempi' (F pidempi) | 'lyhyempi' | null
+function omaLuotausVertaa(F, R){
+  if (!F || !R || typeof F.lat0 !== 'number' || isNaN(F.lat0) || !(R.lat0 === F.lat0 && R.lon0 === F.lon0)) return null;
+  // 2^32 ms: v172–v194 luki kehyksen ajan etumerkittömänä (v195:n korjaus), jolloin jatkotallenteen alkuhetki saattoi jäädä tasan 2^32 ms
+  // (49 vrk 17 h 03 min) liian aikaiseksi. Sama tiedosto uudelleen tuotuna on silloin sama tallenne, ei uusi.
+  var ero = F.alku && R.alku ? Math.abs(F.alku - R.alku) : null;
+  var molemmat = ero !== null, samaAlku = molemmat && (ero <= OL_ALKU_TOL_MS || Math.abs(ero - 4294967296) <= OL_ALKU_TOL_MS);
+  if (molemmat && !samaAlku) return null;
+  if (F.koko === R.koko) return 'sama';
+  if (!samaAlku) return null;
+  return F.koko > R.koko ? 'pidempi' : 'lyhyempi';
+}
+// Etsii tuotavalle (F) saman tallenteen kokonaisista tuonneista ja muistista: { tyyppi, raaka, muisti, R } tai null
+function omaLuotausEtsiSama(d, F){
+  var paras = null, jarj = { sama: 0, pidempi: 1, lyhyempi: 2 };
+  var kokeile = function(R, raaka, muisti){
+    var v = omaLuotausVertaa(F, R); if (!v) return;
+    if (!paras || jarj[v] < jarj[paras.tyyppi]) paras = { tyyppi: v, raaka: raaka, muisti: muisti, R: R };
+  };
+  (d.tuonnit || []).forEach(function(t){
+    var o = omaLuotausTunnisteOsat(t.tunniste); if (!o) return;
+    kokeile({ nimi: t.nimi, koko: o.koko, lat0: Array.isArray(t.lat) && t.lat.length ? t.lat[0] : o.lat0, lon0: Array.isArray(t.lon) && t.lon.length ? t.lon[0] : o.lon0,
+              alku: t.alku || o.alku || null, tuotu: t.tuotu || null, pisteita: (t.lat || []).length }, t, null);
+  });
+  ((d.muisti && d.muisti.tallenteet) || []).forEach(function(m){
+    var o = omaLuotausTunnisteOsat(m.tunniste); if (!o) return;
+    var tu = m.tuotu || (/^sl2-(\d+)-/.exec(m.id || '') || [])[1];
+    kokeile({ nimi: m.nimi, koko: o.koko, lat0: o.lat0, lon0: o.lon0, alku: m.alku || o.alku || null, tuotu: tu ? +tu : null, tiivistetty: m.tiivistetty || null,
+              pisteita: m.pisteita }, null, m);
+  });
+  return paras;
+}
+// v231: tiivistetyn muistin kaiun tai kivikon tallenne alkuhetkestä (muistin tallenteet: alku, loppu tai kestoS); muuten 'tiivistetty muisti'
+function omaLuotausMuistiNimi(M, tms, jarvi){
+  var T = M && M.tallenteet; if (!T || !tms) return 'tiivistetty muisti';
+  var av = jarvi === '_' ? null : jarvi;
+  for (var i = 0; i < T.length; i++){
+    var m = T[i]; if (!m.alku || (av && m.jarvi && m.jarvi !== av)) continue;
+    var loppu = m.loppu || (m.alku + (m.kestoS || 0)*1000);
+    if (tms >= m.alku - 60e3 && tms <= loppu + 60e3) return omaLuotausNimi(m) + ', tiivistetty muistiin';
+  }
+  return 'tiivistetty muisti';
 }

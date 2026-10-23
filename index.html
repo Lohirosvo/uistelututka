@@ -2443,14 +2443,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=230" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=230" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=230" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=230" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=230" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=230" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=230" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=230" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=231" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=231" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=231" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=231" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=231" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=231" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=231" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=231" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
        uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
@@ -4195,8 +4195,39 @@ function kovaPohjaRivit(){
       + ' <button type="button" class="chip" style="padding:1px 8px;font-size:12px;margin-left:4px;" data-kovapoista="' + av + '" onclick="kovaPohjaPoista(\'' + av + '\')">Poista</button></div>';
   }).join('');
 }
+/* v231 (23.10.2026): saman tallenteen tunnistus tuonnissa (luotaus.js: omaLuotausEtsiSama). Hannu: kortti luetaan kesken päivän ja
+   Lowrance aloittaa nimet alusta, joten sama nimi toistuu. Ilmoituksessa tuotavan ja aiemman tallenteen alkuhetki sekä milloin
+   aiempi tuotiin tai tiivistettiin. */
+function olKuvaus(n, alku){ return n + ' (' + (alku ? 'alku ' + omaLuotausAikaTeksti(alku) : 'alkuhetki ei tiedossa') + ')'; }
+function olAiempiTeksti(R){
+  var o = [];
+  if (R.tuotu) o.push('tuotu ' + omaLuotausAikaTeksti(R.tuotu));
+  if (R.tiivistetty) o.push('tiivistetty muistiin ' + omaLuotausAikaTeksti(R.tiivistetty));
+  return olKuvaus(R.nimi || 'tallenne', R.alku) + (o.length ? ', ' + o.join(', ') : '');
+}
+function olSamaTeksti(nimi, alku, os){
+  var R = os.R, kuvaus = olKuvaus(nimi, alku), muisti = !!os.muisti;
+  if (os.tyyppi === 'lyhyempi')
+    return kuvaus + ' on lyhyempi (kesken jäänyt) kopio aiemmin tuodusta tallenteesta ' + olAiempiTeksti(R) + ': sama alkupiste ja alkuhetki, pienempi tiedosto. Ei tuotu.';
+  if (os.tyyppi === 'pidempi')   // vain muistissa oleva: raaka korvataan olTuo:ssa
+    return kuvaus + ' on pidempi versio tallenteesta ' + olAiempiTeksti(R) + '. Tiivistettyä muistia ei voi korvata, joten tätä ei tuotu.';
+  if (R.nimi && R.nimi !== nimi)
+    return kuvaus + ' on sama tallenne kuin aiemmin ' + (muisti ? 'tuotu ja muistiin tiivistetty ' : 'tuotu ') + olAiempiTeksti(R) + ' (sama koko, alkupiste ja alkuhetki, eri nimi). Ei tuotu uudelleen.';
+  return kuvaus + ' oli jo tuotu' + (muisti ? ' ja tiivistetty muistiin' : '') + ': ' + olAiempiTeksti(R) + '. Ei tuotu uudelleen.';
+}
+// samanniminen aiempi, joka on eri tallenne (eri alkuhetki tai koko): mainitaan uuden tuonnin ilmoituksessa
+function olSamaNimiTeksti(d, nimi){
+  var a = (d.tuonnit || []).filter(function(t){ return t.nimi === nimi; }).concat(((d.muisti && d.muisti.tallenteet) || []).filter(function(m){ return m.nimi === nimi; }));
+  if (!a.length) return '';
+  return ' Samanniminen aiempi on eri tallenne (' + a.slice(0, 3).map(function(x){ return x.alku ? 'alku ' + omaLuotausAikaTeksti(x.alku) : 'alkuhetki ei tiedossa'; }).join('; ')
+    + (a.length > 3 ? '; …' : '') + '), joten tämä tuotiin uutena.';
+}
 async function olTuo(files){
-  var tila = document.getElementById('olTila'); if (!files || !files.length) return;
+  /* v231: tiedostot talteen heti. Kentän onchange tyhjentää valinnan (this.value = '') heti olTuo-kutsun jälkeen, ja Chromium
+     tyhjentää silloin myös välitetyn FileList-olion: ensimmäisen await-kohdan jälkeen files.length oli 0, joten usean tiedoston
+     valinnasta tuotiin vain ensimmäinen (löytyi v231:n testissä). */
+  files = files ? Array.prototype.slice.call(files) : [];
+  var tila = document.getElementById('olTila'); if (!files.length) return;
   olTallennaAnturi();
   var d = JSON.parse(JSON.stringify(omaLuotausLue())), uusia = 0, viestit = [], kovaTuotu = false;
   for (var f = 0; f < files.length; f++){
@@ -4211,7 +4242,13 @@ async function olTuo(files){
           var t = lista[li];
           if (!(Array.isArray(t.lat) && Array.isArray(t.lon) && Array.isArray(t.syv) && t.lat.length === t.lon.length && t.lat.length === t.syv.length)) throw new Error('JSON-tiedoston rakenne ei kelpaa');
           if (!t.id) t.id = 'json-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
-          if (d.tuonnit.some(function(x){ return x.id === t.id || (t.tunniste && x.tunniste === t.tunniste); }) || omaLuotausMuistissa(d, t.tunniste, t.id)) { viestit.push(nimi + ': ' + (t.nimi || t.id) + ' oli jo tuotu, ei tuotu uudelleen.'); continue; }   // v229: myös muisti
+          var jSama = d.tuonnit.filter(function(x){ return x.id === t.id || (t.tunniste && x.tunniste === t.tunniste); })[0], jMuisti = !jSama && omaLuotausMuistissa(d, t.tunniste, t.id);
+          if (jSama || jMuisti){ var jR = jSama || jMuisti; viestit.push(nimi + ': ' + olSamaTeksti(t.nimi || t.id, t.alku, { tyyppi: 'sama', muisti: jMuisti || null,
+            R: { nimi: jR.nimi, alku: jR.alku, tuotu: jR.tuotu || (/^sl2-(\d+)-/.exec(jR.id || '') || [])[1] * 1 || null, tiivistetty: jMuisti ? jMuisti.tiivistetty : null } })); continue; }   // v229: myös muisti; v231: päiväykset
+          var jO = omaLuotausTunnisteOsat(t.tunniste), jOs = jO && t.lat.length ? omaLuotausEtsiSama(d, { koko: jO.koko, lat0: t.lat[0], lon0: t.lon[0], alku: t.alku || jO.alku || null }) : null;   // v231: sama sisältö eri nimellä
+          if (jOs && (jOs.tyyppi !== 'pidempi' || jOs.muisti)){ viestit.push(nimi + ': ' + olSamaTeksti(t.nimi || t.id, t.alku, jOs)); continue; }
+          if (jOs){ var jIx = d.tuonnit.indexOf(jOs.raaka); t.id = jOs.raaka.id; if (!t.jarvi){ t.jarvi = jOs.raaka.jarvi; t.jarviNimi = jOs.raaka.jarviNimi; } if (typeof t.anturiM !== 'number') t.anturiM = jOs.raaka.anturiM; d.tuonnit[jIx] = t; uusia++;   // v231: pidempi versio korvaa
+            viestit.push(nimi + ': ' + olKuvaus(t.nimi || t.id, t.alku) + ' on pidempi versio aiemmin tuodusta tallenteesta ' + olAiempiTeksti(jOs.R) + ': korvattiin (' + jOs.R.pisteita + ' → ' + t.lat.length + ' pistettä).'); continue; }
           if (!t.jarvi && t.lat.length){ t.jarvi = await olTunnistaJarvi(t.lat, t.lon); t.jarviNimi = t.jarvi ? olJarviNimi(t.jarvi) : null; }   // Clauden tiedostossa ei ole järveä
           if (typeof t.anturiM !== 'number') t.anturiM = olAnturi();
           d.tuonnit.push(t); uusia++; viestit.push(nimi + ': ' + (t.nimi || t.id) + ', ' + t.lat.length + ' pistettä, ' + olJarviNimi(t.jarvi, t.jarviNimi));
@@ -4220,25 +4257,36 @@ async function olTuo(files){
       }
       if (tila) tila.textContent = 'Luetaan ' + nimi + '…';
       var tulos = await olLueSl2(file, function(o){ if (tila) tila.textContent = 'Luetaan ' + nimi + ': ' + Math.round(o*100) + ' % (' + olN1(file.size*o/1e6) + ' / ' + olN1(file.size/1e6) + ' Mt)'; });
-      var tunniste = nimi + '|' + file.size + '|' + tulos.lat[0] + '|' + tulos.lon[0];
-      var vanha = d.tuonnit.filter(function(x){ return x.tunniste === tunniste; })[0];
-      if (!vanha && omaLuotausMuistissa(d, tunniste)){ viestit.push(nimi + ' oli jo tuotu ja tiivistetty muistiin, ei tuotu uudelleen.'); continue; }   // v229
+      // v231: sama tallenne tunnistetaan koosta, alkupisteestä ja alkuhetkestä (nimi ei ratkaise); vanhat 4 kentän tunnisteet käyvät
+      var F = { koko: file.size, lat0: tulos.lat[0], lon0: tulos.lon[0], alku: tulos.alku || null };
+      var tunniste = omaLuotausTunniste(nimi, file.size, tulos.lat[0], tulos.lon[0], tulos.alku);
+      var os = omaLuotausEtsiSama(d, F), vanha = os && os.tyyppi === 'sama' && os.raaka ? os.raaka : null, korvattava = os && os.tyyppi === 'pidempi' && os.raaka ? os.raaka : null;
+      if (os && !vanha && !korvattava){ viestit.push(olSamaTeksti(nimi, tulos.alku, os)); continue; }   // muistissa oleva tai lyhyempi kopio
       // v193: järvi ensin (pohjaksi luetun parven tarkistus tarvitsee järven syvyyskartan), sitten suodatus, lämpö ja parvet
       if (tila) tila.textContent = nimi + ': tunnistetaan järvi…';
-      var jarviAv = vanha && vanha.jarvi ? vanha.jarvi : await olTunnistaJarvi(tulos.lat, tulos.lon);
+      var jarviAv = (vanha || korvattava) && (vanha || korvattava).jarvi ? (vanha || korvattava).jarvi : await olTunnistaJarvi(tulos.lat, tulos.lon);
       var lisa = olJalkikasittely(tulos, jarviAv, nimi);
+      if (korvattava){   // v231: kesken jäänyt kopio korvataan pidemmällä (sama alkupiste ja alkuhetki), kuten v175-polussa
+        var ennenK = korvattava.lat.length;
+        ['lat','lon','syv','kehyksia','kestoS','lampoMin','lampoMax','lampo','aikaS','lampoKa','lampoViim','parvet','pohjaPoistettu','kalat','kalaMed','takila','parviSekPois','kivikko'].forEach(function(k){ korvattava[k] = tulos[k]; });
+        if (tulos.alku) korvattava.alku = tulos.alku;
+        korvattava.tunniste = omaLuotausTunniste(korvattava.nimi || nimi, file.size, tulos.lat[0], tulos.lon[0], korvattava.alku);
+        korvattava.tuontiVersio = OL_TUONTI_VERSIO; korvattava.tuotu = Date.now(); uusia++;
+        viestit.push(olKuvaus(nimi, tulos.alku) + ' on pidempi versio aiemmin tuodusta tallenteesta ' + olAiempiTeksti(os.R) + ': korvattiin, ' + ennenK + ' → ' + tulos.lat.length + ' pistettä' + lisa + '.');
+        continue;
+      }
       if (vanha && (tulos.lat.length > vanha.lat.length || !Array.isArray(vanha.lampo) || !Array.isArray(vanha.kalat) || (vanha.tuontiVersio || 0) < OL_TUONTI_VERSIO)){   // v175: jumittunut tuonti korvataan; v193: vanha tuonti saa lämmön ja parvet; v194: kalat; v195: kellonajat
         var ennen = vanha.lat.length;
         ['lat','lon','syv','kehyksia','kestoS','lampoMin','lampoMax','lampo','aikaS','lampoKa','lampoViim','parvet','pohjaPoistettu','kalat','kalaMed','takila','parviSekPois','kivikko'].forEach(function(k){ vanha[k] = tulos[k]; });
         if (tulos.alku) vanha.alku = tulos.alku;
         vanha.tuontiVersio = OL_TUONTI_VERSIO;
         vanha.tuotu = Date.now(); uusia++;
-        viestit.push(nimi + ' tuotiin uudelleen: ' + ennen + ' → ' + tulos.lat.length + ' pistettä' + lisa + '.' + olDiagTeksti(tulos));
+        viestit.push(olKuvaus(nimi, tulos.alku) + ' tuotiin uudelleen: ' + ennen + ' → ' + tulos.lat.length + ' pistettä' + lisa + '.' + olDiagTeksti(tulos));
         continue;
       }
       if (vanha){
         if (!vanha.alku && tulos.alku){ vanha.alku = tulos.alku; uusia++; viestit.push(nimi + ' oli jo tuotu; lisättiin tallenteen päivä ' + olAika(tulos.alku) + '.'); }   // v173: v172:ssa tuoduille
-        else viestit.push(nimi + ' oli jo tuotu, ei tuotu uudelleen.');
+        else viestit.push(olSamaTeksti(nimi, tulos.alku, os));   // v231: päiväykset ja eri nimi
         continue;
       }
       var t = { id: 'sl2-' + Date.now() + '-' + f, tunniste: tunniste, nimi: nimi, tuotu: Date.now(), jarvi: jarviAv, jarviNimi: jarviAv ? olJarviNimi(jarviAv) : null, anturiM: olAnturi(),
@@ -4247,8 +4295,9 @@ async function olTuo(files){
                 lampo: tulos.lampo, aikaS: tulos.aikaS, lampoKa: tulos.lampoKa, lampoViim: tulos.lampoViim, parvet: tulos.parvet, pohjaPoistettu: tulos.pohjaPoistettu,   // v193
                 kalat: tulos.kalat, kalaMed: tulos.kalaMed, takila: tulos.takila, parviSekPois: tulos.parviSekPois, kivikko: tulos.kivikko || null,   // v194, v197
                 tuontiVersio: OL_TUONTI_VERSIO };   // v195
+      var samaNimi = olSamaNimiTeksti(d, nimi);   // v231
       d.tuonnit.push(t); uusia++;
-      viestit.push(nimi + ': ' + t.lat.length + ' pistettä, ' + olJarviNimi(jarviAv) + (t.alku ? ', ' + olAika(t.alku) : '') + (jarviAv ? '' : ' (ei osu sovelluksen järviin, tallennetaan silti)') + lisa + olDiagTeksti(tulos));
+      viestit.push(nimi + ': ' + t.lat.length + ' pistettä, ' + olJarviNimi(jarviAv) + (t.alku ? ', ' + olAika(t.alku) : '') + (jarviAv ? '' : ' (ei osu sovelluksen järviin, tallennetaan silti)') + lisa + olDiagTeksti(tulos) + samaNimi);
     } catch (e) {
       viestit.push(nimi + ': ' + (e && e.message ? e.message : e));
     }
@@ -4257,7 +4306,7 @@ async function olTuo(files){
     try { var autoT = olTallenna(d); if (autoT) viestit.push(olAutoTeksti(autoT)); }   // v229
     catch (e) { viestit.push('Tallennus ei onnistunut: puhelimen tila loppui (' + (e && e.name) + '). Poista vanhoja tuonteja tai varmuuskopioi ja tyhjennä.'); uusia = 0; }
   }
-  if (tila) tila.innerHTML = viestit.map(function(v){ return '<div>' + v.replace(/</g, '&lt;') + '</div>'; }).join('')
+  if (tila) tila.innerHTML = viestit.map(function(v){ return '<div style="margin:0 0 5px;">' + v.replace(/</g, '&lt;') + '</div>'; }).join('')   // v231: väli ilmoitusten välissä
     + (uusia ? '<div style="margin-top:4px;color:var(--amber);">Mallit käyttävät luotausta, kun sovellus käynnistetään uudelleen.</div>' : '');
   if (uusia) olValmisUudelleen();
   olPiirraLista();
@@ -4351,7 +4400,7 @@ function olKalaKoosteHtml(d){
     }).join('');
     var vaarin = d.tuonnit.filter(function(t){ return t.jarvi === av && Array.isArray(t.kalat) && olAikaVaarin(t); }).length;   // v195
     return '<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--line);"><strong>🎣 Kalat kaikukuvasta · ' + olJarviNimi(av, nimet[av]) + '</strong>'
-      + (!av ? ' <span class="hint">(' + d.tuonnit.filter(function(t){ return !t.jarvi && Array.isArray(t.kalat) && t.alku; }).map(function(t){ return String(t.nimi || t.id).replace(/</g, '&lt;'); }).join(', ') + ')</span>' : '')   // v207
+      + (!av ? ' <span class="hint">(' + d.tuonnit.filter(function(t){ return !t.jarvi && Array.isArray(t.kalat) && t.alku; }).map(function(t){ return String(omaLuotausNimi(t)).replace(/</g, '&lt;'); }).join(', ') + ')</span>' : '')   // v207
       + ' <span class="hint">(' + K.tallenteita + (K.tallenteita === 1 ? ' tallenne, ' : ' tallennetta, ') + K.kaloja + ' kalaa; solussa isot / kaikki)</span>'
       + '<div style="overflow-x:auto;"><table style="border-collapse:collapse;font-size:12px;margin-top:4px;width:100%;"><tr><th style="' + th + 'text-align:left;">klo</th><th style="' + th + '">luodattu</th>'
       + OL_SYVLUOKAT.map(function(s){ return '<th style="' + th + '">' + s[2] + '</th>'; }).join('') + '</tr>' + rivit + '</table></div>'
@@ -13762,7 +13811,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v230';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v231';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -22091,7 +22140,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=230';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=231';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })
