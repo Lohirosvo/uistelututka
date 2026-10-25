@@ -2443,14 +2443,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=232" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=232" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=232" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=232" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=232" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=232" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=232" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=232" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=233" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=233" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=233" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=233" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=233" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=233" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=233" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=233" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
        uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
@@ -4103,7 +4103,7 @@ function olKaytossa(){
 }
 function olAutoTiivista(d, muut, kaikki){
   var jarj = d.tuonnit.slice().sort(function(a, b){ return (a.alku || 0) - (b.alku || 0) || (a.tuotu || 0) - (b.tuotu || 0); });
-  var uusin = jarj[jarj.length - 1], n = 0, ennen = JSON.stringify(d).length, koko = ennen;
+  var uusin = jarj[jarj.length - 1], n = 0, ennen = omaLuotausJson(d).length, koko = ennen;   // v233: tiiviin muodon koko
   for (var i = 0; i < jarj.length - 1; i++){
     if (!kaikki && muut + koko + 30 <= OL_TAYTTO_TAVOITE*OL_KIINTIO) break;
     var t = jarj[i]; if (t === uusin) continue;
@@ -4112,15 +4112,15 @@ function olAutoTiivista(d, muut, kaikki){
   return n ? { tallenteita: n, vapautui: ennen - koko } : null;
 }
 function olTallenna(d){
-  var json = JSON.stringify(d), vanha = '', auto = null;
+  var json = omaLuotausJson(d), vanha = '', auto = null;   // v233: tallennus tiiviinä (luotaus.js)
   try { vanha = localStorage.getItem('uistelututka_omaluotaus') || ''; } catch (e) {}
   var muut = olKaytossa() - vanha.length - 'uistelututka_omaluotaus'.length;
-  if (muut + json.length + 30 > OL_TAYTTO_RAJA*OL_KIINTIO){ auto = olAutoTiivista(d, muut, false); json = JSON.stringify(d); }
+  if (muut + json.length + 30 > OL_TAYTTO_RAJA*OL_KIINTIO){ auto = olAutoTiivista(d, muut, false); json = omaLuotausJson(d); }
   try { localStorage.setItem('uistelututka_omaluotaus', json); }
   catch (e) {
     var a2 = olAutoTiivista(d, muut, true); if (!a2) throw e;   // heittää, jos tila loppuu eikä tiivistettävää ole
     auto = auto ? { tallenteita: auto.tallenteita + a2.tallenteita, vapautui: auto.vapautui + a2.vapautui } : a2;
-    localStorage.setItem('uistelututka_omaluotaus', JSON.stringify(d));
+    localStorage.setItem('uistelututka_omaluotaus', omaLuotausJson(d));
   }
   window.__olAuto = auto;
   omaLuotausNollaa();
@@ -4239,7 +4239,7 @@ async function olTuo(files){
         var lista = Array.isArray(j.tuonnit) ? j.tuonnit : (j.lat ? [j] : []);
         if (!lista.length) throw new Error('JSON-tiedostossa ei ole luotauspisteitä');
         for (var li = 0; li < lista.length; li++){
-          var t = lista[li];
+          var t = omaLuotausPuraTuonti(lista[li]);   // v233: tiivis muoto (esim. varmuuskopiosta poimittu) puretaan
           if (!(Array.isArray(t.lat) && Array.isArray(t.lon) && Array.isArray(t.syv) && t.lat.length === t.lon.length && t.lat.length === t.syv.length)) throw new Error('JSON-tiedoston rakenne ei kelpaa');
           if (!t.id) t.id = 'json-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
           var jSama = d.tuonnit.filter(function(x){ return x.id === t.id || (t.tunniste && x.tunniste === t.tunniste); })[0], jMuisti = !jSama && omaLuotausMuistissa(d, t.tunniste, t.id);
@@ -4375,7 +4375,7 @@ function olPiirraLista(){
     + ' · parvia ' + my.parvet + ' · kivikkoruutuja ' + my.kivikko + ' · ' + milj(my.merkkeja) + ' milj. merkkiä</div>';
   var vanhat = olVanhat(d);
   if (vanhat.length){
-    var arvio = vanhat.reduce(function(s, t){ return s + JSON.stringify(t).length; }, 0);
+    var arvio = vanhat.reduce(function(s, t){ return s + JSON.stringify(omaLuotausPakkaaTuonti(t)).length; }, 0);   // v233: tiiviin muodon koko
     tilaHtml += '<button type="button" class="chip" id="olTiivista" style="margin:0 0 8px;" onclick="olTiivistaNappi(this)">Tiivistä yli ' + OL_JALKI_VRK + ' vrk vanhat ('
       + vanhat.length + ' tallennetta, vapauttaa noin ' + milj(arvio*0.9) + ' milj. merkkiä)</button>';
   }
@@ -13830,7 +13830,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v232';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v233';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -22160,7 +22160,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=232';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=233';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })

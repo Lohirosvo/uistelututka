@@ -32,6 +32,11 @@ function omaLuotausLue(){
   // literaali, ei OL_LS: funktiota voidaan kutsua ennen kuin var-rivi on suoritettu
   try { d = JSON.parse(localStorage.getItem('uistelututka_omaluotaus') || 'null'); } catch (e) { d = null; }
   if (!d || !Array.isArray(d.tuonnit)) d = { versio: 1, tuonnit: [] };
+  var pakkaamaton = d.tuonnit.some(function(t){ return t && !t.$p; });
+  d.tuonnit = d.tuonnit.map(function(t){ return omaLuotausPuraTuonti(t); });   // v233: tiivis muoto puretaan muistiin entisen muotoiseksi
+  if (pakkaamaton && d.tuonnit.length){   // v233: vanhat tallenteet tiiviiksi kerran (vie vähemmän tilaa, joten mahtuu)
+    try { localStorage.setItem('uistelututka_omaluotaus', omaLuotausJson(d)); } catch (e) {}
+  }
   window.__olData = d;
   return d;
 }
@@ -620,7 +625,7 @@ function omaLuotausMuistissa(d, tunniste, id){
 var omaLuotausR1 = function(x){ return Math.round(x*10)/10; };
 // Tiivistää valitut tuonnit muistiin ja poistaa ne d.tuonnit-listasta. Palauttaa { tallenteita, ennen, jalkeen } (merkkejä).
 function omaLuotausTiivista(d, valitse, nyt){
-  var ennen = JSON.stringify(d).length, M = omaLuotausMuisti(d), pois = d.tuonnit.filter(valitse);
+  var ennen = omaLuotausJson(d).length, M = omaLuotausMuisti(d), pois = d.tuonnit.filter(valitse);   // v233: tiiviin muodon koko
   if (!pois.length) return { tallenteita: 0, ennen: ennen, jalkeen: ennen };
   var e5 = function(x){ return Math.round(x*1e5); }, s = function(ms){ return ms ? Math.round(ms/1000) : null; };
   var indeksit = {};
@@ -673,7 +678,7 @@ function omaLuotausTiivista(d, valitse, nyt){
       loppu: t.alku && Array.isArray(t.aikaS) && t.aikaS.length ? t.alku + t.aikaS[t.aikaS.length - 1]*1000 : null });   // v230: lampoKa, anturiM; v231: tuotu, loppu (kaikujen ja kivikon tallenne)
   });
   d.tuonnit = d.tuonnit.filter(function(t){ return pois.indexOf(t) < 0; });
-  return { tallenteita: pois.length, ennen: ennen, jalkeen: JSON.stringify(d).length };
+  return { tallenteita: pois.length, ennen: ennen, jalkeen: omaLuotausJson(d).length };
 }
 function omaLuotausMuistiYhteenveto(d){
   var M = d && d.muisti; if (!M || !M.tallenteet || !M.tallenteet.length) return null;
@@ -819,3 +824,119 @@ function omaLuotausMuistiNimi(M, tms, jarvi){
   }
   return 'tiivistetty muisti';
 }
+
+/* ===== v233 (25.10.2026): TIIVIS TALLENNUSMUOTO (ei tiedon menetystä) =====
+   Hannu 25.10.: tila 81 % kahden päivän tiivistyksenkin jälkeen ("Mitä ratkaisumalleja tähän ?") → valinta "Tehdään se 1.
+   Tiiviimpi tallennusmuoto, ei tiedon menetystä." 24.10. varmuuskopiossa oman luotauksen 1,96 milj. merkistä kivikko 35 %
+   (5 831 jaksoa, 92 % ilman kiviä), kalakaiut 31 % (kenttänimet toistuivat joka kaiussa) ja reitti 28 %.
+   Tallenteen taulukot tallennetaan sarakkeina: kohdetaulukot (kalat, parvet, takila, kivikon jaksot ja isot) muodossa
+   {$o: avaimet, c: sarakkeet, n: määrä, p: läsnäolo}, ja jokainen sarake lyhimpänä seuraavista: sellaisenaan, erotuksina
+   edellisestä ({$d, k}: luvut kerrottuna 10^k kokonaisluvuiksi), toistoina ({$r}: arvo, kerrat) tai erotusten toistoina ({$dr, k}).
+   Kerroin k valitaan niin, että jokainen luku palautuu täsmälleen (n / 10^k === alkuperäinen), joten mitään ei pyöristetä.
+   Tiivistetty tallenne merkitään {$p: 1}; omaLuotausLue purkaa sen muistiin entisen muotoiseksi, joten muu koodi ei muutu.
+   Vanhat (pakkaamattomat) tallenteet luetaan sellaisinaan ja tallennetaan tiiviinä ensimmäisellä latauksella. */
+var OL_PAKKAUS = 1;
+function olpSkaala(a){   // pienin k (0–6), jolla kaikki luvut palautuvat täsmälleen; null jos ei lukuja tai ei käy
+  var on = false;
+  for (var k = 0; k <= 6; k++){
+    var p = Math.pow(10, k), ok = true;
+    for (var i = 0; i < a.length; i++){
+      var v = a[i]; if (v === null) continue;
+      if (typeof v !== 'number' || !isFinite(v)) return null;
+      on = true; var n = Math.round(v*p);
+      if (!Number.isSafeInteger(n) || n/p !== v){ ok = false; break; }
+    }
+    if (ok) return on ? k : null;
+  }
+  return null;
+}
+function olpRle(a){ var o = []; for (var i = 0; i < a.length; i++){ if (o.length && o[o.length - 2] === a[i]) o[o.length - 1]++; else o.push(a[i], 1); } return o; }
+function olpSarake(a){
+  var paras = a, pituus = JSON.stringify(a).length;
+  var kokeile = function(x){ var l = JSON.stringify(x).length; if (l < pituus){ paras = x; pituus = l; } };
+  var skalaari = a.every(function(v){ return v === null || typeof v === 'number' || typeof v === 'string' || typeof v === 'boolean'; });
+  if (!skalaari) return a;
+  kokeile({ $r: olpRle(a) });
+  var k = olpSkaala(a);
+  if (k !== null){
+    var p = Math.pow(10, k), ed = null, d = [];
+    for (var i = 0; i < a.length; i++){
+      if (a[i] === null){ d.push(null); continue; }
+      var n = Math.round(a[i]*p); d.push(ed === null ? n : n - ed); ed = n;
+    }
+    kokeile({ $d: d, k: k });
+    kokeile({ $dr: olpRle(d), k: k });
+  }
+  return paras;
+}
+function olpPuraSarake(s, n){
+  if (Array.isArray(s)) return s;
+  var r, i, j, out = [];
+  if (s.$r){ r = s.$r; for (i = 0; i < r.length; i += 2) for (j = 0; j < r[i + 1]; j++) out.push(r[i]); return out; }
+  var d = s.$d;
+  if (s.$dr){ d = []; r = s.$dr; for (i = 0; i < r.length; i += 2) for (j = 0; j < r[i + 1]; j++) d.push(r[i]); }
+  var p = Math.pow(10, s.k || 0), ed = null;
+  for (i = 0; i < d.length; i++){
+    if (d[i] === null){ out.push(null); continue; }
+    var v = ed === null ? d[i] : ed + d[i]; ed = v; out.push(v/p);
+  }
+  return out;
+}
+function olpOnKohdetaulukko(a){ return Array.isArray(a) && a.length > 0 && a.every(function(x){ return x && typeof x === 'object' && !Array.isArray(x); }); }
+function olpKohteet(a){   // [{...}] → {$o: avaimet, n, c: sarakkeet, p: {avain: läsnäolo 0/1}}
+  var avaimet = [], on = {};
+  a.forEach(function(x){ Object.keys(x).forEach(function(k){ if (!on[k]){ on[k] = 1; avaimet.push(k); } }); });
+  var c = [], p = {};
+  avaimet.forEach(function(k){
+    var arvot = [], lasna = [], puuttuu = false;
+    a.forEach(function(x){ var o = Object.prototype.hasOwnProperty.call(x, k) && x[k] !== undefined; lasna.push(o ? 1 : 0); if (!o) puuttuu = true; arvot.push(o ? x[k] : null); });
+    c.push(olpSarake(arvot));
+    if (puuttuu) p[k] = olpSarake(lasna);
+  });
+  var o = { $o: avaimet, n: a.length, c: c }; if (Object.keys(p).length) o.p = p;
+  return o;
+}
+function olpPuraKohteet(o){
+  var n = o.n, out = [], i;
+  for (i = 0; i < n; i++) out.push({});
+  o.$o.forEach(function(k, j){
+    var arvot = olpPuraSarake(o.c[j], n), lasna = o.p && o.p[k] ? olpPuraSarake(o.p[k], n) : null;
+    for (i = 0; i < n; i++) if (!lasna || lasna[i]) out[i][k] = arvot[i];
+  });
+  return out;
+}
+function olpArvo(v, syva){   // tallenteen kentän arvo tiiviiksi (syva: kuljetaanko yhden tason objektiin, esim. kivikko)
+  if (Array.isArray(v)){
+    if (!v.length) return v;
+    if (olpOnKohdetaulukko(v)) return olpKohteet(v);
+    var s = olpSarake(v); return s;
+  }
+  if (syva && v && typeof v === 'object'){ var o = {}; Object.keys(v).forEach(function(k){ o[k] = olpArvo(v[k], false); }); return o; }
+  return v;
+}
+function olpPuraArvo(v, syva){
+  if (v && typeof v === 'object' && !Array.isArray(v)){
+    if (v.$o) return olpPuraKohteet(v);
+    if (v.$r || v.$d || v.$dr) return olpPuraSarake(v);
+    if (syva){ var o = {}; Object.keys(v).forEach(function(k){ o[k] = olpPuraArvo(v[k], false); }); return o; }
+  }
+  return v;
+}
+function omaLuotausPakkaaTuonti(t){
+  if (!t || t.$p) return t;
+  var o = { $p: 1 };   // OL_PAKKAUS (literaali: voidaan kutsua ennen var-riviä)
+  Object.keys(t).forEach(function(k){ o[k] = olpArvo(t[k], true); });
+  return o;
+}
+function omaLuotausPuraTuonti(t){
+  if (!t || !t.$p) return t;
+  var o = {};
+  Object.keys(t).forEach(function(k){ if (k !== '$p') o[k] = olpPuraArvo(t[k], true); });
+  return o;
+}
+function omaLuotausPakkaa(d){   // uusi objekti tallennettavaksi; d ei muutu
+  var o = {}; Object.keys(d || {}).forEach(function(k){ o[k] = d[k]; });
+  o.tuonnit = (d && d.tuonnit || []).map(omaLuotausPakkaaTuonti);
+  return o;
+}
+function omaLuotausJson(d){ return JSON.stringify(omaLuotausPakkaa(d)); }

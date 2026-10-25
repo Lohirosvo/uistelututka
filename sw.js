@@ -22,6 +22,7 @@
 // v215: syöttikalakorttiin Havaittu (oma luotain) mallin rinnalle (index.html; tilanne.html vain versio); ei uusia tiedostoja.
 // v216: kaikujen lajiryhmät kausittain ja järvittäin (luotaus.js), Havaittu-rivit kuha-, hauki-, ahven- ja järvilohikorttiin (index.html); tilanne.html vain versio; ei uusia tiedostoja.
 // v217: taimenkorttiin rannan ja selän pintalämpö omasta luotaimesta ja luotaimen rajoitus (index.html, luotaus.js); tilanne.html vain versio; ei uusia tiedostoja.
+// v233: oman luotauksen tiivis tallennusmuoto ilman tiedon menetystä (taulukot sarakkeina, erotukset ja toistot; 25.10. varmuuskopio 3,74 → 1,09 milj. merkkiä); vanhat tallenteet tiivistyvät ensimmäisellä latauksella (luotaus.js, index.html; tilanne.html vain versio).
 // v232: 📜 Kirjaa vanha saalis -riveille tunniste (Muokkaa avasi väärän rivin, Poista olisi vienyt kaikki tunnisteettomat); vanhat rivit saavat tunnisteen latauksessa ja täsmälleen samanlaiset kaksoisrivit poistuvat; sama hetki kysytään; varmuuskopion yhdistys samoin tunnistein (kirjaus.js, index.html; tilanne.html vain versio).
 // v231: oman luotauksen tuonti tunnistaa saman tallenteen koosta, alkupisteestä ja alkuhetkestä (sama nimi eri päivänä tuodaan, sama tallenne eri nimellä torjutaan, pidempi versio korvaa kesken jääneen); ilmoituksiin päiväykset; nimen rinnalle alkuhetki; usean tiedoston valinta tuo kaikki (index.html, luotaus.js; tilanne.html vain versio).
 // v230: tilannekuvaan Vuosi sitten samassa vedessä (±1 °C, sama vuodenpuolisko; ilman lämpöä ±7 vrk); tiivistykseen kaikujen ja parvien pintalämpö (luotaus.js, tilanne.html; index.html vain versio).
@@ -67,7 +68,7 @@
 // VERSIO: kasvata tätä aina kun julkaiset uuden version. Vanha välimuisti siivotaan.
 // Versionumeron kasvatus on se mekanismi joka SIIVOAA vanhan välimuistin,
 // index2.html mukaan lukien. Ilman tätä poisto ei näkyisi puhelimissa.
-const VERSIO = 'uistelututka-v232';
+const VERSIO = 'uistelututka-v233';
 /* v178: sivun omat tiedostot ladataan nimellä tiedosto?v=NNN, jossa NNN on tämän VERSIOn numero.
    index.html:n <script src> -riveissä ja ottiäänen haussa on SAMA numero: kun julkaiset, vaihda
    molemmat. Uusi numero on uusi osoite, joten puhelin ei voi yhdistää uutta sivua vanhaan malliin
