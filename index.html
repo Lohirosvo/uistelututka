@@ -2443,14 +2443,14 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=231" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=231" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=231" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=231" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=231" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=231" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=231" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=231" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=232" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=232" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=232" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=232" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=232" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=232" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=232" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=232" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
        uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
@@ -9155,6 +9155,7 @@ function sumuriskiAlusta(){
       if (!keskenerainenSaalis) return;
       if (Date.now() - poistoVahvistus > 4000) { poistoVahvistus = Date.now(); if (btn) btn.textContent = 'Paina uudelleen: poista'; return; }
       const id = keskenerainenSaalis.id;
+      if (id == null) { document.getElementById('kalaStatus').textContent = 'Rivillä ei ole tunnistetta, joten sitä ei poistettu (avaa sivu uudelleen).'; return; }   // v232: ei kaikkia tunnisteettomia kerralla
       const lista = lataaSaaliit().filter(function (x) { return !x || x.id !== id; });
       tallennaSaaliit(lista);
       try { if (klooniSaalisPoistettu(id)) klooniPaivitaKaikki(); } catch (e) {}   // v180: isku ja osuma pois kloonilokista
@@ -9177,6 +9178,7 @@ function sumuriskiAlusta(){
       return k || null;
     }
     function saalisTaydenna(id) {
+      if (id == null) return;   // v232: tunnisteeton rivi ei saa avata listan ensimmäistä tunnisteetonta
       const t = lataaSaaliit().find(function (x) { return x && x.id === id; });
       if (!t) return;
       keskenerainenSaalis = t;
@@ -9509,6 +9511,11 @@ function sumuriskiAlusta(){
       if (!(hetki < new Date())) { tila.textContent = 'Päivän pitää olla menneisyydessä — uudet kalat kirjataan Kala kiinni -napilla.'; return; }
       const pituudet = String(arvo('vsPituudet') || '').split(/[,;\s]+/).map(x => parseFloat(x.replace(',', '.'))).filter(x => x > 0);
       const kpl = Math.max(1, parseInt(arvo('vsKpl'), 10) || pituudet.length || 1);
+      // v232: sama hetki on jo kirjattu (toistuvat tallennukset tekivät 24.10. 39 kaksoisriviä) → kysytään ennen olojen hakua
+      const laji0 = arvo('vsLaji'), jo = lataaSaaliit().filter(x => x && x.jalkikirjaus && x.laji === laji0 && Date.parse(x.aika) === hetki.getTime()).length;
+      if (jo && !window.confirm(pvm.split('-').reverse().map(Number).join('.') + ' klo ' + klo + ' on jo ' + (jo === 1 ? '1 kirjattu kala' : jo + ' kirjattua kalaa') + ' (' + laji0 + '). Tallennetaanko ' + kpl + ' lisää?')) {
+        tila.textContent = 'Ei tallennettu: sama hetki oli jo kirjattu. Korjaa vanha rivi saalislistan ✏️ Muokkaa -napilla.'; return;
+      }
 
       // sijainti: nimetty paikka tai koordinaatit, muuten järven keskipiste vain säähakuun
       let lat = null, lon = null, sijaintiLahde = null;
@@ -9567,7 +9574,11 @@ function sumuriskiAlusta(){
         kausi, viehe: arvo('vsViehe') || null, nopeusKmh: isFinite(nop) ? nop : null
       };
       const lista = lataaSaaliit();
-      for (let n = 0; n < kpl; n++) lista.push(Object.assign({}, perus, { pituusCm: pituudet[n] !== undefined ? pituudet[n] : null }));
+      const varattu = new Set(lista.map(x => x && x.id));   // v232: tunniste kalan hetkestä (sama sääntö kuin saalisTunnisteet)
+      for (let n = 0; n < kpl; n++) {
+        let id = hetki.getTime() + n; while (varattu.has(id)) id++; varattu.add(id);
+        lista.push(Object.assign({ id: id }, perus, { pituusCm: pituudet[n] !== undefined ? pituudet[n] : null }));
+      }
       tallennaSaaliit(lista);
       paivitaSaalisLista();
       tila.innerHTML = 'Tallennettu ' + kpl + ' kalaa (' + p2(hetki) + ').'
@@ -9582,12 +9593,20 @@ function sumuriskiAlusta(){
       if (maaraEl) maaraEl.textContent = lista.length;
       const el = document.getElementById('saalisLista');
       if (!el) return;
+      let korjausHtml = '';   // v232: kerran tehty tunnistekorjaus näkyy 3 vrk
+      try {
+        const K = JSON.parse(localStorage.getItem(LS_SAALIS_KORJAUS) || 'null');
+        if (K && Date.now() - K.aika < 3 * 86400e3 && (K.poistettu || K.annettu))
+          korjausHtml = '<p class="hint" style="color:var(--amber);margin:0 0 6px;">Saalislista korjattu ' + new Date(K.aika).toLocaleDateString('fi-FI') + ': '
+            + (K.annettu ? K.annettu + ' 📜-riville annettiin tunniste' : '') + (K.annettu && K.poistettu ? ', ' : '')
+            + (K.poistettu ? K.poistettu + ' täsmälleen samanlaista kaksoisriviä poistettiin' : '') + ' (v231:n vika: ✏️ Muokkaa avasi väärän rivin).</p>';
+      } catch (e) {}
       if (lista.length === 0) {
         el.innerHTML = '<p class="hint">Ei vielä kirjauksia. Jokainen saalis JA nollareissu tarkentaa mallia — nollareissut ovat yhtä tärkeitä, koska ne kertovat milloin ennuste petti.</p>';
         return;
       }
       const klD = (typeof klooniLue === 'function') ? klooniLue() : null;   // v177
-      el.innerHTML = lista.slice().reverse().slice(0, 20).map(s => {
+      el.innerHTML = korjausHtml + lista.slice().reverse().slice(0, 20).map(s => {
         const d = new Date(s.aika);
         // vuosi näkyviin, jos eri kuin nyt (jälkikirjaukset); 📜 = kirjattu jälkikäteen
         const vuosiEri = d.getFullYear() !== new Date().getFullYear();
@@ -13811,7 +13830,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v231';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v232';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -20522,6 +20541,7 @@ async function vkTuo(file) {
         var vanha = []; try { vanha = JSON.parse(localStorage.getItem(k) || '[]'); } catch (e) {}
         var uusi = []; try { uusi = JSON.parse(arvo || '[]'); } catch (e) {}
         if (!Array.isArray(vanha)) vanha = []; if (!Array.isArray(uusi)) uusi = [];
+        if (k === 'nopeusnaytto_pro1_saaliit' && typeof saalisTunnisteet === 'function') { vanha = saalisTunnisteet(vanha).lista; uusi = saalisTunnisteet(uusi).lista; }   // v232: tunnisteettomat samoin tunnistein kuin puhelimessa
         var tunnus = function (x) { return x && (x.id != null ? 'i' + x.id : 'a' + x.aika + '|' + x.alku); };
         var on = new Set(vanha.map(tunnus)), lisatty = 0;
         uusi.forEach(function (x) { if (!on.has(tunnus(x))) { vanha.push(x); on.add(tunnus(x)); lisatty++; } });
@@ -22140,7 +22160,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=231';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=232';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })

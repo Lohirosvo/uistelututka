@@ -17,8 +17,40 @@ const LS_SAALIS = 'nopeusnaytto_pro1_saaliit';
 function lataaSaaliit() {
   try {
     const raw = localStorage.getItem(LS_SAALIS);
-    return raw ? JSON.parse(raw) : [];
+    const lista = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(lista) && lista.some(function (x) { return x && x.id == null; })) {   // v232: tunnisteettomat rivit korjataan kerran
+      const k = saalisTunnisteet(lista);
+      try { localStorage.setItem(LS_SAALIS, JSON.stringify(k.lista)); } catch (e) {}
+      try { localStorage.setItem(LS_SAALIS_KORJAUS, JSON.stringify({ aika: Date.now(), annettu: k.annettu, poistettu: k.poistettu })); } catch (e) {}
+      return k.lista;
+    }
+    return lista;
   } catch (e) { return []; }
+}
+/* v232 (25.10.2026): 📜 Kirjaa vanha saalis tallensi rivit ilman tunnistetta (id). Rivin ✏️ Muokkaa haki rivin tunnisteella, joten
+   se avasi aina listan ENSIMMÄISEN tunnisteettoman rivin (Hannun 23.10. korjaukset menivät väärään riviin), ja Poista kirjaus olisi
+   poistanut kaikki tunnisteettomat rivit kerralla. 24.10. aamulla kirjanpitoon tuli 39 samanlaista 23.10. klo 15.30 riviä.
+   Korjaus: tunnisteettomat rivit saavat tunnisteen kirjaushetkestä (Date.parse(aika), varattu → +1 ms), ja täsmälleen samanlaiset
+   tunnisteettomat rivit (kaikki kentät samat) poistetaan, koska niitä syntyi vain viasta. Sama sääntö varmuuskopion yhdistämisessä
+   (vkTuo), jotta vanhan varmuuskopion tunnisteettomat rivit eivät tule takaisin kaksoiskappaleina. */
+const LS_SAALIS_KORJAUS = 'uistelututka_saalis_korjaus';
+function saalisTunnisteet(lista, varatut) {
+  const kaytossa = new Set(varatut || []), nahty = new Set(), ulos = [];
+  let annettu = 0, poistettu = 0;
+  (lista || []).forEach(function (x) { if (x && x.id != null) kaytossa.add(x.id); });
+  (lista || []).forEach(function (x) {
+    if (!x) return;
+    if (x.id == null) {
+      const avain = JSON.stringify(Object.keys(x).filter(function (k) { return k !== 'id'; }).sort().map(function (k) { return [k, x[k]]; }));
+      if (nahty.has(avain)) { poistettu++; return; }
+      nahty.add(avain);
+      let id = Date.parse(x.aika); if (!isFinite(id)) id = Date.now();
+      while (kaytossa.has(id)) id++;
+      x.id = id; kaytossa.add(id); annettu++;
+    }
+    ulos.push(x);
+  });
+  return { lista: ulos, annettu: annettu, poistettu: poistettu };
 }
 
 function tallennaSaaliit(lista) {
