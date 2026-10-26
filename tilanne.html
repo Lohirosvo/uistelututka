@@ -127,6 +127,7 @@
   v215 (18.10.2026): vain versionumero (etusivun syöttikalakorttiin havaittu parven syvyys omasta luotaimesta).
   v216 (18.10.2026): isojen kaikujen napautuksessa matalan pohjan lajiepäily (hauki, ahven, made tai lahna) luotaus.js:n kausisäännöstä; muuten vain versionumero.
   v217 (18.10.2026): vain versionumero (taimenkorttiin rannan pintalämpö; matalan pohjan todisteeseen Hannun ahven- ja haukikoot luotaus.js:ssä).
+  v234 (26.10.2026): kartan väriselite pieneksi ja läpikuultavaksi; selitysteksti napautuksesta 8 s, ei jää auki (Hannu: "peittää koko kuvan").
   v233 (25.10.2026): vain versio (oman luotauksen tiivis tallennusmuoto luotaus.js:ssä; tilannekuva purkaa sen samalla omaLuotausLue-funktiolla).
   v232 (25.10.2026): vain versio (saalisrivien tunnistekorjaus kirjaus.js:ssä: tilannekuvan iskupaikan korjaus löytää jälkikirjaukset).
   v231 (23.10.2026): vain versio; napautusten tallenteen nimessä alkupäivä ja kellonaika (luotaus.js), myös tiivistetyn muistin kaiuissa ja kivikossa.
@@ -225,13 +226,16 @@
     #valikko .huom { grid-column: 1 / -1; color: var(--muted); font-size: 13px; padding: 2px 4px; }
     #valikko .reittiNapit { grid-column: 1 / -1; display: flex; gap: 6px; }   /* v202 */
     #valikko .reittiNapit button { flex: 1 1 0; min-width: 0; padding: 4px 2px; font-size: 15px; }
-    #selite { position: absolute; left: 6px; top: 52px; z-index: 3; background: rgba(4,10,18,.78); border-radius: 8px; padding: 4px; display: none;
+    /* v234 (26.10.2026): Hannu "Aika typerä peittää koko kuvan tuo selite" → selite pieneksi ja läpikuultavaksi; selitysteksti
+       aukeaa napautuksesta 8 sekunniksi (ei enää jää auki eikä tallennu auki-tilaan) */
+    #selite { position: absolute; left: 6px; top: 52px; z-index: 3; background: transparent; border-radius: 6px; padding: 2px; display: none;
               font-size: 11px; color: var(--muted); max-width: calc(100% - 110px); cursor: pointer; }
-    #selite .nimi { font-weight: 700; color: var(--text); font-size: 12px; margin: 0 1px 3px; }
-    #seliteVarit { display: flex; flex-direction: column-reverse; border-radius: 3px; overflow: hidden; width: max-content; }
-    #seliteVarit div { min-width: 34px; padding: 0 4px; height: 16px; line-height: 16px; font-size: 10px; text-align: center; color: #fff;
+    #selite .nimi { font-weight: 700; color: var(--text); font-size: 10px; margin: 0 1px 2px; text-shadow: 0 0 3px #000, 0 0 2px #000, 0 0 1px #000; }
+    #seliteVarit { display: flex; flex-direction: column-reverse; border-radius: 3px; overflow: hidden; width: max-content; opacity: .85; }
+    #seliteVarit div { min-width: 24px; padding: 0 2px; height: 10px; line-height: 10px; font-size: 8px; text-align: center; color: #fff;
                        text-shadow: 0 0 2px rgba(0,0,0,.6); white-space: nowrap; }
-    #seliteYks { display: none; margin-top: 4px; max-width: 220px; line-height: 1.3; }
+    #seliteYks { display: none; margin-top: 3px; max-width: 170px; line-height: 1.3; color: var(--text); text-shadow: 0 0 3px #000, 0 0 2px #000, 0 0 1px #000; }
+    #selite.auki { background: transparent; padding: 2px; }   /* Hannu 26.10.: "kehyksen läpinäkyvyys sataan prosenttiin" */
     #selite.auki #seliteYks { display: block; }
     /* v182: nappiryhmä (pystyssä rivi, vaakana 2 × 2) */
     #napit { display: flex; gap: 8px; flex: 0 0 auto; }
@@ -335,18 +339,18 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=233" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=233" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=233" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=233" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=233" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=233" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=233" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=233" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=234" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=234" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=234" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=234" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=234" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=234" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="aaltomalli.js?v=234" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=234" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v233';
+    const APP_VERSIO = 'v234';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
@@ -359,6 +363,7 @@
     const kk = n => String(n).padStart(2, '0');
     const ilmansuunta = deg => ['P', 'KO', 'I', 'KA', 'E', 'LO', 'L', 'LU'][Math.round((((deg % 360) + 360) % 360) / 45) % 8];   // mistä tuulee
 
+    let seliteAuki = false, seliteAjastin = null;   // v234: selitys auki vain hetken, ei tallenneta (as.selite jää käyttämättä)
     let as = { tila: 'aalto', kloonit: true, yo: false, laji: null, selite: false, vaaka: false, kuha: true, taimen: true, kulku: false, lampo: true, parvet: true, kalat: true, vuosi: true, kivikko: true, kovaPohja: false, lohi: true, saalisVanat: true, reitti: true, reittiNopeus: null, siirtoNopeus: 25, taimenReitti: true, taimenIka: 14 };   // v206: taimenReitti, taimenIka (vrk)   // v202: järvilohireitti   // v201: saalisVanat (saaliin vana)   // v200: lohi (Lintuselän malli)   // v186: kuha, taimen; v193: kulku (kulkusuunta ylös), lampo, parvet; v194: kalat
     try { as = Object.assign(as, JSON.parse(localStorage.getItem(AS_LS) || '{}')); } catch (e) {}
     const tallennaAs = () => { try { localStorage.setItem(AS_LS, JSON.stringify(as)); } catch (e) {} };
@@ -1497,10 +1502,14 @@
       $('seliteNimi').textContent = t ? t[2] : '';
       $('seliteVarit').innerHTML = pohja.asteikko;
       $('seliteYks').textContent = (pohja.yksikko || '') + (pohja.naytto === 'kumpuama' ? '. Pinkki alue: vahva kumpuaminen (Wedderburn), kun etusivun lämpötieto riittää.' : '');
-      el.classList.toggle('auki', !!as.selite);
+      el.classList.toggle('auki', seliteAuki);
       el.style.display = 'block';
     }
-    $('selite').onclick = () => { as.selite = !as.selite; tallennaAs(); $('selite').classList.toggle('auki', as.selite); };
+    $('selite').onclick = () => {
+      seliteAuki = !seliteAuki; clearTimeout(seliteAjastin);
+      if (seliteAuki) seliteAjastin = setTimeout(() => { seliteAuki = false; $('selite').classList.remove('auki'); }, 8000);
+      $('selite').classList.toggle('auki', seliteAuki);
+    };
     function nykyTunti() {
       const T = window.akTunnit ? window.akTunnit() : [];
       if (!T.length) return 0;
