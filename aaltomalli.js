@@ -36,7 +36,7 @@ if (!document.getElementById('aaltokartta')){
     + '<input type="checkbox" id="akKlooniMerkit"><input type="checkbox" id="akKorosta">'
     + '<select id="akNaytto"><option value="aalto">Aallonkorkeus</option><option value="murtuva">Murtuva aallokko</option>'
     + '<option value="virtaus">Pintavirtaus</option><option value="syva">Syvempi vesi</option><option value="vajoama">Vajoama</option>'
-    + '<option value="kumpuama">Kumpuama</option><option value="konvergenssi">Konvergenssi</option><option value="lampo">Lämpö (suunta)</option><option value="syvyys">Syvyyskartta</option></select>'
+    + '<option value="kumpuama">Kumpuama</option><option value="konvergenssi">Konvergenssi</option><option value="lampo">Lämpö (suunta)</option><option value="lampomalli">Lämpö (malli)</option><option value="syvyys">Syvyyskartta</option></select>'
     + '<span id="akYksikko"></span><button type="button" id="akOziNappi"></button><p id="akOziTila"></p><div id="akPiste"></div>'
     + '<select id="akVene"></select><input type="range" id="akRaja" min="0.10" max="0.60" step="0.01" value="0.20"><span id="akRajaL"></span>'
     + '<div id="akRulla"><div id="akRullaSisus"></div></div><div id="akJana"></div><div id="akPaivat"></div>'
@@ -134,6 +134,193 @@ function akLampoKausi(aika){
   return { paino: paino, merkki: merkki, kk: m,
            teksti: (paino === 1 ? 'kesä: tuulen vaikutus täysi' : paino === 0.5 ? 'kerrostuneisuus heikkenee: tuulen vaikutus puolet' : 'sekoittunut vesi: tuulen vaikutus pieni')
              + ' · ' + (merkki > 0 ? 'matala vesi lämpenee nopeammin' : merkki < 0 ? 'matala vesi jäähtyy nopeammin' : 'matalan veden ero pieni') };
+}
+/* v235 LÄMPÖ (MALLI) (Hannu 26.10.2026: "Voidaanko luoda oma vedenlämpötilaennuste kartalle", "Mukautuva scaala",
+   "suunta lämpiminalue kylmin alua hahmottaminen vaikka pienikin", "tunneittain niin kuin muutkin tilannekuvan osaset",
+   "Virtausten aiheuttama lämpösiirtymä ja kasautuminen voisi näkyä"; valinnat: uusi tila vanhan Lämpö (suunta) -tilan
+   rinnalle, kasautuminen viivoituksena värin päällä). Fysiikka ja satelliittitesti: lampomalli.js.
+   Tämä osa: sää Open-Meteosta (7 vrk historiaa + 5 vrk ennustetta; ennustetunneilla tuuli FMI:n ennusteesta, sama kuin
+   kartan nuolissa), lähtölämpö SYKEn pintaveden lämmöstä 7 vrk sitten (muuten oma luotain, viimeisenä arvio ilmasta),
+   ajo taustalla (12 h kerrallaan), tason tasaus uusimpaan omaan luotaukseen tai SYKEn mittaukseen.
+   Kartta: väri = poikkeama järven keskiarvosta samalla tunnilla, MUKAUTUVA asteikko: 12 yhtä suurta osaa järven
+   pinta-alasta, joten lämpimin ja kylmin näkyvät aina; todellinen ero asteina selitteessä ja leimassa.
+   ▨ = pintavesi kasautuu (painuma vähintään 0,5 m ja järven 10 % suurimmista). */
+var AK_LM_VRK = 7, AK_LM_LS = 'uistelututka_lampomalli_saa', AK_LM_SAA_IKA = 3*3600e3, AK_LM_AIKARAJA = 9000;
+var AK_LM_SYKE_ID = { lappajarvi: 1696 };   // 26.10.2026: Hydrologiarajapinta Paikka, "Lappajärvi, Halkosaari" (Suure_Id 11)
+var akLM = null, akLMKuvaVM = null, akLMRajat = null, akLMAsteikko = null, akLMAjo = null, akLMCg = null;
+function akLMSaaLue(){ try { return JSON.parse(localStorage.getItem(AK_LM_LS) || 'null'); } catch(e){ return null; } }
+function akLMHaeSaa(avain){
+  var M = akLMSaaLue(), nyt = Date.now();
+  var kattaa = function(m){ return m && m.avain === avain && m.t0*1000 <= nyt - (AK_LM_VRK - 1)*86400e3 && (m.t0 + 3600*(m.ta.length - 1))*1000 >= nyt + 24*3600e3; };
+  if (kattaa(M) && nyt - M.haettu < AK_LM_SAA_IKA) return Promise.resolve({ m: M, tapa: 'muisti' });
+  var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + jarvi.lat.toFixed(3) + '&longitude=' + jarvi.lon.toFixed(3)
+    + '&hourly=temperature_2m,dew_point_2m,cloud_cover,shortwave_radiation,wind_speed_10m,wind_direction_10m'
+    + '&wind_speed_unit=ms&past_days=' + AK_LM_VRK + '&forecast_days=5&timezone=UTC&timeformat=unixtime';
+  var ohj = (typeof AbortController === 'function') ? new AbortController() : null, ajast = ohj ? setTimeout(function(){ ohj.abort(); }, AK_LM_AIKARAJA) : null;
+  return fetch(url, ohj ? { signal: ohj.signal } : undefined).then(function(r){ return r.ok ? r.json() : Promise.reject(new Error('Open-Meteo ' + r.status)); })
+    .then(function(j){
+      if (ajast) clearTimeout(ajast);
+      var h = j.hourly, pyo = function(a, k){ return a.map(function(v){ return v == null ? null : Math.round(v*k)/k; }); };
+      var m = { avain: avain, haettu: nyt, t0: h.time[0], ta: pyo(h.temperature_2m, 10), td: pyo(h.dew_point_2m, 10), cc: pyo(h.cloud_cover, 1),
+                sw: pyo(h.shortwave_radiation, 1), ws: pyo(h.wind_speed_10m, 10), wd: pyo(h.wind_direction_10m, 1) };
+      try { localStorage.setItem(AK_LM_LS, JSON.stringify(m)); } catch(e){}   // vain yksi järvi kerrallaan (noin 8 kt)
+      return { m: m, tapa: 'verkko' };
+    })
+    .catch(function(e){
+      if (ajast) clearTimeout(ajast);
+      if (M && M.avain === avain && (M.t0 + 3600*(M.ta.length - 1))*1000 >= nyt) return { m: M, tapa: 'muisti', virhe: e && e.message };
+      throw new Error('säätietoja ei saatu (' + ((e && e.name === 'AbortError') ? 'ei vastausta' : (e && e.message) || e) + ')');
+    });
+}
+function akTM35inv(E, N){   // ETRS-TM35FIN → [lat, lon] (Krüger, GRS80)
+  var a = 6378137, f = 1/298.257222101, k0 = 0.9996, l0 = 27*Math.PI/180, n = f/(2 - f), A = a/(1 + n)*(1 + n*n/4 + Math.pow(n, 4)/64);
+  var be = [n/2 - 2*n*n/3 + 37*Math.pow(n, 3)/96, n*n/48 + Math.pow(n, 3)/15, 17*Math.pow(n, 3)/480], e = Math.sqrt(f*(2 - f));
+  var xi = N/(k0*A), eta = (E - 500000)/(k0*A), xp = xi, ep = eta;
+  for (var j = 0; j < 3; j++){ xp -= be[j]*Math.sin(2*(j + 1)*xi)*Math.cosh(2*(j + 1)*eta); ep -= be[j]*Math.cos(2*(j + 1)*xi)*Math.sinh(2*(j + 1)*eta); }
+  var chi = Math.asin(Math.sin(xp)/Math.cosh(ep)), phi = chi;
+  for (var i = 0; i < 6; i++) phi = Math.asin(Math.tanh(Math.atanh(Math.sin(chi)) + e*Math.atanh(e*Math.sin(phi))));
+  return [phi*180/Math.PI, (l0 + Math.atan2(Math.sinh(ep), Math.cos(xp)))*180/Math.PI];
+}
+/* SYKEn pintaveden lämpö (Hydrologiarajapinta LampoPintavesi, vuorokausiarvo, mittaus rannassa aamulla). Asema: lähin
+   lämpöasema järven nimellä (enintään 40 km järven keskipisteestä); Lappajärvellä Halkosaari. null, jos ei saatu. */
+function akLMHaeSyke(avain, alkuMs){
+  var B = 'https://rajapinnat.ymparisto.fi/api/Hydrologiarajapinta/1.0/odata/';
+  var p2 = function(d){ return d.getUTCFullYear() + '-' + ('0' + (d.getUTCMonth() + 1)).slice(-2) + '-' + ('0' + d.getUTCDate()).slice(-2); };
+  var hae = function(u){
+    var ohj = (typeof AbortController === 'function') ? new AbortController() : null, ajast = ohj ? setTimeout(function(){ ohj.abort(); }, AK_LM_AIKARAJA) : null;
+    return fetch(u, ohj ? { signal: ohj.signal } : undefined).then(function(r){ if (ajast) clearTimeout(ajast); return r.ok ? r.json() : Promise.reject(new Error('SYKE ' + r.status)); });
+  };
+  var nimi = jarvi.nimi.split(/[ (]/)[0], varsi = nimi.slice(0, Math.min(7, nimi.length));
+  var asemaP = hae(B + "Paikka?$filter=" + encodeURIComponent("substringof('" + varsi + "', Nimi) and Suure_Id eq 11") + "&$top=30").then(function(j){
+    var paras = null, pd = 40;
+    (j.value || []).forEach(function(s){
+      var E = s.KoordErTmIta, N = s.KoordErTmPohj; if (E == null || N == null) return;
+      var ll = akTM35inv(E, N), dk = Math.hypot((ll[0] - jarvi.lat)*111.3, (ll[1] - jarvi.lon)*111.3*Math.cos(jarvi.lat*Math.PI/180));
+      if (AK_LM_SYKE_ID[avain] === s.Paikka_Id) dk = -1;
+      if (dk < pd){ pd = dk; paras = { id: s.Paikka_Id, nimi: s.Nimi, lat: ll[0], lon: ll[1] }; }
+    });
+    return paras;
+  });
+  return asemaP.then(function(as){
+    if (!as) return null;
+    var u = B + 'LampoPintavesi?$filter=' + encodeURIComponent('Paikka_Id eq ' + as.id + " and Aika ge datetime'" + p2(new Date(alkuMs - 2*86400e3)) + "T00:00:00'") + '&$orderby=Aika%20asc&$top=40';
+    return hae(u).then(function(j){
+      as.arvot = (j.value || []).map(function(x){ var d = new Date(x.Aika); return { t: Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 6), a: Number(x.Arvo) }; })
+        .filter(function(x){ return isFinite(x.a); });
+      return as.arvot.length ? as : null;
+    });
+  }).catch(function(){ return null; });
+}
+/* Oma luotain tälle järvelle: kokonaiset tuonnit (jälki) ja tiivistetyt (vain keskilämpö). */
+function akLMOmat(avain){
+  var out = [];
+  try {
+    var d = (typeof omaLuotausLue === 'function') ? omaLuotausLue() : null; if (!d) return out;
+    (d.tuonnit || []).forEach(function(t){ if (t && t.jarvi === avain && typeof t.lampoKa === 'number' && t.alku) out.push({ t: t.alku + 500*(t.kestoS || 0), ka: t.lampoKa, tuonti: t }); });
+    ((d.muisti && d.muisti.tallenteet) || []).forEach(function(t){ if (t && t.jarvi === avain && typeof t.lampoKa === 'number' && t.alku) out.push({ t: t.alku + 500*(t.kestoS || 0), ka: t.lampoKa, tuonti: null }); });
+  } catch(e){}
+  return out.sort(function(a, b){ return a.t - b.t; });
+}
+function akLMAvain(){
+  if (!jarvi || !data.length) return null;
+  return akNykyAvain() + '|' + data[0].aika.getTime() + '|' + data.length + '|' + (akEnnusteTilaNyt ? akEnnusteTilaNyt.haettu : '');
+}
+function akLMKaynnista(){
+  var av = akLMAvain(); if (!av || typeof window.LampoMalli !== 'object') return;
+  if (akLM && akLM.avain === av) return;
+  if (akLMAjo){ try { akLMAjo.peru(); } catch(e){} akLMAjo = null; }
+  var avain = akNykyAvain(), k = jarvi.kartta, j0 = jarvi;
+  akLM = { avain: av, tila: 'lasketaan', viesti: 'haetaan säätietoja…' }; akLMKuvaVM = null;
+  var nyt = Date.now(), alkuMs = Math.floor((nyt - AK_LM_VRK*86400e3)/86400e3)*86400e3;
+  Promise.all([akLMHaeSaa(avain), akLMHaeSyke(avain, alkuMs)]).then(function(r){
+    if (!akLM || akLM.avain !== av || jarvi !== j0) return;
+    var M = r[0].m, SY = r[1], saa = [], fmi = {};
+    data.forEach(function(d){ fmi[Math.round(d.aika.getTime()/3600e3)] = d; });
+    for (var i = 0; i < M.ta.length; i++){
+      var t = (M.t0 + 3600*i)*1000; if (M.ta[i] == null || M.ws[i] == null) continue;
+      var F = fmi[Math.round(t/3600e3)];
+      saa.push({ t: t, ta: M.ta[i], td: M.td[i] != null ? M.td[i] : M.ta[i] - 2, cc: M.cc[i] || 0, sw: M.sw[i] || 0,
+                 ws: F ? F.U : M.ws[i], wd: F ? F.dir : M.wd[i] });
+    }
+    if (saa.length < 48) throw new Error('säätietoja liian vähän');
+    var t0 = saa[0].t, omat = akLMOmat(avain), T0 = null, lahto = null;
+    if (SY){ var sp = null; SY.arvot.forEach(function(x){ if (Math.abs(x.t - t0) <= 2*86400e3 && (!sp || Math.abs(x.t - t0) < Math.abs(sp.t - t0))) sp = x; });
+      if (sp){ T0 = sp.a; lahto = 'SYKE ' + SY.nimi + ' ' + new Date(sp.t).getDate() + '.' + (new Date(sp.t).getMonth() + 1) + '. ' + sp.a.toFixed(1).replace('.', ',') + ' °C'; } }
+    if (T0 === null){ var op = null; omat.forEach(function(x){ if (Math.abs(x.t - t0) <= 3*86400e3 && (!op || Math.abs(x.t - t0) < Math.abs(op.t - t0))) op = x; });
+      if (op){ T0 = op.ka; lahto = 'oma luotain ' + new Date(op.t).getDate() + '.' + (new Date(op.t).getMonth() + 1) + '. ' + op.ka.toFixed(1).replace('.', ',') + ' °C'; } }
+    if (T0 === null){ var s3 = 0, n3 = 0; for (var i3 = 0; i3 < Math.min(72, saa.length); i3++){ s3 += saa[i3].ta; n3++; }
+      T0 = Math.max(0.5, s3/n3 + 2); lahto = 'arvio ilman lämmöstä (+2 °C), ei mittausta'; }
+    // tasauksen ehdokkaat: uusin oma luotaus (jälki) ja uusin SYKE, vähintään vuorokausi ajon alusta
+    var tall = data.map(function(d){ return d.aika.getTime(); }), oma = null, syk = null;
+    omat.forEach(function(x){ if (x.tuonti && x.t >= t0 + 86400e3 && x.t <= nyt) oma = x; });
+    if (SY) SY.arvot.forEach(function(x){ if (x.t >= t0 + 86400e3 && x.t <= nyt) syk = x; });
+    var naytteet = [];
+    if (oma){
+      var tu = oma.tuonti, ix = []; for (var a = 0; a < tu.lampo.length; a++) if (tu.lampo[a] != null && tu.lat[a] && tu.lon[a]) ix.push(a);
+      var askelN = Math.max(1, Math.floor(ix.length/60));
+      for (var b = 0; b < ix.length; b += askelN){ var a2 = ix[b], q = akRuutuPisteelle(k, tu.lat[a2]/1e6, tu.lon[a2]/1e6), tt = tu.alku + (tu.aikaS[a2] || 0)*1000;
+        if (q >= 0){ naytteet.push({ q: q, t: tt, T: tu.lampo[a2]/100 }); tall.push(tt); } }
+    }
+    var sykQ = -1; if (syk){ sykQ = akRuutuPisteelle(k, SY.lat, SY.lon); if (sykQ >= 0) tall.push(syk.t); }
+    if (!akLMCg || akLMCg.jarvi !== j0) akLMCg = { jarvi: j0, cg: window.LampoMalli.ruudukko(k, mask, akSyvyys, 100) };
+    var cg = akLMCg.cg;
+    akLM.viesti = 'lasketaan ' + Math.round(saa.length/24) + ' vrk…';
+    akLMAjo = window.LampoMalli.ajaVaiheittain(cg, saa, { T0: T0, tallenna: tall, int16: true }, function(R){
+      akLMAjo = null;
+      if (!akLM || akLM.avain !== av || jarvi !== j0) return;
+      var ind = {}; R.hetket.forEach(function(t, i){ ind[Math.round(t/3600e3)] = i; });
+      var arvo = function(q, t){ var i = ind[Math.round(t/3600e3)]; if (i === undefined) return null; return window.LampoMalli.hienoksi(cg, R.T[i], q)/100; };
+      var bias = 0, tasaus = 'ei tasattu mittaukseen (ei omaa luotausta eikä SYKEn mittausta ajon aikana)';
+      var omaT = oma ? Math.max.apply(null, naytteet.map(function(x){ return x.t; })) : -Infinity;
+      if (oma && naytteet.length >= 5 && (!syk || omaT >= syk.t - 86400e3)){
+        var sm = 0, sn = 0, smm = 0; naytteet.forEach(function(x){ var v = arvo(x.q, x.t); if (v !== null){ sm += v; smm += x.T; sn++; } });
+        if (sn){ bias = (smm - sm)/sn; tasaus = 'oma luotain ' + new Date(omaT).getDate() + '.' + (new Date(omaT).getMonth() + 1) + '. (' + sn + ' pistettä)'; }
+      } else if (syk && sykQ >= 0){
+        var vs = arvo(sykQ, syk.t); if (vs !== null){ bias = syk.a - vs; tasaus = 'SYKE ' + SY.nimi + ' ' + new Date(syk.t).getDate() + '.' + (new Date(syk.t).getMonth() + 1) + '. ' + syk.a.toFixed(1).replace('.', ',') + ' °C'; }
+      }
+      akLM = { avain: av, tila: 'ok', cg: cg, R: R, ind: ind, bias: bias, tasaus: tasaus, lahto: lahto, T0: T0, saaTapa: r[0].tapa, saaHaettu: M.haettu,
+               alku: t0, laskettu: Date.now() };
+      akLMKuvaVM = null;
+      try { window.dispatchEvent(new CustomEvent('akLampoMalliValmis')); } catch(e){}
+      if (akTila === 'lampomalli' && !akPiilorunko){ try { piirra(); } catch(e){} }
+    }, function(e){ if (akLM && akLM.avain === av){ akLM = { avain: av, tila: 'virhe', viesti: 'laskenta keskeytyi: ' + (e && e.message || e) }; try { window.dispatchEvent(new CustomEvent('akLampoMalliValmis')); } catch(e2){} } });
+  }).catch(function(e){
+    if (!akLM || akLM.avain !== av) return;
+    akLM = { avain: av, tila: 'virhe', viesti: (e && e.message) || String(e) };
+    try { window.dispatchEvent(new CustomEvent('akLampoMalliValmis')); } catch(e2){}
+    if (akTila === 'lampomalli' && !akPiilorunko){ try { piirra(); } catch(e3){} }
+  });
+}
+window.__akLMTesti = function(){ return akLM; };   // v235: testeille (lampomalli.py)
+window.akLampoMalliTila = function(){ return akLM ? { tila: akLM.tila, viesti: akLM.viesti || null, bias: akLM.bias, tasaus: akLM.tasaus, lahto: akLM.lahto, T0: akLM.T0, saaTapa: akLM.saaTapa } : null; };
+/* Tunnin kenttä hienoon ruudukkoon: poikkeama järven keskiarvosta (°C), painuma D (m), 12 osan rajat. */
+function akLMKentta(d){
+  if (!akLM || akLM.tila !== 'ok') return null;
+  var tk = Math.round(d.aika.getTime()/3600e3), i = akLM.ind[tk];
+  for (var dk = 1; i === undefined && dk <= 2; dk++) i = akLM.ind[tk - dk] !== undefined ? akLM.ind[tk - dk] : akLM.ind[tk + dk];   // puuttuva säätunti: lähin ±2 h
+  if (i === undefined) return null;
+  if (akLMKuvaVM && akLMKuvaVM.avain === akLM.avain && akLMKuvaVM.i === i) return akLMKuvaVM;
+  var cg = akLM.cg, R = akLM.R, Nc = cg.W*cg.H, Tc = new Float32Array(Nc), Dc = new Float32Array(Nc);
+  for (var c = 0; c < Nc; c++){ Tc[c] = R.T[i][c]/100; Dc[c] = R.D[i][c]/100; }
+  var an = new Float32Array(mask.length), Df = new Float32Array(mask.length), lista = [], dl = [], sm = 0, n = 0;
+  for (var q = 0; q < mask.length; q++){ if (!mask[q]) continue; an[q] = window.LampoMalli.hienoksi(cg, Tc, q); Df[q] = window.LampoMalli.hienoksi(cg, Dc, q); sm += an[q]; n++; }
+  var ka = n ? sm/n : 0;
+  for (var q2 = 0; q2 < mask.length; q2++){ if (!mask[q2]) continue; an[q2] -= ka; lista.push(an[q2]); dl.push(Df[q2]); }
+  lista.sort(function(a, b){ return a - b; }); dl.sort(function(a, b){ return a - b; });
+  var kv = function(L, p){ return L.length ? L[Math.min(L.length - 1, Math.max(0, Math.floor(p*(L.length - 1))))] : 0; };
+  var rajat = [], keskit = [];
+  for (var r = 1; r < 12; r++) rajat.push(kv(lista, r/12));
+  for (var r2 = 0; r2 < 12; r2++) keskit.push(kv(lista, (r2 + 0.5)/12));
+  var kynnys = Math.max(0.5, kv(dl, 0.9)), yli = 0; for (var q3 = 0; q3 < dl.length; q3++) if (dl[q3] >= kynnys) yli++;
+  akLMKuvaVM = { avain: akLM.avain, i: i, an: an, D: Df, keski: ka, rajat: rajat, keskit: keskit, ero: kv(lista, 0.98) - kv(lista, 0.02),
+                 kynnys: kynnys, osuusD: dl.length ? yli/dl.length : 0, kk: d.aika.getMonth() + 1 };
+  return akLMKuvaVM;
+}
+function akLMLuokka(v){ var R = akLMRajat || []; var c = 0; while (c < R.length && v >= R[c]) c++; return c; }
+function akLMLuku(v){ var a = Math.abs(v), s = (v > 0.0049 ? '+' : v < -0.0049 ? '−' : '±'); return s + (a >= 1 ? a.toFixed(1) : a.toFixed(2)).replace('.', ','); }
+function akLMDTeksti(kk){
+  return (kk >= 5 && kk <= 9) ? 'satelliittikuvissa kesällä kasautumiskohdat hieman lämpimämpiä (lämmin pintavesi paksumpana)'
+                              : 'satelliittikuvissa syksyllä kasautumiskohdat hieman kylmempiä (jäähtyvä pintavesi painuu)';
 }
 /* v152 SYVYYSKARTTA (Hannu 4.10.2026: käyrät ja ajo OziExplorerilla). Värit syvyysluokittain, käyrät
    marching squares -menetelmällä pehmennetystä syvyydestä (±75 m), zoomattuna syvyysluvut.
@@ -576,6 +763,10 @@ function vari(h){
     for (var is = RAJAT_S.length-1; is >= 0; is--) if (h >= RAJAT_S[is]) return VARIT_S[is];
     return VARIT_S[0];
   }
+  if (akTila === 'lampomalli'){   // v235: 12 yhtä suurta osaa (akLMKentta)
+    if (!akLMRajat || !akLMRajat.length) return '#dfe6ea';
+    return VARIT_K[akLMLuokka(h)];
+  }
   if (akTila === 'konvergenssi' || akTila === 'lampo'){
     var xk = h*venytys;
     for (var ik = RAJAT_K.length-1; ik >= 0; ik--) if (xk >= RAJAT_K[ik]) return VARIT_K[ik];
@@ -874,14 +1065,22 @@ function piirra(){
     }
     d.lampoMax = lMax; d.lampoMin = lMin; d.lampoKausi = lk; d.lampoVoima = lW;
   }
+  // v235: LÄMPÖ (MALLI), ks. akLMKaynnista ja lampomalli.js
+  var lampoM = null;
+  if (akTila === 'lampomalli' && akSyvyys){
+    akLMKaynnista();
+    lampoM = akLMKentta(d);
+    if (!lampoM) lampoM = { an: new Float32Array(mask.length), D: null, kesken: true, rajat: [], keskit: [], ero: 0, kynnys: Infinity };
+    akLMRajat = lampoM.rajat; akLMAsteikko = lampoM;
+  }
   var reunaK = konv ? akKonvReuna(kf) : null;   // v152
   if (konv) d.reunaOsuus = reunaK ? reunaK.osuus : null;
   var syvK = (akTila === 'syvyys' && akSyvyys) ? akSileaSyvyys() : null;   // v152 syvyyskartta
   var murt = (akTila === 'murtuva' && akSyvyys) ? akMurtuvaKentta(d, kentta, Fkesto, U, katto) : null;   // v167
   if (murt) d.murtLkm = murt.lkm;
   var virtaus = (akTila === 'virtaus' && vir);
-  var arvot = lampoK ? lampoK : syvK ? syvK : konv ? kf : vajoama ? vi : syva ? kv : virtaus ? vir : hs;
-  var huippu = lampoK ? Math.max(d.lampoMax || 0, -(d.lampoMin || 0)) : syvK ? 1 : konv ? Math.max(d.konvMax || 0, -(d.konvMin || 0)) : vajoama ? viMax : syva ? kvMax : virtaus ? virMax : korkein;
+  var arvot = lampoM ? lampoM.an : lampoK ? lampoK : syvK ? syvK : konv ? kf : vajoama ? vi : syva ? kv : virtaus ? vir : hs;
+  var huippu = lampoM ? 0 : lampoK ? Math.max(d.lampoMax || 0, -(d.lampoMin || 0)) : syvK ? 1 : konv ? Math.max(d.konvMax || 0, -(d.konvMin || 0)) : vajoama ? viMax : syva ? kvMax : virtaus ? virMax : korkein;
   var R = vajoama ? RAJAT_VI : (virtaus || syva) ? RAJAT_V : RAJAT;
 
   venytys = 1;
@@ -920,7 +1119,7 @@ function piirra(){
   var talteen = {};
 
   function rgb(v){
-    var avain = Math.round(v*400);
+    var avain = lampoM ? 'L' + akLMLuokka(v) : Math.round(v*400);   // v235: lämpömallissa luokka (pienet erot)
     if (talteen[avain]) return talteen[avain];
     var h = vari(v);
     var t = [parseInt(h.substr(1,2),16), parseInt(h.substr(3,2),16), parseInt(h.substr(5,2),16)];
@@ -956,7 +1155,7 @@ function piirra(){
       if (murt){   // v167: murtuva aallokko luokittain, lähin ruutu (terävät reunat)
         var mv = AK_MURT_VARIT[murt.luokka[nj*k.W + ni]];
         kuva.data[o] = parseInt(mv.substr(1,2),16); kuva.data[o+1] = parseInt(mv.substr(3,2),16); kuva.data[o+2] = parseInt(mv.substr(5,2),16);
-      } else if (!virtaus && !syva && !vajoama && !konv && !syvK && !lampoK && arvo > kalaRaja){
+      } else if (!virtaus && !syva && !vajoama && !konv && !syvK && !lampoK && !lampoM && arvo > kalaRaja){
         /* Rajan yli: himmennetään kohti tummaa. Väri jää luettavaksi mutta
            kelvollinen alue hyppää esiin. Turvarajan yli vielä enemmän. */
         var kerroin = arvo > akVene().turva ? 0.30 : 0.55;
@@ -965,6 +1164,9 @@ function piirra(){
         kuva.data[o+2] = Math.round(t[2]*kerroin);
       } else {
         kuva.data[o] = t[0]; kuva.data[o+1] = t[1]; kuva.data[o+2] = t[2];
+      }
+      if (lampoM && lampoM.D && lampoM.D[nj*k.W + ni] >= lampoM.kynnys && ((x + y) % 9) < 2){   // v235: ▨ kasautuu
+        kuva.data[o] = Math.round(kuva.data[o]*0.42); kuva.data[o+1] = Math.round(kuva.data[o+1]*0.42); kuva.data[o+2] = Math.round(kuva.data[o+2]*0.42);
       }
       if (kumpu && kumpu[nj*k.W + ni]){   // v136: pinkki; v137: arvio vaaleampi
         var pa = kumpuArvioVain ? 0.5 : 0.8, pg = kumpuArvioVain ? 140 : 64, pb = kumpuArvioVain ? 200 : 170;
@@ -978,7 +1180,7 @@ function piirra(){
   ctx.putImageData(kuva, 0, 0);
 
   // Nuolet: mihin aalto (tai virtaus) kulkee; v152: syvyyskartalla ei nuolia
-  var rad = ((virtaus || vajoama || konv || lampoK) ? akVirtausSuunta(d.dir) : d.dir + 180)*Math.PI/180;
+  var rad = ((virtaus || vajoama || konv || lampoK || lampoM) ? akVirtausSuunta(d.dir) : d.dir + 180)*Math.PI/180;
   var nuoletPois = !!syvK;
   var ax = Math.sin(rad), ay = -Math.cos(rad);
   var vali = Math.max(6, Math.round(win.w/13))*S, pit = vali*0.40;
@@ -1056,7 +1258,7 @@ function piirra(){
 
   /* Talteen napautusta varten: nämä ovat piirron paikallisia, mutta napautus
      tarvitsee ne piirron jälkeen. */
-  akViime = { lampoK:lampoK, lampoT:lampoT, lampoKausi: lampoK ? d.lampoKausi : null, murt:murt, hs:hs, vir:vir, vi:vi, kf:kf, saumat:saumat, reuna:reunaK, syvK:syvK, kue:kue, kun:kun, kv:kv, kentta:kentta, k:k, S:S, win:win, kalaRaja:kalaRaja, turva:akVene().turva, dir:d.dir };
+  akViime = { lampoM:lampoM, lampoK:lampoK, lampoT:lampoT, lampoKausi: lampoK ? d.lampoKausi : null, murt:murt, hs:hs, vir:vir, vi:vi, kf:kf, saumat:saumat, reuna:reunaK, syvK:syvK, kue:kue, kun:kun, kv:kv, kentta:kentta, k:k, S:S, win:win, kalaRaja:kalaRaja, turva:akVene().turva, dir:d.dir };
   akPiirraKuhaMerkit(ctx, win, S);   // v153
   akPiirraTaimenMerkit(ctx, win, S);   // v156
   try { akPiirraKloonit(ctx, win, S); } catch (e) {}   // v177
@@ -1124,7 +1326,7 @@ window.akTallennaOzi = function(){
     octx.putImageData(img, 0, 0);
     var d = data[valittu] || {}, pv = d.aika || new Date();
     var p2 = function(n){ return ('0' + n).slice(-2); };
-    var tilaNimi = { aalto: 'aallot', virtaus: 'pintavirta', syva: 'syvavesi', vajoama: 'vajoama', kumpuama: 'kumpuama', konvergenssi: 'konvergenssi', lampo: 'lampo', syvyys: 'syvyyskartta' }[akTila] || akTila;
+    var tilaNimi = { aalto: 'aallot', virtaus: 'pintavirta', syva: 'syvavesi', vajoama: 'vajoama', kumpuama: 'kumpuama', konvergenssi: 'konvergenssi', lampo: 'lampo', lampomalli: 'lampomalli', syvyys: 'syvyyskartta' }[akTila] || akTila;
     var jn = (jarvi.nimi || 'jarvi').toLowerCase().replace(/[åä]/g, 'a').replace(/ö/g, 'o').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
     var nimi = 'uistelututka_' + jn + '_' + tilaNimi + '_' + pv.getFullYear() + p2(pv.getMonth() + 1) + p2(pv.getDate()) + '_' + p2(pv.getHours()) + '00';
     var mpp = (latN - latS)*111320/HO;
@@ -1725,6 +1927,7 @@ function akNaytaPisteSisalto(){
                                          : akTila === 'kumpuama' ? "Napauta karttaa: kertoo sen kohdan kumpuamaindeksin"
                                          : akTila === 'konvergenssi' ? "Napauta karttaa: kertoo kasautumisen ja virtasaumat"
                                          : akTila === 'lampo' ? "Napauta karttaa: kertoo, onko vesi arviolta keskimääräistä lämpimämpää vai kylmempää"
+                                         : akTila === 'lampomalli' ? "Napauta karttaa: kertoo mallin pintalämmön ja kasautumisen"
                                          : akTila === 'syvyys' ? "Napauta karttaa: kertoo syvyyden"
                                          : akTila === 'murtuva' ? "Napauta karttaa: kertoo, murtuuko aalto ja miksi"
                                          : "Napauta karttaa: kertoo sen kohdan virtauksen"; return;
@@ -1768,6 +1971,17 @@ function akNaytaPisteSisalto(){
     }
     el.innerHTML = "Syvyys tässä noin <b>" + akViime.syvK[q].toFixed(1).replace(".", ",") + " m</b> · "
       + (omaQ !== null && omaQ !== undefined ? "oma luotaus, ruudun (" + jarvi.kartta.ruutu + " m) mediaani, ei tasoitettu" : akSyvyysLahde() + " · pehmennetty ±75 m") + ", ei navigointiin";
+    return;
+  }
+  if (akTila === 'lampomalli'){   // v235
+    var L3 = akViime.lampoM;
+    if (!L3 || L3.kesken || !akLM || akLM.tila !== 'ok'){ el.innerHTML = "Lämpö (malli): " + (akLM && akLM.viesti ? akLM.viesti : 'lasketaan…'); return; }
+    var aq = L3.an[q], abs3 = L3.keski + akLM.bias + aq, cls = akLMLuokka(aq), sy3 = akSyvyys ? akSyvyys[q] : null, D3 = L3.D[q];
+    el.innerHTML = "Malli: noin <b>" + abs3.toFixed(1).replace('.', ',') + " °C</b> · <b>" + akLMLuku(aq) + " °C</b> järven keskiarvoon"
+      + " (" + (cls >= 10 ? 'lämpimimpiä' : cls <= 1 ? 'kylmimpiä' : cls >= 6 ? 'keskimääräistä lämpimämpää' : 'keskimääräistä kylmempää') + ", osa " + (cls + 1) + "/12)"
+      + (D3 >= L3.kynnys ? "<br>▨ pintavesi kasautuu: painuma noin " + D3.toFixed(1).replace('.', ',') + " m (paksumpi pintakerros) · " + akLMDTeksti(L3.kk)
+         : D3 <= -L3.kynnys ? "<br>pintavesi siirtyy pois, alempaa nousee vettä (painuma −" + Math.abs(D3).toFixed(1).replace('.', ',') + " m)" : "")
+      + (sy3 !== null ? "<br>syvyys noin " + sy3.toFixed(1).replace('.', ',') + " m" : "") + " · malli: suunta luotettavampi kuin aste";
     return;
   }
   if (akTila === 'lampo' && akViime.lampoK){   // v199
@@ -1895,6 +2109,27 @@ function naytaTiedot(d){
       + '<div><span>Käyrät</span><b>pääkäyrät 3 / 10 / 20 / 30 m, zoomattuna kaikki; luvut zoomattuna</b></div>'
       + '<div><span>Syvyydet</span><b>' + akSyvyysLahde() + '</b></div>'
       + '<div><span>Käyttö</span><b>suunnitteluun ja Ozi-tausta­kartaksi, ei navigointikartta</b></div>';
+    return;
+  }
+  if (akTila === 'lampomalli'){   // v235
+    var LM2 = (akLM && akLM.tila === 'ok' && akLMKuvaVM && akLMKuvaVM.avain === akLM.avain) ? akLMKuvaVM : null;
+    var f2 = function(x, n){ return x.toFixed(n).replace('.', ','); };
+    if (!LM2){
+      $("akLeima").innerHTML = '<small>' + (akLM && akLM.tila === 'virhe' ? 'lämpömalli: ' + akLM.viesti : 'lasketaan lämpömallia…') + '</small>'
+        + '<span class="aika">' + pv[d.aika.getDay()] + ' klo ' + pad(d.aika.getHours()) + '</span>';
+      $("akTaulu").innerHTML = '<div><span>Lämpö (malli)</span><b>' + (akLM && akLM.viesti ? akLM.viesti : 'lasketaan…') + '</b></div>';
+      return;
+    }
+    var abs = LM2.keski + akLM.bias;
+    $("akLeima").innerHTML = '<span style="color:#b3302a">' + f2(LM2.ero, 2) + ' °C</span><small>lämpimin–kylmin</small>'
+      + '<span class="aika">' + pv[d.aika.getDay()] + ' klo ' + pad(d.aika.getHours()) + '</span><small>järvi noin ' + f2(abs, 1) + ' °C</small>';
+    $("akTaulu").innerHTML =
+        '<div><span>Lämpimin–kylmin (2–98 % järvestä)</span><b>' + f2(LM2.ero, 2) + ' °C · värit: 12 yhtä suurta osaa järvestä</b></div>'
+      + '<div><span>Järvi keskimäärin (malli)</span><b>' + f2(abs, 1) + ' °C · tasattu: ' + akLM.tasaus + (Math.abs(akLM.bias) >= 0.05 ? ' (' + akLMLuku(akLM.bias) + ' °C)' : '') + '</b></div>'
+      + '<div><span>▨ Pintavesi kasautuu</span><b>' + Math.round(100*LM2.osuusD) + ' % järvestä, painuma vähintään ' + f2(LM2.kynnys, 1) + ' m · ' + akLMDTeksti(LM2.kk) + '</b></div>'
+      + '<div><span>Lähtötieto</span><b>' + akLM.lahto + ' · sää Open-Meteo ' + AK_LM_VRK + ' vrk + ennuste' + (akLM.saaTapa === 'muisti' ? ' (puhelimen muistista)' : '') + ', tuuli ennustetunneilla FMI</b></div>'
+      + '<div><span>Testattu</span><b>53 satelliittikuvaa 2014–2026: osuvuus syksyllä 0,34 (25.9.–31.10. 0,50), keväällä 0,34, kesällä 0,16 (1 = täysi osuma)</b></div>'
+      + '<div><span>Mukana</span><b>lämpötase ruuduittain (matala vesi reagoi nopeammin), päivän pintakerros · virtausten siirto ei lämmössä (heikensi testissä), vain ▨</b></div>';
     return;
   }
   if (akTila === 'lampo' && typeof d.lampoMax === 'number'){   // v199
@@ -3770,6 +4005,12 @@ function piirraAsteikko(){
     $("akAsteikko").innerHTML = AK_MURT_NIMET.map(function(nimi, i){
       return '<div style="background:' + AK_MURT_VARIT[i] + ';color:' + (i >= 3 ? '#fff' : '#16211f') + ';font-size:.62rem;">' + nimi + '</div>';
     }).join("");
+  } else if (akTila === 'lampomalli'){   // v235: osan keskikohta °C järven keskiarvoon
+    var LA = akLMAsteikko;
+    $("akAsteikko").innerHTML = VARIT_K.map(function(vr, i){
+      var tx = (LA && LA.keskit && LA.keskit.length) ? akLMLuku(LA.keskit[i]) : '';
+      return '<div style="background:' + vr + ';color:' + (i <= 2 || i >= 9 ? '#fff' : '#16211f') + ';font-size:.58rem">' + tx + '</div>';
+    }).join("");
   } else if (akTila === 'konvergenssi' || akTila === 'lampo'){
     $("akAsteikko").innerHTML = RAJAT_K.map(function(raja, i){
       return '<div style="background:' + VARIT_K[i] + ';color:' + (i <= 2 || i >= 9 ? '#fff' : '#16211f') + '">' + Math.round(raja/venytys) + '</div>';
@@ -3789,6 +4030,8 @@ function piirraAsteikko(){
                          : akTila === 'kumpuama' ? "kumpuamaindeksi 0–100 (malli)"
                          : akTila === 'konvergenssi' ? "punainen kasautuu, sininen erkanee · violetti sauma · ruskea syvä reuna"
                          : akTila === 'lampo' ? "punainen keskimääräistä lämpimämpää, sininen kylmempää · suuntaa antava malli, ei asteita"
+                         : akTila === 'lampomalli' ? "pinnan lämpö järven keskiarvoon, °C · mukautuva: 12 yhtä suurta osaa järvestä · ▨ pintavesi kasautuu · malli"
+                             + (akLM && akLM.tila !== 'ok' ? ' · ' + (akLM.tila === 'virhe' ? 'ei laskettu: ' : '') + (akLM.viesti || 'lasketaan…') : '')
                          : akTila === 'syvyys' ? "syvyys, m · ei navigointikartta"
                          : akTila === 'murtuva' ? "murtuva aallokko: syvyys, jyrkkyys, penkka, vastavirta · malli"
                          : "merkitsevä aallonkorkeus, m";
@@ -3803,7 +4046,7 @@ function akPaivitaVirtausKytkin(){
     var o = sel.options[i];
     if (o.value === 'aalto') continue;
     o.disabled = !akSyvyys;
-    o.textContent = (o.value === 'virtaus' ? "Pintavirtaus" : o.value === 'vajoama' ? "Vajoama" : o.value === 'kumpuama' ? "Kumpuama" : o.value === 'konvergenssi' ? "Konvergenssi" : o.value === 'lampo' ? "Lämpö (suunta)" : o.value === 'syvyys' ? "Syvyyskartta" : o.value === 'murtuva' ? "Murtuva aallokko" : "Syvempi vesi")
+    o.textContent = (o.value === 'virtaus' ? "Pintavirtaus" : o.value === 'vajoama' ? "Vajoama" : o.value === 'kumpuama' ? "Kumpuama" : o.value === 'konvergenssi' ? "Konvergenssi" : o.value === 'lampo' ? "Lämpö (suunta)" : o.value === 'lampomalli' ? "Lämpö (malli)" : o.value === 'syvyys' ? "Syvyyskartta" : o.value === 'murtuva' ? "Murtuva aallokko" : "Syvempi vesi")
                   + (akSyvyys ? "" : " (ei syvyyskarttaa)");
   }
   if (!akSyvyys){ akTila = 'aalto'; sel.value = 'aalto'; }

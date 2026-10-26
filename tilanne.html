@@ -127,6 +127,7 @@
   v215 (18.10.2026): vain versionumero (etusivun syöttikalakorttiin havaittu parven syvyys omasta luotaimesta).
   v216 (18.10.2026): isojen kaikujen napautuksessa matalan pohjan lajiepäily (hauki, ahven, made tai lahna) luotaus.js:n kausisäännöstä; muuten vain versionumero.
   v217 (18.10.2026): vain versionumero (taimenkorttiin rannan pintalämpö; matalan pohjan todisteeseen Hannun ahven- ja haukikoot luotaus.js:ssä).
+  v235 (26.10.2026): karttatila Lämpö (malli): pintalämpö tunneittain säästä ja syvyydestä (lampomalli.js), mukautuva asteikko 12 osaa, ▨ pintavesi kasautuu; vanha Lämpö (suunta) ennallaan.
   v234 (26.10.2026): kartan väriselite pieneksi ja läpikuultavaksi; selitysteksti napautuksesta 8 s, ei jää auki (Hannu: "peittää koko kuvan").
   v233 (25.10.2026): vain versio (oman luotauksen tiivis tallennusmuoto luotaus.js:ssä; tilannekuva purkaa sen samalla omaLuotausLue-funktiolla).
   v232 (25.10.2026): vain versio (saalisrivien tunnistekorjaus kirjaus.js:ssä: tilannekuvan iskupaikan korjaus löytää jälkikirjaukset).
@@ -339,24 +340,25 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=234" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=234" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=234" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=234" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=234" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=234" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="aaltomalli.js?v=234" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=234" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=235" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=235" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=235" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=235" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=235" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=235" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="lampomalli.js?v=235" onerror="utOsaPuuttuu('lampomalli.js')"></script>
+  <script src="aaltomalli.js?v=235" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=235" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v234';
+    const APP_VERSIO = 'v235';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
     // v181: kaikki aaltokortin tilat samassa järjestyksessä kuin siellä; [tila, napin teksti, valikon teksti]
     const TILAT = [['aalto', 'Aalto', 'Aalto'], ['murtuva', 'Murtuva', 'Murtuva aallokko'], ['virtaus', 'Virta', 'Pintavirtaus'], ['syva', 'Syvä', 'Syvempi vesi'],
-                   ['vajoama', 'Vajoama', 'Vajoama'], ['kumpuama', 'Kumpuama', 'Kumpuama'], ['konvergenssi', 'Konverg.', 'Konvergenssi'], ['lampo', 'Lämpö', 'Lämpö (suunta)'], ['syvyys', 'Syvyys', 'Syvyyskartta']];   // v199: lämpö
+                   ['vajoama', 'Vajoama', 'Vajoama'], ['kumpuama', 'Kumpuama', 'Kumpuama'], ['konvergenssi', 'Konverg.', 'Konvergenssi'], ['lampo', 'Lämpö', 'Lämpö (suunta)'], ['lampomalli', 'L.malli', 'Lämpö (malli)'], ['syvyys', 'Syvyys', 'Syvyyskartta']];   // v199: lämpö; v235: lämpömalli
     const PV = ['su', 'ma', 'ti', 'ke', 'to', 'pe', 'la'];
     const n1 = x => (Math.round(x * 10) / 10).toFixed(1).replace('.', ',');
     const n2 = x => (Math.round(x * 100) / 100).toFixed(2).replace('.', ',');
@@ -1538,6 +1540,8 @@
       const h = T.ikaH < 1 ? Math.round(T.ikaH * 60) + ' min' : Math.round(T.ikaH) + ' h';
       return 'Ennuste puhelimen muistista: haettu ' + hetkiTeksti(T.haettu) + ' (' + h + ' sitten). Haetaan uusi, kun verkko palaa.';
     }
+    // v235: Lämpö (malli) lasketaan taustalla; valmistuttua kartta piirretään uudelleen, jos tila on valittuna
+    window.addEventListener('akLampoMalliValmis', () => { if (as.tila === 'lampomalli' || (pohja && pohja.naytto === 'lampomalli')) renderoi(false); });
     window.addEventListener('akEnnustePaivittyi', () => {
       if (!pohja) return;
       if (!tuntiKasin) tunti = nykyTunti();
