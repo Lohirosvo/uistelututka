@@ -145,6 +145,7 @@ function akLampoKausi(aika){
    Kartta: väri = poikkeama järven keskiarvosta samalla tunnilla, MUKAUTUVA asteikko: 12 yhtä suurta osaa järven
    pinta-alasta, joten lämpimin ja kylmin näkyvät aina; todellinen ero asteina selitteessä ja leimassa.
    ▨ = pintavesi kasautuu (painuma vähintään 0,5 m ja järven 10 % suurimmista). */
+var AK_LM_RINTAMA_M = 10000;   // v236: jyrkimmän muutoksen viivoja yhteensä (Hannu 26.10.: "Yhteensä 10 km viivaa")
 var AK_LM_VRK = 7, AK_LM_LS = 'uistelututka_lampomalli_saa', AK_LM_SAA_IKA = 3*3600e3, AK_LM_AIKARAJA = 9000;
 var AK_LM_SYKE_ID = { lappajarvi: 1696 };   // 26.10.2026: Hydrologiarajapinta Paikka, "Lappajärvi, Halkosaari" (Suure_Id 11)
 var akLM = null, akLMKuvaVM = null, akLMRajat = null, akLMAsteikko = null, akLMAjo = null, akLMCg = null;
@@ -292,6 +293,7 @@ function akLMKaynnista(){
   });
 }
 window.__akLMTesti = function(){ return akLM; };   // v235: testeille (lampomalli.py)
+window.__akLMKuva = function(){ return akLMKuvaVM; };   // v236: testeille (rintamat)
 window.akLampoMalliTila = function(){ return akLM ? { tila: akLM.tila, viesti: akLM.viesti || null, bias: akLM.bias, tasaus: akLM.tasaus, lahto: akLM.lahto, T0: akLM.T0, saaTapa: akLM.saaTapa } : null; };
 /* Tunnin kenttä hienoon ruudukkoon: poikkeama järven keskiarvosta (°C), painuma D (m), 12 osan rajat. */
 function akLMKentta(d){
@@ -312,9 +314,58 @@ function akLMKentta(d){
   for (var r = 1; r < 12; r++) rajat.push(kv(lista, r/12));
   for (var r2 = 0; r2 < 12; r2++) keskit.push(kv(lista, (r2 + 0.5)/12));
   var kynnys = Math.max(0.5, kv(dl, 0.9)), yli = 0; for (var q3 = 0; q3 < dl.length; q3++) if (dl[q3] >= kynnys) yli++;
+  var rin = null; try { rin = window.LampoMalli.rintamat ? window.LampoMalli.rintamat(cg, Tc, { pituusM: AK_LM_RINTAMA_M }) : null; } catch(e){ rin = null; }   // v236
   akLMKuvaVM = { avain: akLM.avain, i: i, an: an, D: Df, keski: ka, rajat: rajat, keskit: keskit, ero: kv(lista, 0.98) - kv(lista, 0.02),
-                 kynnys: kynnys, osuusD: dl.length ? yli/dl.length : 0, kk: d.aika.getMonth() + 1 };
+                 kynnys: kynnys, osuusD: dl.length ? yli/dl.length : 0, kk: d.aika.getMonth() + 1, rintamat: rin };
   return akLMKuvaVM;
+}
+/* v236 JYRKIMMÄN MUUTOKSEN VIIVAT (lampomalli.js rintamat): musta viiva valkoisella reunuksella rintaman suuntaisesti,
+   pienet kolmiot noin 600 m välein osoittavat lämpimämmälle puolelle (mallin kaltevuuden suunta). */
+function akLMRintamaPiste(F, x, y){   // karkean ruudukon koordinaateissa: kaltevuus (°C/km) ja lämpimän puolen suunta (°, kohti)
+  var cg = akLM.cg, W = cg.W, H = cg.H, x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0, sx = 0, sy = 0, pw = 0;
+  for (var b = 0; b < 2; b++) for (var a = 0; a < 2; a++){
+    var xi = x0 + a, yi = y0 + b; if (xi < 0 || yi < 0 || xi >= W || yi >= H || !cg.mask[yi*W + xi]) continue;
+    var p = (a ? fx : 1 - fx)*(b ? fy : 1 - fy); sx += p*F.gx[yi*W + xi]; sy += p*F.gy[yi*W + xi]; pw += p;
+  }
+  if (pw < 1e-9) return null;
+  sx /= pw; sy /= pw;
+  return { g: Math.sqrt(sx*sx + sy*sy), gx: sx, gy: sy, suunta: (Math.atan2(sx, -sy)*180/Math.PI + 360) % 360 };
+}
+function akLMPiirraRintamat(ctx, win, S, LW, F){
+  var f = akLM.cg.f, px = function(pt){ return [((pt[0] + 0.5)*f - 0.5 - win.i0 + 0.5)*S, ((pt[1] + 0.5)*f - 0.5 - win.j0 + 0.5)*S]; };
+  var ydin = Math.max(1.6, LW/240), reuna = ydin + Math.max(1.6, LW/320), koko = Math.max(4, LW/90), vali = 600/akLM.cg.dx;   // vali karkeina ruutuina
+  ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  [['rgba(255,255,255,.9)', reuna], ['#111', ydin]].forEach(function(t){
+    ctx.strokeStyle = t[0]; ctx.lineWidth = t[1]; ctx.beginPath();
+    F.forEach(function(L){ L.p.forEach(function(pt, n){ var c = px(pt); if (n) ctx.lineTo(c[0], c[1]); else ctx.moveTo(c[0], c[1]); }); });
+    ctx.stroke();
+  });
+  ctx.fillStyle = '#111'; ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = Math.max(1, ydin*0.6);
+  F.forEach(function(L){
+    var kertyma = vali/2;
+    for (var u = 1; u < L.p.length; u++){
+      var A = L.p[u-1], B = L.p[u], d = Math.hypot(B[0] - A[0], B[1] - A[1]);
+      while (kertyma <= d && d > 0){
+        var t = kertyma/d, x = A[0] + t*(B[0] - A[0]), y = A[1] + t*(B[1] - A[1]), R = akLMRintamaPiste(F, x, y);
+        if (R && R.g > 0){
+          var c = px([x, y]), ux = (B[0] - A[0])/d, uy = (B[1] - A[1])/d, nx = -uy, ny = ux;
+          if (nx*R.gx + ny*R.gy < 0){ nx = -nx; ny = -ny; }   // normaali lämpimälle puolelle
+          ctx.beginPath(); ctx.moveTo(c[0] - ux*koko*0.6, c[1] - uy*koko*0.6); ctx.lineTo(c[0] + ux*koko*0.6, c[1] + uy*koko*0.6);
+          ctx.lineTo(c[0] + nx*koko, c[1] + ny*koko); ctx.closePath(); ctx.stroke(); ctx.fill();
+        }
+        kertyma += vali;
+      }
+      kertyma -= d;
+    }
+  });
+  ctx.restore();
+}
+function akLMLahinRintama(F, x, y){   // lyhin etäisyys viivaan karkeina ruutuina
+  var paras = Infinity;
+  F.forEach(function(L){ for (var u = 1; u < L.p.length; u++){
+    var A = L.p[u-1], B = L.p[u], vx = B[0] - A[0], vy = B[1] - A[1], l2 = vx*vx + vy*vy, t = l2 ? Math.max(0, Math.min(1, ((x - A[0])*vx + (y - A[1])*vy)/l2)) : 0;
+    var dd = Math.hypot(x - A[0] - t*vx, y - A[1] - t*vy); if (dd < paras) paras = dd; } });
+  return paras;
 }
 function akLMLuokka(v){ var R = akLMRajat || []; var c = 0; while (c < R.length && v >= R[c]) c++; return c; }
 function akLMLuku(v){ var a = Math.abs(v), s = (v > 0.0049 ? '+' : v < -0.0049 ? '−' : '±'); return s + (a >= 1 ? a.toFixed(1) : a.toFixed(2)).replace('.', ','); }
@@ -1220,6 +1271,7 @@ function piirra(){
     }
   }
 
+  if (lampoM && lampoM.rintamat && lampoM.rintamat.length){ try { akLMPiirraRintamat(ctx, win, S, LW, lampoM.rintamat); } catch(e){} }   // v236
   /* v152 SYVYYSKÄYRÄT: marching squares pehmennetystä syvyydestä (v145–v151 piirsi ruutujen reunoja,
      mikä porrasti 50 m ruudukossa). Syvyyskartalla aina; muissa tiloissa kytkimellä. */
   if ((akKayrat || syvK) && akSyvyys) akPiirraKayrat(ctx, win, S, LW);
@@ -1981,6 +2033,13 @@ function akNaytaPisteSisalto(){
       + " (" + (cls >= 10 ? 'lämpimimpiä' : cls <= 1 ? 'kylmimpiä' : cls >= 6 ? 'keskimääräistä lämpimämpää' : 'keskimääräistä kylmempää') + ", osa " + (cls + 1) + "/12)"
       + (D3 >= L3.kynnys ? "<br>▨ pintavesi kasautuu: painuma noin " + D3.toFixed(1).replace('.', ',') + " m (paksumpi pintakerros) · " + akLMDTeksti(L3.kk)
          : D3 <= -L3.kynnys ? "<br>pintavesi siirtyy pois, alempaa nousee vettä (painuma −" + Math.abs(D3).toFixed(1).replace('.', ',') + " m)" : "")
+      + (function(){   // v236: lähellä jyrkimmän muutoksen viivaa
+          var F3 = L3.rintamat; if (!F3 || !F3.length) return '';
+          var cg3 = akLM.cg, k3 = akViime.k, x3 = ((q % k3.W) + 0.5)/cg3.f - 0.5, y3 = (((q/k3.W)|0) + 0.5)/cg3.f - 0.5;
+          if (akLMLahinRintama(F3, x3, y3)*cg3.dx > 150) return '';
+          var R3 = akLMRintamaPiste(F3, x3, y3); if (!R3) return '';
+          return "<br>━ jyrkin muutos: noin " + R3.g.toFixed(2).replace('.', ',') + " °C/km (" + (R3.g/10).toFixed(3).replace('.', ',') + " °C / 100 m), lämpimämpää " + akKohti(R3.suunta);
+        })()
       + (sy3 !== null ? "<br>syvyys noin " + sy3.toFixed(1).replace('.', ',') + " m" : "") + " · malli: suunta luotettavampi kuin aste";
     return;
   }
@@ -2126,9 +2185,11 @@ function naytaTiedot(d){
     $("akTaulu").innerHTML =
         '<div><span>Lämpimin–kylmin (2–98 % järvestä)</span><b>' + f2(LM2.ero, 2) + ' °C · värit: 12 yhtä suurta osaa järvestä</b></div>'
       + '<div><span>Järvi keskimäärin (malli)</span><b>' + f2(abs, 1) + ' °C · tasattu: ' + akLM.tasaus + (Math.abs(akLM.bias) >= 0.05 ? ' (' + akLMLuku(akLM.bias) + ' °C)' : '') + '</b></div>'
+      + (LM2.rintamat && LM2.rintamat.length ? '<div><span>━ Jyrkin muutos</span><b>' + LM2.rintamat.length + ' viivaa, yhteensä ' + f2(LM2.rintamat.yht/1000, 1) + ' km · jyrkin ' + f2(LM2.rintamat[0].g, 2) + ' °C/km, keskimäärin '
+          + f2(LM2.rintamat.reduce(function(s, L){ return s + L.g*L.m; }, 0)/LM2.rintamat.yht, 2) + ' °C/km · kolmiot lämpimämmälle puolelle</b></div>' : '')
       + '<div><span>▨ Pintavesi kasautuu</span><b>' + Math.round(100*LM2.osuusD) + ' % järvestä, painuma vähintään ' + f2(LM2.kynnys, 1) + ' m · ' + akLMDTeksti(LM2.kk) + '</b></div>'
       + '<div><span>Lähtötieto</span><b>' + akLM.lahto + ' · sää Open-Meteo ' + AK_LM_VRK + ' vrk + ennuste' + (akLM.saaTapa === 'muisti' ? ' (puhelimen muistista)' : '') + ', tuuli ennustetunneilla FMI</b></div>'
-      + '<div><span>Testattu</span><b>53 satelliittikuvaa 2014–2026: osuvuus syksyllä 0,34 (25.9.–31.10. 0,50), keväällä 0,34, kesällä 0,16 (1 = täysi osuma)</b></div>'
+      + '<div><span>Testattu</span><b>53 satelliittikuvaa 2014–2026: osuvuus syksyllä 0,34 (25.9.–31.10. 0,50), keväällä 0,34, kesällä 0,16 (1 = täysi osuma) · ━ viivoilla satelliitin lämpö muuttui 1,4 kertaa jyrkemmin kuin järvellä keskimäärin (25.9.–31.10. 2,4), lämpimämpi puoli oikein 67 % (syksyllä 71, kesällä 54)</b></div>'
       + '<div><span>Mukana</span><b>lämpötase ruuduittain (matala vesi reagoi nopeammin), päivän pintakerros · virtausten siirto ei lämmössä (heikensi testissä), vain ▨</b></div>';
     return;
   }
@@ -4030,7 +4091,7 @@ function piirraAsteikko(){
                          : akTila === 'kumpuama' ? "kumpuamaindeksi 0–100 (malli)"
                          : akTila === 'konvergenssi' ? "punainen kasautuu, sininen erkanee · violetti sauma · ruskea syvä reuna"
                          : akTila === 'lampo' ? "punainen keskimääräistä lämpimämpää, sininen kylmempää · suuntaa antava malli, ei asteita"
-                         : akTila === 'lampomalli' ? "pinnan lämpö järven keskiarvoon, °C · mukautuva: 12 yhtä suurta osaa järvestä · ▨ pintavesi kasautuu · malli"
+                         : akTila === 'lampomalli' ? "pinnan lämpö järven keskiarvoon, °C · mukautuva: 12 yhtä suurta osaa järvestä · ━ jyrkin muutos (10 km), kolmiot lämpimämmälle puolelle · ▨ pintavesi kasautuu · malli"
                              + (akLM && akLM.tila !== 'ok' ? ' · ' + (akLM.tila === 'virhe' ? 'ei laskettu: ' : '') + (akLM.viesti || 'lasketaan…') : '')
                          : akTila === 'syvyys' ? "syvyys, m · ei navigointikartta"
                          : akTila === 'murtuva' ? "murtuva aallokko: syvyys, jyrkkyys, penkka, vastavirta · malli"

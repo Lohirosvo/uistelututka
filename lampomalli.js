@@ -286,7 +286,140 @@
     var c = cg.map[qFine]; return c >= 0 ? kentta[c] : NaN;
   }
 
-  var LM = { ruudukko: ruudukko, kiertoPohjat: kiertoPohjat, aloita: aloita, aja: aja, ajaVaiheittain: ajaVaiheittain, hienoksi: hienoksi, kausi: kausi, ylatuuli: ylatuuli };
+  /* v236 JYRKIMMÄN MUUTOKSEN VIIVAT (Hannu 26.10.2026: "Jyrkimmän lämpötilan muutoksen viiva. Yhteensä 10 km viivaa").
+     Lämpörintama = samanlämpöisen veden käyrä (isotermi) siellä, missä lämpö muuttuu jyrkimmin; viiva kulkee rintaman
+     suuntaisesti (sitä pitkin voi vetää), lämpimämpi puoli on kohtisuoraan viivaa vastaan.
+     1) Kaltevuus |∇T| °C/km jokaiselle vesiruudulle (keskierotus, rannalla yksipuolinen).
+     2) Ehdokkaat: isotermit 48 tasolla (järven 3–97 %:n lämpöjen väliltä), marching squares ruutujen keskipisteiden kautta;
+        ruudut, joiden vieressä on maata, jätetään pois (ei rantaviivan mutkia).
+     3) Isotermit katkaistaan kohdista, joissa kaltevuus on alle järven 70 %:n tason; alle 300 m palat pois.
+     4) Palat jyrkimmästä alkaen (pituudella painotettu kaltevuus), lähempänä kuin 400 m jo valittua viivaa olevat osat
+        hylätään (vierekkäiset isotermit samassa rintamassa), kunnes yhteensä pituusM (oletus 10 km); viimeinen lyhennetään.
+     TESTATTU 26.10.2026 samoilla 53 Landsat-kuvalla (malli 10 vrk säähistorialla, viivat kuvaushetkeltä, väli 400 m):
+     satelliitin oma kaltevuus viivojen ruuduissa 1,44-kertainen järven keskiarvoon (mediaani, 46/52 kuvaa yli 1), 74 %
+     viivojen ruuduista yli satelliitin mediaanikaltevuuden (sattuma 50 %); lämpimämpi puoli sama kuin satelliitissa 67 %
+     (kevät 75 %, kesä 54 %, syys 71 %); 25.9.–31.10.: 2,4-kertainen (8/8), 86 %, lämmin puoli 87 %. (Välillä 250 m lähes
+     samat: 1,44 / 74 % / 67 %.) Satelliitin ruutuja viivoilla vähän (2–45 / kuva, rantaruudut pois): yksittäinen kuva epävarma.
+     → [{ p: [[x, y], …] karkean ruudukon koordinaatteina (ruudun keskipiste = kokonaisluku), m: pituus (m),
+          g: kaltevuus (°C/km, pituudella painotettu), lampo: isotermin lämpö (°C) }], järjestys jyrkin ensin. */
+  function rintamat(cg, T, o) {
+    o = o || {};
+    var W = cg.W, H = cg.H, N = W * H, mask = cg.mask, dx = cg.dx, vesi = cg.vesi, pituus = o.pituusM || 10000;
+    var Tv = function (q) { return +T[q]; };
+    var ranta = new Uint8Array(N), gx = new Float32Array(N), gy = new Float32Array(N), gm = new Float32Array(N), arv = [], gl = [];
+    for (var p = 0; p < vesi.length; p++) {
+      var q = vesi[p], i = q % W, j = (q / W) | 0;
+      for (var dj = -1; dj <= 1; dj++) for (var di = -1; di <= 1; di++) {
+        var ii = i + di, jj = j + dj; if (ii < 0 || jj < 0 || ii >= W || jj >= H || !mask[jj * W + ii]) ranta[q] = 1;
+      }
+      var e = i + 1 < W && mask[q + 1], w = i > 0 && mask[q - 1], s = j + 1 < H && mask[q + W], n = j > 0 && mask[q - W];
+      var ddx = (e && w) ? (Tv(q + 1) - Tv(q - 1)) / 2 : e ? Tv(q + 1) - Tv(q) : w ? Tv(q) - Tv(q - 1) : 0;
+      var ddy = (s && n) ? (Tv(q + W) - Tv(q - W)) / 2 : s ? Tv(q + W) - Tv(q) : n ? Tv(q) - Tv(q - W) : 0;
+      gx[q] = ddx / dx * 1000; gy[q] = ddy / dx * 1000; gm[q] = Math.sqrt(gx[q] * gx[q] + gy[q] * gy[q]);
+      if (!ranta[q]) { arv.push(Tv(q)); gl.push(gm[q]); }
+    }
+    if (arv.length < 20) return [];
+    arv.sort(function (a, b) { return a - b; }); gl.sort(function (a, b) { return a - b; });
+    var kv = function (L, x) { return L[Math.min(L.length - 1, Math.max(0, Math.floor(x * (L.length - 1))))]; };
+    var t0 = kv(arv, 0.03), t1 = kv(arv, 0.97), gRaja = Math.max(kv(gl, 0.70), 1e-6);
+    if (!(t1 - t0 > 1e-4)) return [];
+    var bil = function (F, x, y) {   // bilineaarinen vesiruuduista
+      var x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0, sm = 0, pw = 0;
+      for (var b = 0; b < 2; b++) for (var a = 0; a < 2; a++) {
+        var xi = x0 + a, yi = y0 + b; if (xi < 0 || yi < 0 || xi >= W || yi >= H) continue;
+        var qq = yi * W + xi; if (!mask[qq]) continue; var pp = (a ? fx : 1 - fx) * (b ? fy : 1 - fy); sm += pp * F[qq]; pw += pp;
+      }
+      return pw > 1e-9 ? sm / pw : 0;
+    };
+    var palat = [], TASOT = o.tasoja || 48;
+    for (var k = 0; k < TASOT; k++) {
+      var L = t0 + (t1 - t0) * (k + 0.5) / TASOT, seg = {};   // reunan avain → [toinen pää, piste]
+      var lisaa = function (a, b, pa, pb) { (seg[a] = seg[a] || []).push([b, pa, pb]); (seg[b] = seg[b] || []).push([a, pb, pa]); };
+      for (var y = 0; y + 1 < H; y++) for (var x = 0; x + 1 < W; x++) {
+        var q00 = y * W + x, q10 = q00 + 1, q01 = q00 + W, q11 = q01 + 1;
+        if (!mask[q00] || !mask[q10] || !mask[q01] || !mask[q11] || ranta[q00] || ranta[q10] || ranta[q01] || ranta[q11]) continue;
+        var v00 = Tv(q00) - L, v10 = Tv(q10) - L, v01 = Tv(q01) - L, v11 = Tv(q11) - L;
+        var c = (v00 > 0 ? 1 : 0) | (v10 > 0 ? 2 : 0) | (v11 > 0 ? 4 : 0) | (v01 > 0 ? 8 : 0);
+        if (c === 0 || c === 15) continue;
+        // reunat: y = ylä (x..x+1, y), o = oikea (x+1, y..y+1), a = ala (x..x+1, y+1), v = vasen (x, y..y+1)
+        var P = {
+          y: ['h' + x + ',' + y, [x + v00 / (v00 - v10), y]], o: ['v' + (x + 1) + ',' + y, [x + 1, y + v10 / (v10 - v11)]],
+          a: ['h' + x + ',' + (y + 1), [x + v01 / (v01 - v11), y + 1]], v: ['v' + x + ',' + y, [x, y + v00 / (v00 - v01)]]
+        };
+        var parit = { 1: ['y', 'v'], 2: ['y', 'o'], 3: ['v', 'o'], 4: ['o', 'a'], 6: ['y', 'a'], 7: ['v', 'a'], 8: ['v', 'a'], 9: ['y', 'a'],
+                      11: ['o', 'a'], 12: ['v', 'o'], 13: ['y', 'o'], 14: ['y', 'v'] }[c];
+        if (c === 5 || c === 10) {   // satulapiste: keskiarvon mukaan
+          var kesk = (v00 + v10 + v01 + v11) / 4 > 0;
+          var pp2 = c === 5 ? (kesk ? [['y', 'o'], ['a', 'v']] : [['y', 'v'], ['o', 'a']]) : (kesk ? [['y', 'v'], ['o', 'a']] : [['y', 'o'], ['a', 'v']]);
+          pp2.forEach(function (pr) { lisaa(P[pr[0]][0], P[pr[1]][0], P[pr[0]][1], P[pr[1]][1]); });
+        } else lisaa(P[parit[0]][0], P[parit[1]][0], P[parit[0]][1], P[parit[1]][1]);
+      }
+      // ketjut
+      var kayty = {};
+      Object.keys(seg).forEach(function (alku) {
+        if (kayty[alku]) return;
+        // etsi ketjun pää (avain, jossa yksi naapuri), muuten silmukka
+        var paa = alku, ed = null, kierr = 0;
+        while (seg[paa].length === 2 && kierr < 100000) { var nx = seg[paa][0][0] === ed ? seg[paa][1][0] : seg[paa][0][0]; if (nx === alku) break; ed = paa; paa = nx; kierr++; }
+        var pis = [], nyt = paa, eds = null;
+        while (nyt && !kayty[nyt]) {
+          kayty[nyt] = 1;
+          var s2 = seg[nyt], seur = null;
+          for (var t = 0; t < s2.length; t++) if (s2[t][0] !== eds && !kayty[s2[t][0]]) { seur = s2[t]; break; }
+          if (!pis.length) pis.push(s2[0][1]);   // reunan leikkauspiste on sama kaikissa sen merkinnöissä
+          if (!seur) break;
+          pis.push(seur[2]); eds = nyt; nyt = seur[0];
+        }
+        if (pis.length < 2) return;
+        // katkaisu heikon kaltevuuden kohdista
+        var pala = [], gs = 0, ms = 0;
+        var paataPala = function () {
+          if (pala.length >= 2 && ms * dx >= 300) palat.push({ p: pala, m: ms * dx, g: gs / ms, lampo: L });
+          pala = []; gs = 0; ms = 0;
+        };
+        for (var r = 0; r < pis.length; r++) {
+          var g = bil(gm, pis[r][0], pis[r][1]);
+          if (g < gRaja) { paataPala(); continue; }
+          if (pala.length) {
+            var d = Math.hypot(pis[r][0] - pala[pala.length - 1][0], pis[r][1] - pala[pala.length - 1][1]);
+            ms += d; gs += d * g;
+          }
+          pala.push(pis[r]);
+        }
+        paataPala();
+      });
+    }
+    palat.sort(function (a, b) { return b.g - a.g; });
+    var varattu = new Uint8Array(N), rV = Math.max(1, Math.round((o.valiM || 400) / dx)), valittu = [], yht = 0;
+    var vapaa = function (pt) { var qx = Math.round(pt[0]), qy = Math.round(pt[1]); return !(qx >= 0 && qy >= 0 && qx < W && qy < H && varattu[qy * W + qx]); };
+    for (var z = 0; z < palat.length && yht < pituus - 1; z++) {
+      var A = palat[z], osat = [], cur = [];
+      A.p.forEach(function (pt) { if (vapaa(pt)) cur.push(pt); else { if (cur.length >= 2) osat.push(cur); cur = []; } });
+      if (cur.length >= 2) osat.push(cur);
+      osat.forEach(function (os) {
+        if (yht >= pituus - 1) return;
+        var m = 0, gs2 = 0, out = [os[0]];
+        for (var u = 1; u < os.length; u++) {
+          var d2 = Math.hypot(os[u][0] - os[u - 1][0], os[u][1] - os[u - 1][1]) * dx;
+          if (yht + m + d2 > pituus) {   // lyhennys täsmälleen pituuteen
+            var f = (pituus - yht - m) / d2; out.push([os[u - 1][0] + f * (os[u][0] - os[u - 1][0]), os[u - 1][1] + f * (os[u][1] - os[u - 1][1])]);
+            gs2 += (pituus - yht - m) * bil(gm, os[u][0], os[u][1]); m = pituus - yht; break;
+          }
+          m += d2; gs2 += d2 * bil(gm, os[u][0], os[u][1]); out.push(os[u]);
+        }
+        if (m < 300 && yht + m < pituus - 1) return;
+        valittu.push({ p: out, m: m, g: m ? gs2 / m : A.g, lampo: A.lampo }); yht += m;
+        out.forEach(function (pt) {
+          var cx = Math.round(pt[0]), cy = Math.round(pt[1]);
+          for (var b3 = -rV; b3 <= rV; b3++) for (var a3 = -rV; a3 <= rV; a3++) { var xx = cx + a3, yy = cy + b3; if (xx >= 0 && yy >= 0 && xx < W && yy < H) varattu[yy * W + xx] = 1; }
+        });
+      });
+    }
+    valittu.gx = gx; valittu.gy = gy; valittu.gm = gm; valittu.gRaja = gRaja; valittu.yht = yht;
+    return valittu;
+  }
+
+  var LM = { ruudukko: ruudukko, kiertoPohjat: kiertoPohjat, aloita: aloita, aja: aja, ajaVaiheittain: ajaVaiheittain, hienoksi: hienoksi, kausi: kausi, ylatuuli: ylatuuli, rintamat: rintamat };
   if (typeof module !== 'undefined' && module.exports) module.exports = LM;
   root.LampoMalli = LM;
 })(typeof window !== 'undefined' ? window : globalThis);
