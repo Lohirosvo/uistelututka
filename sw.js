@@ -22,6 +22,7 @@
 // v215: syöttikalakorttiin Havaittu (oma luotain) mallin rinnalle (index.html; tilanne.html vain versio); ei uusia tiedostoja.
 // v216: kaikujen lajiryhmät kausittain ja järvittäin (luotaus.js), Havaittu-rivit kuha-, hauki-, ahven- ja järvilohikorttiin (index.html); tilanne.html vain versio; ei uusia tiedostoja.
 // v217: taimenkorttiin rannan ja selän pintalämpö omasta luotaimesta ja luotaimen rajoitus (index.html, luotaus.js); tilanne.html vain versio; ei uusia tiedostoja.
+// v237: kaistamalli.js (uusi tiedosto): Lämpö (malli) -tilan taimenen ja järvilohen 100 m penkkakaistat, 1 % järvestä (aaltomalli.js, index.html, tilanne.html).
 // v236: Lämpö (malli): jyrkimmän muutoksen viivat 10 km (lampomalli.js rintamat, aaltomalli.js); ei uusia tiedostoja.
 // v235: lampomalli.js (uusi tiedosto): karttatila Lämpö (malli), pintalämpö tunneittain säästä, syvyydestä ja SYKEn lähtölämmöstä; satelliittitesti tiedoston alussa (aaltomalli.js, index.html, tilanne.html).
 // v234: tilannekuvan väriselite pieneksi ja läpikuultavaksi, selitysteksti napautuksesta 8 s (tilanne.html; index.html vain versio).
@@ -71,7 +72,7 @@
 // VERSIO: kasvata tätä aina kun julkaiset uuden version. Vanha välimuisti siivotaan.
 // Versionumeron kasvatus on se mekanismi joka SIIVOAA vanhan välimuistin,
 // index2.html mukaan lukien. Ilman tätä poisto ei näkyisi puhelimissa.
-const VERSIO = 'uistelututka-v236';
+const VERSIO = 'uistelututka-v237';
 /* v178: sivun omat tiedostot ladataan nimellä tiedosto?v=NNN, jossa NNN on tämän VERSIOn numero.
    index.html:n <script src> -riveissä ja ottiäänen haussa on SAMA numero: kun julkaiset, vaihda
    molemmat. Uusi numero on uusi osoite, joten puhelin ei voi yhdistää uutta sivua vanhaan malliin
@@ -106,6 +107,7 @@ const ESILADATTAVAT = [
   './vene.js?v=' + TV,          // v185
   './jarvet.js?v=' + TV,        // v178
   './lampomalli.js?v=' + TV,    // v235
+  './kaistamalli.js?v=' + TV,   // v237
   './aaltomalli.js?v=' + TV,    // v178
   './otti.mp3?v=' + TV,         // v178
   './manifest.json',

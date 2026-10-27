@@ -294,6 +294,11 @@ function akLMKaynnista(){
 }
 window.__akLMTesti = function(){ return akLM; };   // v235: testeille (lampomalli.py)
 window.__akLMKuva = function(){ return akLMKuvaVM; };   // v236: testeille (rintamat)
+window.__akKaistaPohja = function(avain){   // v237: testeille ja kehitykseen (kaistamallin syötteet sovelluksen laskemina)
+  if (!jarvi || !JARVET[avain] || jarvi !== JARVET[avain] || !mask || !akSyvyys) return null;
+  var P = akKuhaPohjaLaske(avain); if (!P) return null;
+  return { k: jarvi.kartta, mask: mask, s: akSyvyys, f: P.f, g: P.g, suunta: P.suunta, rantaRuutu: P.ranta, ranta: akRantaMatka(avain), sl: akSileaSyvyys(), gRaja: P.gRaja };
+};
 window.akLampoMalliTila = function(){ return akLM ? { tila: akLM.tila, viesti: akLM.viesti || null, bias: akLM.bias, tasaus: akLM.tasaus, lahto: akLM.lahto, T0: akLM.T0, saaTapa: akLM.saaTapa } : null; };
 /* Tunnin kenttä hienoon ruudukkoon: poikkeama järven keskiarvosta (°C), painuma D (m), 12 osan rajat. */
 function akLMKentta(d){
@@ -301,7 +306,7 @@ function akLMKentta(d){
   var tk = Math.round(d.aika.getTime()/3600e3), i = akLM.ind[tk];
   for (var dk = 1; i === undefined && dk <= 2; dk++) i = akLM.ind[tk - dk] !== undefined ? akLM.ind[tk - dk] : akLM.ind[tk + dk];   // puuttuva säätunti: lähin ±2 h
   if (i === undefined) return null;
-  if (akLMKuvaVM && akLMKuvaVM.avain === akLM.avain && akLMKuvaVM.i === i) return akLMKuvaVM;
+  if (akLMKuvaVM && akLMKuvaVM.avain === akLM.avain && akLMKuvaVM.i === i){ akKMTunti(akLMKuvaVM, d); return akLMKuvaVM; }
   var cg = akLM.cg, R = akLM.R, Nc = cg.W*cg.H, Tc = new Float32Array(Nc), Dc = new Float32Array(Nc);
   for (var c = 0; c < Nc; c++){ Tc[c] = R.T[i][c]/100; Dc[c] = R.D[i][c]/100; }
   var an = new Float32Array(mask.length), Df = new Float32Array(mask.length), lista = [], dl = [], sm = 0, n = 0;
@@ -316,8 +321,99 @@ function akLMKentta(d){
   var kynnys = Math.max(0.5, kv(dl, 0.9)), yli = 0; for (var q3 = 0; q3 < dl.length; q3++) if (dl[q3] >= kynnys) yli++;
   var rin = null; try { rin = window.LampoMalli.rintamat ? window.LampoMalli.rintamat(cg, Tc, { pituusM: AK_LM_RINTAMA_M }) : null; } catch(e){ rin = null; }   // v236
   akLMKuvaVM = { avain: akLM.avain, i: i, an: an, D: Df, keski: ka, rajat: rajat, keskit: keskit, ero: kv(lista, 0.98) - kv(lista, 0.02),
-                 kynnys: kynnys, osuusD: dl.length ? yli/dl.length : 0, kk: d.aika.getMonth() + 1, rintamat: rin };
+                 kynnys: kynnys, osuusD: dl.length ? yli/dl.length : 0, kk: d.aika.getMonth() + 1, rintamat: rin, kaistat: null, kmAvain: null };
+  akKMTunti(akLMKuvaVM, d);   // v237
   return akLMKuvaVM;
+}
+/* ===== v237 TAIMENEN JA JÄRVILOHEN PENKKAKAISTAT (kaistamalli.js) =====
+   Hannu 27.10.2026: "Tee 1 % lappajärven pinta-alasta 100 m leveät kaistat / pätkät josta 20 % on järvilohelle hetkellä parhaaksi
+   arvioitu penkka … loput taimenelle parhaat penkan pätkät. Tämä uusimpaan tilannekuvan lämpö karttaan. Käytä kaikkea saatavilla
+   olevaa dataa … Eri värit ja tummemmalla kun on parasta ja haaleammalla kun arvio ei niin varma."
+   Lasketaan Lämpö (malli) -tilan tunnille: tunnin FMI-tuuli, lämpömallin poikkeama ja järven keskilämpö (malli + tasaus). Oma
+   aineisto luetaan puhelimen muistista (sivukeilan kivikko ja sen kattavuus, ajo, isot ja keskikokoiset kaiut, parvet, taimen- ja
+   järvilohisaaliit, oma luotaus, C-MAPin kova pohja); koodissa ei ole Hannun paikkoja. Malli ja testi: kaistamalli.js ja
+   tilannekuva v237. Kaista 100 m leveä (piirretään 100 m:n levyisenä), pinkki taimen, violetti järvilohi; 3 tummuutta. */
+var AK_KM_LEVEYS = 100, AK_KM_VARIT = { taimen: ['#f4b3d1', '#d8448d', '#8c0e50'], lohi: ['#c9bff5', '#7a63dc', '#3b2899'] };
+var akKM = null;   // { jarvi, syv, avain, B, E, Eavain }
+function akKMAvainE(avain){
+  var ol = (typeof omaLuotausLue === 'function') ? omaLuotausLue() : { tuonnit: [] }, sa = '', kv = '';
+  try { sa = localStorage.getItem('nopeusnaytto_pro1_saaliit') || ''; } catch(e){}
+  try { kv = localStorage.getItem('uistelututka_kova_pohja') || ''; } catch(e){}
+  return [avain, ol.tuonnit.length, ol.muisti && ol.muisti.tallenteet ? ol.muisti.tallenteet.length : 0, window.__olKivikkoV || 0, sa.length, kv.length, Math.floor(Date.now()/86400e3)].join('|');
+}
+function akKMData(avain){
+  var ol = omaLuotausLue(), T = ol.tuonnit.filter(function(t){ return t.jarvi === avain; });
+  var d = { kivikko: [], kiviKatettu: [], ajo: [], kaiut: [], parvet: [], saaliit: [], oma: [], kova: null, nyt: Date.now() };
+  try { omaLuotausKivikko(avain).forEach(function(x){ d.kivikko.push({ lat: x.lat, lon: x.lon, taso: x.taso }); }); } catch(e){}
+  T.forEach(function(t){
+    var a = omaLuotausAnturi(t), viim = -1;
+    if (t.kivikko && Array.isArray(t.kivikko.jaksot)) t.kivikko.jaksot.forEach(function(j){ if (j.tiheys !== null && j.tiheys !== undefined) d.kiviKatettu.push([j.lat, j.lon]); });
+    for (var i = 0; i < t.lat.length; i++){ var m = Math.floor(((t.aikaS && t.aikaS[i]) || 0)/60); if (m === viim) continue; viim = m; d.ajo.push([t.lat[i]/1e6, t.lon[i]/1e6]); }   // ajo minuutin näytteinä
+    (t.kalat || []).forEach(function(e){ if (e.luokka === 'iso' || e.luokka === 'keski') d.kaiut.push({ lat: e.lat, lon: e.lon, luokka: e.luokka, pohja: (e.pohja || 0) + a, lahella: e.lahella }); });
+    (t.parvet || []).forEach(function(p){ d.parvet.push({ lat: p.lat, lon: p.lon, pohja: (p.pohja || 0) + a }); });
+  });
+  var M = ol.muisti && ol.muisti.jarvet && ol.muisti.jarvet[avain];
+  if (M){   // tiivis muisti: syvyysruudun n pistettä × noin 3,7 s ajoa
+    (M.syv || []).forEach(function(e){ var n = Math.max(1, Math.round((e[3] || 1)*3.7/60)); for (var i = 0; i < n; i++) d.ajo.push([e[0]/1e5, e[1]/1e5]); });
+    (M.kaiut || []).forEach(function(e){ d.kaiut.push({ lat: e[1]/1e5, lon: e[2]/1e5, luokka: e[6] === 'i' ? 'iso' : 'keski', pohja: e[4]/100, lahella: e[8] }); });
+    (M.parvet || []).forEach(function(e){ d.parvet.push({ lat: e[1]/1e5, lon: e[2]/1e5, pohja: e[5]/10 }); });
+  }
+  try { (JSON.parse(localStorage.getItem('nopeusnaytto_pro1_saaliit') || '[]') || []).forEach(function(x){
+    if (x && !x.nollareissu && (x.laji === 'taimen' || x.laji === 'jarvilohi') && typeof x.lat === 'number' && typeof x.lon === 'number') d.saaliit.push({ lat: x.lat, lon: x.lon, t: Date.parse(x.aika), laji: x.laji }); }); } catch(e){}
+  try { var ro = omaLuotausSolut(jarvi.kartta); if (ro && ro.solut) d.oma = Object.keys(ro.solut).map(Number); } catch(e){}
+  try { var K = JSON.parse(localStorage.getItem('uistelututka_kova_pohja') || 'null'), J = K && K.jarvet && K.jarvet[avain], k = jarvi.kartta;
+    if (J && J.W === k.W && J.H === k.H && J.ruutu === k.ruutu && J.maski){ var r = atob(J.maski), kv = new Uint8Array(k.W*k.H); for (var q = 0; q < kv.length; q++) kv[q] = (r.charCodeAt(q >> 3) >> (7 - (q & 7))) & 1; d.kova = kv; } } catch(e){}
+  return d;
+}
+function akKMValmis(){
+  if (!window.KaistaMalli || typeof window.KaistaMalli.kaistat !== 'function' || !jarvi || !jarvi.kartta || !mask || !akSyvyys) return null;
+  var avain = akNykyAvain(), P = akKuhaPohjaLaske(avain); if (!P) return null;
+  if (!akKM || akKM.jarvi !== jarvi || akKM.syv !== akSyvyys)
+    akKM = { jarvi: jarvi, syv: akSyvyys, avain: avain, E: null, Eavain: null,
+             B: window.KaistaMalli.pohja({ k: jarvi.kartta, mask: mask, s: akSyvyys, sl: akSileaSyvyys(), g: P.g, suunta: P.suunta, ranta: akRantaMatka(avain) }) };
+  var ea = akKMAvainE(avain);
+  if (akKM.Eavain !== ea){ akKM.E = window.KaistaMalli.todisteet(akKM.B, akKMData(avain)); akKM.Eavain = ea; }
+  return akKM;
+}
+function akKMTunti(L, d){   // kaistat lämpömallin tunnin kenttään L (akLMKentta); lasketaan uudelleen, jos oma aineisto muuttui
+  try {
+    var K = akKMValmis(); if (!K){ L.kaistat = null; return; }
+    if (L.kaistat && L.kmAvain === K.Eavain) return;
+    L.kaistat = window.KaistaMalli.kaistat(K.B, K.E, { U: d.U, dir: d.dir, Tk: L.keski + (akLM.bias || 0), kk: d.aika.getMonth() + 1, an: L.an }, { leveysM: AK_KM_LEVEYS });
+    L.kmAvain = K.Eavain;
+  } catch(e){ L.kaistat = null; }
+}
+function akKMPiirra(ctx, win, S, KA){
+  var lw = Math.max(3, AK_KM_LEVEYS/jarvi.kartta.ruutu*S), reuna = Math.max(1.5, S*0.22), px = function(pt){ return [(pt[0] - win.i0 + 0.5)*S, (pt[1] - win.j0 + 0.5)*S]; };
+  ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'butt';
+  [['lohi', KA.lohi], ['taimen', KA.taimen]].forEach(function(L){
+    L[1].forEach(function(x){
+      ctx.beginPath(); x.p.forEach(function(pt, n){ var c = px(pt); if (n) ctx.lineTo(c[0], c[1]); else ctx.moveTo(c[0], c[1]); });
+      ctx.strokeStyle = 'rgba(25,10,25,.6)'; ctx.lineWidth = lw + 2*reuna; ctx.stroke();
+      ctx.strokeStyle = AK_KM_VARIT[L[0]][Math.max(1, Math.min(3, x.tummuus)) - 1]; ctx.lineWidth = lw; ctx.stroke();
+    });
+  });
+  ctx.restore();
+}
+var AK_KM_TUMMUUS = ['haalea: epävarmempi tai heikompi', 'keskitaso', 'tumma: paras ja varmempi'];
+function akKMNapautus(KA, q){   // lähin kaista napautusruudusta (≤ 70 m keskilinjasta)
+  if (!KA || !akKM) return '';
+  var W = jarvi.kartta.W, L = window.KaistaMalli.lahin(akKM.B, KA, q % W, (q/W)|0); if (!L || L.etaisyysM > 70) return '';
+  var x = L.kaista, o = x.osat || {}, f1 = function(v){ return v.toFixed(1).replace('.', ','); }, osat = [];
+  osat.push('syvyys ' + f1(o.syvMin) + '–' + f1(o.syvMax) + ' m (käyrä ' + String(x.taso).replace('.', ',') + ' m)');
+  if (typeof o.kalt === 'number') osat.push('penkka ' + f1(o.kalt) + ' m / 100 m');
+  if (L.laji === 'taimen'){
+    osat.push(o.kivi >= 0.8 ? 'kivikko sivukeilassa' : o.kivi >= 0.55 ? 'harvakseltaan kiviä sivukeilassa' : o.kivi <= 0.35 ? 'sivukeila: ei kiviä' : 'kivikosta ei tietoa');
+    osat.push(o.tuuli >= 0.65 ? 'tuuli puskee penkkaan, aallokkoa' : o.tuuli <= 0.35 ? 'penkan suojan puoli' : 'tuuli ei painota');
+    if (o.saalis >= 0.3) osat.push('oma taimensaalis lähellä');
+  } else {
+    osat.push(o.lTuuli >= 0.7 ? 'tuuli penkan suuntainen tai tuulenpuoleinen kylki' : 'tuuli ei painota');
+    osat.push(o.lKaiku >= 0.6 ? 'lohiepäilykaikuja ajoon nähden tavallista enemmän' : o.lKaiku <= 0.4 ? 'lohiepäilykaikuja ajoon nähden vähemmän' : 'kaiuista ei erottuvaa tietoa');
+  }
+  if (typeof o.an === 'number') osat.push('lämpö ' + akLMLuku(o.an) + ' °C järven keskiarvoon');
+  return '<br>' + (L.laji === 'taimen' ? '🎣 <b>Taimenkaista ' : '🐟 <b>Järvilohikaista ') + x.tunnus + '</b> (' + AK_KM_TUMMUUS[Math.max(1, Math.min(3, x.tummuus)) - 1]
+    + ', pisteet ' + x.pisteet + '/100, varmuus ' + x.varmuus + ' %, ' + x.pituusM + ' m): ' + osat.join(' · ')
+    + (L.laji === 'lohi' ? '<br>Järvilohen kaistat ovat Lintuselän kokemuksen ja syvyyden mallia: omiin lohiepäilykaikuihin ne eivät vielä osuneet, joten väri on enintään keskitaso.' : '');
 }
 /* v236 JYRKIMMÄN MUUTOKSEN VIIVAT (lampomalli.js rintamat): musta viiva valkoisella reunuksella rintaman suuntaisesti,
    pienet kolmiot noin 600 m välein osoittavat lämpimämmälle puolelle (mallin kaltevuuden suunta). */
@@ -1271,6 +1367,7 @@ function piirra(){
     }
   }
 
+  if (lampoM && lampoM.kaistat){ try { akKMPiirra(ctx, win, S, lampoM.kaistat); } catch(e){} }   // v237: penkkakaistat rintamaviivojen alle
   if (lampoM && lampoM.rintamat && lampoM.rintamat.length){ try { akLMPiirraRintamat(ctx, win, S, LW, lampoM.rintamat); } catch(e){} }   // v236
   /* v152 SYVYYSKÄYRÄT: marching squares pehmennetystä syvyydestä (v145–v151 piirsi ruutujen reunoja,
      mikä porrasti 50 m ruudukossa). Syvyyskartalla aina; muissa tiloissa kytkimellä. */
@@ -2040,7 +2137,8 @@ function akNaytaPisteSisalto(){
           var R3 = akLMRintamaPiste(F3, x3, y3); if (!R3) return '';
           return "<br>━ jyrkin muutos: noin " + R3.g.toFixed(2).replace('.', ',') + " °C/km (" + (R3.g/10).toFixed(3).replace('.', ',') + " °C / 100 m), lämpimämpää " + akKohti(R3.suunta);
         })()
-      + (sy3 !== null ? "<br>syvyys noin " + sy3.toFixed(1).replace('.', ',') + " m" : "") + " · malli: suunta luotettavampi kuin aste";
+      + (sy3 !== null ? "<br>syvyys noin " + sy3.toFixed(1).replace('.', ',') + " m" : "") + " · malli: suunta luotettavampi kuin aste"
+      + akKMNapautus(L3.kaistat, q);   // v237
     return;
   }
   if (akTila === 'lampo' && akViime.lampoK){   // v199
@@ -2188,6 +2286,9 @@ function naytaTiedot(d){
       + (LM2.rintamat && LM2.rintamat.length ? '<div><span>━ Jyrkin muutos</span><b>' + LM2.rintamat.length + ' viivaa, yhteensä ' + f2(LM2.rintamat.yht/1000, 1) + ' km · jyrkin ' + f2(LM2.rintamat[0].g, 2) + ' °C/km, keskimäärin '
           + f2(LM2.rintamat.reduce(function(s, L){ return s + L.g*L.m; }, 0)/LM2.rintamat.yht, 2) + ' °C/km · kolmiot lämpimämmälle puolelle</b></div>' : '')
       + '<div><span>▨ Pintavesi kasautuu</span><b>' + Math.round(100*LM2.osuusD) + ' % järvestä, painuma vähintään ' + f2(LM2.kynnys, 1) + ' m · ' + akLMDTeksti(LM2.kk) + '</b></div>'
+      + (LM2.kaistat ? '<div><span>Penkkakaistat (100 m)</span><b>pinkki taimen ' + f2(LM2.kaistat.pituusT/1000, 1) + ' km (' + LM2.kaistat.taimen.length + ' pätkää), violetti järvilohi ' + f2(LM2.kaistat.pituusL/1000, 1) + ' km (' + LM2.kaistat.lohi.length
+          + ') · yhteensä 1 % järvestä · tumma = paras ja varmempi, haalea = epävarmempi · tunnin tuuli, lämpö, syvyys, sivukeilan kivikko, omat saaliit, kaiut ja parvet</b></div>'
+        + '<div><span>Kaistojen testi</span><b>taimen (omat saaliit 4.–24.10., päivä kerrallaan pois): 5/7 ottipaikkaa alle 150 m:n päässä kaistasta, kun saman päivän ajosta 46 % oli; ottipaikka arvioitiin paremmaksi kuin 67 % saman päivän ajosta (ero ei vielä tilastollisesti varma) · järvilohi: ei erottanut omia lohiepäilykaikuja syvän veden ajosta</b></div>' : '')
       + '<div><span>Lähtötieto</span><b>' + akLM.lahto + ' · sää Open-Meteo ' + AK_LM_VRK + ' vrk + ennuste' + (akLM.saaTapa === 'muisti' ? ' (puhelimen muistista)' : '') + ', tuuli ennustetunneilla FMI</b></div>'
       + '<div><span>Testattu</span><b>53 satelliittikuvaa 2014–2026: osuvuus syksyllä 0,34 (25.9.–31.10. 0,50), keväällä 0,34, kesällä 0,16 (1 = täysi osuma) · ━ viivoilla satelliitin lämpö muuttui 1,4 kertaa jyrkemmin kuin järvellä keskimäärin (25.9.–31.10. 2,4), lämpimämpi puoli oikein 67 % (syksyllä 71, kesällä 54)</b></div>'
       + '<div><span>Mukana</span><b>lämpötase ruuduittain (matala vesi reagoi nopeammin), päivän pintakerros · virtausten siirto ei lämmössä (heikensi testissä), vain ▨</b></div>';
@@ -4091,7 +4192,7 @@ function piirraAsteikko(){
                          : akTila === 'kumpuama' ? "kumpuamaindeksi 0–100 (malli)"
                          : akTila === 'konvergenssi' ? "punainen kasautuu, sininen erkanee · violetti sauma · ruskea syvä reuna"
                          : akTila === 'lampo' ? "punainen keskimääräistä lämpimämpää, sininen kylmempää · suuntaa antava malli, ei asteita"
-                         : akTila === 'lampomalli' ? "pinnan lämpö järven keskiarvoon, °C · mukautuva: 12 yhtä suurta osaa järvestä · ━ jyrkin muutos (10 km), kolmiot lämpimämmälle puolelle · ▨ pintavesi kasautuu · malli"
+                         : akTila === 'lampomalli' ? "pinnan lämpö järven keskiarvoon, °C · mukautuva: 12 yhtä suurta osaa järvestä · ━ jyrkin muutos (10 km), kolmiot lämpimämmälle puolelle · ▨ pintavesi kasautuu · ▬ 100 m kaistat (1 % järvestä): pinkki taimen, violetti järvilohi, tumma = paras ja varmempi · malli"
                              + (akLM && akLM.tila !== 'ok' ? ' · ' + (akLM.tila === 'virhe' ? 'ei laskettu: ' : '') + (akLM.viesti || 'lasketaan…') : '')
                          : akTila === 'syvyys' ? "syvyys, m · ei navigointikartta"
                          : akTila === 'murtuva' ? "murtuva aallokko: syvyys, jyrkkyys, penkka, vastavirta · malli"
