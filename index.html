@@ -2444,16 +2444,16 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=238" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=238" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=238" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=238" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=238" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=238" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="lampomalli.js?v=238" onerror="utOsaPuuttuu('lampomalli.js')"></script>
-  <script src="kaistamalli.js?v=238" onerror="utOsaPuuttuu('kaistamalli.js')"></script>
-  <script src="aaltomalli.js?v=238" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=238" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=239" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=239" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=239" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=239" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=239" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=239" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="lampomalli.js?v=239" onerror="utOsaPuuttuu('lampomalli.js')"></script>
+  <script src="kaistamalli.js?v=239" onerror="utOsaPuuttuu('kaistamalli.js')"></script>
+  <script src="aaltomalli.js?v=239" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=239" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
        uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
@@ -4518,7 +4518,8 @@ window.addEventListener('load', function(){
          ruutumäärän ja nopeuden mukaan kuten Inarilla v227. Jos MML:ssä ei ole syvyyksiä, rantaviiva ja ruudukko
          rakennetaan silti (3 m oletus), ja syvyydet luetaan Hannun karttakuvista. Muut kohteet ovat ohita-tilassa,
          joten Rakenna järvikartat rakentaa vain Höytiäisen. */
-      { avain: 'hoytiainen', nimi: 'Höytiäinen', laatikko: 'Höytiäinen', siemen: [62.788, 29.717], ruutu: 50, lataaSyvyydet: true,
+      // v239: rakennettu 1.11. (uistelututka_jarvikartat_11.json, MML-syvyydet koko järveltä) ja upotettu → ohitetaan.
+      { ohita: true, avain: 'hoytiainen', nimi: 'Höytiäinen', laatikko: 'Höytiäinen', siemen: [62.788, 29.717], ruutu: 50, lataaSyvyydet: true,
         rantaIlmanSyvyytta: true, virallinen: 'Fishing in Finland: 283 km², keskisyvyys 11 m, suurin 59 m (muut lähteet 56–62 m)' }
     ];
     var jkTulos = null;
@@ -6322,7 +6323,7 @@ window.addEventListener('load', function(){
        Pintaa ei ekstrapoloida yli 2,5 m (sama raja kuin ltProfiili). */
     const LP_NIMET = { lappajarvi: 'Lappajärvi', hirvijarvi: 'Hirvijärvi', ahtarinjarvi: 'Ähtärinjärvi', kivijarvi: 'Kivijärvi',
       alajarvi: 'Alajärvi', evijarvi: 'Evijärvi', patana: 'Patana', toisvesi: 'Toisvesi', kyrkosjarvi: 'Kyrkösjärvi',
-      kalajarvi: 'Kalajärvi', saimaa_imatra: 'Saimaa (Imatra)', ylakeitele: 'Ylä-Keitele', inarijarvi: 'Inarijärvi' };   // v225
+      kalajarvi: 'Kalajärvi', saimaa_imatra: 'Saimaa (Imatra)', ylakeitele: 'Ylä-Keitele', inarijarvi: 'Inarijärvi', hoytiainen: 'Höytiäinen' };   // v225; v239
     const LP_VARIT = ['#4ea8ff', '#ffb020', '#3ddc84', '#ff5c7a', '#b388ff', '#22d3ee', '#c6e05a', '#ff8a3d', '#f472b6', '#2dd4bf', '#facc15', '#a3a3ff'];
     const LP_VIIVAT = ['', '7 4', '2 3', '9 3 2 3'];
     let lpTila = { avain: null, vuosi: null, valittu: null };
@@ -12060,7 +12061,7 @@ function sumuriskiAlusta(){
        kaikilla kuha on lajineuvon kohdelaji. Saimaalla ehdokkaat vain alueelta, jonka syvyys on luettu
        karttakuvista (kattavuusmaski, ks. akKuhaPohjaLaske). */
     const KUHA_EHDOKASJARVET = ['lappajarvi', 'hirvijarvi', 'alajarvi', 'evijarvi', 'toisvesi', 'patana', 'kyrkosjarvi', 'kalajarvi',
-                                'ahtarinjarvi', 'kivijarvi', 'saimaa_imatra', 'ylakeitele'];   // v211: Ylä-Keitele
+                                'ahtarinjarvi', 'kivijarvi', 'saimaa_imatra', 'ylakeitele', 'hoytiainen'];   // v211: Ylä-Keitele; v239: Höytiäinen (Hannu 1.11.)
     let viimeisinKuhaEhdokkaat = [];   // saaliskirjaukselle, myös järvillä ilman nimettyjä kuhapaikkoja
     const KUHA_INESS = ['pohjoisessa','koillisessa','idässä','kaakossa','etelässä','lounaassa','lännessä','luoteessa'];
     const KUHA_ILLAT = ['pohjoiseen','koilliseen','itään','kaakkoon','etelään','lounaaseen','länteen','luoteeseen'];
@@ -12113,7 +12114,8 @@ function sumuriskiAlusta(){
         // lähin nimetty paikka suunnistusta varten: Lappajärvellä kaikki nimetyt paikat (myös
         // taimenpaikat, jotka Hannu tuntee), muualla kuhapaikat
         let lahin = null;
-        const maamerkit = (avain === 'lappajarvi' && typeof lappajarviHotspots === 'object') ? Object.values(lappajarviHotspots) : nimetyt;
+        const maamerkit = (avain === 'lappajarvi' && typeof lappajarviHotspots === 'object') ? Object.values(lappajarviHotspots)
+          : (!nimetyt.length && typeof muutLohipaikat === 'object' && muutLohipaikat[avain]) ? muutLohipaikat[avain] : nimetyt;   // v239: Höytiäisellä nimetyt lohipaikat suunnistukseen
         maamerkit.forEach(sp => { const e = haversineDistMeters(sp.lat, sp.lon, x.c.lat, x.c.lon); if (!lahin || e < lahin.m) lahin = { sp, m: e }; });
         if (lahin) {
           const b = (Math.atan2((x.c.lon - lahin.sp.lon) * Math.cos(x.c.lat * Math.PI / 180), x.c.lat - lahin.sp.lat) * 180 / Math.PI + 360) % 360;
@@ -12301,7 +12303,7 @@ function sumuriskiAlusta(){
            (Jarić ym. 2023)]
        Ehdokas tarvitsee fysiikasta ≥ 6 p. Valinta: 20 parasta (v158; v156 3), ≥ 1 km toisistaan ja ≥ 700 m nimetyistä
        paikoista, aalto veneen rajan yli → pois (kuten kuha). Saaliit eivät vaikuta pisteisiin. */
-    const TAIMEN_HOTSPOTJARVET = ['lappajarvi', 'kivijarvi', 'toisvesi', 'ylakeitele'];   // v211: Ylä-Keitele
+    const TAIMEN_HOTSPOTJARVET = ['lappajarvi', 'kivijarvi', 'toisvesi', 'ylakeitele', 'hoytiainen'];   // v211: Ylä-Keitele; v239: Höytiäinen
     /* v158 (Hannu 5.10.2026): kolme on vähän, koska Lappajärvi on valtava ja päivän uistelualue on osa siitä.
        20 ehdokasta kaikilla kolmella järvellä, järjestys pisteiden mukaan; paneelissa 3 parasta, kaikki kartalla. */
     const TAIMEN_EHDOKKAITA = 20;
@@ -12411,6 +12413,9 @@ function sumuriskiAlusta(){
       const lista = [];
       let suljettuja = 0;
       const samaKortti = !!K.samaKortti;
+      /* v239: muilla järvillä nimetyt taimen- ja järvilohipaikat (paikat.js muutLohipaikat) vain suunnistukseen ("lähin nimetty
+         paikka"): niitä ei pisteytetä eikä niiden ympäriltä karsita ehdokkaita, koska koordinaatti voi olla niemen kohdalla maalla. */
+      const maamerkit = nimetyt.length ? nimetyt : ((typeof muutLohipaikat === 'object' && muutLohipaikat[avain]) ? muutLohipaikat[avain] : []);
       for (const x of kaikki) {
         if (lista.length >= TAIMEN_EHDOKKAITA) break;
         if (nimetyt.some(sp => haversineDistMeters(sp.lat, sp.lon, x.c.lat, x.c.lon) < 700)) continue;
@@ -12418,7 +12423,7 @@ function sumuriskiAlusta(){
         const m = samaKortti ? taimenAalto(x.c.lat, x.c.lon, aikaMs, v && v.aaltoMuisti) : null;
         if (m && typeof m.aaltoM === 'number' && typeof m.raja === 'number' && m.aaltoM > m.raja) { suljettuja++; continue; }
         let lahin = null;
-        nimetyt.forEach(sp => { const e = haversineDistMeters(sp.lat, sp.lon, x.c.lat, x.c.lon); if (!lahin || e < lahin.m) lahin = { sp, m: e }; });
+        maamerkit.forEach(sp => { const e = haversineDistMeters(sp.lat, sp.lon, x.c.lat, x.c.lon); if (!lahin || e < lahin.m) lahin = { sp, m: e }; });
         if (lahin) {
           const bb = (Math.atan2((x.c.lon - lahin.sp.lon) * Math.cos(x.c.lat * Math.PI / 180), x.c.lat - lahin.sp.lat) * 180 / Math.PI + 360) % 360;
           lahin.suunta = KUHA_ILLAT[Math.round(bb / 45) % 8];
@@ -13847,7 +13852,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v238';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v239';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -19658,9 +19663,10 @@ function sumuriskiAlusta(){
          uusi on luetulla alueella (vettä, noin 7 m). */
       { name: 'Inarijärvi', lat: 68.8220, lon: 27.6702, maxDepth: 92, areaKm2: 1040, clarityClass: 5, sykeTerm: 'Inari', waterLevelStationId: 2564,
         kohdelajit: ['taimen', 'jarvilohi', 'ahven', 'hauki'], syvyysOsittain: true },   // v227
-      /* v238 (1.11.2026): Höytiäinen. Vaihe 1: paikkalistaan ja järvikarttojen rakennukseen; järvikartta (JARVET.hoytiainen)
-         ja karttaAvainNimesta tulevat, kun Hannun rakennus ja karttakuvat on luettu (kuten Inarilla v224 → v225).
-         Siihen asti 48 h -ikkuna käyttää yhtä lukua koko järvelle kuten Näsijärvellä.
+      /* v238 (1.11.2026): Höytiäinen paikkalistaan ja järvikarttojen rakennukseen.
+         v239: järvikartta JARVET.hoytiainen (MML: rantaviiva ja syvyydet koko järveltä), karttaAvainNimesta, taimenehdokkaat
+         (TAIMEN_HOTSPOTJARVET) ja nimetyt paikat (paikat.js muutLohipaikat) suunnistukseen ja tilannekuvaan. Piste 62,788 / 29,717
+         on ruudukossa vettä (8 m:n luokka).
          Lähteet: 283 km² (Wikipedia/SYKE 282,64; Fishing in Finland 283), suurin syvyys 59 m (Fishing in Finland; Wikipedia 62,
          Janhunen ym. 2021 56), keskisyvyys 11 m (Fishing in Finland; Janhunen ym. 11,8). Piste = sama eteläselän avovesi kuin
          rakennuksen siemen (arvioitu Hannun karttakuvasta). Kirkkausluokka 3 on ARVIO: Janhunen ym. kuvaavat järven kirkasvetiseksi,
@@ -19668,7 +19674,7 @@ function sumuriskiAlusta(){
          näkösyvyyttä ei ole mitattu. Vedenkorkeusasemaa ja järvitunnusta ei tarkistettu. Kohdelajit taimen ja järvilohi
          (Hannu 1.11.2026: ottiseutuja taimenelle ja järvilohelle). */
       { name: 'Höytiäinen', lat: 62.788, lon: 29.717, maxDepth: 59, areaKm2: 283, clarityClass: 3, sykeTerm: 'Höytiäinen',
-        kohdelajit: ['taimen', 'jarvilohi'] },   // v238
+        kohdelajit: ['taimen', 'jarvilohi', 'kuha'] },   // v238; v239: kuha (Hannu 1.11.; tieteellisen artikkelin tiivistelmä hakutuloksessa: yksi Suomen taloudellisesti arvokkaimmista kuhakannoista, saalis jopa 5,5 kg/ha; artikkelia ei avattu)
       /* 1.10.2026 (v128): MML-ruudukolla aalto- ja virtausmalli, syvyys veneen kohdalla.
          Piste = järven vesiruutujen painopistettä lähin vesiruutu (ruudukosta laskettu).
          SYKEn pintalämpöasemaa ei löytynyt kummallekaan (testi v118), joten lämpö tulee
@@ -22188,7 +22194,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=238';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=239';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })

@@ -127,6 +127,7 @@
   v215 (18.10.2026): vain versionumero (etusivun syöttikalakorttiin havaittu parven syvyys omasta luotaimesta).
   v216 (18.10.2026): isojen kaikujen napautuksessa matalan pohjan lajiepäily (hauki, ahven, made tai lahna) luotaus.js:n kausisäännöstä; muuten vain versionumero.
   v217 (18.10.2026): vain versionumero (taimenkorttiin rannan pintalämpö; matalan pohjan todisteeseen Hannun ahven- ja haukikoot luotaus.js:ssä).
+  v239 (1.11.2026): Höytiäinen järvikarttana (jarvet.js, MML 50 m); muiden järvien nimetyt lohipaikat (paikat.js muutLohipaikat) haaleina salmiakkeina ja napautukseen.
   v238 (1.11.2026): vain versionumero (Höytiäinen paikkalistaan ja järvikarttojen rakennukseen; ottipaikat paikat.js:ssä dataksi).
   v237 (27.10.2026): Lämpö (malli) -tilaan 100 m leveät penkkakaistat, 1 % järven alasta: pinkki taimen (80 %), violetti järvilohi (20 %), tumma = paras ja varmempi (kaistamalli.js, aaltomalli.js; tilanne.html versio ja skripti).
   v236 (26.10.2026): Lämpö (malli) -tilaan jyrkimmän lämpötilan muutoksen viivat, yhteensä 10 km, kolmiot lämpimämmälle puolelle (lampomalli.js, aaltomalli.js; tilanne.html vain versio).
@@ -343,20 +344,20 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=238" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=238" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=238" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=238" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=238" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=238" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="lampomalli.js?v=238" onerror="utOsaPuuttuu('lampomalli.js')"></script>
-  <script src="kaistamalli.js?v=238" onerror="utOsaPuuttuu('kaistamalli.js')"></script>
-  <script src="aaltomalli.js?v=238" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=238" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=239" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=239" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=239" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=239" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=239" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=239" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="lampomalli.js?v=239" onerror="utOsaPuuttuu('lampomalli.js')"></script>
+  <script src="kaistamalli.js?v=239" onerror="utOsaPuuttuu('kaistamalli.js')"></script>
+  <script src="aaltomalli.js?v=239" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=239" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v238';
+    const APP_VERSIO = 'v239';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
@@ -1352,6 +1353,13 @@
           salmiakki(p.x, p.y, 6.5); ctx.fillStyle = '#ff4d6d'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = '#040a12'; ctx.stroke();
           if (nimet) teksti(hs.name, p.x + 9, p.y, '#ffc2cc', 13);
         });
+      } else if (typeof muutLohipaikat !== 'undefined' && muutLohipaikat[avain]) {
+        // v239: muiden järvien taimen- ja järvilohipaikat (paikat.js), haalea merkki (Hannu 18.10.: uudet merkinnät haaleina)
+        muutLohipaikat[avain].forEach(hs => {
+          const p = naytolle(hs.lat, hs.lon); if (!nakyy(p, 20)) return;
+          salmiakki(p.x, p.y, 6); ctx.fillStyle = 'rgba(255,77,109,.45)'; ctx.fill(); ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(4,10,18,.7)'; ctx.stroke();
+          if (nimet) teksti(hs.name, p.x + 9, p.y, 'rgba(255,194,204,.8)', 12);
+        });
       }
 
       // v186: kuha- ja taimenpaikat etusivun analyysista (samat merkit kuin aaltokortissa)
@@ -2124,6 +2132,9 @@
         if (typeof lappajarviHotspots !== 'undefined') Object.values(lappajarviHotspots).forEach(h => lisaa(h.lat, h.lon,
           '<b style="color:#ff8fa3">' + h.name + '</b>' + (h.type ? '<br>' + h.type : '') + (h.targetSpecies ? '<br>Kohde: ' + h.targetSpecies : '') + (h.tactic ? '<br>' + h.tactic : '')));
         if (typeof omatMerkinnat !== 'undefined') omatMerkinnat.forEach(m => lisaa(m.lat, m.lon, '<b style="color:#ffb020">Oma merkintä:</b> ' + m.t));
+      } else if (typeof muutLohipaikat !== 'undefined' && muutLohipaikat[avain]) {   // v239
+        muutLohipaikat[avain].forEach(h => lisaa(h.lat, h.lon, '<b style="color:#ff8fa3">' + h.name + '</b> <span style="color:#7E93AC">(' + h.taso + ')</span>'
+          + (h.targetSpecies ? '<br>Kohde: ' + h.targetSpecies : '') + (h.vesi ? '<br>' + h.vesi : '') + (h.reason ? '<br>' + h.reason : '')));
       }
       PAIKKALAJIT.forEach(laji => {   // v186
         if (!as[laji]) return; const { K } = paikkaKartta(laji); if (!K) return;

@@ -230,13 +230,14 @@ const lappajarviHotspots = {
 
 /* ===== MUIDEN JÄRVIEN TAIMEN- JA JÄRVILOHIPAIKAT — v238 (1.11.2026) =====
    Avain = JARVET-avain. Rakenne kuten lappajarviHotspots (name, lat, lon, targetSpecies, reason), lisäksi taso.
-   Vaihe 1: vain data. Kartalle, napautukseen ja taimen- ja järvilohiehdokkaiden "lähin nimetty paikka" -suunnistukseen
-   ne kytketään, kun järven JARVET-ruudukko on upotettu (silloin ne voi testata oikealla kartalla).
+   v238: vain data. v239: tilannekuvan kartalle (haalea salmiakki) ja napautukseen sekä taimen- ja kuhaehdokkaiden "lähin nimetty
+   paikka" -suunnistukseen (index.html). Niitä ei pisteytetä eikä niiden ympäriltä karsita ehdokkaita.
 
    HÖYTIÄINEN: Hannun antamat koordinaatit 1.11.2026 (asteet, minuutit, sekunnit → desimaalit laskettu). Hannu: "Julkista
    tietoa/konsensusta", ei omaa saalista → taso Konsensus. Nimet Hannun antamina.
-   Tarkistettu karkeasti Hannun karttakuvaa vasten: kaikki osuvat järvelle; Kontioniemi ja Kunnasniemi vastaavat kartan
-   nimiä; Jängänniemeä kuvassa ei ole (laskettu länsirannalle Martikkalanniemen tienoille, arvio).
+   v238:n karkea tarkistus kuvasta ("kaikki osuvat järvelle") oli VÄÄRÄ. v239: MML-ruudukossa (50 m) kaikki neljä ovat maata:
+   Jängänniemi ja Kontioniemi noin 670 m vedestä, Tammaluoto 50 m, Kunnasniemi 180 m (lähimmän vesiruudun keskipisteeseen).
+   Hannu 1.11.: pidetään annetut koordinaatit (niemen tai luodon nimi maamerkkinä), selite kertoo matkan veteen (kenttä vesi).
    Tutkittu (Janhunen ym. 2021, PLOS ONE 16(12): e0260944, Luken merkintäkoe): merkittyjä 2-vuotiaita järvilohia istutettiin
    20.5.2011 Saunasaareen ja Kontioniemeen, 3-vuotiaita 30.5.2012 Kontioniemeen. 3-vuotiaiden palautuksista suurin osa
    tuli järven eteläosasta, jossa vesi on syvempää ja kirkkaampaa; vapakalastuksen osuus palautuksista noin 17 %,
@@ -247,13 +248,17 @@ const lappajarviHotspots = {
 const muutLohipaikat = {
   hoytiainen: [
     { id: 'hoy_jangan', name: 'Jängänniemi', lat: 62.84088, lon: 29.61341, targetSpecies: 'taimen, järvilohi', taso: 'Konsensus',
+      vesi: 'Koordinaatti on kartalla maata; lähin vesi noin 670 m lounaaseen.',
       reason: 'Konsensus: julkinen tieto ottiseudusta (Hannu 1.11.2026). Ei omaa saalista.' },
     { id: 'hoy_kontio', name: 'Kontioniemi', lat: 62.74786, lon: 29.80977, targetSpecies: 'taimen, järvilohi', taso: 'Konsensus',
+      vesi: 'Koordinaatti on kartalla maata; lähin vesi noin 670 m lounaaseen.',
       reason: 'Konsensus: julkinen tieto ottiseudusta (Hannu 1.11.2026). Ei omaa saalista. Tutkittu: Luke istutti merkittyjä järvilohia '
         + 'Kontioniemeen 2011 ja 2012 (Janhunen ym. 2021). Otit voivat johtua istutuspaikan läheisyydestä; nykyisiä istutuspaikkoja ei ole tarkistettu.' },
     { id: 'hoy_tamma', name: 'Tammaluoto', lat: 62.80661, lon: 29.80493, targetSpecies: 'taimen, järvilohi', taso: 'Konsensus',
+      vesi: 'Koordinaatti on kartalla maata (luoto); lähin vesi noin 50 m pohjoiseen.',
       reason: 'Konsensus: julkinen tieto ottiseudusta (Hannu 1.11.2026). Ei omaa saalista.' },
     { id: 'hoy_kunnas', name: 'Kunnasniemi', lat: 62.72474, lon: 29.63520, targetSpecies: 'taimen, järvilohi', taso: 'Konsensus',
+      vesi: 'Koordinaatti on kartalla maata; lähin vesi noin 180 m lounaaseen.',
       reason: 'Konsensus: julkinen tieto ottiseudusta (Hannu 1.11.2026). Ei omaa saalista.' }
   ]
 };
@@ -274,6 +279,7 @@ function karttaAvainNimesta(n) {
   if (n.startsWith('Saimaa')) return 'saimaa_imatra';   // v142
   if (n.startsWith('Ylä-Keitele') || n.startsWith('Keitele')) return 'ylakeitele';   // v211
   if (n.startsWith('Inarijärvi')) return 'inarijarvi';   // v225: Veskoniemen–Jääsaarten alue (vain rantaviiva)
+  if (n.startsWith('Höytiäinen')) return 'hoytiainen';   // v239: koko järvi, MML
   return null;
 }
 
