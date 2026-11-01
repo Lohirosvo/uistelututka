@@ -2444,16 +2444,16 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=237" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=237" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=237" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=237" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=237" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=237" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="lampomalli.js?v=237" onerror="utOsaPuuttuu('lampomalli.js')"></script>
-  <script src="kaistamalli.js?v=237" onerror="utOsaPuuttuu('kaistamalli.js')"></script>
-  <script src="aaltomalli.js?v=237" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=237" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=238" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=238" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=238" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=238" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=238" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=238" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="lampomalli.js?v=238" onerror="utOsaPuuttuu('lampomalli.js')"></script>
+  <script src="kaistamalli.js?v=238" onerror="utOsaPuuttuu('kaistamalli.js')"></script>
+  <script src="aaltomalli.js?v=238" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=238" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
        uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
@@ -3021,6 +3021,12 @@ body{padding-bottom:66px}
          1 km reunavara: 68,74–69,025 N, 27,19–28,34 E (noin 32 × 46 km, 50 m:n ruutuina noin 0,59 miljoonaa ruutua). Hannu
          20.10.: "B" ja omia karttakuvia vähitellen, "jopa ruutu sieltä täältä". */
       { nimi: 'Inarijärvi (laajennettu alue)', lat: [68.74, 69.025], lon: [27.19, 28.34] },
+      /* v238 (1.11.2026): Höytiäinen (Kontiolahti, Polvijärvi, Juuka). Hannu: taimenen ja järvilohen ottiseutuja,
+         "karttakuvapalaset löytyy". Koko järvi: 283 km², pituus noin 40 km (Fishing in Finland), keskipiste 62,80 N
+         29,65 E (Wikipedia). Rajaus arvioitu Hannun karttakuvasta (mittakaavapalkki 5 km ≈ 247 px; kalibrointi Kontioniemen
+         ja Kunnasniemen koordinaateilla): järvi noin 62,68–63,05 N, 29,46–29,93 E, länsipuolen lahdet kuvan reunan yli.
+         Väljä rajaus noin 1–3 km reunavaralla: noin 50 × 35 km. Jos MML-haku jää kesken (sivuraja), rajaa pienennetään. */
+      { nimi: 'Höytiäinen',             lat: [62.65, 63.10], lon: [29.30, 29.98] },
       /* v131: Pohjanmaa Cupin järvet (Hannu 3.10.2026). Väljät rajaukset; järvi valitaan
          siemenpisteestä (JK_KOHTEET). Kuhalordi, Kivitippu ja Vimpeli = Lappajärvi (tehty). */
       { nimi: 'Alajärvi',               lat: [62.92, 63.10], lon: [23.65, 23.95] },
@@ -4505,7 +4511,15 @@ window.addEventListener('load', function(){
          ruudukko rakennetaan silti (3 m oletus), ja syvyydet luetaan myöhemmin karttakuvista. */
       // v226: rakennettiin laajennetulta rajaukselta; v227: upotettu (uistelututka_jarvikartat_10.json) → ohitetaan taas.
       { ohita: true, avain: 'inarijarvi', nimi: 'Inarijärvi', laatikko: 'Inarijärvi (laajennettu alue)', siemen: [68.785683, 27.645733], ruutu: 50, lataaSyvyydet: true, rajaa: true,
-        rantaIlmanSyvyytta: true, virallinen: 'Wikipedia: koko järvi 1 040 km², suurin syvyys 92 m, keskisyvyys 15 m; tässä vain Veskoniemestä Ukonsaaren ja itäosan ajoihin ulottuva alue' }
+        rantaIlmanSyvyytta: true, virallinen: 'Wikipedia: koko järvi 1 040 km², suurin syvyys 92 m, keskisyvyys 15 m; tässä vain Veskoniemestä Ukonsaaren ja itäosan ajoihin ulottuva alue' },
+      /* v238 (1.11.2026): Höytiäinen koko järvenä. Siemen = eteläisen selän avovesi Höytiäinen-nimen kohdalla Hannun
+         karttakuvassa (62,788 / 29,717; leveää selkää joka suuntaan, joten kuvasta arvioinnin virhe ±1 km ei vie maalle).
+         50 m ruudut kuten Ylä-Keiteleellä ja Inarilla rakennusvaiheessa; upotuksen tarkkuus (50 vai 100 m) päätetään
+         ruutumäärän ja nopeuden mukaan kuten Inarilla v227. Jos MML:ssä ei ole syvyyksiä, rantaviiva ja ruudukko
+         rakennetaan silti (3 m oletus), ja syvyydet luetaan Hannun karttakuvista. Muut kohteet ovat ohita-tilassa,
+         joten Rakenna järvikartat rakentaa vain Höytiäisen. */
+      { avain: 'hoytiainen', nimi: 'Höytiäinen', laatikko: 'Höytiäinen', siemen: [62.788, 29.717], ruutu: 50, lataaSyvyydet: true,
+        rantaIlmanSyvyytta: true, virallinen: 'Fishing in Finland: 283 km², keskisyvyys 11 m, suurin 59 m (muut lähteet 56–62 m)' }
     ];
     var jkTulos = null;
     function jkRenkaat(geom) {   // [[ [lon,lat], ... ], ...] kaikki renkaat
@@ -13833,7 +13847,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v237';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v238';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -19644,6 +19658,17 @@ function sumuriskiAlusta(){
          uusi on luetulla alueella (vettä, noin 7 m). */
       { name: 'Inarijärvi', lat: 68.8220, lon: 27.6702, maxDepth: 92, areaKm2: 1040, clarityClass: 5, sykeTerm: 'Inari', waterLevelStationId: 2564,
         kohdelajit: ['taimen', 'jarvilohi', 'ahven', 'hauki'], syvyysOsittain: true },   // v227
+      /* v238 (1.11.2026): Höytiäinen. Vaihe 1: paikkalistaan ja järvikarttojen rakennukseen; järvikartta (JARVET.hoytiainen)
+         ja karttaAvainNimesta tulevat, kun Hannun rakennus ja karttakuvat on luettu (kuten Inarilla v224 → v225).
+         Siihen asti 48 h -ikkuna käyttää yhtä lukua koko järvelle kuten Näsijärvellä.
+         Lähteet: 283 km² (Wikipedia/SYKE 282,64; Fishing in Finland 283), suurin syvyys 59 m (Fishing in Finland; Wikipedia 62,
+         Janhunen ym. 2021 56), keskisyvyys 11 m (Fishing in Finland; Janhunen ym. 11,8). Piste = sama eteläselän avovesi kuin
+         rakennuksen siemen (arvioitu Hannun karttakuvasta). Kirkkausluokka 3 on ARVIO: Janhunen ym. kuvaavat järven kirkasvetiseksi,
+         Fishing in Finland pohjoisosan lahdet humuspitoisiksi (näkösyvyys enintään pari metriä) ja eteläisen selän kirkkaaksi;
+         näkösyvyyttä ei ole mitattu. Vedenkorkeusasemaa ja järvitunnusta ei tarkistettu. Kohdelajit taimen ja järvilohi
+         (Hannu 1.11.2026: ottiseutuja taimenelle ja järvilohelle). */
+      { name: 'Höytiäinen', lat: 62.788, lon: 29.717, maxDepth: 59, areaKm2: 283, clarityClass: 3, sykeTerm: 'Höytiäinen',
+        kohdelajit: ['taimen', 'jarvilohi'] },   // v238
       /* 1.10.2026 (v128): MML-ruudukolla aalto- ja virtausmalli, syvyys veneen kohdalla.
          Piste = järven vesiruutujen painopistettä lähin vesiruutu (ruudukosta laskettu).
          SYKEn pintalämpöasemaa ei löytynyt kummallekaan (testi v118), joten lämpö tulee
@@ -22163,7 +22188,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=237';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=238';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })
