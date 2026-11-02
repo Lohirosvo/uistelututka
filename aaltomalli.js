@@ -2453,11 +2453,15 @@ function akMalliLaske(lat, lon, aikaMs){
   var d = data[idx], U = Math.max(0.5, d.U);
   var ke = akKentta(Math.round(d.dir/5)*5);
   var Fq = Math.min(ke[q], kestonPyyhkaisy(d.tunteja*3600, U));
+  var aR = akAaltoRuutu(q, Fq, U, syvyysKatto(jarvi.syvyys, U));   // v240: koko tulos talteen (jakso ja aallonpituus)
   var t = { jarvi: jarvi.nimi, raja: akKalaRaja(),
             // tuuli jolla malliarvot laskettiin (FMI:n editoitu ennuste, havaintokorjattu):
             // saalisrivin tuuliMs tulee Open-Meteosta, joten tämä tallennetaan erikseen
             tuuliMs: d.U, tuuliSuunta: d.dir,
-            aaltoM: akAaltoRuutu(q, Fq, U, syvyysKatto(jarvi.syvyys, U)).hs };   // v167: paikallinen syvyysraja
+            aaltoM: aR.hs,   // v167: paikallinen syvyysraja
+            /* v240: tilannekuvan vieheen heiluntaa ja kohtaamisjaksoa varten: huippujakso (JONSWAP), aallonpituus ruudun
+               syvyydellä, ruudun syvyys (null ilman syvyysdataa) ja aallon kulkusuunta (tuulen alle, asteina kohti). */
+            aaltoTp: aR.Tp, aaltoL: aR.L, aaltoSyvyys: aR.d, aaltoSuunta: (d.dir + 180) % 360 };
   if (akSyvyys){
     var syvK = 1 + (5 - Math.min(akSyvyys[q], 5))*0.15, pyyK = 0.4 + 0.6*Math.min(1, Fq/3000);
     t.pintaKmh = U*2*syvK*pyyK*0.036;

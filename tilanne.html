@@ -127,6 +127,7 @@
   v215 (18.10.2026): vain versionumero (etusivun syöttikalakorttiin havaittu parven syvyys omasta luotaimesta).
   v216 (18.10.2026): isojen kaikujen napautuksessa matalan pohjan lajiepäily (hauki, ahven, made tai lahna) luotaus.js:n kausisäännöstä; muuten vain versionumero.
   v217 (18.10.2026): vain versionumero (taimenkorttiin rannan pintalämpö; matalan pohjan todisteeseen Hannun ahven- ja haukikoot luotaus.js:ssä).
+  v240 (2.11.2026): nopeus veden suhteen (GPS 15 s miinus mallin pintavirta, suunta vanan 35 m:stä), vieheen heilunta aallossa 0,5 m:ssä ja kohtaamisjakso yhtenä haaleana rivinä GPS-nopeuden alla (#vesirivi, napautus: perustelut, valikosta pois); arvot myös Kala kiinni -saalisriville (aaltomalli.js: pistekysely palauttaa jakson, aallonpituuden, syvyyden ja aallon suunnan).
   v239 (1.11.2026): Höytiäinen järvikarttana (jarvet.js, MML 50 m); muiden järvien nimetyt lohipaikat (paikat.js muutLohipaikat) haaleina salmiakkeina ja napautukseen.
   v238 (1.11.2026): vain versionumero (Höytiäinen paikkalistaan ja järvikarttojen rakennukseen; ottipaikat paikat.js:ssä dataksi).
   v237 (27.10.2026): Lämpö (malli) -tilaan 100 m leveät penkkakaistat, 1 % järven alasta: pinkki taimen (80 %), violetti järvilohi (20 %), tumma = paras ja varmempi (kaistamalli.js, aaltomalli.js; tilanne.html versio ja skripti).
@@ -199,6 +200,8 @@
     #nopeus small, #kurssi small { font-size: 14px; color: var(--muted); font-weight: 600; }
     #kurssi { font-size: 22px; font-weight: 700; margin-left: 6px; }
     #lisarivi { font-size: 13px; color: var(--muted); line-height: 1.2; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    /* v240: nopeus veden suhteen ja aallon heilunta, yksi haalea rivi GPS-nopeuden alla */
+    #vesirivi { font-size: 13px; color: var(--muted); opacity: .8; line-height: 1.25; cursor: pointer; }
     #virhe { display: none; position: absolute; inset: 0; padding: 24px; background: var(--bg); color: var(--text); font-size: 18px; line-height: 1.4; }
     /* v180: Kala kiinni. Iso nappi oikeassa alakulmassa (peukalo), ei kartan päällä olevien paneelien alla. */
     #kalaNappi { position: absolute; right: 10px; bottom: 54px; width: 76px; height: 76px; border-radius: 18px; border: 2px solid #fff3;
@@ -263,6 +266,7 @@
       #nopeus { display: block; font-size: 42px; line-height: 1; }
       #kurssi { display: block; font-size: 30px; margin: 2px 0 6px; }
       #lisarivi { font-size: 15px; line-height: 1.3; -webkit-line-clamp: 7; }
+      #vesirivi { font-size: 15px; white-space: normal; margin-bottom: 4px; }
       #napit { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
       #napit .nappi { width: 100%; }
       #kalaNappi { position: fixed; right: calc(10px + env(safe-area-inset-right)); bottom: calc(10px + env(safe-area-inset-bottom));
@@ -320,6 +324,7 @@
   <div id="ala">
     <div id="lukemat">
       <div><span id="nopeus">–<small> km/h</small></span><span id="kurssi">–<small>°</small></span></div>
+      <div id="vesirivi" role="button" title="Nopeus veden suhteen ja aallon heilunta (malli). Napauta: perustelut." style="display:none"></div>
       <div id="lisarivi">Odotetaan sijaintia…</div>
     </div>
     <div id="napit">
@@ -344,20 +349,20 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=239" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=239" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=239" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=239" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=239" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=239" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="lampomalli.js?v=239" onerror="utOsaPuuttuu('lampomalli.js')"></script>
-  <script src="kaistamalli.js?v=239" onerror="utOsaPuuttuu('kaistamalli.js')"></script>
-  <script src="aaltomalli.js?v=239" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=239" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=240" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=240" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=240" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=240" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=240" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=240" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="lampomalli.js?v=240" onerror="utOsaPuuttuu('lampomalli.js')"></script>
+  <script src="kaistamalli.js?v=240" onerror="utOsaPuuttuu('kaistamalli.js')"></script>
+  <script src="aaltomalli.js?v=240" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=240" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v239';
+    const APP_VERSIO = 'v240';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
@@ -371,7 +376,7 @@
     const ilmansuunta = deg => ['P', 'KO', 'I', 'KA', 'E', 'LO', 'L', 'LU'][Math.round((((deg % 360) + 360) % 360) / 45) % 8];   // mistä tuulee
 
     let seliteAuki = false, seliteAjastin = null;   // v234: selitys auki vain hetken, ei tallenneta (as.selite jää käyttämättä)
-    let as = { tila: 'aalto', kloonit: true, yo: false, laji: null, selite: false, vaaka: false, kuha: true, taimen: true, kulku: false, lampo: true, parvet: true, kalat: true, vuosi: true, kivikko: true, kovaPohja: false, lohi: true, saalisVanat: true, reitti: true, reittiNopeus: null, siirtoNopeus: 25, taimenReitti: true, taimenIka: 14 };   // v206: taimenReitti, taimenIka (vrk)   // v202: järvilohireitti   // v201: saalisVanat (saaliin vana)   // v200: lohi (Lintuselän malli)   // v186: kuha, taimen; v193: kulku (kulkusuunta ylös), lampo, parvet; v194: kalat
+    let as = { tila: 'aalto', kloonit: true, yo: false, laji: null, selite: false, vaaka: false, kuha: true, taimen: true, kulku: false, lampo: true, parvet: true, kalat: true, vuosi: true, kivikko: true, kovaPohja: false, lohi: true, saalisVanat: true, reitti: true, reittiNopeus: null, siirtoNopeus: 25, taimenReitti: true, taimenIka: 14, vesinopeus: true };   // v240: vesinopeus (nopeus veden suhteen ja aallon heilunta)   // v206: taimenReitti, taimenIka (vrk)   // v202: järvilohireitti   // v201: saalisVanat (saaliin vana)   // v200: lohi (Lintuselän malli)   // v186: kuha, taimen; v193: kulku (kulkusuunta ylös), lampo, parvet; v194: kalat
     try { as = Object.assign(as, JSON.parse(localStorage.getItem(AS_LS) || '{}')); } catch (e) {}
     const tallennaAs = () => { try { localStorage.setItem(AS_LS, JSON.stringify(as)); } catch (e) {} };
 
@@ -1684,6 +1689,16 @@
       snap.kirjausLahde = 'tilanne';
       snap.kirjauspohjaAika = pk.kelpaa ? P.aika : null;
       snap.gpsIkaS = gps ? Math.max(0, Math.round((t - gps.aika) / 1000)) : null;
+      try {   // v240: nopeus veden suhteen ja aallon heilunta kirjaushetkellä (malli; myös kun rivi on piilotettu)
+        const vr = vesiNopeus();
+        if (vr) {
+          if (typeof vr.vesi === 'number') Object.assign(snap, { vesiNopeusKmh: +vr.vesi.toFixed(2), gpsNopeus15sKmh: +vr.gps.toFixed(2),
+            pintavirtaKmh: +vr.virta.toFixed(2), pintavirtaSuunta: Math.round(vr.virtaSuunta), vesiNopeusKurssi: Math.round(vr.kurssi) });
+          if (typeof vr.heilunta === 'number') Object.assign(snap, { aaltoHeiluntaKmh: +vr.heilunta.toFixed(2), aaltoHeiluntaSyvM: VN_VIEHE_M,
+            aaltoKohtaamisjaksoS: typeof vr.jakso === 'number' ? +vr.jakso.toFixed(1) : null });
+          snap.vesiNopeusLahde = 'malli v240';
+        }
+      } catch (e) {}
       const lista = lataaSaaliit(); lista.push(snap);
       const ok = tallennaSaaliit(lista);
       try { if (navigator.vibrate) navigator.vibrate(ok ? 180 : [100, 80, 100, 80, 300]); } catch (e) {}
@@ -1863,6 +1878,7 @@
       else if (oma && nyt - oma.aika < 60e3) { suunta = oma.suunta; suuntaT = oma.suuntaT; }
       oma = { lat: c.latitude, lon: c.longitude, suunta, suuntaT, tarkkuus: c.accuracy, kmh, aika: nyt };
       window.utOmaSijainti = oma;
+      vnLisaaNopeus(kmh, nyt);   // v240
       paivitaKierto();   // v193
       utVana.lisaa(oma.lat, oma.lon, c.accuracy, (typeof c.speed === 'number' && c.speed >= 0) ? c.speed : null, nyt);
       // v180: avoimeen uistelureissuun (etusivun Aloita uistelu) GPS-piste kerran minuutissa, kuten etusivulla
@@ -1881,10 +1897,116 @@
       pyydaPiirto();
     }
     let ensimmainenKeskitys = true;
+
+    /* ---------- v240 (2.11.2026): NOPEUS VEDEN SUHTEEN JA AALLON HEILUNTA ----------
+       Hannu 2.11.: "yksi luku joka on mallin paras arvaus kyseisessä paikassa; korjauksen kippari tekee oman arvion mukaan",
+       "15 sekunnin tasaus", "pienellä livenä", "ymmärrän rajoitukset". Todisteen taso: Malli.
+       vedessä = GPS-nopeus (15 s keskiarvo) vektorina miinus pintavirta. Pintavirta = aaltomallin pintaKmh (2 % tuulesta,
+         matalassa enemmän, lyhyellä pyyhkäisymatkalla vähemmän) suuntaan pintaSuunta (tuulen alle +15°) veneen kohdalla,
+         nykyhetken ennustetunti. Kulkusuunta vanan viimeisestä 35 metristä (enintään 90 s), muuten GPS:n tuore suunta (≤ 10 s).
+         Alle 1,5 km/h ei lukua. Näytetty luku vaihtuu vasta, kun uusi arvo on pysynyt ≥ 0,1 km/h toisena kahdessa
+         peräkkäisessä päivityksessä (heti, jos ero ≥ 0,3).
+       aalto ± = veden heilahdusnopeuden amplitudi (km/h) vieheen syvyydellä VN_VIEHE_M = 0,5 m (pintasääntö 0,1–0,7 m):
+         π·Hs/Tp · cosh(k(d − z))/sinh(k·d), k = 2π/L (lineaarinen aaltoteoria; syvässä vedessä e^(−kz)). Hs, Tp, L ja d
+         aaltomallin ruudusta. Merkitsevä aallonkorkeus → tyypillinen heilunta, isoimmat aallot enemmän.
+       s = kohtaamisjakso L / |c − v·cos β| (c = L/Tp, v = GPS-nopeus, β = kulkusuunnan ja aallon kulkusuunnan ero);
+         paikallaan tai ilman suuntaa = aallon oma jakso Tp. Yli 30 s (vene aallon vauhdissa) ei näytetä.
+       Rajoitukset: virtakerroin 1–3 % (Wu 1975: aivan pinnassa noin 3,5 %, pienenee syvyyden mukana); virhe 8 m/s:ssa noin
+         ±0,3–0,4 km/h (laskettu). Heikompi rannan lähellä, salmissa, alle 3 m/s tuulessa ja tuulen käännyttyä. Ei koske
+         takilaa eikä dipsyä (syvemmällä virta pienempi tai vastakkainen). Aaltoa ei mitata: ennuste ja havaintokorjaus. */
+    const VN_TASAUS_MS = 15e3, VN_SUUNTA_M = 35, VN_SUUNTA_MAX_MS = 90e3, VN_VIEHE_M = 0.5, VN_MIN_KMH = 1.5;
+    let vnNopeudet = [], vnNaytetty = null, vnEhdokas = null, vnViime = null;
+    function vnLisaaNopeus(kmh, t) {
+      if (typeof kmh !== 'number' || !isFinite(kmh) || kmh < 0) return;
+      vnNopeudet.push({ t, kmh });
+      while (vnNopeudet.length && t - vnNopeudet[0].t > VN_TASAUS_MS) vnNopeudet.shift();
+    }
+    function vnNopeus() {   // GPS-nopeuden keskiarvo 15 s:lta (vähintään 3 lukemaa)
+      const nyt = Date.now(), L = vnNopeudet.filter(q => nyt - q.t <= VN_TASAUS_MS);
+      return L.length >= 3 ? L.reduce((a, q) => a + q.kmh, 0) / L.length : null;
+    }
+    function vnSuunta() {   // kulkusuunta vanan viimeisestä 35 metristä, muuten GPS:n tuore suunta
+      const V = (window.utVana && typeof utVana.pisteet === 'function') ? utVana.pisteet() : [], nyt = Date.now();
+      if (V.length >= 2 && nyt - V[V.length - 1].t <= 30e3) {
+        const b = V[V.length - 1]; let s = 0;
+        for (let i = V.length - 2; i >= 0; i--) {
+          if (b.t - V[i].t > VN_SUUNTA_MAX_MS) break;
+          s += klooniMatka(V[i].lat, V[i].lon, V[i + 1].lat, V[i + 1].lon);
+          if (s >= VN_SUUNTA_M) return { suunta: klooniSuuntima(V[i].lat, V[i].lon, b.lat, b.lon), lahde: 'vana ' + Math.round(s) + ' m' };
+        }
+      }
+      if (oma && typeof oma.suunta === 'number' && typeof oma.suuntaT === 'number' && nyt - oma.suuntaT <= 10e3) return { suunta: oma.suunta, lahde: 'GPS' };
+      return null;
+    }
+    function vesiNopeus() {
+      if (!oma || typeof window.akMalliSync !== 'function' || Date.now() - oma.aika > 120e3) return null;
+      let m = null; try { m = window.akMalliSync(oma.lat, oma.lon, Date.now()); } catch (e) { m = null; }
+      if (!m) return null;
+      const r = { tuuliMs: m.tuuliMs, tuuliSuunta: m.tuuliSuunta };
+      const sog = vnNopeus(), ks = vnSuunta();
+      if (typeof sog === 'number' && sog >= VN_MIN_KMH && ks && typeof m.pintaKmh === 'number' && typeof m.pintaSuunta === 'number') {
+        const a = ks.suunta * Math.PI / 180, b = m.pintaSuunta * Math.PI / 180;
+        const ve = sog * Math.sin(a) - m.pintaKmh * Math.sin(b), vn = sog * Math.cos(a) - m.pintaKmh * Math.cos(b);
+        Object.assign(r, { vesi: Math.hypot(ve, vn), gps: sog, virta: m.pintaKmh, virtaSuunta: m.pintaSuunta, kurssi: ks.suunta, kurssiLahde: ks.lahde });
+      }
+      if (typeof m.aaltoM === 'number' && typeof m.aaltoTp === 'number' && m.aaltoTp > 0.3 && typeof m.aaltoL === 'number' && m.aaltoL > 0) {
+        const k = 2 * Math.PI / m.aaltoL, d = typeof m.aaltoSyvyys === 'number' && m.aaltoSyvyys > 0 ? m.aaltoSyvyys : null, z = VN_VIEHE_M;
+        const kerroin = (d !== null && d < m.aaltoL / 2) ? Math.cosh(k * Math.max(0, d - z)) / Math.sinh(k * d) : Math.exp(-k * z);
+        const liikkuu = typeof sog === 'number' && sog >= VN_MIN_KMH && ks && typeof m.aaltoSuunta === 'number';
+        const c = m.aaltoL / m.aaltoTp, v = liikkuu ? sog / 3.6 : 0, be = liikkuu ? (ks.suunta - m.aaltoSuunta) * Math.PI / 180 : 0;
+        const nim = Math.abs(c - v * Math.cos(be));
+        Object.assign(r, { heilunta: Math.PI * m.aaltoM / m.aaltoTp * kerroin * 3.6, jakso: nim > 0.05 ? m.aaltoL / nim : null, jaksoOma: m.aaltoTp,
+          aaltoM: m.aaltoM, aaltoL: m.aaltoL, syvyys: d, aaltoSuunta: m.aaltoSuunta, kohtaaminen: liikkuu });
+      }
+      return (typeof r.vesi === 'number' || typeof r.heilunta === 'number') ? r : null;
+    }
+    window.__vesiNopeus = () => vesiNopeus();   // testeille
+    function vnNaytaArvo(x) {   // näytetty luku vaihtuu vasta, kun uusi arvo on pysynyt toisena kaksi päivitystä (heti, jos ero ≥ 0,3)
+      if (typeof x !== 'number') { vnNaytetty = null; vnEhdokas = null; return null; }
+      const u = Math.round(x * 10) / 10;
+      if (vnNaytetty === null || Math.abs(u - vnNaytetty) >= 0.3 - 1e-9) { vnNaytetty = u; vnEhdokas = null; }
+      else if (Math.abs(u - vnNaytetty) >= 0.1 - 1e-9) {
+        if (vnEhdokas !== null && Math.abs(u - vnEhdokas) < 0.05) { vnNaytetty = u; vnEhdokas = null; } else vnEhdokas = u;
+      } else vnEhdokas = null;
+      return vnNaytetty;
+    }
+    function vnPaivita() {
+      const el = $('vesirivi'); if (!el) return;
+      if (!as.vesinopeus) { el.textContent = ''; el.style.display = 'none'; return; }
+      let r = null; try { r = vesiNopeus(); } catch (e) { r = null; }
+      vnViime = r;
+      const o = [], nv = vnNaytaArvo(r && typeof r.vesi === 'number' ? r.vesi : null);
+      if (nv !== null) o.push('vedessä ' + n1(nv));
+      if (r && typeof r.heilunta === 'number') o.push('aalto ±' + n1(r.heilunta));
+      if (r && typeof r.jakso === 'number' && r.jakso <= 30) o.push(n1(r.jakso) + ' s');
+      el.textContent = o.join(' · ');
+      el.style.display = o.length ? '' : 'none';
+    }
+    function vnTieto() {   // napautus: luvut ja perustelut
+      const r = vnViime; if (!r) return;
+      const s = [];
+      if (typeof r.vesi === 'number') {
+        s.push('<b>Vedessä ' + n1(r.vesi) + ' km/h</b> = GPS ' + n1(r.gps) + ' km/h (15 s keskiarvo), kulkusuunta ' + Math.round(r.kurssi) + '° (' + r.kurssiLahde + '), '
+          + 'pintavirta ' + n2(r.virta) + ' km/h suuntaan ' + Math.round(r.virtaSuunta) + '° (malli: 2 % tuulesta ' + n1(r.tuuliMs) + ' m/s, matala ja pyyhkäisymatka huomioitu).');
+        const ero = r.vesi - r.gps;
+        s.push(Math.abs(ero) < 0.05 ? 'Virta ei nyt muuta nopeutta kulkusuunnassa.' : (ero < 0 ? 'Myötävirta: vieheet kulkevat vedessä ' + n1(-ero) + ' km/h hitaammin kuin GPS näyttää.' : 'Vastavirta: vieheet kulkevat vedessä ' + n1(ero) + ' km/h nopeammin kuin GPS näyttää.'));
+      } else s.push('Nopeutta veden suhteen ei lasketa paikallaan (alle ' + n1(VN_MIN_KMH) + ' km/h) eikä ilman kulkusuuntaa.');
+      if (typeof r.heilunta === 'number') s.push('<b>Aalto ±' + n1(r.heilunta) + ' km/h</b>: veden heilahdusnopeus ' + n1(VN_VIEHE_M) + ' m:ssä (aalto ' + n2(r.aaltoM) + ' m, jakso ' + n1(r.jaksoOma) + ' s, aallonpituus ' + n1(r.aaltoL) + ' m'
+        + (r.syvyys !== null ? ', syvyys ' + n1(r.syvyys) + ' m' : '') + '). Pintaviehe kiihtyy ja hidastuu jokaisen aallon tahdissa; isoimmat aallot heiluttavat enemmän.'
+        + (typeof r.jakso === 'number' ? ' ' + (r.kohtaaminen ? 'Kohtaamisjakso' : 'Aallon jakso') + ' ' + n1(r.jakso) + ' s' + (r.kohtaaminen ? ' (vastaan lyhyempi, myötään pidempi).' : '.') : ''));
+      s.push('<span style="color:#7E93AC">Malli, ei mittaus. Virtakerroin 1–3 % (aivan pinnassa noin 3,5 %, Wu 1975); virhe 8 m/s:ssa noin ±0,3–0,4 km/h. '
+        + 'Heikompi rannan lähellä, salmissa, alle 3 m/s tuulessa ja tuulen käännyttyä. Koskee pintavieheitä, ei takilaa eikä dipsyä.</span>');
+      nayttoTieto(s.join('<br>'));
+    }
+    function vesiNopeusValikko() {   // v240
+      return '<button class="merkki' + (as.vesinopeus ? ' valittu' : '') + '" data-vesinopeus="1">🌊 Nopeus veden suhteen ja aalto</button>'
+        + '<div class="huom">Rivi GPS-nopeuden alla: nopeus veden suhteen (GPS miinus mallin pintavirta), vieheen heilunta aallossa 0,5 m:ssä ja kohtaamisjakso. Malli, ei mittaus; napauta riviä: perustelut.</div>';
+    }
     function paivitaLukemat() {
       if (!oma) return;
       $('nopeus').innerHTML = (typeof oma.kmh === 'number' ? n1(oma.kmh) : '–') + '<small> km/h</small>';
       $('kurssi').innerHTML = (typeof oma.suunta === 'number' ? kk(Math.round(oma.suunta) % 360).padStart(3, '0') : '–') + '<small>°</small>';
+      vnPaivita();   // v240
       const o = [];   // v180: tärkein ensin (syvyys, aalto), enintään kaksi riviä
       try { o.push(syvyysTeksti(oma.lat, oma.lon, false)); } catch (e) {}   // sama kuin etusivulla (MML + oma luotaus)
       try {
@@ -2101,6 +2223,7 @@
     /* ---------- napautus: tieto ---------- */
     function nayttoTieto(html) { $('tietoSisalto').innerHTML = html; $('tieto').style.display = 'block'; }
     $('tietoSulje').onclick = () => { $('tieto').style.display = 'none'; };
+    $('vesirivi').onclick = () => vnTieto();   // v240
     function etaisyysVeneesta(lat, lon) {
       if (!oma) return '';
       return ' · ' + klooniMatkaTeksti(klooniMatka(oma.lat, oma.lon, lat, lon)) + ' ' + klooniSuuntima(oma.lat, oma.lon, lat, lon) + '° veneestä';
@@ -2298,6 +2421,7 @@
         + kovaPohjaValikko()   // v213
         + '<button class="merkki' + (as.kulku ? ' valittu' : '') + '" data-kulku="1">🧭 ' + (as.kulku ? 'Kulkusuunta ylös' : 'Pohjoinen ylös') + '</button>'
         + '<div class="huom">Kartan suunta (myös pohjoisnuolta napauttamalla). Seurattaessa vene on kolmanneksen keskeltä taaksepäin, jotta edessä näkyy enemmän.</div>'
+        + vesiNopeusValikko()   // v240
         + veneValikko();
     }
     // v200: järvilohen kaistat
@@ -2349,6 +2473,9 @@
     function kytkeMerkit(v) {
       v.querySelectorAll('button[data-kerros]').forEach(b => { b.onclick = () => {   // v193: lämpöjälki ja parvet
         const k = b.dataset.kerros; as[k] = !as[k]; tallennaAs(); pyydaPiirto(); b.classList.toggle('valittu', as[k]);
+      }; });
+      v.querySelectorAll('button[data-vesinopeus]').forEach(b => { b.onclick = () => {   // v240
+        as.vesinopeus = !as.vesinopeus; tallennaAs(); b.classList.toggle('valittu', as.vesinopeus); vnPaivita();
       }; });
       v.querySelectorAll('button[data-kulku]').forEach(b => { b.onclick = () => {   // v193
         vaihdaKulku(); b.classList.toggle('valittu', as.kulku); b.textContent = '🧭 ' + (as.kulku ? 'Kulkusuunta ylös' : 'Pohjoinen ylös');
