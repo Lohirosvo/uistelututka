@@ -22,7 +22,7 @@
 // v215: syöttikalakorttiin Havaittu (oma luotain) mallin rinnalle (index.html; tilanne.html vain versio); ei uusia tiedostoja.
 // v216: kaikujen lajiryhmät kausittain ja järvittäin (luotaus.js), Havaittu-rivit kuha-, hauki-, ahven- ja järvilohikorttiin (index.html); tilanne.html vain versio; ei uusia tiedostoja.
 // v217: taimenkorttiin rannan ja selän pintalämpö omasta luotaimesta ja luotaimen rajoitus (index.html, luotaus.js); tilanne.html vain versio; ei uusia tiedostoja.
-// v243: Lappajärven matalikkomalli: kaistan syvyys parvien pohjasta ja jyrkkyyspainotus (aaltomalli.js, tilanne.html); index.html vain versio; ei uusia tiedostoja.
+// v243: Lappajärven matalikkomalli: kaistan syvyys parvien pohjasta, jyrkkyyspainotus ja parvien paikka (aaltomalli.js, tilanne.html); index.html vain versio; ei uusia tiedostoja.
 // v242: matalikkomalli Lappajärvelle valinnaksi, kaistan syvyys säädettäväksi, Lappajärvellä uintisyvyys muikku- ja kuoreparvista (aaltomalli.js, tilanne.html); index.html vain versio; ei uusia tiedostoja.
 // v241: järvilohen järvikohtainen malli (Höytiäinen syksyllä), muikkuparvien syvyys, säädöt tilannekuvan valikossa (aaltomalli.js, luotaus.js, kirjaus.js, tilanne.html; index.html CSV-sarake lohiKaistaMalli); ei uusia tiedostoja.
 // v240: nopeus veden suhteen ja aallon heilunta tilannekuvaan (tilanne.html, aaltomalli.js akMalliLaske); index.html vain versio; ei uusia tiedostoja.

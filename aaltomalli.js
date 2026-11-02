@@ -3079,7 +3079,7 @@ var AK_LOHI_OLETUS = { nimi: 'Lintuselän malli', kaista: [14, 21], lakiMin: 3, 
 var AK_LOHI_PROFIILIT = {
   hoytiainen: { nimi: 'Höytiäisen malli', lahde: 'KS-Lures 1.11.2026', kaista: [8, 13], lakiMin: 3, lakiMax: 8, etM: 100, kausi: 'syksy8', parvet: true, parviTapa: 'muikkuEnsin', oletusPaalla: true },
   lappajarvi: { nimi: 'Matalikkomalli', lahde: 'KS-Lures, Höytiäinen 1.11.2026, sovellettu', kaista: [8, 13], lakiMin: 3, lakiMax: 8, etM: 100, kausi: 'syksy8', parvet: true, parviTapa: 'yhdessa', oletusPaalla: false,
-    kaistaParvista: true, kaistaVali: 'luokka', jyrkkyysPaino: 0.3, jyrkkyysRef: 0.1 }
+    kaistaParvista: true, kaistaVali: 'luokka', jyrkkyysPaino: 0.3, jyrkkyysRef: 0.1, parviPaikka: true, parviM: 500 }
 };
 /* v242 (2.11.2026, Hannu 12.42): "Se syvyys kartalla saisi tulla siitä missä muikkuparvet on. Mieluiten jyrkemmistä penkoista.
    Höytiäinen on Höytiäinen." Lappajärvellä: kaistan syvyys = pohjan syvyys omien muikku- ja kuoreparvien kohdalla 10 vrk:lta
@@ -3087,6 +3087,11 @@ var AK_LOHI_PROFIILIT = {
    jos vähintään neljännes kaistan leveydestä osuu sen syvyysluokan väliin (kaistaVali 'luokka'; oma luotaus: tarkka syvyys). Jyrkkyys (pehmennetyn syvyyden
    kaltevuus, 10 m / 100 m = täysi) painaa maastossa 0,3 (jyrkkyysPaino; maasto skaalataan takaisin 0–1). Höytiäinen ennallaan. */
 var AK_LOHI_PARVI_MIN = 3;
+/* v243 (2.11.2026, Hannu 12.48): "No sieltä sitä aloitetaan etsiminen missä parvet on olleet. Pitäisi vaikuttaa." Parvien paikka
+   (parviPaikka): kun omia parvia on 10 vrk:lta, kaistan pisteet = 0,6 × perus + 40 × parvi, perus = 100 × (0,45 × maasto + 0,55 × tuuli),
+   parvi = 0,7 × (1 − lähin parvi / parviM) + 0,3 × min(1, parvia parviM:n sisällä / 5); parviM oletus 500 m (säädettävä 300/500/1000).
+   Karsintaraja (55) koskee perus-pisteitä, joten kaukana parvista olevat kaistat jäävät listalle mutta järjestyksessä taakse.
+   Ilman parvihavaintoja pisteet kuten ennen. Painot ovat oletuksia, ei mitattu. */
 function akSyvValissa(v, a, b, luokittain){   // v242: ruudun syvyys kaistalla [a, b]; luokittain: ruudukon luokan väli osuu kaistaan
   if (!luokittain) return v >= a && v <= b;
   var L = (jarvi && jarvi.kartta && jarvi.kartta.luokkaM) || SYV_LUOKKA_M, ala = 0;
@@ -3113,7 +3118,7 @@ function akLohiProfiili(avain, aikaMs){
   var P = AK_LOHI_PROFIILIT[avain];
   if (!P) return Object.assign({ avain: null, kaytossa: false, syy: null }, AK_LOHI_OLETUS);
   var A = akLohiAsetukset(avain), r = Object.assign({}, P, { avain: avain });
-  ['lakiMin', 'lakiMax', 'etM'].forEach(function(x){ if (typeof A[x] === 'number' && isFinite(A[x])) r[x] = A[x]; });
+  ['lakiMin', 'lakiMax', 'etM', 'parviM'].forEach(function(x){ if (typeof A[x] === 'number' && isFinite(A[x])) r[x] = A[x]; });
   if (r.lakiMax < r.lakiMin){ var tmp = r.lakiMax; r.lakiMax = r.lakiMin; r.lakiMin = tmp; }
   var kMin = typeof A.kaistaMin === 'number' && isFinite(A.kaistaMin) ? A.kaistaMin : P.kaista[0], kMax = typeof A.kaistaMax === 'number' && isFinite(A.kaistaMax) ? A.kaistaMax : P.kaista[1];   // v242
   r.kaista = [Math.min(kMin, kMax), Math.max(kMin, kMax)]; r.kaistaLahde = 'saato';
@@ -3136,7 +3141,8 @@ function akLohiProfiili(avain, aikaMs){
   else { r.kaytossa = m === 10 || m === 11; r.syy = (r.kaytossa ? '' : 'ei käytössä: ') + 'veden lämpö ei tiedossa, kalenteri 1.10.–30.11.'; }
   if (!r.paalla){ r.kaytossa = false; r.syy = 'valittu Lintuselän malli (' + P.nimi + ' valittavissa syksyyn)'; }   // v242
   r.jarven = { lakiMin: r.lakiMin, lakiMax: r.lakiMax, etM: r.etM, kaista: r.kaista, paalla: r.paalla, lahde: P.lahde, oletusKaista: P.kaista,
-               saatoKaista: [Math.min(kMin, kMax), Math.max(kMin, kMax)], kaistaLahde: r.kaistaLahde, kaistaParvi: r.kaistaParvi || null, kaistaParvista: !!P.kaistaParvista };
+               saatoKaista: [Math.min(kMin, kMax), Math.max(kMin, kMax)], kaistaLahde: r.kaistaLahde, kaistaParvi: r.kaistaParvi || null, kaistaParvista: !!P.kaistaParvista,
+               parviPaikka: !!P.parviPaikka, parviM: r.parviM || null };
   if (!r.kaytossa) return Object.assign({}, AK_LOHI_OLETUS, { avain: avain, kaytossa: false, syy: r.syy, vesi: v, jarvenMalli: P.nimi, jarven: r.jarven });
   r.jarvenMalli = P.nimi;
   return r;
@@ -3161,7 +3167,8 @@ function akLohiParviSyvyys(avain, tapa){
   var t = Math.max.apply(null, L.map(function(p){ return p.t || 0; }));
   var po = L.filter(function(p){ return typeof p.pohja === 'number' && p.pohja > 0; }).map(function(p){ return p.pohja; }).sort(function(a, b){ return a - b; });   // v242
   return { n: L.length, nimi: nimi, yla: kv(yl, 0.25), ala: Math.max(kv(yl, 0.25), kv(al, 0.75)), viimeisin: t || null, vrk: AK_LOHI_PARVI_VRK,
-           nPohja: po.length, pohjaA: po.length ? kv(po, 0.25) : null, pohjaB: po.length ? kv(po, 0.75) : null };
+           nPohja: po.length, pohjaA: po.length ? kv(po, 0.25) : null, pohjaB: po.length ? kv(po, 0.75) : null,
+           pisteet: L.filter(function(p){ return typeof p.lat === 'number' && typeof p.lon === 'number'; }).map(function(p){ return { lat: p.lat, lon: p.lon, t: p.t || null }; }) };   // v243
 }
 window.akLohiParviSyvyys = function(avain){ avain = avain || akNykyAvain(); var P = AK_LOHI_PROFIILIT[avain]; return akLohiParviSyvyys(avain, P ? P.parviTapa : null); };
 
@@ -3235,6 +3242,7 @@ window.akLohiKaistat = function(o){
   var k = jarvi.kartta, rr = k.ruutu, U = typeof o.U === 'number' ? o.U : null, dir = typeof o.dir === 'number' ? o.dir : null;
   var tuuliOn = U !== null && dir !== null && U >= 2;
   var wx = 0, wy = 0; if (dir !== null){ wx = Math.sin(dir*Math.PI/180); wy = Math.cos(dir*Math.PI/180); }   // mistä tuuli tulee
+  var PP = (oma && prof.parviPaikka && parvi && parvi.pisteet && parvi.pisteet.length) ? parvi.pisteet : null;   // v243
   var lista = ehd.map(function(c){
     var kayra = (akLohiKulma(c.gx, c.gy) + 90) % 180;            // syvyyskäyrän (vedon) suunta 0–180°
     var par = 0, kylki = 0, tuuli = 0.5;
@@ -3244,12 +3252,26 @@ window.akLohiKaistat = function(o){
       kylki = Math.max(0, c.gx*wx + c.gy*wy);
       tuuli = 0.4 + 0.35*par + 0.25*kylki;
     }
-    var raaka = 100*(0.45*c.maasto + 0.55*tuuli);
-    return { c: c, kayra: kayra, par: par, kylki: kylki, tuuli: tuuli, raaka: raaka, pisteet: Math.round(raaka) };
+    var raaka = 100*(0.45*c.maasto + 0.55*tuuli), pv = null;
+    if (PP){   // v243: parvien paikka (Lappajärven matalikkomalli)
+      var cl = k.pohjoisLat - (c.j + 0.5)*rr/111320, co = k.lansiLon + (c.i + 0.5)*rr/(111320*Math.cos(cl*Math.PI/180)), kc = Math.cos(cl*Math.PI/180), dmin = Infinity, nR = 0, tL = null;
+      for (var m = 0; m < PP.length; m++){
+        var dd = Math.sqrt(Math.pow((PP[m].lat - cl)*111320, 2) + Math.pow((PP[m].lon - co)*111320*kc, 2));
+        if (dd < dmin){ dmin = dd; tL = PP[m].t; }
+        if (dd <= prof.parviM) nR++;
+      }
+      var pa = 0.7*Math.max(0, 1 - dmin/prof.parviM) + 0.3*Math.min(1, nR/5);
+      pv = { dmin: dmin, nR: nR, t: tL, pa: pa };
+    }
+    // v243: perus = maasto ja tuuli (karsintaraja koskee tätä); parvien kanssa järjestys ja näytetyt pisteet 0,6 × perus + 40 × parvi
+    var perus = raaka; if (pv) raaka = 0.6*perus + 40*pv.pa;
+    return { c: c, kayra: kayra, par: par, kylki: kylki, tuuli: tuuli, raaka: raaka, pisteet: Math.round(raaka), perus: perus, pv: pv };
   }).sort(function(a, b){ return b.raaka - a.raaka || b.c.syva - a.c.syva; });
   var valitut = [], vali = 700/rr, max = o.max || 8, raja = typeof o.raja === 'number' ? o.raja : 55;
   for (var n = 0; n < lista.length && valitut.length < max; n++){
-    var x = lista[n]; if (x.pisteet < raja) break;
+    var x = lista[n];
+    if (PP){ if (Math.round(x.perus) < raja) continue; }   // v243: parvien kanssa järjestys ei ole perus-pisteiden mukainen
+    else if (x.pisteet < raja) break;
     if (valitut.some(function(v){ var a = v.c.i - x.c.i, b = v.c.j - x.c.j; return a*a + b*b < vali*vali; })) continue;
     valitut.push(x);
   }
@@ -3266,6 +3288,8 @@ window.akLohiKaistat = function(o){
       } else syyt.push({ taso: 'Konsensus', teksti: 'veneen alla ' + akSyvLuokkaTeksti(c.syv) + ' m (säätö ' + n1(prof.kaista[0]) + '–' + n1(prof.kaista[1]) + ' m; ' + prof.lahde + ': 8–13 m matalikon lähellä'
           + (prof.kaistaParvista ? '; parvihavaintoja alle ' + AK_LOHI_PARVI_MIN + ', joten syvyys säädöstä' : '') + ')' });
       if (prof.jyrkkyysPaino) syyt.push({ taso: 'Malli', teksti: 'penkan jyrkkyys noin ' + n1(c.jyrkkyys*100) + ' m / 100 m (jyrkempi saa enemmän pisteitä, Hannu 2.11.)' });
+      if (x.pv) syyt.push({ taso: 'Havaittu', teksti: x.pv.nR ? 'parvia ' + x.pv.nR + ' kpl ' + prof.parviM + ' m sisällä, lähin ' + Math.round(x.pv.dmin) + ' m' + (x.pv.t ? ' (' + new Date(x.pv.t).toLocaleDateString('fi-FI') + ')' : '') + ': etsintä alkaa parvien kohdalta'
+                                                    : 'ei parvia ' + prof.parviM + ' m sisällä (lähin ' + (x.pv.dmin >= 1000 ? n1(x.pv.dmin/1000) + ' km' : Math.round(x.pv.dmin) + ' m') + ')' });
       syyt.push({ taso: 'Konsensus', teksti: 'matalikko nousee ' + akSyvLuokkaTeksti(c.laki) + ' m:iin ' + c.lakiEtM + ' m päässä' + (c.patti ? ', oma kumpare' : '')
         + ' (säädöt: matalikko ' + n1(prof.lakiMin) + '–' + n1(prof.lakiMax) + ' m, enintään ' + prof.etM + ' m); muikut kutupaikkojen lähellä' });
       if (tuuliOn) syyt.push({ taso: 'Malli', teksti: (x.par >= 0.7 ? 'tuuli reunan suuntainen' : x.par >= 0.4 ? 'tuuli vinosti reunaan' : 'tuuli poikki reunan')
