@@ -326,6 +326,19 @@ var OL_PARVISAANNOT = {
     ]
   }
 };
+/* v241 (2.11.2026): HÖYTIÄINEN syksy, samat muotosäännöt kuin Lappajärvellä. Höytiäisessä on sekä muikkua että kuoretta
+   (Janhunen ym. 2021, PLOS ONE: "supports small pelagic fish, European smelt and vendace"); runsaussuhdetta ei tarkistettu.
+   Käyttö: tilannekuvan parvivärit ja Höytiäisen järvilohimallin uintisyvyys (aaltomalli.js akLohiParviSyvyys). */
+OL_PARVISAANNOT.hoytiainen = {
+  autumn: [
+    { ryhma: 'muikku', pallo: true, vari: '#7fd4ff', nimi: 'muikku (pallo)', lajit: 'muikku',
+      peruste: 'pallomainen parvi (pituus keilalla korjattuna enintään korkeus)', todiste: 'konsensus: pallomaista parvea pidetään muikkuna (Hannu)' },
+    { ryhma: 'ulappa', pohjaValiMin: 2, vari: '#ffd166', nimi: 'muikku tai kuore', lajit: 'muikku tai kuore',
+      peruste: 'välivedessä, alapinta vähintään 2 m pohjasta', todiste: 'tutkittu: muikku ja kuore parvina ulapalla päivällä (Jurvelius ym. 2000); Höytiäisessä molemmat (Janhunen ym. 2021)' },
+    { ryhma: 'pohja', pohjaValiMax: 1, vari: '#c0ca33', nimi: 'kuore, ahven tai muikku', lajit: 'kuore, ahven tai muikku',
+      peruste: 'pohjan tuntumassa, alapinta alle 1 m pohjasta', todiste: 'tutkittu: ahven päivällä pohjassa (Eckmann & Imbrock 1996); myös muikku ja kuore painuvat päivällä pohjaan (Jurvelius ym. 2000)' }
+  ]
+};
 // Parven sääntö (tai null). p: parvi anturista (yla, ala, pohja, pituusM); 1–2 m pohjasta jää ilman sääntöä (epäselvä).
 function omaLuotausParviSaanto(p, avain, kausi){
   var S = (OL_PARVISAANNOT[avain] || {})[kausi || omaLuotausKausi()];

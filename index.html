@@ -2444,16 +2444,16 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=240" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=240" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=240" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=240" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=240" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=240" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="lampomalli.js?v=240" onerror="utOsaPuuttuu('lampomalli.js')"></script>
-  <script src="kaistamalli.js?v=240" onerror="utOsaPuuttuu('kaistamalli.js')"></script>
-  <script src="aaltomalli.js?v=240" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=240" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=241" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=241" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=241" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=241" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=241" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=241" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="lampomalli.js?v=241" onerror="utOsaPuuttuu('lampomalli.js')"></script>
+  <script src="kaistamalli.js?v=241" onerror="utOsaPuuttuu('kaistamalli.js')"></script>
+  <script src="aaltomalli.js?v=241" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=241" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
        uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
@@ -9688,7 +9688,7 @@ function sumuriskiAlusta(){
       // 18.10.2026 (v207): viehesyvyyden pikaluokka (yli 6 m: max tyhjä) ja lähde (oletus | valittu)
       'vieheSyvMin','vieheSyvMax','vieheSyvLahde',
       // 20.10.2026 (v223): järvilohen kaista saaliin kohdalla (Lintuselän malli, kirjaushetken tunnin tuuli)
-      'lohiKaistaM','lohiKaistaTunnus','lohiKaistaPisteet','lohiKaistaSija','lohiKaistoja','lohiKaistaVersio'];
+      'lohiKaistaM','lohiKaistaTunnus','lohiKaistaPisteet','lohiKaistaSija','lohiKaistoja','lohiKaistaVersio','lohiKaistaMalli'];   // v241: lohiKaistaMalli
     const SAALIS_CSV_JOHDETUT = {   // v205: sarakkeet, jotka luetaan paikkaKorjaus-oliosta
       paikkaKorjattuM: s => s.paikkaKorjaus ? s.paikkaKorjaus.siirtoM : null,
       alkupLat: s => s.paikkaKorjaus && s.paikkaKorjaus.alkup ? s.paikkaKorjaus.alkup.lat : null,
@@ -13852,7 +13852,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v240';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v241';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -22194,7 +22194,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=240';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=241';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })

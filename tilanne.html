@@ -127,6 +127,7 @@
   v215 (18.10.2026): vain versionumero (etusivun syöttikalakorttiin havaittu parven syvyys omasta luotaimesta).
   v216 (18.10.2026): isojen kaikujen napautuksessa matalan pohjan lajiepäily (hauki, ahven, made tai lahna) luotaus.js:n kausisäännöstä; muuten vain versionumero.
   v217 (18.10.2026): vain versionumero (taimenkorttiin rannan pintalämpö; matalan pohjan todisteeseen Hannun ahven- ja haukikoot luotaus.js:ssä).
+  v241 (2.11.2026): järvilohen järvikohtainen malli: Höytiäisellä syksyllä (pintavesi alle 8 °C) Höytiäisen malli (KS-Lures 1.11.: 8–13 m matalikon lähellä), uintisyvyys omista muikkuparvista 10 vrk; valikkoon mallin tila ja säädöt (matalikko 0–10 m, etäisyys 50–300 m), napautukseen mallin nimi ja syy (aaltomalli.js, luotaus.js, kirjaus.js).
   v240 (2.11.2026): nopeus veden suhteen (GPS 15 s miinus mallin pintavirta, suunta vanan 35 m:stä), vieheen heilunta aallossa 0,5 m:ssä ja kohtaamisjakso yhtenä haaleana rivinä GPS-nopeuden alla (#vesirivi, napautus: perustelut, valikosta pois); arvot myös Kala kiinni -saalisriville (aaltomalli.js: pistekysely palauttaa jakson, aallonpituuden, syvyyden ja aallon suunnan).
   v239 (1.11.2026): Höytiäinen järvikarttana (jarvet.js, MML 50 m); muiden järvien nimetyt lohipaikat (paikat.js muutLohipaikat) haaleina salmiakkeina ja napautukseen.
   v238 (1.11.2026): vain versionumero (Höytiäinen paikkalistaan ja järvikarttojen rakennukseen; ottipaikat paikat.js:ssä dataksi).
@@ -349,20 +350,20 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=240" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=240" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=240" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=240" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=240" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=240" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="lampomalli.js?v=240" onerror="utOsaPuuttuu('lampomalli.js')"></script>
-  <script src="kaistamalli.js?v=240" onerror="utOsaPuuttuu('kaistamalli.js')"></script>
-  <script src="aaltomalli.js?v=240" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=240" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=241" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=241" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=241" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=241" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=241" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=241" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="lampomalli.js?v=241" onerror="utOsaPuuttuu('lampomalli.js')"></script>
+  <script src="kaistamalli.js?v=241" onerror="utOsaPuuttuu('kaistamalli.js')"></script>
+  <script src="aaltomalli.js?v=241" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=241" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v240';
+    const APP_VERSIO = 'v241';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
@@ -528,9 +529,13 @@
        Hannun Kivijärven Lintuselän kokemus: veneen alla 15–20 m, patti tai penkka noin 6 m:iin, veto penkan suuntaisesti,
        pintauistin. Kaistat lasketaan kartan tunnin tuulella (vaihtuvat tunnin mukana), syvyysruudukosta; ei vaadi Analysoi-nappia. */
     let lohiVM = { avain: null, k: '', L: null };
+    function lohiProfiili() { try { return window.akLohiProfiili ? window.akLohiProfiili(avain) : null; } catch (e) { return null; } }   // v241
     function lohiKaistat() {
       if (typeof window.akLohiKaistat !== 'function' || !pohja) return null;
-      const U = pohja.ennuste ? pohja.U : null, d = pohja.ennuste ? pohja.dir : null, k = avain + '|' + U + '|' + d;
+      // v241: avaimeen järven mallin tila ja säädöt sekä muikkuparvien määrä (uusi tallenne päivittää uintisyvyyden)
+      const pr = lohiProfiili(), pv = (pr && pr.kaytossa && window.akLohiParviSyvyys) ? window.akLohiParviSyvyys(avain) : null;
+      const U = pohja.ennuste ? pohja.U : null, d = pohja.ennuste ? pohja.dir : null,
+        k = avain + '|' + U + '|' + d + '|' + (pr ? [pr.kaytossa, pr.lakiMin, pr.lakiMax, pr.etM].join(',') : '') + '|' + (pv ? pv.n + ',' + pv.viimeisin : '');
       if (lohiVM.k === k) return lohiVM.L;
       let L = null; try { L = window.akLohiKaistat({ U, dir: d }); } catch (e) { L = null; }
       if (L && L.avain !== avain) L = null;
@@ -546,8 +551,9 @@
     }
     function lohiTietoHtml(L, q) {
       const syyt = q.syyt.map(s => '<div class="syy"><span class="taso">' + s.taso + '</span>' + s.teksti + '</div>').join('');
-      return '<b style="color:#ff9e80">🐟 Järvilohi ' + q.tunnus + ' (' + q.pisteet + ' %)</b> <span style="color:#7E93AC">Lintuselän malli'
-        + (L.tuuli ? ', tuuli ' + Math.round(L.tuuli.U) + ' m/s ' + ilmansuunta(L.tuuli.dir) : ', ei tuulta') + '</span><br>' + q.teksti + syyt;
+      return '<b style="color:#ff9e80">🐟 Järvilohi ' + q.tunnus + ' (' + q.pisteet + ' %)</b> <span style="color:#7E93AC">' + (L.malli || 'Lintuselän malli')   // v241
+        + (L.tuuli ? ', tuuli ' + Math.round(L.tuuli.U) + ' m/s ' + ilmansuunta(L.tuuli.dir) : ', ei tuulta')
+        + (L.profiili && L.profiili.syy ? '; ' + L.profiili.syy : '') + '</span><br>' + q.teksti + syyt;
     }
 
     /* ---------- v202: JÄRVILOHIREITTI (kokeilu) ----------
@@ -2425,11 +2431,27 @@
         + veneValikko();
     }
     // v200: järvilohen kaistat
+    /* v241: järven oma järvilohimalli (Höytiäinen): tila ja säädöt (matalikon syvyys ja etäisyys) */
+    const LOHI_LAKI_MIN = [0, 1.5, 3], LOHI_LAKI_MAX = [3, 6, 8, 10], LOHI_ET = [50, 100, 150, 200, 300];
+    function lohiProfiiliValikko() {
+      const pr = lohiProfiili(); if (!pr || !pr.avain || !pr.jarven) return '';
+      const J = pr.jarven, nap = (attr, x, val, t) => '<button class="' + (x === val ? 'valittu' : '') + '" data-' + attr + '="' + val + '">' + t + '</button>';
+      return '<div class="huom" style="color:var(--text)">' + pr.jarvenMalli + ': ' + (pr.kaytossa ? 'käytössä' : 'ei käytössä') + (pr.syy ? ' (' + pr.syy + ')' : '')
+        + '. Veneen alla ' + J.kaista[0] + '–' + J.kaista[1] + ' m matalikon lähellä (KS-Lures 1.11.2026), uintisyvyys omista muikkuparvihavainnoista 10 vrk:lta.</div>'
+        + '<div class="huom">Matalikko alkaen (m)</div><div class="reittiNapit">' + LOHI_LAKI_MIN.map(x => nap('lohilakimin', J.lakiMin, x, n1(x).replace(',0', ''))).join('') + '</div>'
+        + '<div class="huom">Matalikko enintään (m)</div><div class="reittiNapit">' + LOHI_LAKI_MAX.map(x => nap('lohilakimax', J.lakiMax, x, String(x))).join('') + '</div>'
+        + '<div class="huom">Etäisyys kaistasta enintään (m)</div><div class="reittiNapit">' + LOHI_ET.map(x => nap('lohiet', J.etM, x, String(x))).join('') + '</div>';
+    }
     function lohiValikko() {
       const L = lohiKaistat(), n = L ? L.kaistat.length : 0;
-      return '<button class="merkki' + (as.lohi && n ? ' valittu' : '') + '" data-merkit="lohi"' + (n ? '' : ' disabled') + '>🐟 Järvilohi, Lintuselän malli (' + n + ')</button>'
-        + '<div class="huom">' + (n ? 'Oranssi viiva = vetokaista penkan suuntaisesti: veneen alla 15–20 m, patti tai penkka noin 6 m:iin, kartan tunnin tuuli. Pintauistin viileässä vedessä. Malli Hannun Kivijärven kokemuksesta, ei Lappajärven saaliista.'
-          : 'Ei kaistoja: järvellä ei ole 15–20 m:n vettä 3–10 m:n penkan vieressä tai syvyysruudukko puuttuu.') + '</div>';
+      return '<button class="merkki' + (as.lohi && n ? ' valittu' : '') + '" data-merkit="lohi"' + (n ? '' : ' disabled') + '>🐟 Järvilohi, ' + (L && L.malli ? L.malli : 'Lintuselän malli') + ' (' + n + ')</button>'
+        + lohiProfiiliValikko()
+        + (L && L.uinti ? '<div class="huom">' + L.uinti + '</div>' : '')
+        + '<div class="huom">' + (L && L.profiili && L.profiili.kaytossa   // v241: järven oma malli
+            ? (n ? 'Oranssi viiva = vetokaista matalikon reunaa pitkin: veneen alla ' + L.profiili.kaista[0] + '–' + L.profiili.kaista[1] + ' m, matalikko ' + n1(L.profiili.lakiMin).replace(',0', '') + '–' + L.profiili.lakiMax + ' m enintään ' + L.profiili.etM + ' m päässä, kartan tunnin tuuli. Konsensus (yksi raportti), ei omaa saalista.'
+                 : 'Ei kaistoja näillä säädöillä: väljennä matalikon syvyyttä tai etäisyyttä.')
+            : (n ? 'Oranssi viiva = vetokaista penkan suuntaisesti: veneen alla 15–20 m, patti tai penkka noin 6 m:iin, kartan tunnin tuuli. Pintauistin viileässä vedessä. Malli Hannun Kivijärven kokemuksesta, ei Lappajärven saaliista.'
+                 : 'Ei kaistoja: järvellä ei ole 15–20 m:n vettä 3–10 m:n penkan vieressä tai syvyysruudukko puuttuu.')) + '</div>';
     }
     // v201: päivän saaliiden vanat
     function saalisVanaValikko() {
@@ -2490,6 +2512,15 @@
         tallennaAs(); pyydaPiirto();
         v.querySelectorAll(b.dataset.siirto ? 'button[data-siirto]' : 'button[data-reittinopeus]').forEach(x => x.classList.toggle('valittu', x === b));
         v.querySelectorAll('div[data-reittirivit]').forEach(h => { h.innerHTML = reittiRivit(reittiLaskeLaji(h.dataset.reittirivit)).join('<br>'); });   // v206: molemmat reitit
+      }; });
+      v.querySelectorAll('button[data-lohilakimin], button[data-lohilakimax], button[data-lohiet]').forEach(b => { b.onclick = () => {   // v241
+        if (!window.akLohiProfiiliAseta) return;
+        const x = b.dataset.lohilakimin !== undefined ? { lakiMin: +b.dataset.lohilakimin } : b.dataset.lohilakimax !== undefined ? { lakiMax: +b.dataset.lohilakimax } : { etM: +b.dataset.lohiet };
+        window.akLohiProfiiliAseta(avain, x); lohiVM.k = ''; pyydaPiirto();
+        const sel = b.dataset.lohilakimin !== undefined ? 'button[data-lohilakimin]' : b.dataset.lohilakimax !== undefined ? 'button[data-lohilakimax]' : 'button[data-lohiet]';
+        v.querySelectorAll(sel).forEach(y => y.classList.toggle('valittu', y === b));
+        const m = v.querySelector('button[data-merkit="lohi"]'), L = lohiKaistat(), n = L ? L.kaistat.length : 0;
+        if (m) { m.textContent = '🐟 Järvilohi, ' + (L && L.malli ? L.malli : 'Lintuselän malli') + ' (' + n + ')'; m.disabled = !n; m.classList.toggle('valittu', !!(as.lohi && n)); }
       }; });
       v.querySelectorAll('button[data-taimenika]').forEach(b => { b.onclick = () => {   // v206: iskun ikäraja
         as.taimenIka = +b.dataset.taimenika; tallennaAs(); pyydaPiirto();

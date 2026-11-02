@@ -379,7 +379,8 @@ function saalisTuoreSuunta(oma, t) {
      lohiKaistaVersio   sovelluksen versio, jolla laskettiin (malli voi muuttua)
    Kaikille lajeille ja myös karanneille (vertailu järvilohen ja muiden lajien välillä); ei nollareissuille. Vain jos piste on
    saman järven vedessä, jonka kaistat on laskettu. Paikan korjaus (saalisSiirra) laskee uudelleen. */
-const SAALIS_KAISTA_KENTAT = ['lohiKaistaM', 'lohiKaistaTunnus', 'lohiKaistaPisteet', 'lohiKaistaSija', 'lohiKaistoja', 'lohiKaistaVersio'];
+/* v241: lohiKaistaMalli = kaistojen malli ('Lintuselän malli' tai järven oma, esim. 'Höytiäisen malli' syksyllä). */
+const SAALIS_KAISTA_KENTAT = ['lohiKaistaM', 'lohiKaistaTunnus', 'lohiKaistaPisteet', 'lohiKaistaSija', 'lohiKaistoja', 'lohiKaistaVersio', 'lohiKaistaMalli'];
 function saalisLohiKaista(snap, U, dir) {
   if (!snap || snap.nollareissu || typeof snap.lat !== 'number' || typeof snap.lon !== 'number' || typeof window.akLohiKaistat !== 'function') return false;
   const jp = typeof window.akJarviPisteessa === 'function' ? window.akJarviPisteessa(snap.lat, snap.lon) : null;
@@ -396,6 +397,7 @@ function saalisLohiKaista(snap, U, dir) {
   snap.lohiKaistaM = Math.round(paras.d); snap.lohiKaistaTunnus = paras.q.tunnus; snap.lohiKaistaPisteet = paras.q.pisteet;
   snap.lohiKaistaSija = paras.i + 1; snap.lohiKaistoja = L.kaistat.length;
   snap.lohiKaistaVersio = typeof APP_VERSIO === 'string' ? APP_VERSIO : null;
+  snap.lohiKaistaMalli = L.malli || 'Lintuselän malli';   // v241
   return true;
 }
 function saalisMalliTaydennys(snap) {
