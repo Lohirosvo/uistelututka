@@ -127,6 +127,7 @@
   v215 (18.10.2026): vain versionumero (etusivun syöttikalakorttiin havaittu parven syvyys omasta luotaimesta).
   v216 (18.10.2026): isojen kaikujen napautuksessa matalan pohjan lajiepäily (hauki, ahven, made tai lahna) luotaus.js:n kausisäännöstä; muuten vain versionumero.
   v217 (18.10.2026): vain versionumero (taimenkorttiin rannan pintalämpö; matalan pohjan todisteeseen Hannun ahven- ja haukikoot luotaus.js:ssä).
+  v242 (2.11.2026): matalikkomalli myös Lappajärvelle valinnaksi (oletus Lintuselän malli), syksyn mallin valinta ja kaistan syvyys (alkaen 3/6/8/10, enintään 8/10/13/15/20 m) valikossa, järvilohiosa päivittyy kokonaan mallin vaihtuessa (aaltomalli.js).
   v241 (2.11.2026): järvilohen järvikohtainen malli: Höytiäisellä syksyllä (pintavesi alle 8 °C) Höytiäisen malli (KS-Lures 1.11.: 8–13 m matalikon lähellä), uintisyvyys omista muikkuparvista 10 vrk; valikkoon mallin tila ja säädöt (matalikko 0–10 m, etäisyys 50–300 m), napautukseen mallin nimi ja syy (aaltomalli.js, luotaus.js, kirjaus.js).
   v240 (2.11.2026): nopeus veden suhteen (GPS 15 s miinus mallin pintavirta, suunta vanan 35 m:stä), vieheen heilunta aallossa 0,5 m:ssä ja kohtaamisjakso yhtenä haaleana rivinä GPS-nopeuden alla (#vesirivi, napautus: perustelut, valikosta pois); arvot myös Kala kiinni -saalisriville (aaltomalli.js: pistekysely palauttaa jakson, aallonpituuden, syvyyden ja aallon suunnan).
   v239 (1.11.2026): Höytiäinen järvikarttana (jarvet.js, MML 50 m); muiden järvien nimetyt lohipaikat (paikat.js muutLohipaikat) haaleina salmiakkeina ja napautukseen.
@@ -350,20 +351,20 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=241" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=241" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=241" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=241" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=241" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=241" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="lampomalli.js?v=241" onerror="utOsaPuuttuu('lampomalli.js')"></script>
-  <script src="kaistamalli.js?v=241" onerror="utOsaPuuttuu('kaistamalli.js')"></script>
-  <script src="aaltomalli.js?v=241" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=241" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=242" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=242" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=242" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=242" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=242" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=242" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="lampomalli.js?v=242" onerror="utOsaPuuttuu('lampomalli.js')"></script>
+  <script src="kaistamalli.js?v=242" onerror="utOsaPuuttuu('kaistamalli.js')"></script>
+  <script src="aaltomalli.js?v=242" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=242" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v241';
+    const APP_VERSIO = 'v242';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
@@ -535,7 +536,7 @@
       // v241: avaimeen järven mallin tila ja säädöt sekä muikkuparvien määrä (uusi tallenne päivittää uintisyvyyden)
       const pr = lohiProfiili(), pv = (pr && pr.kaytossa && window.akLohiParviSyvyys) ? window.akLohiParviSyvyys(avain) : null;
       const U = pohja.ennuste ? pohja.U : null, d = pohja.ennuste ? pohja.dir : null,
-        k = avain + '|' + U + '|' + d + '|' + (pr ? [pr.kaytossa, pr.lakiMin, pr.lakiMax, pr.etM].join(',') : '') + '|' + (pv ? pv.n + ',' + pv.viimeisin : '');
+        k = avain + '|' + U + '|' + d + '|' + (pr ? [pr.kaytossa, pr.lakiMin, pr.lakiMax, pr.etM, pr.kaista].join(',') : '') + '|' + (pv ? pv.n + ',' + pv.viimeisin : '');
       if (lohiVM.k === k) return lohiVM.L;
       let L = null; try { L = window.akLohiKaistat({ U, dir: d }); } catch (e) { L = null; }
       if (L && L.avain !== avain) L = null;
@@ -2433,16 +2434,23 @@
     // v200: järvilohen kaistat
     /* v241: järven oma järvilohimalli (Höytiäinen): tila ja säädöt (matalikon syvyys ja etäisyys) */
     const LOHI_LAKI_MIN = [0, 1.5, 3], LOHI_LAKI_MAX = [3, 6, 8, 10], LOHI_ET = [50, 100, 150, 200, 300];
+    const LOHI_KAISTA_MIN = [3, 6, 8, 10], LOHI_KAISTA_MAX = [8, 10, 13, 15, 20];   // v242
     function lohiProfiiliValikko() {
       const pr = lohiProfiili(); if (!pr || !pr.avain || !pr.jarven) return '';
       const J = pr.jarven, nap = (attr, x, val, t) => '<button class="' + (x === val ? 'valittu' : '') + '" data-' + attr + '="' + val + '">' + t + '</button>';
-      return '<div class="huom" style="color:var(--text)">' + pr.jarvenMalli + ': ' + (pr.kaytossa ? 'käytössä' : 'ei käytössä') + (pr.syy ? ' (' + pr.syy + ')' : '')
-        + '. Veneen alla ' + J.kaista[0] + '–' + J.kaista[1] + ' m matalikon lähellä (KS-Lures 1.11.2026), uintisyvyys omista muikkuparvihavainnoista 10 vrk:lta.</div>'
-        + '<div class="huom">Matalikko alkaen (m)</div><div class="reittiNapit">' + LOHI_LAKI_MIN.map(x => nap('lohilakimin', J.lakiMin, x, n1(x).replace(',0', ''))).join('') + '</div>'
+      const lk = x => n1(x).replace(',0', '');
+      return '<div class="huom" style="color:var(--text)">Syksyn järvilohimalli (pintavesi alle 8 °C): ' + (J.paalla ? pr.jarvenMalli : 'Lintuselän malli') + '</div>'   // v242
+        + '<div class="reittiNapit">' + nap('lohipaalla', J.paalla ? 1 : 0, 1, pr.jarvenMalli) + nap('lohipaalla', J.paalla ? 1 : 0, 0, 'Lintuselän malli') + '</div>'
+        + '<div class="huom">' + pr.jarvenMalli + ': ' + (pr.kaytossa ? 'käytössä' : 'ei käytössä') + (pr.syy ? ' (' + pr.syy + ')' : '')
+        + '. Kaista matalikon lähellä (' + J.lahde + ': 8–13 m), uintisyvyys omista parvihavainnoista 10 vrk:lta. Ruudukon syvyysportaat 3–6 / 6–10 / 10–15 / 15–20 m; oma luotaus tarkentaa.</div>'
+        + '<div class="huom">Kaista alkaen (m)</div><div class="reittiNapit">' + LOHI_KAISTA_MIN.map(x => nap('lohikaistamin', J.kaista[0], x, lk(x))).join('') + '</div>'
+        + '<div class="huom">Kaista enintään (m)</div><div class="reittiNapit">' + LOHI_KAISTA_MAX.map(x => nap('lohikaistamax', J.kaista[1], x, lk(x))).join('') + '</div>'
+        + '<div class="huom">Matalikko alkaen (m)</div><div class="reittiNapit">' + LOHI_LAKI_MIN.map(x => nap('lohilakimin', J.lakiMin, x, lk(x))).join('') + '</div>'
         + '<div class="huom">Matalikko enintään (m)</div><div class="reittiNapit">' + LOHI_LAKI_MAX.map(x => nap('lohilakimax', J.lakiMax, x, String(x))).join('') + '</div>'
         + '<div class="huom">Etäisyys kaistasta enintään (m)</div><div class="reittiNapit">' + LOHI_ET.map(x => nap('lohiet', J.etM, x, String(x))).join('') + '</div>';
     }
-    function lohiValikko() {
+    function lohiValikko() { return '<div data-lohiosa="1">' + lohiValikkoSisalto() + '</div>'; }   // v242: päivitetään kokonaan mallin vaihtuessa
+    function lohiValikkoSisalto() {
       const L = lohiKaistat(), n = L ? L.kaistat.length : 0;
       return '<button class="merkki' + (as.lohi && n ? ' valittu' : '') + '" data-merkit="lohi"' + (n ? '' : ' disabled') + '>🐟 Järvilohi, ' + (L && L.malli ? L.malli : 'Lintuselän malli') + ' (' + n + ')</button>'
         + lohiProfiiliValikko()
@@ -2513,14 +2521,18 @@
         v.querySelectorAll(b.dataset.siirto ? 'button[data-siirto]' : 'button[data-reittinopeus]').forEach(x => x.classList.toggle('valittu', x === b));
         v.querySelectorAll('div[data-reittirivit]').forEach(h => { h.innerHTML = reittiRivit(reittiLaskeLaji(h.dataset.reittirivit)).join('<br>'); });   // v206: molemmat reitit
       }; });
-      v.querySelectorAll('button[data-lohilakimin], button[data-lohilakimax], button[data-lohiet]').forEach(b => { b.onclick = () => {   // v241
+      const LOHI_SAADOT = { lohipaalla: 'paalla', lohikaistamin: 'kaistaMin', lohikaistamax: 'kaistaMax', lohilakimin: 'lakiMin', lohilakimax: 'lakiMax', lohiet: 'etM' };   // v241, v242
+      v.querySelectorAll(Object.keys(LOHI_SAADOT).map(a => 'button[data-' + a + ']').join(', ')).forEach(b => { b.onclick = () => {
         if (!window.akLohiProfiiliAseta) return;
-        const x = b.dataset.lohilakimin !== undefined ? { lakiMin: +b.dataset.lohilakimin } : b.dataset.lohilakimax !== undefined ? { lakiMax: +b.dataset.lohilakimax } : { etM: +b.dataset.lohiet };
+        const a = Object.keys(LOHI_SAADOT).find(x => b.dataset[x] !== undefined), kentta = LOHI_SAADOT[a];
+        const x = {}; x[kentta] = kentta === 'paalla' ? b.dataset[a] === '1' : +b.dataset[a];
         window.akLohiProfiiliAseta(avain, x); lohiVM.k = ''; pyydaPiirto();
-        const sel = b.dataset.lohilakimin !== undefined ? 'button[data-lohilakimin]' : b.dataset.lohilakimax !== undefined ? 'button[data-lohilakimax]' : 'button[data-lohiet]';
-        v.querySelectorAll(sel).forEach(y => y.classList.toggle('valittu', y === b));
+        v.querySelectorAll('button[data-' + a + ']').forEach(y => y.classList.toggle('valittu', y === b));
         const m = v.querySelector('button[data-merkit="lohi"]'), L = lohiKaistat(), n = L ? L.kaistat.length : 0;
         if (m) { m.textContent = '🐟 Järvilohi, ' + (L && L.malli ? L.malli : 'Lintuselän malli') + ' (' + n + ')'; m.disabled = !n; m.classList.toggle('valittu', !!(as.lohi && n)); }
+        if (kentta === 'paalla') {   // tila ja syy muuttuvat: koko järvilohiosa uudelleen
+          const vanha = b.closest('[data-lohiosa]'); if (vanha) { vanha.innerHTML = lohiValikkoSisalto(); kytkeMerkit(vanha); }   // closest: myös uudelleen kytketyistä napeista
+        }
       }; });
       v.querySelectorAll('button[data-taimenika]').forEach(b => { b.onclick = () => {   // v206: iskun ikäraja
         as.taimenIka = +b.dataset.taimenika; tallennaAs(); pyydaPiirto();
