@@ -823,7 +823,9 @@
     -webkit-appearance:none;appearance:none}
 
 .ak-kartta{position:relative;background:#eef1f0;border-radius:8px;overflow:hidden}
-.ak-kartta canvas{width:100%;display:block;image-rendering:auto}
+.ak-kartta canvas{width:100%;display:block;image-rendering:auto;touch-action:none;transform-origin:0 0}
+/* v244 (4.11.2026): tietokortit eivät nappaa kosketusta, jotta kartan siirto sormella voi alkaa mistä tahansa kohdasta */
+.ak-leima, .ak-tuuli{pointer-events:none}
 /* SIIRRETTY ALAS OIKEALLE 15.9.2026. Ylhäällä se peitti järven pohjoispään,
    ja aika jäi pieneen tekstiin. Alhaalla se on samalla rivillä tuulitiedon
    kanssa ja lähempänä liukusäädintä, jolloin molemmat näkyvät kun tuntia
@@ -1466,6 +1468,27 @@ body{padding-bottom:66px}
   <h2>Aallonkorkeus</h2>
   <select class="ak-valinta" id="akJarvi"></select>
 
+  <!-- AIKARULLA korvaa liu'un ja siirtonapit 21.9.2026. Sama esitys kuin
+       erillisellä aaltokarttasivulla. Liuku jää piiloon, koska osa koodista
+       lukee sen arvoa; se pidetään synkassa rullan kanssa.
+       v244 (4.11.2026): rulla, jana, päivämerkit ja kellonajat kartan yläpuolelle (Hannu, kuten Beasonissa). -->
+  <div id="akAikaBlokki" style="margin:0 0 10px;">
+    <div class="ak-rulla" id="akRulla"><div class="ak-rullasisus" id="akRullaSisus"></div></div>
+    <input type="range" id="akLiuku" min="0" max="0" value="0" aria-label="Tunti"
+           style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;"
+           aria-hidden="true" tabindex="-1">
+    <!-- 48 H JANA — 15.9.2026. Liuku näyttää yhden tunnin kerrallaan, mutta
+         lähtöpäätös tehdään koko jaksosta. Jana kertoo jokaisen tunnin
+         uisteltavan osuuden yhtenä nauhana: vihreä yli neljännes, keltainen
+         vähän, punainen ei mitään. Palkkia napauttamalla hyppää siihen tuntiin. -->
+    <div class="ak-jana" id="akJana"></div>
+    <!-- PÄIVÄMERKIT — 15.9.2026. Ennuste on jopa 84 tuntia, eli lähes neljä
+         vuorokautta. Pelkät alku- ja loppuajat eivät kerro mistä kohtaa nauhaa
+         mikäkin päivä alkaa, joten jokainen aamuseitsemän merkitään. -->
+    <div class="ak-paivat" id="akPaivat"></div>
+    <div class="ak-aika"><span id="akAlku"></span><span id="akLoppu"></span></div>
+  </div>
+
   <div class="ak-kartta">
     <canvas id="akKuva" width="300" height="300"></canvas>
     <!-- v137: zoom. Valitse piste napauttamalla, sitten + zoomaa sen ympärille. -->
@@ -1478,6 +1501,10 @@ body{padding-bottom:66px}
     <div class="ak-tuuli" id="akTuuli"></div>
   </div>
   <p class="hint" id="akKumpuInfo" style="margin:6px 0 0; color:#e0308a; display:none;"></p>
+  <!-- v244 VAKAUS (neuvoteleva rivi, haalea väri): ilman ja veden lämpöero. Ei muuta aallonkorkeuslaskentaa. -->
+  <p class="hint" id="akVakausInfo" style="margin:4px 0 0; color:#7d8b89; display:none;"></p>
+  <!-- v244 TUULEN KÄÄNTYMINEN (neuvoteleva rivi, haalea väri): ristiaallokon mahdollisuus. Ei muuta aallonkorkeuslaskentaa. -->
+  <p class="hint" id="akKaantoInfo" style="margin:4px 0 0; color:#7d8b89; display:none;"></p>
   <!-- v153: kuhapaikat kartalla (Hannu 4.10.2026: ehdotukset myös kartalle merkkeinä) -->
   <p class="hint" id="akKuhaInfo" style="margin:6px 0 0; display:none;"></p>
   <!-- v156: taimenen hotspotit harppauskerroksen mallista -->
@@ -1486,8 +1513,15 @@ body{padding-bottom:66px}
   <p class="hint" id="akKlooniInfo" style="margin:6px 0 0; display:none;"></p>
 
   <div class="ak-asteikko" id="akAsteikko"></div>
+  <!-- v244 SYVYYSVÄRIT AALLON ALLA: säädin näkyy vain aaltotilassa; 0 % = pois -->
+  <div id="akSyvTintRivi" style="display:none;align-items:center;gap:8px;font-size:.72rem;color:#4a5654;margin:6px 0 0;">
+    <label for="akSyvTint" style="white-space:nowrap;">Syvyysvärit aallon alla</label>
+    <input type="range" id="akSyvTint" min="0" max="100" step="1" value="40" style="flex:1;min-width:0;accent-color:#16211f;">
+    <span id="akSyvTintArvo" style="min-width:2.6em;text-align:right;">40 %</span>
+  </div>
   <div class="ak-alarivi">
     <label class="ak-kytkin"><input type="checkbox" id="akKayrat"> Syvyyskäyrät</label>
+    <label class="ak-kytkin" id="akSaaretRivi" style="display:none;"><input type="checkbox" id="akSaaret"> Saarten nimet</label>
     <label class="ak-kytkin"><input type="checkbox" id="akKuhaMerkit"> Kuhapaikat</label>
     <label class="ak-kytkin"><input type="checkbox" id="akTaimenMerkit"> Taimenpaikat</label>
     <label class="ak-kytkin"><input type="checkbox" id="akKlooniMerkit"> Kloonit</label>
@@ -1529,23 +1563,7 @@ body{padding-bottom:66px}
     <span id="akRajaL"></span>
   </div>
 
-  <!-- AIKARULLA korvaa liu'un ja siirtonapit 21.9.2026. Sama esitys kuin
-       erillisellä aaltokarttasivulla. Liuku jää piiloon, koska osa koodista
-       lukee sen arvoa; se pidetään synkassa rullan kanssa. -->
-  <div class="ak-rulla" id="akRulla"><div class="ak-rullasisus" id="akRullaSisus"></div></div>
-  <input type="range" id="akLiuku" min="0" max="0" value="0" aria-label="Tunti"
-         style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;"
-         aria-hidden="true" tabindex="-1">
-  <!-- 48 H JANA — 15.9.2026. Liuku näyttää yhden tunnin kerrallaan, mutta
-       lähtöpäätös tehdään koko jaksosta. Jana kertoo jokaisen tunnin
-       uisteltavan osuuden yhtenä nauhana: vihreä yli neljännes, keltainen
-       vähän, punainen ei mitään. Palkkia napauttamalla hyppää siihen tuntiin. -->
-  <div class="ak-jana" id="akJana"></div>
-  <!-- PÄIVÄMERKIT — 15.9.2026. Ennuste on jopa 84 tuntia, eli lähes neljä
-       vuorokautta. Pelkät alku- ja loppuajat eivät kerro mistä kohtaa nauhaa
-       mikäkin päivä alkaa, joten jokainen aamuseitsemän merkitään. -->
-  <div class="ak-paivat" id="akPaivat"></div>
-  <div class="ak-aika"><span id="akAlku"></span><span id="akLoppu"></span></div>
+  <!-- Aikarulla, jana, päivämerkit ja kellonajat siirrettiin kartan yläpuolelle 4.11.2026 (v244, Hannu). -->
 
   <div class="ak-taulu" id="akTaulu"></div>
 
@@ -2444,16 +2462,16 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=243" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=243" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=243" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=243" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=243" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=243" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="lampomalli.js?v=243" onerror="utOsaPuuttuu('lampomalli.js')"></script>
-  <script src="kaistamalli.js?v=243" onerror="utOsaPuuttuu('kaistamalli.js')"></script>
-  <script src="aaltomalli.js?v=243" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=243" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=244" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=244" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=244" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=244" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=244" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=244" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="lampomalli.js?v=244" onerror="utOsaPuuttuu('lampomalli.js')"></script>
+  <script src="kaistamalli.js?v=244" onerror="utOsaPuuttuu('kaistamalli.js')"></script>
+  <script src="aaltomalli.js?v=244" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=244" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
        uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
@@ -13852,7 +13870,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v243';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v244';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -22194,7 +22212,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=243';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=244';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })

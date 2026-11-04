@@ -127,6 +127,7 @@
   v215 (18.10.2026): vain versionumero (etusivun syöttikalakorttiin havaittu parven syvyys omasta luotaimesta).
   v216 (18.10.2026): isojen kaikujen napautuksessa matalan pohjan lajiepäily (hauki, ahven, made tai lahna) luotaus.js:n kausisäännöstä; muuten vain versionumero.
   v217 (18.10.2026): vain versionumero (taimenkorttiin rannan pintalämpö; matalan pohjan todisteeseen Hannun ahven- ja haukikoot luotaus.js:ssä).
+  v244 (4.11.2026): Beasonin aaltokartan parannukset (Hannu): saarten nimet (Lappajärvi, 34 nimeä) ja syvyyskäyrien luvut tilannekuvaan vakiokokoisina (piirto tällä sivulla, ei pohjakuvaan), syvyysvärit aallon alla pohjakuvaan (0/20/40/60 %, sama asetus kuin etusivulla); valikkoon "Kartan nimet ja syvyysvärit"; napautus maalla kertoo saaren nimen (aaltomalli.js).
   v243 (2.11.2026): Lappajärven matalikkomallissa kaistan syvyys omien parvien pohjasta (10 vrk, vähintään 3 parvea; muuten säätö), jyrkemmät penkat saavat lisäpisteitä ja kaistat painottuvat parvien kohdalle (etsintäalue 300/500/1000 m, oletus 500); valikossa kaistan lähde ja etsintäalue (aaltomalli.js).
   v242 (2.11.2026): matalikkomalli myös Lappajärvelle valinnaksi (oletus Lintuselän malli), syksyn mallin valinta ja kaistan syvyys (alkaen 3/6/8/10, enintään 8/10/13/15/20 m) valikossa, järvilohiosa päivittyy kokonaan mallin vaihtuessa (aaltomalli.js).
   v241 (2.11.2026): järvilohen järvikohtainen malli: Höytiäisellä syksyllä (pintavesi alle 8 °C) Höytiäisen malli (KS-Lures 1.11.: 8–13 m matalikon lähellä), uintisyvyys omista muikkuparvista 10 vrk; valikkoon mallin tila ja säädöt (matalikko 0–10 m, etäisyys 50–300 m), napautukseen mallin nimi ja syy (aaltomalli.js, luotaus.js, kirjaus.js).
@@ -352,20 +353,20 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=243" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=243" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=243" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=243" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=243" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=243" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="lampomalli.js?v=243" onerror="utOsaPuuttuu('lampomalli.js')"></script>
-  <script src="kaistamalli.js?v=243" onerror="utOsaPuuttuu('kaistamalli.js')"></script>
-  <script src="aaltomalli.js?v=243" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=243" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=244" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=244" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=244" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=244" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=244" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=244" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="lampomalli.js?v=244" onerror="utOsaPuuttuu('lampomalli.js')"></script>
+  <script src="kaistamalli.js?v=244" onerror="utOsaPuuttuu('kaistamalli.js')"></script>
+  <script src="aaltomalli.js?v=244" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=244" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v243';
+    const APP_VERSIO = 'v244';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
@@ -379,7 +380,7 @@
     const ilmansuunta = deg => ['P', 'KO', 'I', 'KA', 'E', 'LO', 'L', 'LU'][Math.round((((deg % 360) + 360) % 360) / 45) % 8];   // mistä tuulee
 
     let seliteAuki = false, seliteAjastin = null;   // v234: selitys auki vain hetken, ei tallenneta (as.selite jää käyttämättä)
-    let as = { tila: 'aalto', kloonit: true, yo: false, laji: null, selite: false, vaaka: false, kuha: true, taimen: true, kulku: false, lampo: true, parvet: true, kalat: true, vuosi: true, kivikko: true, kovaPohja: false, lohi: true, saalisVanat: true, reitti: true, reittiNopeus: null, siirtoNopeus: 25, taimenReitti: true, taimenIka: 14, vesinopeus: true };   // v240: vesinopeus (nopeus veden suhteen ja aallon heilunta)   // v206: taimenReitti, taimenIka (vrk)   // v202: järvilohireitti   // v201: saalisVanat (saaliin vana)   // v200: lohi (Lintuselän malli)   // v186: kuha, taimen; v193: kulku (kulkusuunta ylös), lampo, parvet; v194: kalat
+    let as = { tila: 'aalto', kloonit: true, yo: false, laji: null, selite: false, vaaka: false, kuha: true, taimen: true, kulku: false, lampo: true, parvet: true, kalat: true, vuosi: true, kivikko: true, kovaPohja: false, lohi: true, saalisVanat: true, reitti: true, reittiNopeus: null, siirtoNopeus: 25, taimenReitti: true, taimenIka: 14, vesinopeus: true, saaret: true, kayraLuvut: true };   // v244: saaret, kayraLuvut   // v240: vesinopeus (nopeus veden suhteen ja aallon heilunta)   // v206: taimenReitti, taimenIka (vrk)   // v202: järvilohireitti   // v201: saalisVanat (saaliin vana)   // v200: lohi (Lintuselän malli)   // v186: kuha, taimen; v193: kulku (kulkusuunta ylös), lampo, parvet; v194: kalat
     try { as = Object.assign(as, JSON.parse(localStorage.getItem(AS_LS) || '{}')); } catch (e) {}
     const tallennaAs = () => { try { localStorage.setItem(AS_LS, JSON.stringify(as)); } catch (e) {} };
 
@@ -1275,6 +1276,57 @@
     window.utLajiVarit = () => ({ kaiut: isotKaiut().map(q => { const r = kaikuSaanto(q); return r ? r.ryhma : null; }),
                                  parvet: (typeof omaLuotausParvet === 'function' ? omaLuotausParvet(avain) : []).map(q => { const r = parviSaanto(q); return r ? r.ryhma : null; }) });   // testeille
 
+    /* v244: saarten nimet ja syvyyskäyrien luvut (aaltomalli.js: akSaaret, pohjakuvan kayraLuvut). Piirretään tässä
+       vakiokokoisina, koska pohjakuvaan piirretty teksti kasvaisi ja kutistuisi zoomin mukana. Saaret: suuret aina,
+       keskikokoiset kun 1 km ≥ 50 px, pienet kun 1 km ≥ 120 px; suuret ensin, päällekkäiset jäävät pois. Käyrien luvut:
+       pääkäyrät (3, 10, 20 … m) kun 1 km ≥ 50 px, väliarvot kun 1 km ≥ 120 px, vähintään 150 px välein, syvimmät ensin. */
+    function karttaNimetPiirra(nakyy, w, h) {
+      const pxm = nak.s * pohja.S / pohja.k.ruutu;   // näyttöpikseliä metrille
+      const varatut = [], osuu = r => varatut.some(o => r.x0 < o.x1 && r.x1 > o.x0 && r.y0 < o.y1 && r.y1 > o.y0);
+      ctx.save(); ctx.textBaseline = 'middle'; ctx.lineJoin = 'round'; ctx.textAlign = 'left';
+      if (as.saaret && typeof window.akSaaret === 'function') {
+        const halo = as.yo ? 'rgba(120,130,122,.85)' : 'rgba(240,244,238,.92)';
+        window.akSaaret(avain).filter(e => e.t === 1 || (e.t === 2 && pxm >= 0.05) || (e.t === 3 && pxm >= 0.12))
+          .sort((a, b) => (a.t - b.t) || (b.a - a.a)).forEach(e => {
+            const p = naytolle(e.lat, e.lon); if (!nakyy(p, 60)) return;
+            const fs = e.t === 1 ? 15 : e.t === 2 ? 13 : 12;
+            ctx.font = (e.t === 1 ? '700 ' : '600 ') + fs + 'px "Barlow Condensed", system-ui, sans-serif';
+            const tw = ctx.measureText(e.n).width, r = Math.max(4, Math.sqrt(e.a / Math.PI) * pohja.k.ruutu * pxm) + 3;
+            const kandit = e.t === 1 ? [[p.x - tw / 2, p.y]] : [[p.x + r, p.y], [p.x - r - tw, p.y], [p.x - tw / 2, p.y + r + fs * 0.6], [p.x - tw / 2, p.y - r - fs * 0.6]];
+            for (const [x0, y0] of kandit) {
+              const b = { x0: x0 - 2, x1: x0 + tw + 2, y0: y0 - fs * 0.6, y1: y0 + fs * 0.6 };
+              if (b.x0 < 2 || b.x1 > w - 2 || b.y0 < 2 || b.y1 > h - 2 || osuu(b)) continue;
+              varatut.push(b);
+              ctx.lineWidth = 3.5; ctx.strokeStyle = halo; ctx.strokeText(e.n, x0, y0); ctx.fillStyle = '#24302b'; ctx.fillText(e.n, x0, y0);
+              break;
+            }
+          });
+      }
+      if (as.kayraLuvut && pohja.kayraLuvut && pohja.kayraLuvut.length && pxm >= 0.05) {
+        ctx.font = '600 12px "Barlow Condensed", system-ui, sans-serif';
+        const hyv = [], minD = 150, halo = as.yo ? 'rgba(120,140,160,.8)' : 'rgba(255,255,255,.85)';
+        pohja.kayraLuvut.forEach(e => {   // valmiiksi järjestetty (aaltomalli.js): pääkäyrät, syvimmät ensin
+          if (!e.paa && pxm < 0.12) return;
+          const p = naytolle(e.lat, e.lon); if (p.x < 14 || p.y < 12 || p.x > w - 14 || p.y > h - 12) return;
+          if (hyv.some(q => (q.x - p.x) ** 2 + (q.y - p.y) ** 2 < minD * minD)) return;
+          const tw = ctx.measureText(e.t).width, b = { x0: p.x - tw / 2 - 2, x1: p.x + tw / 2 + 2, y0: p.y - 8, y1: p.y + 8 };
+          if (osuu(b)) return;
+          hyv.push(p); varatut.push(b);
+          ctx.lineWidth = 3; ctx.strokeStyle = halo; ctx.strokeText(e.t, p.x - tw / 2, p.y); ctx.fillStyle = '#0b2f55'; ctx.fillText(e.t, p.x - tw / 2, p.y);
+        });
+      }
+      ctx.restore();
+    }
+    function karttaNimetValikko() {   // v244
+      const nS = typeof window.akSaaret === 'function' ? window.akSaaret(avain).length : 0, st = typeof window.akSyvTintArvo === 'function' ? window.akSyvTintArvo() : 0;
+      return '<div class="huom" style="margin-top:4px;color:var(--text)">Kartan nimet ja syvyysvärit</div>'
+        + (nS ? '<button class="merkki' + (as.saaret ? ' valittu' : '') + '" data-kerros="saaret">🏝 Saarten nimet (' + nS + ')</button>' : '')
+        + '<button class="merkki' + (as.kayraLuvut ? ' valittu' : '') + '" data-kerros="kayraLuvut">〰 Syvyysluvut käyrille</button>'
+        + '<div class="huom">' + (nS ? 'Saarten paikat noin ±100–150 m. ' : '') + 'Käyrien luvut näkyvät, kun käyrät ovat kartalla (syvyyskartta tai etusivun Syvyyskäyrät-kytkin).</div>'
+        + '<div class="huom" style="color:var(--text)">Syvyysvärit aallon alla (Aallonkorkeus-näkymä)</div>'
+        + '<div class="reittiNapit">' + [0, 20, 40, 60].map(p => '<button class="' + (p === st ? 'valittu' : '') + '" data-syvtint="' + p + '">' + (p ? p + ' %' : 'pois') + '</button>').join('') + '</div>'
+        + '<div class="huom">Sama asetus kuin etusivun aaltokortissa. Sekoitus muuttaa aaltovärejä: sama aalto näyttää syvän ja matalan päällä eri sävyltä kuin selitteessä.</div>';
+    }
     function piirra() {
       const { w, h } = koko();
       ctx.fillStyle = '#0a1626'; ctx.fillRect(0, 0, w, h);
@@ -1289,6 +1341,7 @@
       const nakyy = (p, m) => p.x > -m && p.y > -m && p.x < w + m && p.y < h + m;
       const nimet = nak.s * pohja.S / pohja.k.ruutu > 0.05;   // nimet, kun 1 km ≥ 50 px
       if (as.kovaPohja) { try { kovaPohjaPiirra(nakyy); } catch (e) {} }   // v213: alimmaksi, muut merkit päälle
+      if (as.saaret || as.kayraLuvut) { try { karttaNimetPiirra(nakyy, w, h); } catch (e) {} }   // v244: saaret ja käyrien luvut pohjan päälle, merkkien alle
 
       // oma luotaus syvyyskartassa: mistä mitattu syvyys on (ohut ja himmeä, kuten aaltokortissa v176); v228: vain viimeiset 10 vrk
       if (pohja.naytto === 'syvyys' && typeof omaLuotausPisteet === 'function') {
@@ -2427,6 +2480,7 @@
         + tallenneValikko()
         + vuosiValikko()   // v230
         + kovaPohjaValikko()   // v213
+        + karttaNimetValikko()   // v244
         + '<button class="merkki' + (as.kulku ? ' valittu' : '') + '" data-kulku="1">🧭 ' + (as.kulku ? 'Kulkusuunta ylös' : 'Pohjoinen ylös') + '</button>'
         + '<div class="huom">Kartan suunta (myös pohjoisnuolta napauttamalla). Seurattaessa vene on kolmanneksen keskeltä taaksepäin, jotta edessä näkyy enemmän.</div>'
         + vesiNopeusValikko()   // v240
@@ -2510,6 +2564,11 @@
     function kytkeMerkit(v) {
       v.querySelectorAll('button[data-kerros]').forEach(b => { b.onclick = () => {   // v193: lämpöjälki ja parvet
         const k = b.dataset.kerros; as[k] = !as[k]; tallennaAs(); pyydaPiirto(); b.classList.toggle('valittu', as[k]);
+      }; });
+      v.querySelectorAll('button[data-syvtint]').forEach(b => { b.onclick = () => {   // v244
+        if (typeof window.akSyvTintAseta === 'function') window.akSyvTintAseta(+b.dataset.syvtint);
+        v.querySelectorAll('button[data-syvtint]').forEach(x => x.classList.toggle('valittu', x === b));
+        if (pohja && pohja.naytto === 'aalto') renderoi(false);
       }; });
       v.querySelectorAll('button[data-vesinopeus]').forEach(b => { b.onclick = () => {   // v240
         as.vesinopeus = !as.vesinopeus; tallennaAs(); b.classList.toggle('valittu', as.vesinopeus); vnPaivita();
