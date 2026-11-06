@@ -127,6 +127,7 @@
   v215 (18.10.2026): vain versionumero (etusivun syöttikalakorttiin havaittu parven syvyys omasta luotaimesta).
   v216 (18.10.2026): isojen kaikujen napautuksessa matalan pohjan lajiepäily (hauki, ahven, made tai lahna) luotaus.js:n kausisäännöstä; muuten vain versionumero.
   v217 (18.10.2026): vain versionumero (taimenkorttiin rannan pintalämpö; matalan pohjan todisteeseen Hannun ahven- ja haukikoot luotaus.js:ssä).
+  v245 (6.11.2026): PLAY-nappi kartan oikeassa yläkulmassa (Hannu): käy läpi kahdeksan näyttötilaa (Pintavirtaus, Syvempi vesi, Vajoama, Kumpuama, Konvergenssi, Lämpö (suunta), Lämpö (malli), Syvyyskartta; ei aaltoa eikä murtuvaa), 5 s kukin, pelkkä kartta kuten käsin vaihdettaessa. Näkymä ei muutu (seuraa venettä, jos seuranta on päällä; muuten pysyy katsotussa kohdassa), tunti on yläpalkin tunti. Napautus kartalla = heti seuraava; ■ pysäyttää ja jää näkyvään tilaan; kierroksen lopussa paluu alkuperäiseen tilaan. Seuraava kuva lasketaan vaihtohetkellä (edellinen näkyy laskennan ajan), joten muistissa on yksi kuva kerrallaan; 5 s alkaa, kun kuva on piirretty. Lämpö (malli) ohitetaan, jos malli ei ole valmis.
   v244 (4.11.2026): Beasonin aaltokartan parannukset (Hannu): saarten nimet (Lappajärvi, 34 nimeä) ja syvyyskäyrien luvut tilannekuvaan vakiokokoisina (piirto tällä sivulla, ei pohjakuvaan), syvyysvärit aallon alla pohjakuvaan (0/20/40/60 %, sama asetus kuin etusivulla); valikkoon "Kartan nimet ja syvyysvärit"; napautus maalla kertoo saaren nimen (aaltomalli.js).
   v243 (2.11.2026): Lappajärven matalikkomallissa kaistan syvyys omien parvien pohjasta (10 vrk, vähintään 3 parvea; muuten säätö), jyrkemmät penkat saavat lisäpisteitä ja kaistat painottuvat parvien kohdalle (etsintäalue 300/500/1000 m, oletus 500); valikossa kaistan lähde ja etsintäalue (aaltomalli.js).
   v242 (2.11.2026): matalikkomalli myös Lappajärvelle valinnaksi (oletus Lintuselän malli), syksyn mallin valinta ja kaistan syvyys (alkaen 3/6/8/10, enintään 8/10/13/15/20 m) valikossa, järvilohiosa päivittyy kokonaan mallin vaihtuessa (aaltomalli.js).
@@ -240,6 +241,11 @@
     #valikko .reittiNapit button { flex: 1 1 0; min-width: 0; padding: 4px 2px; font-size: 15px; }
     /* v234 (26.10.2026): Hannu "Aika typerä peittää koko kuvan tuo selite" → selite pieneksi ja läpikuultavaksi; selitysteksti
        aukeaa napautuksesta 8 sekunniksi (ei enää jää auki eikä tallennu auki-tilaan) */
+    /* v245: PLAY-nappi (näyttötilat kierroksena) */
+    #playNappi { position: absolute; right: 8px; top: 52px; z-index: 4; min-width: 44px; height: 44px; padding: 0 10px; border-radius: 22px;
+                 border: 1px solid var(--line); background: rgba(14,27,46,.88); color: var(--text); font: 700 17px "Barlow Condensed", system-ui, sans-serif; }
+    #playNappi.paalla { border-color: var(--vihrea); color: var(--vihrea); }
+    #playNappi:disabled { opacity: .35; }
     #selite { position: absolute; left: 6px; top: 52px; z-index: 3; background: transparent; border-radius: 6px; padding: 2px; display: none;
               font-size: 11px; color: var(--muted); max-width: calc(100% - 110px); cursor: pointer; }
     #selite .nimi { font-weight: 700; color: var(--text); font-size: 10px; margin: 0 1px 2px; text-shadow: 0 0 3px #000, 0 0 2px #000, 0 0 1px #000; }
@@ -319,6 +325,7 @@
     <div id="tieto"><button id="tietoSulje" aria-label="Sulje">✕</button><div id="tietoSisalto"></div></div>
     <div id="kirjaus" aria-live="polite"></div>
     <div id="korjaus" aria-live="polite"></div>
+    <button id="playNappi" aria-label="Käy näyttötilat läpi (5 s kukin)" title="Käy näyttötilat läpi">▶</button>
     <div id="selite" title="Napauta: selitys"><div class="nimi" id="seliteNimi"></div><div id="seliteVarit"></div><div id="seliteYks"></div></div>
     <div id="valikko" role="menu"></div>
     <button id="kalaNappi" aria-label="Kala kiinni: kirjaa saalis"><span class="iso">🐟</span><span class="pieni">KALA</span><span id="kalaLaji">taimen</span></button>
@@ -353,20 +360,20 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=244" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=244" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=244" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=244" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=244" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=244" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="lampomalli.js?v=244" onerror="utOsaPuuttuu('lampomalli.js')"></script>
-  <script src="kaistamalli.js?v=244" onerror="utOsaPuuttuu('kaistamalli.js')"></script>
-  <script src="aaltomalli.js?v=244" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=244" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=245" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=245" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=245" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=245" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=245" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=245" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="lampomalli.js?v=245" onerror="utOsaPuuttuu('lampomalli.js')"></script>
+  <script src="kaistamalli.js?v=245" onerror="utOsaPuuttuu('kaistamalli.js')"></script>
+  <script src="aaltomalli.js?v=245" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=245" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v244';
+    const APP_VERSIO = 'v245';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
@@ -1555,12 +1562,60 @@
 
     /* ---------- pohjakuva mallista ---------- */
     let laskee = false;
+    /* v245 PLAY (Hannu 6.11.2026): näyttötilat kierroksena, kun "tiedonjano iskee". Pelkkä kartta kuten käsin vaihdettaessa.
+       5 s ruutua kohden (arvio: jokaisella tilalla oma väriasteikko; liian pitkää aikaa voi lyhentää napautuksella).
+       Seuraava kuva lasketaan vaihtohetkellä: edellinen kuva näkyy laskennan ajan (0,3–0,7 s testiselaimessa), ja 5 s alkaa
+       vasta piirrosta. Muistissa on näin yksi kuva kerrallaan (kaikki kahdeksan etukäteen veisi 100–190 Mt). Näkymää ei
+       sovitetaan uudelleen: seuranta pitää veneen kuvassa, muuten kartta pysyy katsotussa kohdassa. Tila as.tila ei muutu
+       kierroksen aikana; pysäytys (■) tallentaa näkyvän tilan, loppu palaa alkuperäiseen. */
+    const PLAY_TILAT = ['virtaus', 'syva', 'vajoama', 'kumpuama', 'konvergenssi', 'lampo', 'lampomalli', 'syvyys'];
+    const PLAY_MS = 5000;
+    let play = null;   // { i, ajastin, avain }
+    function playNappiPaivita() {
+      const b = $('playNappi'); if (!b) return;
+      b.classList.toggle('paalla', !!play);
+      b.textContent = play ? '■ ' + (play.i + 1) + '/' + PLAY_TILAT.length : '▶';
+      b.disabled = !play && !(pohja && pohja.ennuste);
+    }
+    function playNayta(i) {   // laskee ja näyttää kierroksen ruudun i; ohittaa ruudut, joita ei voi piirtää
+      if (!play) return;
+      clearTimeout(play.ajastin);
+      for (; i < PLAY_TILAT.length; i++) {
+        const t = PLAY_TILAT[i];
+        let r = null;
+        try { r = window.akRenderoi({ tila: t, tunti, kerroin: 3 }); } catch (e) { r = null; }
+        if (!r || r.tila !== 'ok' || r.naytto !== t) continue;
+        if (t === 'lampomalli') { const L = typeof window.akLampoMalliTila === 'function' ? window.akLampoMalliTila() : null; if (!L || L.tila !== 'ok') continue; }
+        play.i = i; pohja = r;
+        paivitaYla(); paivitaSelite(); playNappiPaivita(); pyydaPiirto();
+        play.ajastin = setTimeout(() => playSeuraava(), PLAY_MS);
+        return;
+      }
+      playLopeta(false);   // kierros lopussa: takaisin alkuperäiseen tilaan
+    }
+    function playSeuraava() { if (play) setTimeout(() => playNayta(play.i + 1), 0); }
+    function playAloita() {
+      if (play || !pohja || !pohja.ennuste || typeof window.akRenderoi !== 'function') return;
+      const v = $('valikko'); if (v) v.style.display = 'none';
+      play = { i: -1, ajastin: null, avain };
+      playNappiPaivita(); setTimeout(() => playNayta(0), 0);
+    }
+    function playLopeta(jaa) {   // jaa = true: jäädään näkyvään tilaan (pysäytys); false: paluu alkuperäiseen (loppu)
+      if (!play) return;
+      clearTimeout(play.ajastin);
+      const t = pohja && pohja.naytto;
+      play = null;
+      if (jaa && t && PLAY_TILAT.includes(t)) { as.tila = t; tallennaAs(); paivitaYla(); playNappiPaivita(); return; }
+      playNappiPaivita(); renderoi(false);
+    }
+    $('playNappi').onclick = () => { if (play) playLopeta(true); else playAloita(); };
+
     function renderoi(sovita) {
       if (typeof window.akRenderoi !== 'function' || laskee) return;
       laskee = true; tila('Lasketaan karttaa…');
       setTimeout(() => {
         try {
-          let r = window.akRenderoi({ tila: as.tila, tunti, kerroin: 3 });
+          let r = window.akRenderoi({ tila: play ? PLAY_TILAT[play.i] : as.tila, tunti, kerroin: 3 });   // v245: kierroksen aikana kierroksen tila (tunnin vaihto, ennusteen päivitys)
           if (r.tila === 'eiEnnustetta') r = window.akRenderoi({ tila: 'syvyys', kerroin: 3 });
           if (r.tila !== 'ok') { tila('Karttaa ei voitu piirtää (' + r.tila + ').'); return; }
           const ennen = pohja; pohja = r;
@@ -1597,6 +1652,7 @@
       return paras;
     }
     function paivitaYla() {
+      try { playNappiPaivita(); } catch (e) {}   // v245
       $('tilaNappi').textContent = (TILAT.find(t => t[0] === (pohja ? pohja.naytto : as.tila)) || TILAT[0])[1];
       const el = $('tuntiTeksti');
       if (pohja && pohja.ennuste && pohja.aika) {
@@ -2291,6 +2347,7 @@
     }
     function napautus(sx, sy) {
       if (!pohja || !nak) return;
+      if (play) { playSeuraava(); return; }   // v245: kierroksen aikana napautus vie heti seuraavaan tilaan
       if (korjaus) { korjausNapautus(sx, sy); return; }   // v205: iskupaikan korjaus odottaa kohtaa
       if (oletusValinta) { oletusNapautus(sx, sy); return; }   // v206: taimenreitin oletuspiste
       if (Math.hypot(sx - (cv.clientWidth - 24), sy - 24) < 24) { vaihdaKulku(); return; }   // v193: pohjoisnuoli kääntää kartan
@@ -2454,6 +2511,7 @@
     $('klooniNappi').onclick = () => { as.kloonit = !as.kloonit; tallennaAs(); $('klooniNappi').classList.toggle('paalla', as.kloonit); paivitaKerros(); pyydaPiirto(); };
     $('yoNappi').onclick = () => { as.yo = !as.yo; tallennaAs(); $('yoNappi').classList.toggle('paalla', as.yo); pyydaPiirto(); };
     $('tilaNappi').onclick = () => {   // v181: valikko kaikista tiloista (ennen nappi kierrätti neljää)
+      if (play) playLopeta(true);   // v245: valikko pysäyttää kierroksen näkyvään tilaan
       const v = $('valikko');
       if (v.style.display === 'grid') { v.style.display = 'none'; return; }
       const ilman = pohja && !pohja.ennuste, nyt = pohja ? pohja.naytto : as.tila;
@@ -2617,7 +2675,8 @@
       tunti = Math.max(0, Math.min(T.length - 1, tunti + d)); tuntiKasin = tunti !== nykyTunti(); renderoi(false);
     }
     $('seuraava').onclick = () => { const s = kerros && kerros.seur; if (s && pohja) { asetaSeuraa(false); keskita(s.c.lat, s.c.lon); pyydaPiirto(); } };
-    $('jarvi').onchange = function () { tuntiKasin = false; asetaSeuraa(false); valitseJarvi(this.value, true); };
+    $('jarvi').onchange = function () { if (play) { clearTimeout(play.ajastin); play = null; playNappiPaivita(); }   // v245
+      tuntiKasin = false; asetaSeuraa(false); valitseJarvi(this.value, true); };
     window.addEventListener('resize', () => { if (nak && seuraa && oma) keskitaVene(); pyydaPiirto(); });
     window.addEventListener('storage', e => {
       if (e.key === KLOONI_LS) { paivitaKerros(); pyydaPiirto(); }
