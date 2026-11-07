@@ -250,6 +250,54 @@ function omaLuotausKalat(avain, maxIkaMs){
   });
   return out;
 }
+/* ===== v246 (Hannu 7.11.2026): KAIKKI ISOT KAIUT JA JÄRVILOHI-EPÄILYT IÄSTÄ RIIPPUMATTA =====
+   Hannu 7.11.: "Muutetaan sääntöä mitä näytetään. Näitä kaikki järvilohiepäilyt ikinä on ollut vanhemmat haaleampana" →
+   valinnat: kaikki mitä ikinä on ollut (ei 10 vrk:n eikä reitin 2 km:n rajaa), 4 haaleusporrasta iän mukaan (tilanne.html),
+   vain syksyn kaiut (lajisääntö kaiun OMAN ajankohdan kaudelta; sääntöjä on vain Lappajärven syksylle, joten kesän ja kevään
+   kaiut eivät ole epäilyjä), Isot kaiut -kerros myös kaikki iät. Lähteet: tuodut tallenteet (d.tuonnit) ja tiivistetty muisti
+   (d.muisti.jarvet[avain].kaiut, v229–v230). Tiivistetyssä rivissä ei ole kaiun voimakkuuden mediaania (med).
+   omaLuotausKausiAjasta: alle 30 vrk vanha kaiku arvioidaan nykyisellä kaudella (myös etusivun valinta, kuten ennen),
+   vanhempi kuukauden mukaan (syys–marras syksy, heinä–elo keskikesä, kesä alkukesä, huhti–touko kevät, muuten talvi). */
+function omaLuotausKausiAjasta(tms){
+  if (!tms || Math.abs(Date.now() - tms) < 30*86400e3) return omaLuotausKausi();
+  var m = new Date(tms).getMonth() + 1;
+  return m >= 9 && m <= 11 ? 'autumn' : m >= 7 ? 'midsummer' : m === 6 ? 'earlysummer' : m >= 4 ? 'spring' : 'winter';
+}
+var olKaikkiVM = null;
+function omaLuotausKaikkiVM(avain){
+  var d = omaLuotausLue(), J = d.muisti && d.muisti.jarvet && d.muisti.jarvet[avain], rivit = (J && J.kaiut) || [], nk = 0;
+  d.tuonnit.forEach(function(t){ if (t.jarvi === avain && Array.isArray(t.kalat)) nk += t.kalat.length; });
+  var k = avain + '|' + d.tuonnit.length + '|' + nk + '|' + rivit.length + '|' + Math.floor(Date.now()/600000);
+  if (olKaikkiVM && olKaikkiVM.k === k) return olKaikkiVM;
+  var isot = [];
+  d.tuonnit.forEach(function(t){
+    if (t.jarvi !== avain || !t.alku || !Array.isArray(t.kalat)) return;
+    var a = omaLuotausAnturi(t), nimi = omaLuotausNimi(t);
+    t.kalat.forEach(function(k2){
+      if (k2.luokka !== 'iso') return;
+      var q = {}; for (var x in k2) q[x] = k2[x];
+      q.t = k2.t || (t.alku + (k2.aikaS || 0)*1000); q.parviYla = omaLuotausParviYla(t, k2);
+      q.zP = Math.round((k2.z + a)*10)/10; q.pohjaP = Math.round((k2.pohja + a)*10)/10; q.nimi = nimi; q.med = t.kalaMed; q.jarvi = t.jarvi; q.anturi = a;
+      q.kausi = omaLuotausKausiAjasta(q.t); isot.push(q);
+    });
+  });
+  rivit.forEach(function(e){
+    if (e[6] !== 'i') return;
+    var tms = e[0] ? e[0]*1000 : null, uusi = e.length >= 13;
+    isot.push({ t: tms, lat: e[1]/1e5, lon: e[2]/1e5, z: e[3]/100, pohja: e[4]/100, zP: Math.round(e[3]/10)/10, pohjaP: Math.round(e[4]/10)/10, anturi: 0,
+                yl: e[5], luokka: 'iso', kaari: !!e[7], lahella: e[8], parviM: e[9],
+                muuParvi: e[10] ? { m: e[10][0], yla: e[10][1]/10, ala: e[10][2]/10 } : null, parviYla: uusi && e[12] !== null ? e[12]/10 : null,
+                vesi: uusi && e[11] !== null ? e[11]/10 : null, nimi: omaLuotausMuistiNimi(d.muisti, tms, avain), jarvi: avain, tiivistetty: true,
+                kausi: omaLuotausKausiAjasta(tms) });
+  });
+  isot.sort(function(x, y){ return (x.t || 0) - (y.t || 0); });   // vanhimmat ensin: tuoreimmat piirtyvät päällimmäisiksi
+  var lohi = isot.filter(function(q){ var s = omaLuotausLajiSaanto(q, avain, q.kausi); return !!(s && s.ryhma === 'lohi'); });
+  olKaikkiVM = { k: k, isot: isot, lohi: lohi };
+  return olKaikkiVM;
+}
+function omaLuotausKaikkiIsot(avain){ try { return omaLuotausKaikkiVM(avain).isot; } catch (e) { return []; } }
+function omaLuotausLohiEpailyt(avain){ try { return omaLuotausKaikkiVM(avain).lohi; } catch (e) { return []; } }
+
 /* Lajiepäily olosuhteista (Hannu 11.10.: "mahdollisen lajin epäilyt"; valinta: epäily olosuhteista, todisteen taso näkyviin).
    Kaikuluotain ei tunnista lajia: tämä on olosuhdepäätelmä lajien tavallisista elintavoista, ei tunnistus.
    Lappajärvi (Järviseudun kalatalousalueen käyttö- ja hoitosuunnitelma 2022): kuha merkittävin, kuore ja muikku tärkeimmät
@@ -429,7 +477,7 @@ function omaLuotausRantaLampo(avain, hetkiMs, vrk){
 }
 function omaLuotausKalaLaji0(k, avain){
   var L = avain === 'lappajarvi', n1 = function(v){ return (Math.round(v*10)/10).toLocaleString('fi-FI'); };
-  var sv = omaLuotausLajiSaanto(k, avain);   // v216: kausi- ja järvikohtainen sääntö, jos se korvaa napautuksen epäilyn
+  var sv = omaLuotausLajiSaanto(k, avain, k.kausi);   // v216: kausi- ja järvikohtainen sääntö, jos se korvaa napautuksen epäilyn; v246: kaiun oma kausi, jos annettu
   if (sv && sv.napautus){
     var ero0 = k.pohja - k.z, mp0 = k.muuParvi, a0 = k.anturi || 0;
     return { lajit: sv.lajit, vari: sv.vari, ryhma: sv.ryhma,
