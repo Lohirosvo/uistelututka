@@ -2462,16 +2462,16 @@ body{padding-bottom:66px}
       if (document.body) nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=246" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=246" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=246" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=246" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=246" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=246" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="lampomalli.js?v=246" onerror="utOsaPuuttuu('lampomalli.js')"></script>
-  <script src="kaistamalli.js?v=246" onerror="utOsaPuuttuu('kaistamalli.js')"></script>
-  <script src="aaltomalli.js?v=246" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=246" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=247" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=247" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=247" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=247" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=247" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=247" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="lampomalli.js?v=247" onerror="utOsaPuuttuu('lampomalli.js')"></script>
+  <script src="kaistamalli.js?v=247" onerror="utOsaPuuttuu('kaistamalli.js')"></script>
+  <script src="aaltomalli.js?v=247" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=247" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
     /* v192: TAUSTA-AJO. Tilannekuva lataa etusivun näkymättömään kehykseen (index.html?tausta=1) toistamaan analyysin
        uistelun aikana. Silloin etusivu ei kuuluta, ei kirjaa pyyntilokin pisteitä, ei pidä näyttöä päällä eikä rekisteröi
@@ -8790,12 +8790,14 @@ function sumuriskiAlusta(){
        Kopio harppausennuste-2027.html:n ENNUSTE-taulukon päivämääristä ja
        kerrossyvyyksistä. HUOM: jos muutat sitä taulukkoa, muuta tämä samoin.
        Oma toteumamittaus menee ennusteen edelle: se luetaan samasta selaimen
-       tallennuksesta johon ennustesivu sen kirjoittaa (sama osoite, sama avain). */
+       tallennuksesta johon ennustesivu sen kirjoittaa (sama osoite, sama avain).
+       v247 (8.11.2026): luvut SYKEn Lappajärven profiileista, El Niño -jälkivuodet ±12 vrk
+       (aiemmin arvio muista järvistä). Päivämäärät ennallaan, joten tallennetut toteumat pysyvät riveillään. */
     const HARPPAUS_TAULUKKO = [
-      ['1.5.','ei vielä'],['15.5.','3–5 m'],['1.6.','4–7 m'],['15.6.','6–9 m'],
-      ['1.7.','8–11 m'],['15.7.','9–12 m'],['1.8.','10–13 m'],['15.8.','12–15 m'],
-      ['1.9.','14–18 m'],['15.9.','17–21 m'],['1.10.','20–26 m tai poissa'],
-      ['15.10.','poissa'],['1.11.','poissa'],['15.11.','poissa'],['1.12.','käänteinen alkaa']
+      ['1.5.','ei vielä'],['15.5.','ei vielä'],['1.6.','4–12 m tai poissa'],['15.6.','2–6 m tai poissa'],
+      ['1.7.','3–6 m'],['15.7.','3–10 m'],['1.8.','8–13 m'],['15.8.','16–23 m tai poissa'],
+      ['1.9.','poissa'],['15.9.','poissa'],['1.10.','poissa'],['15.10.','poissa'],
+      ['1.11.','poissa'],['15.11.','poissa'],['1.12.','käänteinen alkaa']
     ];
     // v155: paras harppaustieto tälle järvelle (ltHarppaus). Palautusmuoto ennallaan saaliskirjausta varten.
     function harppausSaaliille(aika) {
@@ -13870,7 +13872,7 @@ function sumuriskiAlusta(){
        Nyt verrataan kahta asiaa jotka molemmat ovat koneen tiedossa:
        AKTIIVINEN service worker kertoo oman versionsa viestillä, ja palvelimen
        sw.js luetaan verkosta. Jos ne eroavat, uusi versio odottaa. */
-    const APP_VERSIO = 'v246';   // vain näytöllä; ei ohjaa päivitystarkistusta
+    const APP_VERSIO = 'v247';   // vain näytöllä; ei ohjaa päivitystarkistusta
     (async () => {
       const el = () => document.getElementById('versioNro');
       const st = () => document.getElementById('swTila');
@@ -22212,7 +22214,7 @@ function paivitaPaikkaLeima(){
   <audio id="ottiAani" preload="auto"></audio>
   <script>
     (function () {
-      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=246';
+      var el = document.getElementById('ottiAani'), u = 'otti.mp3?v=247';
       if (!el) return;
       fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) { el.src = URL.createObjectURL(b); })

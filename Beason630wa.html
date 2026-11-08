@@ -264,11 +264,12 @@ input[type=range]{width:100%;margin:12px 0 2px;accent-color:#16211f}
    -> harppausennuste 2027 + alusvesi 8 °C = arvio. Alusveden syvyys h2 = 2 × järven keskisyvyys − h1
    (karkea arvio; vaikuttaa vain tarvittavaan tuulen kestoon). */
 var KP_LS = 'beason_kumpu';
+// v247 (8.11.2026): sama kuin index.html:n HARPPAUS_TAULUKKO (SYKEn Lappajärven profiileista, El Niño -jälkivuodet).
 var HARPPAUS_TAULUKKO = [
-  ['1.5.','ei vielä'],['15.5.','3–5 m'],['1.6.','4–7 m'],['15.6.','6–9 m'],
-  ['1.7.','8–11 m'],['15.7.','9–12 m'],['1.8.','10–13 m'],['15.8.','12–15 m'],
-  ['1.9.','14–18 m'],['15.9.','17–21 m'],['1.10.','20–26 m tai poissa'],
-  ['15.10.','poissa'],['1.11.','poissa'],['15.11.','poissa'],['1.12.','käänteinen alkaa']
+  ['1.5.','ei vielä'],['15.5.','ei vielä'],['1.6.','4–12 m tai poissa'],['15.6.','2–6 m tai poissa'],
+  ['1.7.','3–6 m'],['15.7.','3–10 m'],['1.8.','8–13 m'],['15.8.','16–23 m tai poissa'],
+  ['1.9.','poissa'],['15.9.','poissa'],['1.10.','poissa'],['15.10.','poissa'],
+  ['1.11.','poissa'],['15.11.','poissa'],['1.12.','käänteinen alkaa']
 ];
 function vedenTiheys(T){ return 1000*(1 - (T + 288.9414)*Math.pow(T - 3.9863, 2)/(508929.2*(T + 68.12963))); }
 function harppausEnnuste(aika){

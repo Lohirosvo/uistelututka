@@ -127,6 +127,7 @@
   v215 (18.10.2026): vain versionumero (etusivun syöttikalakorttiin havaittu parven syvyys omasta luotaimesta).
   v216 (18.10.2026): isojen kaikujen napautuksessa matalan pohjan lajiepäily (hauki, ahven, made tai lahna) luotaus.js:n kausisäännöstä; muuten vain versionumero.
   v217 (18.10.2026): vain versionumero (taimenkorttiin rannan pintalämpö; matalan pohjan todisteeseen Hannun ahven- ja haukikoot luotaus.js:ssä).
+  v247 (8.11.2026): vain versionumero (harppausennuste 2027 SYKEn Lappajärven profiileista; HARPPAUS_TAULUKKO etusivulla).
   v246 (7.11.2026): järvilohi-epäilyt omana kerroksena (valikko 🟣 Järvilohi-epäilyt, oletus päällä): kaikki, mitä ikinä on ollut (tallenteet ja tiivistetty muisti), koko järveltä reitistä riippumatta; lajisääntö kaiun oman ajankohdan kaudelta (vain syksy). Isot kaiut -kerros kaikki iät (ennen 7 vrk). Haaleus iän mukaan neljässä portaassa: alle 1 vrk täysi, 1–10 vrk 75 %, 10–30 vrk 50 %, vanhemmat 28 %; nimiöön yli vuorokauden vanhoille päivämäärä. Järvilohireitti piirtää omat renkaansa vain lenkin kaiuille, kun kerros on päällä (luotaus.js).
   v245 (6.11.2026): PLAY-nappi kartan oikeassa yläkulmassa (Hannu): käy läpi kahdeksan näyttötilaa (Pintavirtaus, Syvempi vesi, Vajoama, Kumpuama, Konvergenssi, Lämpö (suunta), Lämpö (malli), Syvyyskartta; ei aaltoa eikä murtuvaa), 5 s kukin, pelkkä kartta kuten käsin vaihdettaessa. Näkymä ei muutu (seuraa venettä, jos seuranta on päällä; muuten pysyy katsotussa kohdassa), tunti on yläpalkin tunti. Napautus kartalla = heti seuraava; ■ pysäyttää ja jää näkyvään tilaan; kierroksen lopussa paluu alkuperäiseen tilaan. Seuraava kuva lasketaan vaihtohetkellä (edellinen näkyy laskennan ajan), joten muistissa on yksi kuva kerrallaan; 5 s alkaa, kun kuva on piirretty. Lämpö (malli) ohitetaan, jos malli ei ole valmis.
   v244 (4.11.2026): Beasonin aaltokartan parannukset (Hannu): saarten nimet (Lappajärvi, 34 nimeä) ja syvyyskäyrien luvut tilannekuvaan vakiokokoisina (piirto tällä sivulla, ei pohjakuvaan), syvyysvärit aallon alla pohjakuvaan (0/20/40/60 %, sama asetus kuin etusivulla); valikkoon "Kartan nimet ja syvyysvärit"; napautus maalla kertoo saaren nimen (aaltomalli.js).
@@ -361,20 +362,20 @@
       if (document.readyState !== 'loading') nayta(); else document.addEventListener('DOMContentLoaded', nayta);
     }
   </script>
-  <script src="paikat.js?v=246" onerror="utOsaPuuttuu('paikat.js')"></script>
-  <script src="luotaus.js?v=246" onerror="utOsaPuuttuu('luotaus.js')"></script>
-  <script src="syvyys.js?v=246" onerror="utOsaPuuttuu('syvyys.js')"></script>
-  <script src="kirjaus.js?v=246" onerror="utOsaPuuttuu('kirjaus.js')"></script>
-  <script src="jarvet.js?v=246" onerror="utOsaPuuttuu('jarvet.js')"></script>
-  <script src="vene.js?v=246" onerror="utOsaPuuttuu('vene.js')"></script>
-  <script src="lampomalli.js?v=246" onerror="utOsaPuuttuu('lampomalli.js')"></script>
-  <script src="kaistamalli.js?v=246" onerror="utOsaPuuttuu('kaistamalli.js')"></script>
-  <script src="aaltomalli.js?v=246" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
-  <script src="kloonit.js?v=246" onerror="utOsaPuuttuu('kloonit.js')"></script>
+  <script src="paikat.js?v=247" onerror="utOsaPuuttuu('paikat.js')"></script>
+  <script src="luotaus.js?v=247" onerror="utOsaPuuttuu('luotaus.js')"></script>
+  <script src="syvyys.js?v=247" onerror="utOsaPuuttuu('syvyys.js')"></script>
+  <script src="kirjaus.js?v=247" onerror="utOsaPuuttuu('kirjaus.js')"></script>
+  <script src="jarvet.js?v=247" onerror="utOsaPuuttuu('jarvet.js')"></script>
+  <script src="vene.js?v=247" onerror="utOsaPuuttuu('vene.js')"></script>
+  <script src="lampomalli.js?v=247" onerror="utOsaPuuttuu('lampomalli.js')"></script>
+  <script src="kaistamalli.js?v=247" onerror="utOsaPuuttuu('kaistamalli.js')"></script>
+  <script src="aaltomalli.js?v=247" onerror="utOsaPuuttuu('aaltomalli.js')"></script>
+  <script src="kloonit.js?v=247" onerror="utOsaPuuttuu('kloonit.js')"></script>
   <script>
   (function () {
     'use strict';
-    const APP_VERSIO = 'v246';
+    const APP_VERSIO = 'v247';
     window.APP_VERSIO = APP_VERSIO;   // kloonit.js merkitsee iskuun laskeneen version
     const $ = id => document.getElementById(id);
     const AS_LS = 'tilanne_asetukset';
