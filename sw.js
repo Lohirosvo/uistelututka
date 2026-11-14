@@ -22,6 +22,7 @@
 // v215: syöttikalakorttiin Havaittu (oma luotain) mallin rinnalle (index.html; tilanne.html vain versio); ei uusia tiedostoja.
 // v216: kaikujen lajiryhmät kausittain ja järvittäin (luotaus.js), Havaittu-rivit kuha-, hauki-, ahven- ja järvilohikorttiin (index.html); tilanne.html vain versio; ei uusia tiedostoja.
 // v217: taimenkorttiin rannan ja selän pintalämpö omasta luotaimesta ja luotaimen rajoitus (index.html, luotaus.js); tilanne.html vain versio; ei uusia tiedostoja.
+// v247b (14.11.2026): välimuistin siivous vain uistelututka-alkuisiin (Merilohitutka samassa osoitteessa); ei muita muutoksia.
 // v247: harppausennuste 2027 SYKEn Lappajärven profiileista, El Niño -jälkivuodet (harppausennuste-2027.html; HARPPAUS_TAULUKKO index.html ja Beason630wa.html); tilanne.html vain versio; ei uusia tiedostoja.
 // v246: järvilohi-epäilyt omaksi kerrokseksi kaikilta ajoilta (tallenteet ja tiivistetty muisti, haaleus iän mukaan), isot kaiut kaikki iät (luotaus.js, tilanne.html); index.html vain versio; ei uusia tiedostoja.
 // v245: tilannekuvaan PLAY-nappi: kahdeksan näyttötilaa kierroksena 5 s kukin, napautus = seuraava, ■ pysäyttää (tilanne.html); index.html vain versio; ei uusia tiedostoja.
@@ -147,7 +148,13 @@ self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()
       .then(avaimet => Promise.all(
-        avaimet.filter(a => a !== VERSIO).map(a => caches.delete(a))
+        /* KORJATTU 14.11.2026 (versio pysyy v247, sivuja ei tarvitse muuttaa). Selaimen välimuisti on yhteinen koko
+           osoitteelle lohirosvo.github.io, ja siellä on myös Merilohitutka (/merilohitutka/). Aiemmin tämä poisti
+           KAIKKI muut välimuistit, myös Merilohitutkan meridatan (mlt-meri-1) ja sovellustiedostot
+           (merilohitutka-…), joten Merilohitutka ei olisi käynnistynyt merellä ilman verkkoa uistelututkan
+           päivityksen jälkeen. Nyt poistetaan vain uistelututkan omat vanhat versiot.
+           PIDÄ TÄMÄ RAJAUS MYÖS TULEVISSA VERSIOISSA. */
+        avaimet.filter(a => a.startsWith('uistelututka-') && a !== VERSIO).map(a => caches.delete(a))
       ))
       .then(() => self.clients.claim())
   );
